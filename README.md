@@ -1,10 +1,12 @@
 # Qwen3.8-Flash-Next on a single DGX Spark
 
-Serving a **170.2 GiB** checkpoint on a box with **121 GiB** of memory, by paging its
+Serving a **123.6 GiB** checkpoint on a box with **121 GiB** of memory, by paging its
 51B-parameter n-gram embedding table to SSD swap.
 
-Measured **2026-08-27**. This is a snapshot against unmerged vLLM PRs and a temporary
-image tag — see [Versions](#versions) before assuming any of it still holds.
+Updated **2026-09-06** for NVIDIA's official NVFP4 build, which replaced the community
+conversion this repo started with. Still a snapshot against unmerged vLLM work — one of
+the two patches here is a port of an open PR — see [Versions](#versions) before assuming
+any of it still holds.
 
 ---
 
@@ -13,13 +15,13 @@ image tag — see [Versions](#versions) before assuming any of it still holds.
 | | |
 |---|---|
 | Hardware | 1x DGX Spark (GB10, sm_121a, 121 GiB unified memory, 273 GB/s) |
-| Checkpoint | `Inferact/Qwen3.8-Flash-Next-NVFP4`, 170.2 GiB |
-| Resident on GPU | 76.3 GiB weights + ~16 GiB KV |
-| Paged to swap | 95.37 GiB (the n-gram / PLE table) |
+| Checkpoint | `nvidia/Qwen3.8-Flash-Next-NVFP4`, 123.6 GiB |
+| Resident on GPU | 75.9 GiB weights + ~15 GiB KV |
+| Paged to swap | 47.7 GiB (the n-gram / PLE table); 55 GiB of swap in use |
 | Context | 524288 (YaRN factor 2 over the native 262144) |
-| Speculation | in-checkpoint MTP, k=2 |
-| Engine | stock image **plus one local patch** that unblocks vLLM's own fast decode GEMM (below) |
-| **Decode** | **32.7 tok/s** warm, 30.9 first run after boot |
+| Speculation | in-checkpoint MTP, **k=3** — the optimum moved with the checkpoint |
+| Engine | stock image **plus two local patches**: the TP=1 decode GEMM, and mixed-precision support the official checkpoint needs (below) |
+| **Decode** | **33.0 tok/s** warm |
 | **Prefill** | **2,719 tok/s** at 30k tokens |
 | Concurrency | ~102 tok/s aggregate at 8 concurrent requests |
 | Repeated prefix | TTFT **5.4x** better with prefix caching (see below — needs two flags, not one) |
@@ -27,6 +29,9 @@ image tag — see [Versions](#versions) before assuming any of it still holds.
 
 **The single thing most likely to cost you a day:** PLE CPU offload silently hangs at
 TP=1. Jump to [The trap](#the-trap-ple-offload-hangs-at-tp1).
+
+**If you are here for the official checkpoint:** it needs two source fixes that are not
+in any published image. Jump to [The official checkpoint](#the-official-checkpoint).
 
 ---
 
@@ -42,14 +47,15 @@ On top of that it carries two things that do not fit the usual mental model:
   injected at layer 2), and
 - a **4B MTP layer** for speculative decoding.
 
-180B parameters total, 335 GiB in BF16. The smallest published quantization that vLLM
-will actually load is 170.2 GiB. The box has 121 GiB.
+180B parameters total, 335 GiB in BF16. The official NVFP4 build is 123.6 GiB. The box has
+121 GiB. (When this repo started, the smallest quantization vLLM would load without source
+changes was 170.2 GiB — that gap is what the rest of this section describes, and the
+official build narrows but does not close it.)
 
 ### Why it fits anyway
 
-The n-gram table is **95.37 GiB of the 170.2**, it ships alone in
-`model-00001-of-00004.safetensors`, and it is a pure lookup — each token reads a handful
-of rows. Qwen's own card says as much: embeddings "are more amenable to offloading than
+The n-gram table is **47.7 GiB of the 123.6** — 95.37 of 170.2 in the BF16 builds — it
+ships in one shard, and it is a pure lookup: each token reads 18 rows out of 320 million. Qwen's own card says as much: embeddings "are more amenable to offloading than
 Mixture-of-Experts … for memory-constrained accelerators."
 
 vLLM implements exactly that. `VLLM_PLE_CPU_OFFLOAD=1` hands the table to a dedicated CPU
@@ -121,17 +127,19 @@ executor on its own and the bug is invisible.
 
 ## Which checkpoint
 
-| Checkpoint | Size | PLE dtype | Loads on stock vLLM? |
-|---|---|---|---|
-| `Inferact/Qwen3.8-Flash-Next-NVFP4` | 170.3 GiB | BF16 (95.4 GiB) | **yes** |
-| `RadixArk/Qwen3.8-Flash-Next-NVFP4` | 126.0 GiB | FP8 (47.7 GiB) | no — one `isinstance` gate |
-| `Qwen/Qwen3.8-Flash-Next-FP8` | 172.8 GiB | FP8 | body alone is ~125 GiB, does not fit |
+| Checkpoint | Size | PLE dtype | MTP | Loads on the stock image? |
+|---|---|---|---|---|
+| `nvidia/Qwen3.8-Flash-Next-NVFP4` | **123.6 GiB** | FP8 (47.7 GiB) | FP8_PB_WO | no — needs both patches below |
+| `Inferact/Qwen3.8-Flash-Next-NVFP4` | 170.3 GiB | BF16 (95.4 GiB) | NVFP4 | **yes** |
+| `RadixArk/Qwen3.8-Flash-Next-NVFP4` | 126.0 GiB | FP8 (47.7 GiB) | unquantized | no — one `isinstance` gate |
+| `Qwen/Qwen3.8-Flash-Next-FP8` | 172.8 GiB | FP8 | — | body alone is ~125 GiB, does not fit |
 
-This setup runs **Inferact**, which is also what the vLLM recipe recommends, because it loads
-with no source changes. But if you are downloading fresh, know what the second row actually
-costs you, because two earlier versions of this table — including mine — got it wrong.
+This setup now runs the **official NVIDIA build**. It is 46.7 GiB smaller than Inferact,
+halves the swap, ships its own eval numbers, and measured *faster* here once its MTP was
+tuned — 33.02 tok/s against 32.65. It is not free: it needs two source fixes.
 
-**RadixArk loads and serves correctly.** The blocker is one line:
+Earlier versions of this table got the second and third rows wrong, twice. The gate that
+rejects a quantized PLE is one line:
 
 ```python
 # vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py
@@ -141,31 +149,103 @@ def _get_ple_embedding_quant_method(quant_config, prefix):
         return None
 ```
 
-RadixArk ships the PLE in exactly the format that method implements — F8_E4M3 shards plus one
-global BF16 `ngram_embedding.weight_scale` — but its *body* is NVFP4, so `quant_config` is
-`modelopt_fp4` and the gate rejects it on the body's format rather than the PLE's. Accepting
-`modelopt`/`modelopt_fp4` there is enough; [another GB10 operator confirmed a correct,
-coherent serve](../../issues/1) that way, at 76.61 GiB resident. That is **44 GiB less to
-download and half the swap** than the row above.
+RadixArk and NVIDIA both ship the PLE in exactly the format that method implements —
+F8_E4M3 shards plus a global BF16 `ngram_embedding.weight_scale` — but neither presents
+itself as an `Fp8Config`, so the gate rejects them on the *body's* format rather than the
+PLE's.
 
-Two traps on that path, both from the same report:
+## The official checkpoint
 
-- **It fails silently if the GPU-side process registers `weight`/`weight_scale`.** Under PLE
-  CPU offload only `_offload_weight_scale` is filled, so a registered-but-unloaded
-  `weight_scale` shadows it and the lookup dequantizes against an uninitialised value —
-  fluent garbage, no error. Hand the FP8 method out only inside the offload process.
-- **`--cap-add=SYS_PTRACE` may be needed in Docker.** `PleOffloadWorker` passes CUDA tensors
-  over IPC and `rebuild_cuda_tensor` needs `pidfd_getfd`, which the default seccomp profile
-  denies; it surfaces ten minutes in as `Engine core initialization failed. Failed core
-  proc(s): {}`. This setup has not hit it — `serve.sh` runs with `--ipc host` and
-  `--cap-add=IPC_LOCK` — but add it if you see that error.
+`nvidia/Qwen3.8-Flash-Next-NVFP4` declares `quant_algo: MIXED_PRECISION` and describes
+itself per layer, in `config.json`'s `quantization_config.quantized_layers`:
 
-And one that is not about the checkpoint at all: a **size-correct but corrupt shard loads
-cleanly, reports sane shapes, produces correct-magnitude activations, and yields garbage that
-survives every configuration change.** Twenty hypotheses were eliminated against corrupt
-weights before anyone checked hashes. Verify `lfs.sha256` from the HF API, not file size.
-`scripts/download-weights.sh` checks both, and refetches a shard whose size matches but whose
-hash does not.
+| Target | Algorithm |
+|---|---|
+| `model.language_model.layers.N.mlp.experts` (48) | NVFP4, group 16 |
+| `model.language_model.layers.1.ple...ngram_embedding` | FP8 |
+| `mtp.layers.0.mlp.experts` | **FP8_PB_WO**, group 128 |
+
+NVIDIA's card names both gaps, and it is worth reading before you spend a day on either:
+
+> Serving without MTP requires vLLM commit `d4d703ca...` or a later upstream commit. MTP
+> speculative decoding additionally requires vLLM PR #55513 until that fix is merged
+> upstream.
+
+The pinned `qwen38-flash-next` image predates both, and its tag line has not moved since
+2026-08-26. So `scripts/patch-nv-mixed.py` carries three hunks:
+
+**A — the PLE, under a mixed-precision config.** `MIXED_PRECISION` arrives as
+`ModelOptMixedPrecisionConfig`, which is not the native `Fp8Config` the gate above tests
+for, so the PLE is built unquantized and the 128 F8_E4M3 shards have nowhere to land.
+Nothing needs inventing: the mixed config already resolves that prefix to `"FP8"` through
+`_resolve_quant_algo`, and already holds a real `ModelOptFp8Config`. The patch adds the
+branch. Verified against the checkpoint's own tensor header first — a range request on
+`model-fp8-mtp-ple.safetensors`, because the embedding method accepts exactly one layout:
+
+```
+ngram_embedding.shard_N.weight   F8_E4M3  (2500012, 160)  x128
+ngram_embedding.weight_scale     BF16     (1,)            <- per-table scalar
+```
+
+**B1 and B2 — PR #55513, ported.** Without them the boot dies at the very end of weight
+loading:
+
+```
+AttributeError: Layer mtp.layers.48.mlp.experts has no parameter 'w2_weight_scale_inv'
+  for checkpoint weight 'mtp.layers.48.mlp.experts.0.down_proj.weight_scale_inv'
+```
+
+Two independent causes:
+
+- `RoutedExperts` with `FP8_PB_WO` fell through to `ModelOptFp8MoEMethod`, which registers
+  one `PerTensorScaleParameter` per expert. The checkpoint ships 2D block scales
+  (`weight_scale_inv`, e.g. `(20, 5)` for `down_proj` at group 128). The **native**
+  `Fp8MoEMethod` already handles this: its constructor sets
+  `weight_scale_name = "weight_scale_inv"` whenever `weight_block_size` is set. This image
+  already knew `FP8_PB_WO` for *linear* layers — just not for MoE.
+- The index in the error is 48, but the checkpoint says `mtp.layers.0`. The draft model is
+  standalone and its layers are offset by `mtp_start_layer_idx`. `_remap_ignored_layers`
+  already existed and was applied to `ignored_layers` and `exclude_modules` — but not to
+  `quantized_layers`, so every MTP entry missed its lookup.
+
+### MTP: k is a property of the checkpoint, not the model
+
+The drafter changed with the checkpoint, and so did the optimum. On Inferact, k=3 measured
+net −3.0% against k=2 and k=2 was kept. On the official build the whole curve moves one
+notch:
+
+| k | steps/s | acceptance | tok/s |
+|---|---|---|---|
+| 2 | 13.26 | 2.14 | 28.31 |
+| **3** | **11.90** | **2.78** | **33.02** |
+| 4 | 10.37 | 2.76 | 28.66 |
+
+Acceptance saturates between 3 and 4 — 2.78 to 2.76 — while the extra draft keeps costing
+a full step. Everything below k=3 leaves acceptance on the table; everything above pays for
+predictions that do not land.
+
+That +17% is the whole reason the official checkpoint wins. At k=2 it is *slower* than the
+build it replaced (28.31 against 32.65). If you switch checkpoints, re-measure k.
+
+### What did not work
+
+Three attempts to stop the PLE being paged out, all failed, all worth not repeating:
+
+| Attempt | Result |
+|---|---|
+| `vm.swappiness` 60 → 1 | PLE residency 2.4% → 5.5%. The freed pages went to page cache. |
+| Context 512K → 262K (7.5 GiB of KV returned) | Residency unchanged; the 7.5 GiB became page cache. |
+| PLE re-quantized to NVFP4 (26.8 GiB, −20.9) | Arithmetic said it fits with 2.3 GiB to spare. Measured residency: **0.6%**. Swap only fell 55 → 34 GiB. |
+
+The pattern is consistent: a table touched 18 rows at a time out of 320 million looks cold
+to the kernel no matter how much room you give it. The only thing that ever raised
+residency was a failed `swapoff` forcing pages back in — and that is coercion, not policy.
+
+Removing the PLE entirely does free all 95 GiB, and is a trap. Answers stay *correct*, but
+reasoning stops converging: the same three-sentence question went from 236 reasoning tokens
+to 2,900, and 12 s to 145 s. Decode tok/s **rises** while doing it, because degenerate text
+is easier to draft. Never judge that change by tok/s.
+
 
 ## KV is unusually cheap
 
@@ -208,6 +288,18 @@ measured as `prompt_tokens / TTFT`.
 | 524288, MTP-3 | 26.0 / 27.3 | 12.3 | 2.42 |
 | 524288, MTP-2 | 26.9 / 28.2 | 13.19 | 2.14 |
 | **524288, MTP-2, skinny-GEMM patch** | **30.9 / 32.7** | **14.04** | 2.33 |
+
+Then the checkpoint changed. Same box, same bench, `nvidia/Qwen3.8-Flash-Next-NVFP4`:
+
+| config | tok/s | steps/s | mean acceptance |
+|---|---|---|---|
+| 524288, MTP-2 | 28.31 | 13.26 | 2.14 |
+| **524288, MTP-3, index-share + autotune** | **33.02** | **11.90** | **2.78** |
+| 524288, MTP-4, index-share + autotune | 28.66 | 10.37 | 2.76 |
+
+k=3, `index_share_for_mtp_iteration` and FlashInfer autotune were turned on together and
+have not been separated, so the split between them is unmeasured. The acceptance jump
+2.14 → 2.78 can only come from k, since neither of the other two touches drafting.
 
 **Compare configurations by steps/s, not tok/s.** Throughput is `acceptance x step rate`,
 and acceptance wanders between boots of one identical config (2.14–2.33 observed), moving
@@ -382,7 +474,7 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 ## Reproducing
 
 ```bash
-# 1. weights, 170.2 GiB
+# 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
 
 # 2. swap for the PLE table -- NOT optional, the load OOMs without it
@@ -391,16 +483,25 @@ sudo chmod 600 /swap-ple.img
 sudo mkswap /swap-ple.img
 sudo swapon -p 10 /swap-ple.img
 
-# 3. engine, plus the TP=1 skinny-GEMM patch (worth +6.9% on the step rate)
+# 3. engine. Two layers: the TP=1 skinny-GEMM patch (+6.9% on the step rate), then the
+#    mixed-precision support the official checkpoint needs. Order matters -- the second
+#    builds FROM the first, and asserts the GEMM plans survived.
 docker pull vllm/vllm-openai:qwen38-flash-next-arm64-cu130
 docker build -t vllm-skinny-tp1:v1 -f scripts/Dockerfile.skinny-gemm scripts/
+docker build -t vllm-nv-mixed:v2   -f scripts/Dockerfile.nv-mixed   scripts/
 
 # 4. serve
 ./scripts/serve.sh
 ```
 
-`serve.sh` defaults to the patched image. `VLLM_IMAGE=vllm/vllm-openai:qwen38-flash-next-arm64-cu130 ./scripts/serve.sh`
-runs the stock one if you would rather not carry the patch.
+`serve.sh` defaults to `vllm-nv-mixed:v2` and the official checkpoint. To go back to the
+Inferact build this repo used to serve, pass both — the image and the weights travel
+together:
+
+```bash
+VLLM_IMAGE=vllm-skinny-tp1:v1 MODEL_DIR=$HOME/models/qwen3.8-flash-next-nvfp4 \
+  NSPEC=2 AUTOTUNE=0 INDEX_SHARE=0 ./scripts/serve.sh
+```
 
 Expect roughly 10 minutes of weight loading and a further ~3 minutes of PLE paging before
 the API answers. The PLE worker loads and swaps out first; the GPU worker follows.
@@ -410,7 +511,8 @@ Useful knobs, all environment variables on `serve.sh`:
 ```bash
 MAXLEN=1048576 GPU_UTIL=0.91 KV_MEM= ./scripts/serve.sh  # 1M, leaves ~1-2 GiB free
 SPEC=none ./scripts/serve.sh                            # unspeculated baseline
-NSPEC=3 ./scripts/serve.sh                              # MTP k=3 (k=2 is the default)
+NSPEC=2 ./scripts/serve.sh                              # MTP k=2 (k=3 is the default)
+AUTOTUNE=0 INDEX_SHARE=0 ./scripts/serve.sh             # drop the two untested knobs
 PREFIX_CACHE=1 ./scripts/serve.sh                       # + --mamba-cache-mode align
 ```
 
@@ -479,21 +581,31 @@ This is not an optimized configuration. Things that are open:
 
 ## Versions
 
-Everything below is what was running on 2026-08-27. The image tag is a temporary one that
+Everything below is what was running on 2026-09-06. The image tag is a temporary one that
 will move; pin by digest if you care.
 
 | | |
 |---|---|
-| Image | `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` |
+| Base image | `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` |
 | vLLM reports | `0.1.dev20073+g8e685d198` |
-| Module | `vllm.models.qwen3_8_flash_next` (a later branch than either PR below) |
-| Model support | vLLM PR #53896 (open at the time) |
-| PLE offload | vLLM PR #53899 (open at the time) |
+| Module | `vllm.models.qwen3_8_flash_next` |
+| Checkpoint | `nvidia/Qwen3.8-Flash-Next-NVFP4`, modelopt v0.46.0, NVFP4 1.0 |
+| Model support | vLLM PR #53896 — carried by the image |
+| PLE offload | vLLM PR #53899 — carried by the image |
+| Mixed-precision PLE | **not carried** — `scripts/patch-nv-mixed.py`, hunk A |
+| Block-FP8 MTP | **not carried** — vLLM PR #55513, open; ported as hunks B1/B2 |
 | CUDA | 13.0.1 |
 | Host | Ubuntu, kernel 6.17, aarch64 |
 
-The image already carries both PRs, so no source build was needed — a plain `docker pull`
-is enough, which is the main reason this configuration is reachable at all.
+The image carries the two PRs that make the *model* work, which is why a plain
+`docker pull` was enough for the Inferact build. The official checkpoint moved the goal
+posts: NVIDIA's card asks for a vLLM commit and an open PR that no published image has,
+and the `qwen38-flash-next` tag line has not moved since 2026-08-26. Hence the second
+Dockerfile.
+
+**#55513 is open, not merged.** When it lands, hunks B1 and B2 become dead weight and
+should be dropped rather than carried — the patch asserts its anchors, so it will fail
+loudly rather than silently double-apply.
 
 ## License
 

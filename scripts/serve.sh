@@ -2,18 +2,21 @@
 # Serve Qwen3.8-Flash-Next NVFP4 on a single DGX Spark (GB10 / sm_121a, 121 GiB unified),
 # with the 51B n-gram (PLE) embedding table offloaded to swap.
 #
-# Measured 2026-08-27. See ../README.md for why each choice is what it is.
+# Updated 2026-09-06 for nvidia/Qwen3.8-Flash-Next-NVFP4. See ../README.md.
 #
-# The checkpoint is 170.2 GiB on a 121 GiB box. It fits because 95.37 GiB of it is one
-# tensor -- the n-gram embedding table, shipped alone in model-00001-of-00004.safetensors
-# -- and that tensor is a pure lookup: each token reads a handful of rows.
+# The checkpoint is 123.6 GiB on a 121 GiB box. 47.7 GiB of it is one tensor -- the n-gram
+# embedding table, FP8 in the official build -- and that tensor is a pure lookup: each
+# token reads 18 rows out of 320 million.
 # VLLM_PLE_CPU_OFFLOAD=1 hands it to a dedicated CPU process which gathers on CPU and DMAs
 # the result to the GPU worker. It is ordinary pageable memory, so the kernel pages the
 # cold rows out to swap. Measured cost: ~73 KiB of page-ins per decoded token.
 set -euo pipefail
 
-IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
-MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-nvfp4}"
+# vllm-nv-mixed:v2 = skinny-GEMM + patch-nv-mixed.py. Both are required: the official
+# checkpoint declares quant_algo=MIXED_PRECISION, which the pinned image cannot load
+# (PLE) and cannot draft with (FP8_PB_WO MTP). Build both Dockerfiles in scripts/ first.
+IMAGE="${VLLM_IMAGE:-vllm-nv-mixed:v2}"
+MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-nvidia}"
 NAME="${NAME:-qwen38-flash-next}"
 PORT="${PORT:-8888}"
 SERVED_NAME="${SERVED_NAME:-qwen3.8-flash-next}"
@@ -44,14 +47,25 @@ if [[ "${ROPE}" != "none" && "${MAXLEN}" -gt 262144 ]]; then
   LONG_ENV=(-e VLLM_ALLOW_LONG_MAX_MODEL_LEN=1)
 fi
 
-# MTP lives in the checkpoint (nvfp4_experts_mtp.safetensors) and vLLM derives the draft
-# config from the target. Worth 1.68x here -- more than the acceptance length (2.2-3.7 of
-# 4) implies, because the verify pass covers k+1 tokens in one forward and so divides the
-# per-step PLE round trip by k+1.
+# MTP lives in the checkpoint and vLLM derives the draft config from the target.
+#
+# k IS CHECKPOINT-SPECIFIC. Do not carry a value over from another build. On Inferact,
+# k=3 measured net -3.0% against k=2. On the official checkpoint the FP8-block drafter is
+# stronger and the whole curve shifts one notch:
+#     k=2  13.26 steps/s  acc 2.14  ->  28.31 tok/s
+#     k=3  11.90 steps/s  acc 2.78  ->  33.02 tok/s   <-- default
+#     k=4  10.37 steps/s  acc 2.76  ->  28.66 tok/s   acceptance saturates, cost does not
 #   SPEC=none ./serve.sh    # unspeculated baseline, 17.4 tok/s
-NSPEC="${NSPEC:-2}"
+NSPEC="${NSPEC:-3}"
 case "${SPEC:-mtp}" in
-  mtp)  SPEC_CFG="{\"method\":\"mtp\",\"num_speculative_tokens\":${NSPEC}}" ;;
+  mtp)  # INDEX_SHARE maps to set_skip_topk: MTP step 0 picks the QSA sparse indices and
+        # later steps reuse them. Profiler puts QSA under 5% of decode, so the ceiling is
+        # small; it was enabled alongside k=3 and never measured on its own.
+        if [[ "${INDEX_SHARE:-1}" == "1" ]]; then
+          SPEC_CFG="{\"method\":\"mtp\",\"num_speculative_tokens\":${NSPEC},\"index_share_for_mtp_iteration\":true}"
+        else
+          SPEC_CFG="{\"method\":\"mtp\",\"num_speculative_tokens\":${NSPEC}}"
+        fi ;;
   none) SPEC_CFG='' ;;
   *)    SPEC_CFG="${SPEC}" ;;
 esac
@@ -97,7 +111,14 @@ PREFIX_ARGS=()
 # not finish inside the 600 s default.
 PLE_TIMEOUT="${PLE_TIMEOUT:-1800}"
 
-[[ -f "${MODEL_DIR}/model-00001-of-00004.safetensors" ]] || {
+# FlashInfer autotune. The stock setting was off, with no recorded reason. On by default
+# now: the MoE backend resolves to FLASHINFER_CUTLASS and its grouped GEMM is 18.7% of
+# decode by profiler. Enabled alongside k=3 and never measured on its own. AUTOTUNE=0
+# reverts. Costs extra boot time while it sweeps.
+AUTOTUNE_ARGS=(--enable-flashinfer-autotune)
+[[ "${AUTOTUNE:-1}" == "1" ]] || AUTOTUNE_ARGS=(--no-enable-flashinfer-autotune)
+
+[[ -f "${MODEL_DIR}/model-fp8-mtp-ple.safetensors" ]] || {
   echo "FATAL: weights missing at ${MODEL_DIR} -- run ./download-weights.sh first" >&2; exit 1; }
 swapon --show=NAME --noheadings | grep -q . || {
   echo "FATAL: no swap is active. The PLE table has nowhere to page out to and the load" >&2
@@ -144,7 +165,7 @@ docker run -d \
     --max-num-batched-tokens "${BATCHED_TOKENS:-8192}" \
     --enable-chunked-prefill \
     "${PREFIX_ARGS[@]}" \
-    --no-enable-flashinfer-autotune \
+    "${AUTOTUNE_ARGS[@]}" \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \

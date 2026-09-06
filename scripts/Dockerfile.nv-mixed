@@ -1,0 +1,31 @@
+# The image for nvidia/Qwen3.8-Flash-Next-NVFP4.
+#   docker build -t vllm-skinny-tp1:v1 -f scripts/Dockerfile.skinny-gemm scripts/
+#   docker build -t vllm-nv-mixed:v2   -f scripts/Dockerfile.nv-mixed   scripts/
+#
+# Stacked on the skinny-GEMM image on purpose: that patch is worth +6.9% on the step rate
+# and building from the stock image instead would silently drop it. The build asserts the
+# TP=1 plans are still there.
+#
+# NVIDIA's model card names the two gaps this closes:
+#   "Serving without MTP requires vLLM commit d4d703ca... or later. MTP speculative
+#    decoding additionally requires vLLM PR #55513 until that fix is merged upstream."
+# The pinned qwen38-flash-next image predates both, and its tag line has not moved since
+# 2026-08-26. patch-nv-mixed.py supplies our own fix for the first and a port of #55513
+# for the second.
+FROM vllm-skinny-tp1:v1
+COPY patch-nv-mixed.py /tmp/p.py
+RUN python3 /tmp/p.py \
+ && python3 -c "\
+import ast, glob; \
+b = glob.glob('/usr/local/lib/python3.*/dist-packages/vllm')[0]; \
+n = b + '/models/qwen3_8_flash_next/nvidia'; \
+p = open(n + '/ple_layer.py').read(); ast.parse(p); \
+assert 'ModelOptMixedPrecisionConfig' in p and p.count('Qwen3_8FlashNextPLEFp8EmbeddingMethod()') == 2; \
+m = open(b + '/model_executor/layers/quantization/modelopt.py').read(); ast.parse(m); \
+assert 'FP8_BLOCK_SCALES' in m and '_NativeFp8MoEMethod' in m; \
+t = open(n + '/mtp.py').read(); ast.parse(t); \
+assert '_remap_ignored_layers([name]' in t; \
+g = open(n + '/low_latency_gemm.py').read(); \
+assert '(248320, 2560)' in g and '(12, 1)' in g, 'skinny-GEMM plans lost'; \
+print('patched: PLE mixed-precision route, PR55513 B1+B2, skinny-GEMM intact')" \
+ && rm /tmp/p.py

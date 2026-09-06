@@ -1,5 +1,5 @@
 #!/bin/bash
-# Download Inferact/Qwen3.8-Flash-Next-NVFP4 (~170.3 GiB, 21 shards).
+# Download nvidia/Qwen3.8-Flash-Next-NVFP4 (123.6 GiB, 24 files).
 #
 # Qwen3.8-Flash-Next: Qwen4 architecture preview, arch Qwen4ExpForConditionalGeneration /
 # qwen4_exp. 125B total with 6B activated, PLUS a 51B n-gram embedding table and a 4B MTP
@@ -7,23 +7,26 @@
 # Sparse Attention), 512 experts top-10 + shared, hidden 2560, GQA 24/2 at head_dim 256,
 # interleaved M-RoPE, VLM, native 262144 context (YaRN factor 4 -> 1M per the card).
 #
-# WHY THIS BUILD, and not the two cheaper-looking ones:
-#   - Inferact NVFP4 (this one): experts NVFP4, PLE left BF16. 170.3 GiB on disk, but only
-#     ~74.9 GiB is resident -- the 95.4 GiB PLE table goes to the CPU offload process and
-#     from there to swap. This is the build the vLLM recipe recommends.
-#   - RadixArk NVFP4 (126.0 GiB, PLE in fp8 = 47.7 GiB) would halve both the download and
-#     the swap, but does NOT load: vLLM picks the fp8 PLE path only for an Fp8Config
-#     checkpoint. Verified inside the image at
-#     vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py:193 (`if not isinstance(
-#     quant_config, Fp8Config): return None`). RadixArk is modelopt/NVFP4, so the PLE would
-#     be built unquantized and its fp8 tensors would not load into a bf16 parameter.
-#   - Qwen/Qwen3.8-Flash-Next-FP8 (172.8 GiB) has the fp8 PLE that path wants, but its
-#     body is ~125 GiB, which does not fit in this box at all.
+# WHY THIS BUILD (changed 2026-09-06; this script used to fetch Inferact):
+#   - nvidia NVFP4 (this one): quant_algo=MIXED_PRECISION, described per layer --
+#     NVFP4 routed experts (gs 16), FP8 PLE, FP8_PB_WO MTP experts (gs 128). 123.6 GiB,
+#     46.7 GiB less than Inferact, and the PLE is 47.7 GiB rather than 95.37. Officially
+#     published, and it ships its own eval numbers. Needs patch-nv-mixed.py: the pinned
+#     image cannot load a mixed-precision PLE and cannot draft with an FP8_PB_WO MTP.
+#   - Inferact NVFP4 (170.3 GiB, PLE BF16 95.4 GiB) is what this repo served until now and
+#     still loads with no source changes. Slower here: 32.65 tok/s against 33.02, and
+#     ~98 GiB of swap against 55.
+#   - RadixArk NVFP4 (126.0 GiB, PLE fp8) loads only with the same ple_layer.py gate
+#     relaxed; superseded by the official build, which needs the fix anyway.
+#   - Qwen/Qwen3.8-Flash-Next-FP8 (172.8 GiB): body alone is ~125 GiB, does not fit.
 #
 # MEMORY PLAN on the Spark (121 GiB unified, ~7 GiB OS):
-#   body 74.9 GiB resident + KV 24 KiB/token (only 12 of 48 layers hold KV: 2 kv heads x
-#   (256+256) x 2B x 12) => 6 GiB at 262144, 24 GiB at 1M. PLE 95.4 GiB lives in the
-#   offload process and is paged to /swap-ple.img (128 GiB, added 2026-08-26).
+#   body 75.9 GiB resident + KV 24 KiB/token (only 12 of 48 layers hold KV: 2 kv heads x
+#   (256+256) x 2B x 12) => 6 GiB at 262144, 24 GiB at 1M. PLE 47.7 GiB lives in the
+#   offload process and is paged to /swap-ple.img (128 GiB). Measured steady state: 55 GiB
+#   of swap in use. Three separate attempts to make the PLE resident instead all failed --
+#   see the README; the kernel treats a table touched 18 rows at a time as cold no matter
+#   how much room you give it.
 #   Needs VLLM_PLE_CPU_OFFLOAD=1 and the image vllm/vllm-openai:qwen38-flash-next-arm64-cu130
 #   (vllm 0.1.dev20073+g8e685d198, ships vllm/v1/ple_offload/ and the env var).
 #
@@ -31,8 +34,8 @@
 # CLI stalled at 0 B/s on Xet, so this keeps it simple and resumable.
 set -uo pipefail
 
-REPO="${REPO:-Inferact/Qwen3.8-Flash-Next-NVFP4}"
-DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-nvfp4}"
+REPO="${REPO:-nvidia/Qwen3.8-Flash-Next-NVFP4}"
+DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-nvidia}"
 BASE="https://huggingface.co/${REPO}/resolve/main"
 mkdir -p "$DEST" || exit 1
 
