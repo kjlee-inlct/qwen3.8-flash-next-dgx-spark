@@ -22,6 +22,7 @@ done
 source "${STATE_FILE}"
 [[ -n "${INSTALL_ROOT:-}" && -d "${INSTALL_ROOT}" ]] || die "invalid INSTALL_ROOT in manifest"
 [[ -n "${CONTAINER_NAME:-}" && "${CONTAINER_NAME}" != */* ]] || die "invalid container name"
+MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 
 printf 'Qwen3.8 Flash Next uninstaller\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
 printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
@@ -33,18 +34,29 @@ fi
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
 if [[ "${PURGE_MODEL}" == 1 ]]; then
-  [[ -f "${MODEL_DIR}/.qwen38-model-manifest.json" ]] || die "refusing model deletion: manifest missing"
-  if [[ "${MODEL_DIR}" != "${HOME}/models/"* && "${MODEL_DIR}" != "${INSTALL_ROOT}/model" ]]; then
-    die "refusing model deletion outside ${HOME}/models or the install root's model directory"
+  [[ "${MODEL_OWNED}" == 1 ]] || die "refusing model deletion: directory was not created by this installer"
+  if [[ -e "${MODEL_DIR}" ]]; then
+    [[ -f "${MODEL_DIR}/.qwen38-model-manifest.json" ]] || die "refusing model deletion: model manifest missing"
+    if [[ "${MODEL_DIR}" != "${HOME}/models/"* && "${MODEL_DIR}" != "${INSTALL_ROOT}/model" ]]; then
+      die "refusing model deletion outside ${HOME}/models or the install root's model directory"
+    fi
+    rm -rf --one-file-system -- "${MODEL_DIR}"
+    printf 'Removed model directory: %s\n' "${MODEL_DIR}"
   fi
-  rm -rf --one-file-system -- "${MODEL_DIR}"
-  printf 'Removed model directory: %s\n' "${MODEL_DIR}"
 fi
 if [[ "${PURGE_SWAP}" == 1 ]]; then
-  swap_args=(remove --file "${SWAP_FILE}"); [[ "${YES}" == 1 ]] && swap_args+=(--yes)
-  sudo "${INSTALL_ROOT}/scripts/manage-swap.sh" "${swap_args[@]}"
+  [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
+  if [[ -e "${SWAP_FILE}" ]]; then
+    swap_args=(remove --file "${SWAP_FILE}"); [[ "${YES}" == 1 ]] && swap_args+=(--yes)
+    sudo "${INSTALL_ROOT}/scripts/manage-swap.sh" "${swap_args[@]}"
+  fi
 fi
-if [[ "${PURGE_IMAGE}" == 1 ]]; then docker image rm "${VLLM_IMAGE}" || die "image is still in use"; fi
+if [[ "${PURGE_IMAGE}" == 1 ]]; then
+  [[ "${IMAGE_OWNED}" == 1 ]] || die "refusing image deletion: image existed before this installation"
+  if docker image inspect "${VLLM_IMAGE}" >/dev/null 2>&1; then
+    docker image rm "${VLLM_IMAGE}" || die "image is still in use"
+  fi
+fi
 if [[ "${PURGE_MODEL}" == 1 && "${PURGE_SWAP}" == 1 && "${PURGE_IMAGE}" == 1 ]]; then
   rm -f -- "${STATE_FILE}"; rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
   printf 'Full uninstall completed; installation manifest removed.\n'
