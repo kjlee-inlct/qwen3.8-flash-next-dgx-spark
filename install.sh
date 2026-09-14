@@ -11,7 +11,7 @@ IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-YES=0; START=1; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
+YES=0; START=1; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 expand_user_path() {
@@ -32,6 +32,7 @@ write_state() {
     printf 'SWAP_FILE=%q\n' "${SWAP_FILE}"; printf 'SWAP_OWNED=%q\n' "${SWAP_OWNED}"
     printf 'VLLM_IMAGE=%q\n' "${IMAGE}"; printf 'IMAGE_OWNED=%q\n' "${IMAGE_OWNED}"
     printf 'CONTAINER_NAME=%q\n' qwen38-flash-next; printf 'CONFIG_OVERRIDE=%q\n' "${CONFIG_OVERRIDE}"
+    printf 'CONFIG_OWNED=%q\n' "${CONFIG_OWNED}"
     printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
   } > "${STATE_FILE}.tmp"
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
@@ -61,6 +62,7 @@ if [[ -r "${STATE_FILE}" ]]; then
   printf 'Resuming installation from phase: %s\n' "${PHASE:-unknown}"
 fi
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
+CONFIG_OWNED="${CONFIG_OWNED:-0}"
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
 for command in python3 curl docker sudo hf; do command -v "${command}" >/dev/null || die "${command} is required"; done
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
@@ -86,6 +88,7 @@ MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
 printf 'Installation plan\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
+printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 ask_yes_no "Continue?" || die "cancelled"
@@ -114,6 +117,13 @@ write_state downloading
 MODEL_PROFILE=orcarouter REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
   "${ROOT_DIR}/scripts/download-weights.sh"
 write_state weights_ready
+if [[ -z "${CONFIG_OVERRIDE}" ]]; then
+  CONFIG_OVERRIDE="${STATE_DIR}/config.vllm.json"
+  printf '\nPreparing vLLM-compatible model config...\n'
+  python3 "${ROOT_DIR}/scripts/prepare-config.py" --model-dir "${MODEL_DIR}" --output "${CONFIG_OVERRIDE}"
+  CONFIG_OWNED=1
+  write_state config_ready
+fi
 printf '\nInspecting checkpoint tensor headers...\n'
 inspect_args=(--offline --model-dir "${MODEL_DIR}")
 [[ -n "${CONFIG_OVERRIDE}" ]] && inspect_args+=(--config-override "${CONFIG_OVERRIDE}")
