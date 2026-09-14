@@ -598,8 +598,9 @@ monitor process. Non-interactive installs keep protection disabled unless
 
 For the OrcaRouter checkpoint, `install.sh` now generates a separate
 `~/.local/state/qwen38-spark/config.vllm.json` automatically. It converts the checkpoint's
-`qwen_sparse_attention` layer labels to the canonical `compressed_sparse_attention` name
-accepted by the pinned vLLM image, while leaving `model/config.json` unchanged. Direct
+`qwen_sparse_attention` layer labels to `full_attention`, which passes the generic validator;
+the Qwen3.8 implementation then selects QSA through `indexer_n_heads`. This leaves
+`model/config.json` unchanged. Direct
 `serve.sh` invocations do the same when `CONFIG_OVERRIDE` is not supplied. Container restart
 defaults to `on-failure:3`, preventing a bad startup config from entering an infinite loop;
 override it explicitly with `RESTART_POLICY` only when needed.
