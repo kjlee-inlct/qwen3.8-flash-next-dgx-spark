@@ -34,7 +34,9 @@ docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
 if [[ "${PURGE_MODEL}" == 1 ]]; then
   [[ -f "${MODEL_DIR}/.qwen38-model-manifest.json" ]] || die "refusing model deletion: manifest missing"
-  [[ "${MODEL_DIR}" == "${HOME}/models/"* ]] || die "refusing model deletion outside ${HOME}/models"
+  if [[ "${MODEL_DIR}" != "${HOME}/models/"* && "${MODEL_DIR}" != "${INSTALL_ROOT}/model" ]]; then
+    die "refusing model deletion outside ${HOME}/models or the install root's model directory"
+  fi
   rm -rf --one-file-system -- "${MODEL_DIR}"
   printf 'Removed model directory: %s\n' "${MODEL_DIR}"
 fi
