@@ -14,6 +14,13 @@ REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
 YES=0; START=1
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+expand_user_path() {
+  case "$1" in
+    "~") printf '%s\n' "${HOME}" ;;
+    "~/"*) printf '%s/%s\n' "${HOME}" "${1:2}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
 usage() { printf 'Usage: ./install.sh [--yes] [--no-start]\n'; }
 ask_yes_no() {
   local prompt="$1" answer
@@ -38,6 +45,10 @@ if [[ "${YES}" != 1 ]]; then
   read -r -p "Model directory [${MODEL_DIR}]: " answer; MODEL_DIR="${answer:-${MODEL_DIR}}"
   read -r -p "Optional config.json override [none]: " answer; CONFIG_OVERRIDE="${answer:-${CONFIG_OVERRIDE}}"
 fi
+MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
+[[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
+MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
+[[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
 printf 'Installation plan\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
