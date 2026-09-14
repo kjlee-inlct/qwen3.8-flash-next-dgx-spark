@@ -42,10 +42,13 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 MONITOR_LOG="${STATE_DIR}/monitor.log"
 RESTART_POLICY="${RESTART_POLICY:-on-failure:3}"
+PUBLISH_HOST="${PUBLISH_HOST:-127.0.0.1}"
 [[ "${MONITOR_PROTECT}" == 0 || "${MONITOR_PROTECT}" == 1 ]] || {
   echo "FATAL: MONITOR_PROTECT must be 0 or 1" >&2; exit 2; }
 [[ "${RESTART_POLICY}" =~ ^(no|always|unless-stopped|on-failure(:[1-9][0-9]*)?)$ ]] || {
   echo "FATAL: invalid RESTART_POLICY=${RESTART_POLICY}" >&2; exit 2; }
+[[ "${PUBLISH_HOST}" == 127.0.0.1 || "${PUBLISH_HOST}" == 0.0.0.0 ]] || {
+  echo "FATAL: unsupported PUBLISH_HOST=${PUBLISH_HOST}" >&2; exit 2; }
 
 # THE ONE THAT COSTS YOU A DAY -----------------------------------------------------
 # PLE offload requires the multiproc executor, even at TP=1. spawn_ple_offload() and
@@ -126,7 +129,7 @@ KVMEM_ARGS=()
 # size becomes 1600 tokens, so only prompts longer than that can hit. Off by default
 # because it only pays on repeated prefixes; see the README.
 PREFIX_CACHE="${PREFIX_CACHE:-0}"
-PREFIX_ARGS=()
+PREFIX_ARGS=(--no-enable-prefix-caching)
 [[ "${PREFIX_CACHE}" == "1" ]] && PREFIX_ARGS=(--enable-prefix-caching --mamba-cache-mode align)
 
 # NEVER enable --async-scheduling with MTP: it makes _prepare_ngram_context read the
@@ -172,7 +175,7 @@ docker rm -f "${NAME}" >/dev/null 2>&1 || true
 docker run -d \
   --name "${NAME}" \
   --user root \
-  -p "${PORT}:${PORT}" \
+  -p "${PUBLISH_HOST}:${PORT}:${PORT}" \
   --restart "${RESTART_POLICY}" \
   --shm-size=32g \
   --ulimit memlock=-1:-1 \
