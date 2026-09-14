@@ -13,6 +13,7 @@ REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
 YES=0; START=1; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
+CLI_LANG=""; UI_LANG="${UI_LANG:-}"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 expand_user_path() {
@@ -37,10 +38,14 @@ write_state() {
     printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
     printf 'PROXY_ENABLED=%q\n' "${PROXY_ENABLED}"; printf 'PROXY_OWNED=%q\n' "${PROXY_OWNED}"
     printf 'PROXY_PORT=%q\n' "${PROXY_PORT}"
+    printf 'UI_LANG=%q\n' "${UI_LANG}"
   } > "${STATE_FILE}.tmp"
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
-usage() { printf 'Usage: ./install.sh [--yes] [--no-start]\n'; }
+usage() {
+  printf 'Usage: ./install.sh [--lang en|ko] [--yes] [--no-start]\n'
+  printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
+}
 ask_yes_no() {
   local prompt="$1" answer
   [[ "${YES}" == 1 ]] && return 0
@@ -49,12 +54,12 @@ ask_yes_no() {
 }
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --yes) YES=1 ;; --no-start) START=0 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
   shift
 done
 
-printf 'Qwen3.8 Flash Next — DGX Spark installer\n\n'
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
   # shellcheck disable=SC1090 -- created by write_state with shell-escaped values and mode 600.
@@ -62,7 +67,21 @@ if [[ -r "${STATE_FILE}" ]]; then
   [[ "${MODEL_REPO:-}" == "${REPO}" && "${MODEL_REVISION:-}" == "${REVISION}" ]] || \
     die "existing manifest belongs to a different model or revision: ${STATE_FILE}"
   IMAGE="${VLLM_IMAGE}"; RESUME=1
-  printf 'Resuming installation from phase: %s\n' "${PHASE:-unknown}"
+fi
+[[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
+if [[ -z "${UI_LANG}" ]]; then
+  if [[ "${YES}" == 0 && -t 0 ]]; then
+    read -r -p 'Language / 언어 [1: English, 2: 한국어] (2): ' answer
+    [[ "${answer}" == 1 || "${answer}" == en ]] && UI_LANG=en || UI_LANG=ko
+  elif [[ "${LANG:-}" == ko_* ]]; then UI_LANG=ko; else UI_LANG=en; fi
+fi
+[[ "${UI_LANG}" == en || "${UI_LANG}" == ko ]] || die "--lang must be en or ko"
+if [[ "${UI_LANG}" == ko ]]; then
+  printf 'Qwen3.8 Flash Next — DGX Spark 설치 마법사\n\n'
+  [[ "${RESUME}" == 0 ]] || printf '설치 재개 단계: %s\n' "${PHASE:-알 수 없음}"
+else
+  printf 'Qwen3.8 Flash Next — DGX Spark installer wizard\n\n'
+  [[ "${RESUME}" == 0 ]] || printf 'Resuming installation from phase: %s\n' "${PHASE:-unknown}"
 fi
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
@@ -72,33 +91,41 @@ for command in python3 curl docker sudo hf; do command -v "${command}" >/dev/nul
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
 hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
 if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
-  read -r -p "Model directory [${MODEL_DIR}]: " answer; MODEL_DIR="${answer:-${MODEL_DIR}}"
+  [[ "${UI_LANG}" == ko ]] && prompt="모델 디렉터리 [${MODEL_DIR}]: " || prompt="Model directory [${MODEL_DIR}]: "
+  read -r -p "${prompt}" answer; MODEL_DIR="${answer:-${MODEL_DIR}}"
   if [[ -n "${CONFIG_OVERRIDE}" ]]; then
-    read -r -p "Use the configured config.json override (${CONFIG_OVERRIDE})? [Y/n]: " answer
+    [[ "${UI_LANG}" == ko ]] && prompt="설정된 config.json override를 사용합니까 (${CONFIG_OVERRIDE})? [Y/n]: " || prompt="Use the configured config.json override (${CONFIG_OVERRIDE})? [Y/n]: "
+    read -r -p "${prompt}" answer
     [[ "${answer}" == n || "${answer}" == N ]] && CONFIG_OVERRIDE=""
   else
-    read -r -p "Use a separate config.json override? [y/N]: " answer
+    [[ "${UI_LANG}" == ko ]] && prompt="별도의 config.json override를 사용합니까? [y/N]: " || prompt="Use a separate config.json override? [y/N]: "
+    read -r -p "${prompt}" answer
     if [[ "${answer}" == y || "${answer}" == Y ]]; then
-      read -r -p "Absolute path or ~/path/to/config.json: " CONFIG_OVERRIDE
+      [[ "${UI_LANG}" == ko ]] && prompt='절대 경로 또는 ~/path/to/config.json: ' || prompt='Absolute path or ~/path/to/config.json: '
+      read -r -p "${prompt}" CONFIG_OVERRIDE
       [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
     fi
   fi
-  read -r -p "Enable automatic low-memory protection? [y/N]: " answer
+  [[ "${UI_LANG}" == ko ]] && prompt='자동 저메모리 보호 기능을 활성화합니까? [y/N]: ' || prompt='Enable automatic low-memory protection? [y/N]: '
+  read -r -p "${prompt}" answer
   [[ "${answer}" == y || "${answer}" == Y ]] && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
-  read -r -p "Install docker0-only OpenWebUI proxy on port ${PROXY_PORT}? [y/N]: " answer
+  [[ "${UI_LANG}" == ko ]] && prompt="docker0 전용 OpenWebUI proxy를 ${PROXY_PORT} 포트에 설치합니까? [y/N]: " || prompt="Install docker0-only OpenWebUI proxy on port ${PROXY_PORT}? [y/N]: "
+  read -r -p "${prompt}" answer
   [[ "${answer}" == y || "${answer}" == Y ]] && PROXY_ENABLED=1 || PROXY_ENABLED=0
 fi
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
 MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
-printf 'Installation plan\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${REPO}" "${REVISION}" "${MODEL_DIR}"
+[[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
+printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
 printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'docker0:%s -> loopback:8888' "${PROXY_PORT}" || printf disabled)"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
-ask_yes_no "Continue?" || die "cancelled"
+[[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
+ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
 
 if [[ "${RESUME}" != 1 ]]; then
   [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1
@@ -156,4 +183,8 @@ if [[ "${START}" == 1 ]]; then
     "${ROOT_DIR}/scripts/serve.sh"
 fi
 write_state complete
-printf '\nInstallation completed.\n  manifest: %s\n  logs: docker logs -f qwen38-flash-next\n' "${STATE_FILE}"
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '\n설치가 완료되었습니다.\n  manifest: %s\n  logs: docker logs -f qwen38-flash-next\n' "${STATE_FILE}"
+else
+  printf '\nInstallation completed.\n  manifest: %s\n  logs: docker logs -f qwen38-flash-next\n' "${STATE_FILE}"
+fi
