@@ -32,7 +32,7 @@ class PrepareConfigTests(unittest.TestCase):
             result = json.loads(output.read_text(encoding="utf-8"))
 
             self.assertEqual(count, 1)
-            self.assertEqual(result["text_config"]["layer_types"][1], "compressed_sparse_attention")
+            self.assertEqual(result["text_config"]["layer_types"][1], "full_attention")
             self.assertEqual(result["text_config"]["description"], source["text_config"]["description"])
 
     def test_copies_an_already_compatible_config(self):
@@ -40,7 +40,7 @@ class PrepareConfigTests(unittest.TestCase):
             root = Path(temporary)
             source = root / "config.json"
             output = root / "override.json"
-            source.write_text('{"layer_types":["compressed_sparse_attention"]}', encoding="utf-8")
+            source.write_text('{"layer_types":["full_attention"]}', encoding="utf-8")
             self.assertEqual(MODULE.prepare(source, output), 0)
             self.assertEqual(json.loads(output.read_text()), json.loads(source.read_text()))
 
