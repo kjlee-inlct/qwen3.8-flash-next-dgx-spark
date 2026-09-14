@@ -15,11 +15,27 @@ set -euo pipefail
 # vllm-nv-mixed:v2 = skinny-GEMM + patch-nv-mixed.py. Both are required: the official
 # checkpoint declares quant_algo=MIXED_PRECISION, which the pinned image cannot load
 # (PLE) and cannot draft with (FP8_PB_WO MTP). Build both Dockerfiles in scripts/ first.
-IMAGE="${VLLM_IMAGE:-vllm-nv-mixed:v2}"
-MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-nvidia}"
+MODEL_PROFILE="${MODEL_PROFILE:-nvidia}"
+case "${MODEL_PROFILE}" in
+  orcarouter)
+    IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
+    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
+    DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
+    DEFAULT_GPU_UTIL=0.85; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    SERVED_NAME="${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
+    ;;
+  nvidia)
+    IMAGE="${VLLM_IMAGE:-vllm-nv-mixed:v2}"
+    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-nvidia}"
+    DEFAULT_MAXLEN=524288; DEFAULT_NSPEC=3; DEFAULT_INDEX_SHARE=1
+    DEFAULT_GPU_UTIL=0.78; DEFAULT_KV_MEM=16106127360; DEFAULT_MAXSEQS=8; DEFAULT_AUTOTUNE=1
+    SERVED_NAME="${SERVED_NAME:-qwen3.8-flash-next}"
+    ;;
+  *) echo "FATAL: unknown MODEL_PROFILE=${MODEL_PROFILE}" >&2; exit 2 ;;
+esac
 NAME="${NAME:-qwen38-flash-next}"
 PORT="${PORT:-8888}"
-SERVED_NAME="${SERVED_NAME:-qwen3.8-flash-next}"
+CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 
 # THE ONE THAT COSTS YOU A DAY -----------------------------------------------------
 # PLE offload requires the multiproc executor, even at TP=1. spawn_ple_offload() and
@@ -37,7 +53,7 @@ EXECUTOR="${EXECUTOR:-mp}"
 # 1M costs 31.9 GiB of KV against 14-16, and the RAM that frees becomes page cache for
 # the PLE table, so n-gram lookups hit RAM more often. Measured 30.0 tok/s at 512K
 # against 27.4 at 1M.
-MAXLEN="${MAXLEN:-524288}"
+MAXLEN="${MAXLEN:-${DEFAULT_MAXLEN}}"
 ROPE="${ROPE:-yarn}"
 ROPE_ARGS=()
 LONG_ENV=()
@@ -56,12 +72,12 @@ fi
 #     k=3  11.90 steps/s  acc 2.78  ->  33.02 tok/s   <-- default
 #     k=4  10.37 steps/s  acc 2.76  ->  28.66 tok/s   acceptance saturates, cost does not
 #   SPEC=none ./serve.sh    # unspeculated baseline, 17.4 tok/s
-NSPEC="${NSPEC:-3}"
+NSPEC="${NSPEC:-${DEFAULT_NSPEC}}"
 case "${SPEC:-mtp}" in
   mtp)  # INDEX_SHARE maps to set_skip_topk: MTP step 0 picks the QSA sparse indices and
         # later steps reuse them. Profiler puts QSA under 5% of decode, so the ceiling is
         # small; it was enabled alongside k=3 and never measured on its own.
-        if [[ "${INDEX_SHARE:-1}" == "1" ]]; then
+        if [[ "${INDEX_SHARE:-${DEFAULT_INDEX_SHARE}}" == "1" ]]; then
           SPEC_CFG="{\"method\":\"mtp\",\"num_speculative_tokens\":${NSPEC},\"index_share_for_mtp_iteration\":true}"
         else
           SPEC_CFG="{\"method\":\"mtp\",\"num_speculative_tokens\":${NSPEC}}"
@@ -85,13 +101,13 @@ KV_ARGS=()
 # 0.78 -> ~16 GiB of KV, comfortably above the 14.2 GiB one 524288 request needs, and
 # leaves ~15 GiB of RAM as PLE page cache. Raising it starves that cache; 0.63 already
 # left KV at 0.21 GiB and refused to boot.
-GPU_UTIL="${GPU_UTIL:-0.78}"
-MAXSEQS="${MAXSEQS:-8}"
+GPU_UTIL="${GPU_UTIL:-${DEFAULT_GPU_UTIL}}"
+MAXSEQS="${MAXSEQS:-${DEFAULT_MAXSEQS}}"
 
 # Pin the KV pool: vLLM derives it from a runtime measurement that wobbles on unified
 # memory (three boots of one config gave 573,862 / 591,889 / 614,423 tokens). 15.0 GiB
 # leaves ~5% over the 14.3 GiB one 524288 request needs. KV_MEM= restores the old behaviour.
-KV_MEM="${KV_MEM-16106127360}"
+KV_MEM="${KV_MEM-${DEFAULT_KV_MEM}}"
 KVMEM_ARGS=()
 [[ -n "${KV_MEM}" ]] && KVMEM_ARGS=(--kv-cache-memory "${KV_MEM}")
 
@@ -116,9 +132,9 @@ PLE_TIMEOUT="${PLE_TIMEOUT:-1800}"
 # decode by profiler. Enabled alongside k=3 and never measured on its own. AUTOTUNE=0
 # reverts. Costs extra boot time while it sweeps.
 AUTOTUNE_ARGS=(--enable-flashinfer-autotune)
-[[ "${AUTOTUNE:-1}" == "1" ]] || AUTOTUNE_ARGS=(--no-enable-flashinfer-autotune)
+[[ "${AUTOTUNE:-${DEFAULT_AUTOTUNE}}" == "1" ]] || AUTOTUNE_ARGS=(--no-enable-flashinfer-autotune)
 
-[[ -f "${MODEL_DIR}/model-fp8-mtp-ple.safetensors" ]] || {
+[[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || {
   echo "FATAL: weights missing at ${MODEL_DIR} -- run ./download-weights.sh first" >&2; exit 1; }
 swapon --show=NAME --noheadings | grep -q . || {
   echo "FATAL: no swap is active. The PLE table has nowhere to page out to and the load" >&2
@@ -129,6 +145,13 @@ swapon --show=NAME --noheadings | grep -q . || {
 docker image inspect "${IMAGE}" >/dev/null 2>&1 || {
   echo "FATAL: image ${IMAGE} not present -- docker pull ${IMAGE}" >&2; exit 1; }
 
+CONFIG_MOUNT=()
+if [[ -n "${CONFIG_OVERRIDE}" ]]; then
+  [[ -f "${CONFIG_OVERRIDE}" ]] || { echo "FATAL: config override not found: ${CONFIG_OVERRIDE}" >&2; exit 1; }
+  CONFIG_MOUNT=(-v "${CONFIG_OVERRIDE}:/model/config.json:ro")
+fi
+mkdir -p "${HOME}/.cache/flashinfer" "${HOME}/.cache/vllm-qwen38"
+
 docker rm -f "${NAME}" >/dev/null 2>&1 || true
 
 docker run -d \
@@ -138,7 +161,9 @@ docker run -d \
   --restart unless-stopped \
   --shm-size=32g \
   --ulimit memlock=-1:-1 \
+  --ulimit stack=67108864 \
   --cap-add=IPC_LOCK \
+  --cap-add=SYS_PTRACE \
   --ipc host \
   --gpus all \
   --workdir /workspace \
@@ -146,9 +171,12 @@ docker run -d \
   -e CUTE_DSL_ARCH=sm_121a \
   -e VLLM_PLE_CPU_OFFLOAD=1 \
   -e VLLM_PLE_OFFLOAD_READY_TIMEOUT="${PLE_TIMEOUT}" \
+  -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
   "${LONG_ENV[@]}" \
   -v "${MODEL_DIR}:/model:ro" \
+  "${CONFIG_MOUNT[@]}" \
   -v "${HOME}/.cache/flashinfer:/root/.cache/flashinfer" \
+  -v "${HOME}/.cache/vllm-qwen38:/root/.cache/vllm" \
   "${IMAGE}" \
   /model \
     --served-model-name "${SERVED_NAME}" \
@@ -156,6 +184,7 @@ docker run -d \
     --port "${PORT}" \
     --tensor-parallel-size 1 \
     --distributed-executor-backend "${EXECUTOR}" \
+    --trust-remote-code \
     "${KV_ARGS[@]}" \
     --gpu-memory-utilization "${GPU_UTIL}" \
     "${KVMEM_ARGS[@]}" \
@@ -164,6 +193,7 @@ docker run -d \
     --max-num-seqs "${MAXSEQS}" \
     --max-num-batched-tokens "${BATCHED_TOKENS:-8192}" \
     --enable-chunked-prefill \
+    --no-async-scheduling \
     "${PREFIX_ARGS[@]}" \
     "${AUTOTUNE_ARGS[@]}" \
     --enable-auto-tool-choice \
@@ -172,7 +202,7 @@ docker run -d \
     --limit-mm-per-prompt '{"image":4}' \
     "${SPEC_ARGS[@]}"
 
-echo "started ${NAME} (executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
+echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
 echo "follow with:  docker logs -f ${NAME}"
 echo "watch memory: watch -n5 'free -g; swapon --show'"
 echo
