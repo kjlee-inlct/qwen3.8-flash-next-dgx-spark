@@ -36,6 +36,12 @@ esac
 NAME="${NAME:-qwen38-flash-next}"
 PORT="${PORT:-8888}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
+MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
+MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
+MONITOR_LOG="${STATE_DIR}/monitor.log"
+[[ "${MONITOR_PROTECT}" == 0 || "${MONITOR_PROTECT}" == 1 ]] || {
+  echo "FATAL: MONITOR_PROTECT must be 0 or 1" >&2; exit 2; }
 
 # THE ONE THAT COSTS YOU A DAY -----------------------------------------------------
 # PLE offload requires the multiproc executor, even at TP=1. spawn_ple_offload() and
@@ -201,6 +207,22 @@ docker run -d \
     --reasoning-parser qwen3 \
     --limit-mm-per-prompt '{"image":4}' \
     "${SPEC_ARGS[@]}"
+
+if [[ "${MONITOR_PROTECT}" == 1 ]]; then
+  mkdir -p "${STATE_DIR}"
+  if [[ -r "${MONITOR_PID_FILE}" ]]; then
+    old_pid="$(<"${MONITOR_PID_FILE}")"
+    if [[ "${old_pid}" =~ ^[0-9]+$ && -r "/proc/${old_pid}/cmdline" ]] && \
+       tr '\0' ' ' < "/proc/${old_pid}/cmdline" | grep -Fq 'monitor-runtime.sh'; then
+      kill "${old_pid}" 2>/dev/null || true
+    fi
+  fi
+  nohup "$(dirname -- "${BASH_SOURCE[0]}")/monitor-runtime.sh" --container "${NAME}" --protect \
+    >>"${MONITOR_LOG}" 2>&1 &
+  monitor_pid=$!
+  printf '%s\n' "${monitor_pid}" > "${MONITOR_PID_FILE}"
+  echo "memory protection monitor started (pid=${monitor_pid}, log=${MONITOR_LOG})"
+fi
 
 echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
 echo "follow with:  docker logs -f ${NAME}"
