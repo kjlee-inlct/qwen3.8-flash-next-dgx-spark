@@ -505,6 +505,28 @@ disabled FlashInfer autotune, and disabled async scheduling. Treat that as a com
 baseline; re-enable optimizations one at a time after recording output quality, step rate,
 MTP acceptance, memory and swap use.
 
+### Manage the dedicated PLE swap
+
+Use the swap wizard to add `/swap-ple.img` without resizing, formatting, or otherwise
+changing an existing `/swap.img`:
+
+```bash
+sudo ./scripts/manage-swap.sh
+```
+
+The same operations are available non-interactively for a future installer:
+
+```bash
+sudo ./scripts/manage-swap.sh create --size-gib 128 --persist --yes
+./scripts/manage-swap.sh status
+sudo ./scripts/manage-swap.sh remove
+```
+
+Creation refuses to overwrite an existing path and preserves a 32 GiB disk-space reserve.
+Removal accepts only a regular non-symlink file, deactivates it before deletion, and manages
+only the exact `/etc/fstab` entry marked `# qwen38-ple-swap`. Other swap files and entries
+are never modified.
+
 ```bash
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
