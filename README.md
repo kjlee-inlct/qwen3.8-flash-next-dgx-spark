@@ -568,7 +568,8 @@ are never modified.
 ### Monitor DGX Spark unified memory
 
 The runtime monitor is warning-only by default. It samples `MemAvailable`, `MemFree`, and
-`SwapFree`, debounces transient pressure, and exits when the container stops:
+`SwapFree`, debounces transient pressure, emits a healthy heartbeat every 60 seconds, and
+exits when the container stops:
 
 ```bash
 ./scripts/monitor-runtime.sh
@@ -582,11 +583,26 @@ make the host unresponsive:
 ./scripts/monitor-runtime.sh --protect
 ```
 
+Change or disable the heartbeat without changing the two-second safety sampling interval:
+
+```bash
+./scripts/monitor-runtime.sh --heartbeat 30
+./scripts/monitor-runtime.sh --heartbeat 0
+```
+
 The interactive installer asks whether to enable this protection. If enabled, `serve.sh`
 runs the monitor in the background and records its PID and log under
 `${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark`; `uninstall.sh` stops only that recorded
 monitor process. Non-interactive installs keep protection disabled unless
 `MONITOR_PROTECT=1` is explicitly supplied.
+
+For the OrcaRouter checkpoint, `install.sh` now generates a separate
+`~/.local/state/qwen38-spark/config.vllm.json` automatically. It converts the checkpoint's
+`qwen_sparse_attention` layer labels to the canonical `compressed_sparse_attention` name
+accepted by the pinned vLLM image, while leaving `model/config.json` unchanged. Direct
+`serve.sh` invocations do the same when `CONFIG_OVERRIDE` is not supplied. Container restart
+defaults to `on-failure:3`, preventing a bad startup config from entering an infinite loop;
+override it explicitly with `RESTART_POLICY` only when needed.
 
 ```bash
 # 1. weights, 123.6 GiB
