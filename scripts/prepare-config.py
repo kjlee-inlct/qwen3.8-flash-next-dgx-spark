@@ -12,7 +12,9 @@ from typing import Any
 
 
 SOURCE_LAYER_TYPE = "qwen_sparse_attention"
-VLLM_LAYER_TYPE = "compressed_sparse_attention"
+# The pinned image's generic validator accepts this canonical category, and
+# Qwen3.8's model implementation selects QSA when indexer_n_heads is present.
+VLLM_LAYER_TYPE = "full_attention"
 
 
 def convert_layer_types(value: Any) -> tuple[Any, int]:
