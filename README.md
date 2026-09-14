@@ -488,6 +488,8 @@ The model revision is pinned to `c1209bda15a6bbc4c68b585e93d40c0d85f50306`.
 The gated model terms must be accepted and `hf auth login` completed first. Downloads are
 resumable; files backed by Hugging Face LFS are checked against their published SHA-256,
 and the resolved repository revision and file manifest are stored with the model.
+The optional config override prompt normally answers **No**; choose Yes only when an
+existing, separately tested `config.json` must be mounted over the checkpoint's own file.
 
 The default uninstaller removes only the recorded container and preserves expensive or
 shared resources:
