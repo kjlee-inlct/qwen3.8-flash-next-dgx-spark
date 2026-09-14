@@ -620,8 +620,13 @@ The uninstaller removes it only when that installation created it. Standalone re
 unmanaged or symlinked unit files:
 
 ```bash
+./scripts/manage-proxy.sh adopt   # record a manually created managed proxy
 sudo ./scripts/manage-proxy.sh remove
 ```
+
+Run `adopt` without `sudo`. It accepts only this tool's root-owned, marker-bearing unit pair
+and a current-user-owned, non-symlink installation manifest. After adoption, `uninstall.sh`
+removes the proxy just as if the installer wizard had created it.
 
 Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment with separate
 access controls. Prefix caching is explicitly disabled in the OrcaRouter compatibility
