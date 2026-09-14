@@ -565,6 +565,29 @@ Removal accepts only a regular non-symlink file, deactivates it before deletion,
 only the exact `/etc/fstab` entry marked `# qwen38-ple-swap`. Other swap files and entries
 are never modified.
 
+### Monitor DGX Spark unified memory
+
+The runtime monitor is warning-only by default. It samples `MemAvailable`, `MemFree`, and
+`SwapFree`, debounces transient pressure, and exits when the container stops:
+
+```bash
+./scripts/monitor-runtime.sh
+```
+
+Automatic protection is deliberately opt-in. With `--protect`, five consecutive low-memory
+samples cause a graceful 30-second container stop instead of letting unified-memory pressure
+make the host unresponsive:
+
+```bash
+./scripts/monitor-runtime.sh --protect
+```
+
+The interactive installer asks whether to enable this protection. If enabled, `serve.sh`
+runs the monitor in the background and records its PID and log under
+`${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark`; `uninstall.sh` stops only that recorded
+monitor process. Non-interactive installs keep protection disabled unless
+`MONITOR_PROTECT=1` is explicitly supplied.
+
 ```bash
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
