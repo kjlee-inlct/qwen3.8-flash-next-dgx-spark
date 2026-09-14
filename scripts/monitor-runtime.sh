@@ -8,6 +8,7 @@ MIN_FREE_GIB=2
 FREE_GATE_GIB=10
 CONSECUTIVE=5
 INTERVAL=2
+HEARTBEAT=60
 PROTECT=0
 
 usage() {
@@ -19,6 +20,7 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --free-gate-gib N            Apply MemFree floor below this MemAvailable (default: 10)
   --consecutive N              Consecutive low samples before protection (default: 5)
   --interval N                 Sampling interval in seconds (default: 2)
+  --heartbeat N                Healthy status interval in seconds; 0 disables (default: 60)
   --protect                    Stop the container after consecutive low samples
 
 Without --protect this tool only reports warnings and never changes the container.
@@ -26,6 +28,7 @@ EOF
 }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 positive_integer() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
+nonnegative_integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --free-gate-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; FREE_GATE_GIB="$2"; shift ;;
     --consecutive) [[ $# -ge 2 ]] || die "$1 requires a value"; CONSECUTIVE="$2"; shift ;;
     --interval) [[ $# -ge 2 ]] || die "$1 requires a value"; INTERVAL="$2"; shift ;;
+    --heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; HEARTBEAT="$2"; shift ;;
     --protect) PROTECT=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -45,6 +49,7 @@ done
 for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${CONSECUTIVE}" "${INTERVAL}"; do
   positive_integer "${value}" || die "thresholds and intervals must be positive integers"
 done
+nonnegative_integer "${HEARTBEAT}" || die "heartbeat must be a non-negative integer"
 command -v docker >/dev/null || die "docker is required"
 [[ -r /proc/meminfo ]] || die "/proc/meminfo is unavailable"
 docker inspect "${CONTAINER}" >/dev/null 2>&1 || die "container not found: ${CONTAINER}"
@@ -56,6 +61,7 @@ low_count=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
 printf '%s monitor started: container=%s mode=%s available=%sGiB free=%sGiB/%sGiB gate\n' \
   "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}"
+next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
   mem_available="$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"
@@ -78,6 +84,11 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
         "$(date '+%F %T')" "$((mem_available / 1024))" "$((mem_free / 1024))"
     fi
     low_count=0
+    if (( HEARTBEAT > 0 && SECONDS >= next_heartbeat )); then
+      printf '%s HEARTBEAT healthy: available=%dMiB free=%dMiB swapfree=%dMiB\n' \
+        "$(date '+%F %T')" "$((mem_available / 1024))" "$((mem_free / 1024))" "$((swap_free / 1024))"
+      next_heartbeat=$((SECONDS + HEARTBEAT))
+    fi
   fi
   sleep "${INTERVAL}"
 done
