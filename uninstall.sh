@@ -24,6 +24,7 @@ source "${STATE_FILE}"
 [[ -n "${CONTAINER_NAME:-}" && "${CONTAINER_NAME}" != */* ]] || die "invalid container name"
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
+PROXY_OWNED="${PROXY_OWNED:-0}"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 
 printf 'Qwen3.8 Flash Next uninstaller\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
@@ -40,6 +41,9 @@ if [[ -r "${MONITOR_PID_FILE}" ]]; then
     kill "${monitor_pid}" 2>/dev/null || true
   fi
   rm -f -- "${MONITOR_PID_FILE}"
+fi
+if [[ "${PROXY_OWNED}" == 1 ]]; then
+  sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes
 fi
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
