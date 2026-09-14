@@ -17,6 +17,14 @@ readonly ORCA_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 readonly ORCA_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
 readonly NVIDIA_REPO="nvidia/Qwen3.8-Flash-Next-NVFP4"
 
+expand_user_path() {
+  case "$1" in
+    "~") printf '%s\n' "${HOME}" ;;
+    "~/"*) printf '%s/%s\n' "${HOME}" "${1:2}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 PROFILE="${MODEL_PROFILE:-orcarouter}"
 case "${PROFILE}" in
   orcarouter)
@@ -27,6 +35,7 @@ case "${PROFILE}" in
     DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-nvidia}"; REQUIRE_TOKEN=0 ;;
   *) printf 'FATAL: unknown MODEL_PROFILE: %s\n' "${PROFILE}" >&2; exit 2 ;;
 esac
+DEST="$(realpath -m -- "$(expand_user_path "${DEST}")")"
 
 TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"
 if [[ -z "${TOKEN}" ]]; then
@@ -61,9 +70,18 @@ resolved_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[
 if [[ "${REVISION}" =~ ^[0-9a-f]{40}$ && "${resolved_revision}" != "${REVISION}" ]]; then
   printf 'FATAL: requested revision %s resolved to unexpected %s\n' "${REVISION}" "${resolved_revision}" >&2; exit 4
 fi
-if [[ "${REQUIRE_TOKEN}" == 1 ]] && ! curl -fsSL --range 0-0 "${AUTH_ARGS[@]}" \
-    "${BASE_URL}/config.json" >/dev/null; then
-  printf 'FATAL: authenticated model-file access failed; accept the gated terms and run `hf auth login`.\n' >&2
+file_http_code=200
+if [[ "${REQUIRE_TOKEN}" == 1 ]]; then
+  file_http_code="$(curl -sS -L --range 0-0 -o /dev/null -w '%{http_code}' \
+    "${AUTH_ARGS[@]}" "${BASE_URL}/config.json" || true)"
+fi
+if [[ "${file_http_code}" != 200 && "${file_http_code}" != 206 ]]; then
+  printf 'FATAL: authenticated model-file access returned HTTP %s.\n' "${file_http_code}" >&2
+  printf 'The token is valid enough for metadata but cannot download this gated repository.\n' >&2
+  printf '1. Accept access at: https://huggingface.co/%s\n' "${REPO}" >&2
+  printf '2. Ensure the token has read access to public gated repositories.\n' >&2
+  printf '3. Refresh it with `hf auth login --force`, then test:\n' >&2
+  printf '   hf download %s config.json --revision %s\n' "${REPO}" "${REVISION}" >&2
   exit 4
 fi
 
