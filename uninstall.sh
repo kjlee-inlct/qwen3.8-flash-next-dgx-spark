@@ -23,6 +23,7 @@ source "${STATE_FILE}"
 [[ -n "${INSTALL_ROOT:-}" && -d "${INSTALL_ROOT}" ]] || die "invalid INSTALL_ROOT in manifest"
 [[ -n "${CONTAINER_NAME:-}" && "${CONTAINER_NAME}" != */* ]] || die "invalid container name"
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
+CONFIG_OWNED="${CONFIG_OWNED:-0}"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 
 printf 'Qwen3.8 Flash Next uninstaller\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
@@ -67,6 +68,10 @@ if [[ "${PURGE_IMAGE}" == 1 ]]; then
   fi
 fi
 if [[ "${PURGE_MODEL}" == 1 && "${PURGE_SWAP}" == 1 && "${PURGE_IMAGE}" == 1 ]]; then
+  if [[ "${CONFIG_OWNED}" == 1 && "${CONFIG_OVERRIDE:-}" == "${STATE_DIR}/config.vllm.json" ]]; then
+    rm -f -- "${CONFIG_OVERRIDE}"
+  fi
+  rm -f -- "${STATE_DIR}/monitor.log"
   rm -f -- "${STATE_FILE}"; rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
   printf 'Full uninstall completed; installation manifest removed.\n'
 else
