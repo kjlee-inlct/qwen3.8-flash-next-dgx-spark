@@ -605,6 +605,28 @@ the Qwen3.8 implementation then selects QSA through `indexer_n_heads`. This leav
 defaults to `on-failure:3`, preventing a bad startup config from entering an infinite loop;
 override it explicitly with `RESTART_POLICY` only when needed.
 
+`serve.sh` publishes the API on host loopback only (`127.0.0.1:8888`) by default. This keeps
+the unauthenticated vLLM API off the LAN. For an existing Dockerized OpenWebUI, install the
+optional managed socket proxy, which listens only on the IPv4 address assigned to `docker0`:
+
+```bash
+sudo ./scripts/manage-proxy.sh create
+./scripts/manage-proxy.sh status
+docker exec open-webui curl -fsS http://host.docker.internal:8000/v1/models
+```
+
+The interactive installer can create it and records ownership in the installation manifest.
+The uninstaller removes it only when that installation created it. Standalone removal refuses
+unmanaged or symlinked unit files:
+
+```bash
+sudo ./scripts/manage-proxy.sh remove
+```
+
+Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment with separate
+access controls. Prefix caching is explicitly disabled in the OrcaRouter compatibility
+baseline; set `PREFIX_CACHE=1` to enable it together with the required Mamba alignment mode.
+
 ```bash
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
