@@ -473,6 +473,38 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 
 ## Reproducing
 
+### Inspect a checkpoint before downloading or serving
+
+The OrcaRouter checkpoint is gated and is substantially larger than the NVIDIA build.
+Inspect its remote manifest first, then inspect the downloaded safetensors headers. The
+local inspection reads only JSON headers; it does not load the 170+ GiB checkpoint into
+memory.
+
+```bash
+# Public metadata: revision, total size, large shards and gated status.
+python3 scripts/inspect-model.py
+
+# Definitive PLE/MTP dtype and tensor-layout inspection after `hf auth login` + download.
+python3 scripts/inspect-model.py \
+  --model-dir /home/jay/model_zoo/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --config-override /home/jay/vllm-qwen38/config.json
+
+# Machine-readable report for CI or an installation manifest.
+python3 scripts/inspect-model.py --model-dir /path/to/model --json
+```
+
+Exit status is `2` when a required file cannot be read or no PLE tensors are found. A
+warning means the layout needs review but does not prove incompatibility. In particular,
+do not apply `patch-nv-mixed.py` merely because a checkpoint is named NVFP4: that patch is
+specific to NVIDIA's `MIXED_PRECISION` PLE and block-FP8 MTP layout.
+
+The known OrcaRouter TP=1 starting point uses the stock
+`vllm/vllm-openai:qwen38-flash-next-arm64-cu130` image, PLE CPU offload, the `mp`
+executor, native 262144 context, 24 GiB of pinned KV, MTP `k=2`, disabled prefix cache,
+disabled FlashInfer autotune, and disabled async scheduling. Treat that as a compatibility
+baseline; re-enable optimizations one at a time after recording output quality, step rate,
+MTP acceptance, memory and swap use.
+
 ```bash
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
