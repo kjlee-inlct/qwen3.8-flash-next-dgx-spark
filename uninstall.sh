@@ -23,6 +23,7 @@ source "${STATE_FILE}"
 [[ -n "${INSTALL_ROOT:-}" && -d "${INSTALL_ROOT}" ]] || die "invalid INSTALL_ROOT in manifest"
 [[ -n "${CONTAINER_NAME:-}" && "${CONTAINER_NAME}" != */* ]] || die "invalid container name"
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
+MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 
 printf 'Qwen3.8 Flash Next uninstaller\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
 printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
@@ -30,6 +31,14 @@ printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && 
 printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf remove || printf keep)"
 if [[ "${YES}" != 1 ]]; then
   read -r -p 'Type DELETE to continue: ' answer; [[ "${answer}" == DELETE ]] || die "cancelled"
+fi
+if [[ -r "${MONITOR_PID_FILE}" ]]; then
+  monitor_pid="$(<"${MONITOR_PID_FILE}")"
+  if [[ "${monitor_pid}" =~ ^[0-9]+$ && -r "/proc/${monitor_pid}/cmdline" ]] && \
+     tr '\0' ' ' < "/proc/${monitor_pid}/cmdline" | grep -Fq 'monitor-runtime.sh'; then
+    kill "${monitor_pid}" 2>/dev/null || true
+  fi
+  rm -f -- "${MONITOR_PID_FILE}"
 fi
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
