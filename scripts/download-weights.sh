@@ -3,15 +3,19 @@
 set -uo pipefail
 
 CHECK_ONLY=0
-case "${1:-}" in
-  --check) CHECK_ONLY=1; shift ;;
-  -h|--help)
-    printf 'Usage: [MODEL_PROFILE=orcarouter|nvidia] ./scripts/download-weights.sh [--check]\n'
-    exit 0 ;;
-  "") ;;
-  *) printf 'FATAL: unknown argument: %s\n' "$1" >&2; exit 2 ;;
-esac
-[[ $# -eq 0 ]] || { printf 'FATAL: unexpected arguments\n' >&2; exit 2; }
+QUIET=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check) CHECK_ONLY=1 ;;
+    -q|--quiet) QUIET=1 ;;
+    -h|--help)
+      printf 'Usage: [MODEL_PROFILE=orcarouter|nvidia] ./scripts/download-weights.sh [--check] [--quiet]\n'
+      printf 'Interactive downloads show per-file and overall progress by default.\n'
+      exit 0 ;;
+    *) printf 'FATAL: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
 
 readonly ORCA_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 readonly ORCA_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
@@ -136,17 +140,33 @@ verify() {
 }
 printf 'Checkpoint download\n  repository : %s\n  revision   : %s\n  destination: %s\n' "${REPO}" "${resolved_revision}" "${DEST}"
 fail=0
+file_count="$(printf '%s\n' "${manifest}" | awk 'NF {count++} END {print count+0}')"
+file_index=0
+completed_bytes=0
+curl_progress=(--no-progress-meter)
+if [[ "${QUIET}" == 0 && -t 2 ]]; then curl_progress=(--progress-bar); fi
 while IFS=$'\t' read -r name size sha; do
   [[ -n "${name}" ]] || continue
+  file_index=$((file_index + 1))
   output="${DEST}/${name}"; mkdir -p "$(dirname -- "${output}")"
-  if verify "${output}" "${size}" "${sha}"; then printf '  ok    %s\n' "${name}"; continue; fi
+  overall_pct="$(awk -v done="${completed_bytes}" -v total="${required_bytes}" 'BEGIN {printf "%.1f", total ? done*100/total : 100}')"
+  if verify "${output}" "${size}" "${sha}"; then
+    printf '  [%d/%d | %s%%] ok   %s\n' "${file_index}" "${file_count}" "${overall_pct}" "${name}"
+    completed_bytes=$((completed_bytes + size))
+    continue
+  fi
   if [[ -f "${output}" && "$(stat -c %s -- "${output}")" == "${size}" ]]; then
     printf '  BAD   %s (SHA-256 mismatch; refetching)\n' "${name}" >&2; rm -f -- "${output}"
   fi
-  printf '  get   %s (%.2f GiB)\n' "${name}" "$(awk -v n="${size}" 'BEGIN {print n/1073741824}')"
-  curl -fL -C - --retry 5 --retry-delay 5 --retry-all-errors --no-progress-meter \
+  printf '  [%d/%d | %s%%] get  %s (%.2f GiB)\n' "${file_index}" "${file_count}" \
+    "${overall_pct}" "${name}" "$(awk -v n="${size}" 'BEGIN {print n/1073741824}')"
+  curl -fL -C - --retry 5 --retry-delay 5 --retry-all-errors "${curl_progress[@]}" \
     "${AUTH_ARGS[@]}" -o "${output}" "${BASE_URL}/${name}" || { printf '  FAIL  %s\n' "${name}" >&2; fail=1; continue; }
-  verify "${output}" "${size}" "${sha}" || { printf '  FAIL  %s (verification failed)\n' "${name}" >&2; fail=1; }
+  if verify "${output}" "${size}" "${sha}"; then
+    completed_bytes=$((completed_bytes + size))
+  else
+    printf '  FAIL  %s (verification failed)\n' "${name}" >&2; fail=1
+  fi
 done <<< "${manifest}"
 [[ "${fail}" == 0 ]] || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
 
