@@ -473,6 +473,36 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 
 ## Reproducing
 
+### Guided install and uninstall
+
+The installer defaults to the pinned OrcaRouter checkpoint. It checks Docker and Hugging
+Face authentication, creates only the dedicated PLE swap when needed, downloads and
+verifies every checkpoint file, inspects tensor headers, records an installation manifest,
+and starts the conservative TP=1 profile:
+
+```bash
+./install.sh
+```
+
+The model revision is pinned to `c1209bda15a6bbc4c68b585e93d40c0d85f50306`.
+The gated model terms must be accepted and `hf auth login` completed first. Downloads are
+resumable; files backed by Hugging Face LFS are checked against their published SHA-256,
+and the resolved repository revision and file manifest are stored with the model.
+
+The default uninstaller removes only the recorded container and preserves expensive or
+shared resources:
+
+```bash
+./uninstall.sh
+./uninstall.sh --purge-model
+./uninstall.sh --purge-swap
+./uninstall.sh --purge-all
+```
+
+Destructive model removal is allowed only below `$HOME/models` and only when the download
+manifest exists. Dedicated swap removal delegates to `manage-swap.sh`; `/swap.img` is
+never selected. Use `--yes` only for already-reviewed automation.
+
 ### Inspect a checkpoint before downloading or serving
 
 The OrcaRouter checkpoint is gated and is substantially larger than the NVIDIA build.
