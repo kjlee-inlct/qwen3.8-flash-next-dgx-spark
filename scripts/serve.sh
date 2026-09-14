@@ -11,6 +11,7 @@
 # the result to the GPU worker. It is ordinary pageable memory, so the kernel pages the
 # cold rows out to swap. Measured cost: ~73 KiB of page-ins per decoded token.
 set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # vllm-nv-mixed:v2 = skinny-GEMM + patch-nv-mixed.py. Both are required: the official
 # checkpoint declares quant_algo=MIXED_PRECISION, which the pinned image cannot load
@@ -40,8 +41,11 @@ MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 MONITOR_LOG="${STATE_DIR}/monitor.log"
+RESTART_POLICY="${RESTART_POLICY:-on-failure:3}"
 [[ "${MONITOR_PROTECT}" == 0 || "${MONITOR_PROTECT}" == 1 ]] || {
   echo "FATAL: MONITOR_PROTECT must be 0 or 1" >&2; exit 2; }
+[[ "${RESTART_POLICY}" =~ ^(no|always|unless-stopped|on-failure(:[1-9][0-9]*)?)$ ]] || {
+  echo "FATAL: invalid RESTART_POLICY=${RESTART_POLICY}" >&2; exit 2; }
 
 # THE ONE THAT COSTS YOU A DAY -----------------------------------------------------
 # PLE offload requires the multiproc executor, even at TP=1. spawn_ple_offload() and
@@ -151,6 +155,11 @@ swapon --show=NAME --noheadings | grep -q . || {
 docker image inspect "${IMAGE}" >/dev/null 2>&1 || {
   echo "FATAL: image ${IMAGE} not present -- docker pull ${IMAGE}" >&2; exit 1; }
 
+if [[ "${MODEL_PROFILE}" == orcarouter && -z "${CONFIG_OVERRIDE}" ]]; then
+  CONFIG_OVERRIDE="${STATE_DIR}/config.vllm.json"
+  python3 "${SCRIPT_DIR}/prepare-config.py" --model-dir "${MODEL_DIR}" --output "${CONFIG_OVERRIDE}"
+fi
+
 CONFIG_MOUNT=()
 if [[ -n "${CONFIG_OVERRIDE}" ]]; then
   [[ -f "${CONFIG_OVERRIDE}" ]] || { echo "FATAL: config override not found: ${CONFIG_OVERRIDE}" >&2; exit 1; }
@@ -164,7 +173,7 @@ docker run -d \
   --name "${NAME}" \
   --user root \
   -p "${PORT}:${PORT}" \
-  --restart unless-stopped \
+  --restart "${RESTART_POLICY}" \
   --shm-size=32g \
   --ulimit memlock=-1:-1 \
   --ulimit stack=67108864 \
@@ -217,7 +226,7 @@ if [[ "${MONITOR_PROTECT}" == 1 ]]; then
       kill "${old_pid}" 2>/dev/null || true
     fi
   fi
-  nohup "$(dirname -- "${BASH_SOURCE[0]}")/monitor-runtime.sh" --container "${NAME}" --protect \
+  nohup "${SCRIPT_DIR}/monitor-runtime.sh" --container "${NAME}" --protect --heartbeat 60 \
     >>"${MONITOR_LOG}" 2>&1 &
   monitor_pid=$!
   printf '%s\n' "${monitor_pid}" > "${MONITOR_PID_FILE}"
