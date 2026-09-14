@@ -490,6 +490,12 @@ resumable; files backed by Hugging Face LFS are checked against their published 
 and the resolved repository revision and file manifest are stored with the model.
 The optional config override prompt normally answers **No**; choose Yes only when an
 existing, separately tested `config.json` must be mounted over the checkpoint's own file.
+Both manifests are written before the long download begins. The installation manifest
+tracks `prepared`, `swap_ready`, `downloading`, `weights_ready`, `inspected`, `image_ready`
+and `complete` phases plus ownership of the model directory, swap and image. The model
+manifest starts with `status: downloading` and changes atomically to `status: complete`
+only after every file passes verification. Re-running `install.sh` resumes an interrupted
+installation from the recorded paths without taking ownership of pre-existing resources.
 
 The default uninstaller removes only the recorded container and preserves expensive or
 shared resources:
