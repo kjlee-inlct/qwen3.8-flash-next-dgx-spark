@@ -4,15 +4,18 @@ set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
-PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; YES=0
+PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; YES=0
+CLI_LANG=""
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: ./uninstall.sh [--purge-model] [--purge-swap] [--purge-image] [--purge-all] [--yes]\n'
+  printf 'Usage: ./uninstall.sh [--lang en|ko] [--purge-model] [--purge-swap] [--purge-image] [--purge-all] [--yes]\n'
+  printf '       ./uninstall.sh  # interactive English/Korean wizard (default)\n'
 }
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --purge-model) PURGE_MODEL=1 ;; --purge-swap) PURGE_SWAP=1 ;; --purge-image) PURGE_IMAGE=1 ;;
-    --purge-all) PURGE_MODEL=1; PURGE_SWAP=1; PURGE_IMAGE=1 ;; --yes) YES=1 ;;
+    --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
+    --purge-model) PURGE_MODEL=1; PURGE_SELECTED=1 ;; --purge-swap) PURGE_SWAP=1; PURGE_SELECTED=1 ;; --purge-image) PURGE_IMAGE=1; PURGE_SELECTED=1 ;;
+    --purge-all) PURGE_MODEL=1; PURGE_SWAP=1; PURGE_IMAGE=1; PURGE_SELECTED=1 ;; --yes) YES=1 ;;
     -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
   shift
@@ -20,6 +23,14 @@ done
 [[ -r "${STATE_FILE}" ]] || die "installation manifest not found: ${STATE_FILE}"
 # shellcheck disable=SC1090 -- created by install.sh with shell-escaped values and mode 600.
 source "${STATE_FILE}"
+[[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
+if [[ -z "${UI_LANG:-}" ]]; then
+  if [[ "${YES}" == 0 && -t 0 ]]; then
+    read -r -p 'Language / 언어 [1: English, 2: 한국어] (2): ' answer
+    [[ "${answer}" == 1 || "${answer}" == en ]] && UI_LANG=en || UI_LANG=ko
+  elif [[ "${LANG:-}" == ko_* ]]; then UI_LANG=ko; else UI_LANG=en; fi
+fi
+[[ "${UI_LANG}" == en || "${UI_LANG}" == ko ]] || die "--lang must be en or ko"
 [[ -n "${INSTALL_ROOT:-}" && -d "${INSTALL_ROOT}" ]] || die "invalid INSTALL_ROOT in manifest"
 [[ -n "${CONTAINER_NAME:-}" && "${CONTAINER_NAME}" != */* ]] || die "invalid container name"
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
@@ -27,12 +38,33 @@ CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_OWNED="${PROXY_OWNED:-0}"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 
-printf 'Qwen3.8 Flash Next uninstaller\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
-printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
-printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf remove || printf keep)"
-printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf remove || printf keep)"
+if [[ "${YES}" == 0 && "${PURGE_SELECTED}" == 0 ]]; then
+  if [[ "${UI_LANG}" == ko ]]; then
+    read -r -p '다운로드한 모델도 제거합니까? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] && PURGE_MODEL=1
+    read -r -p '전용 PLE swap도 제거합니까? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] && PURGE_SWAP=1
+    read -r -p 'vLLM Docker image도 제거합니까? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] && PURGE_IMAGE=1
+  else
+    read -r -p 'Remove the downloaded model too? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] && PURGE_MODEL=1
+    read -r -p 'Remove the dedicated PLE swap too? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] && PURGE_SWAP=1
+    read -r -p 'Remove the vLLM Docker image too? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] && PURGE_IMAGE=1
+  fi
+fi
+
+if [[ "${UI_LANG}" == ko ]]; then
+  printf 'Qwen3.8 Flash Next 제거 마법사\n\n  container: %s (제거)\n' "${CONTAINER_NAME}"
+  printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf 제거 || printf 유지)"
+  printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf 제거 || printf 유지)"
+  printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf 제거 || printf 유지)"
+else
+  printf 'Qwen3.8 Flash Next uninstaller wizard\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
+  printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
+  printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf remove || printf keep)"
+  printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf remove || printf keep)"
+fi
 if [[ "${YES}" != 1 ]]; then
-  read -r -p 'Type DELETE to continue: ' answer; [[ "${answer}" == DELETE ]] || die "cancelled"
+  [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '
+  read -r -p "${prompt}" answer
+  [[ "${answer}" == DELETE ]] || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
 fi
 if [[ -r "${MONITOR_PID_FILE}" ]]; then
   monitor_pid="$(<"${MONITOR_PID_FILE}")"
@@ -77,7 +109,11 @@ if [[ "${PURGE_MODEL}" == 1 && "${PURGE_SWAP}" == 1 && "${PURGE_IMAGE}" == 1 ]];
   fi
   rm -f -- "${STATE_DIR}/monitor.log"
   rm -f -- "${STATE_FILE}"; rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
-  printf 'Full uninstall completed; installation manifest removed.\n'
+  [[ "${UI_LANG}" == ko ]] && printf '전체 제거 완료; 설치 manifest를 삭제했습니다.\n' || printf 'Full uninstall completed; installation manifest removed.\n'
 else
-  printf 'Uninstall completed. Manifest retained so preserved resources can be purged later: %s\n' "${STATE_FILE}"
+  if [[ "${UI_LANG}" == ko ]]; then
+    printf '제거 완료. 유지한 리소스를 나중에 정리할 수 있도록 manifest를 보존했습니다: %s\n' "${STATE_FILE}"
+  else
+    printf 'Uninstall completed. Manifest retained so preserved resources can be purged later: %s\n' "${STATE_FILE}"
+  fi
 fi
