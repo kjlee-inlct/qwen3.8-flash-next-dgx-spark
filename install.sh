@@ -11,7 +11,7 @@ IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-YES=0; START=1
+YES=0; START=1; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 expand_user_path() {
@@ -32,6 +32,7 @@ write_state() {
     printf 'SWAP_FILE=%q\n' "${SWAP_FILE}"; printf 'SWAP_OWNED=%q\n' "${SWAP_OWNED}"
     printf 'VLLM_IMAGE=%q\n' "${IMAGE}"; printf 'IMAGE_OWNED=%q\n' "${IMAGE_OWNED}"
     printf 'CONTAINER_NAME=%q\n' qwen38-flash-next; printf 'CONFIG_OVERRIDE=%q\n' "${CONFIG_OVERRIDE}"
+    printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
   } > "${STATE_FILE}.tmp"
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
@@ -76,6 +77,8 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
       [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
     fi
   fi
+  read -r -p "Enable automatic low-memory protection? [y/N]: " answer
+  [[ "${answer}" == y || "${answer}" == Y ]] && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
 fi
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
@@ -83,6 +86,7 @@ MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
 printf 'Installation plan\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
+printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 ask_yes_no "Continue?" || die "cancelled"
 
@@ -122,7 +126,8 @@ write_state image_ready
 if [[ "${START}" == 1 ]]; then
   printf '\nStarting service...\n'
   MODEL_PROFILE=orcarouter MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" \
-    CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" "${ROOT_DIR}/scripts/serve.sh"
+    CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" MONITOR_PROTECT="${MONITOR_PROTECT}" \
+    "${ROOT_DIR}/scripts/serve.sh"
 fi
 write_state complete
 printf '\nInstallation completed.\n  manifest: %s\n  logs: docker logs -f qwen38-flash-next\n' "${STATE_FILE}"
