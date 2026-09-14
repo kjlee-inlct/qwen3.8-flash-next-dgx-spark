@@ -43,7 +43,16 @@ docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks perm
 hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
 if [[ "${YES}" != 1 ]]; then
   read -r -p "Model directory [${MODEL_DIR}]: " answer; MODEL_DIR="${answer:-${MODEL_DIR}}"
-  read -r -p "Optional config.json override [none]: " answer; CONFIG_OVERRIDE="${answer:-${CONFIG_OVERRIDE}}"
+  if [[ -n "${CONFIG_OVERRIDE}" ]]; then
+    read -r -p "Use the configured config.json override (${CONFIG_OVERRIDE})? [Y/n]: " answer
+    [[ "${answer}" == n || "${answer}" == N ]] && CONFIG_OVERRIDE=""
+  else
+    read -r -p "Use a separate config.json override? [y/N]: " answer
+    if [[ "${answer}" == y || "${answer}" == Y ]]; then
+      read -r -p "Absolute path or ~/path/to/config.json: " CONFIG_OVERRIDE
+      [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
+    fi
+  fi
 fi
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
