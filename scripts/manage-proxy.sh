@@ -63,7 +63,7 @@ if [[ "${ACTION}" == adopt ]]; then
   [[ "$(stat -c %a "${STATE_FILE}")" == 600 ]] || die "installation manifest must have mode 600"
   managed_file "${SOCKET_FILE}" && managed_file "${SERVICE_FILE}" || die "managed proxy units are not installed"
   [[ "$(stat -c %u "${SOCKET_FILE}")" == 0 && "$(stat -c %u "${SERVICE_FILE}")" == 0 ]] || die "proxy units are not root-owned"
-  recorded_port="$(awk -F: '$1=="ListenStream" {print $NF}' "${SOCKET_FILE}")"
+  recorded_port="$(awk -F'[=:]' '$1=="ListenStream" {print $NF}' "${SOCKET_FILE}")"
   valid_port "${recorded_port}" || die "cannot determine proxy listen port"
   # shellcheck disable=SC1090 -- install.sh writes shell-escaped values to a user-owned mode-600 file.
   source "${STATE_FILE}"
