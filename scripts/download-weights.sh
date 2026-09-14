@@ -55,7 +55,6 @@ fi
 AUTH_ARGS=(); [[ -n "${TOKEN}" ]] && AUTH_ARGS=(-H "Authorization: Bearer ${TOKEN}")
 API_URL="https://huggingface.co/api/models/${REPO}/revision/${REVISION}?blobs=true"
 BASE_URL="https://huggingface.co/${REPO}/resolve/${REVISION}"
-mkdir -p "${DEST}" || exit 1
 
 metadata_file="$(mktemp)"
 trap 'rm -f "${metadata_file}"' EXIT
@@ -96,8 +95,10 @@ PY
 )"
 [[ -n "${manifest}" ]] || { printf 'FATAL: empty model manifest\n' >&2; exit 4; }
 required_bytes="$(python3 -c 'import json,sys; print(sum(int(x.get("size") or 0) for x in json.load(open(sys.argv[1])).get("siblings", [])))' "${metadata_file}")"
-available_bytes="$(df --output=avail -B1 "${DEST}" | tail -n1 | tr -d ' ')"
-existing_bytes="$(du -sb "${DEST}" | cut -f1)"
+space_probe="${DEST}"
+while [[ ! -e "${space_probe}" ]]; do space_probe="$(dirname -- "${space_probe}")"; done
+available_bytes="$(df --output=avail -B1 "${space_probe}" | tail -n1 | tr -d ' ')"
+existing_bytes=0; [[ ! -d "${DEST}" ]] || existing_bytes="$(du -sb "${DEST}" | cut -f1)"
 (( available_bytes + existing_bytes >= required_bytes + 20 * 1024 * 1024 * 1024 )) || {
   printf 'FATAL: insufficient disk space for checkpoint plus 20 GiB reserve.\n' >&2; exit 5; }
 if [[ "${CHECK_ONLY}" == 1 ]]; then
@@ -105,6 +106,28 @@ if [[ "${CHECK_ONLY}" == 1 ]]; then
     "${REPO}" "${resolved_revision}" "$(awk -v n="${required_bytes}" 'BEGIN {print n/1073741824}')" "${DEST}"
   exit 0
 fi
+
+mkdir -p "${DEST}" || exit 1
+write_model_manifest() {
+  local status="$1"
+  python3 - "${metadata_file}" "${DEST}/.qwen38-model-manifest.json" "${REPO}" \
+    "${resolved_revision}" "${status}" <<'PY'
+import json, sys
+source, destination, repository, revision, status = sys.argv[1:]
+remote = json.load(open(source))
+result = {"schema_version": 1, "status": status, "repository": repository,
+          "revision": revision,
+          "files": [{"path": x["rfilename"], "size": x.get("size") or 0,
+                     "sha256": (x.get("lfs") or {}).get("sha256")}
+                    for x in remote.get("siblings", []) if not x["rfilename"].startswith(".")]}
+temporary = destination + ".tmp"
+with open(temporary, "w", encoding="utf-8") as stream:
+    json.dump(result, stream, indent=2); stream.write("\n")
+import os
+os.replace(temporary, destination)
+PY
+}
+write_model_manifest downloading
 
 verify() {
   local path="$1" size="$2" sha="$3"
@@ -127,15 +150,5 @@ while IFS=$'\t' read -r name size sha; do
 done <<< "${manifest}"
 [[ "${fail}" == 0 ]] || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
 
-python3 - "${metadata_file}" "${DEST}/.qwen38-model-manifest.json" "${REPO}" "${resolved_revision}" <<'PY'
-import json, sys
-source, destination, repository, revision = sys.argv[1:]
-remote = json.load(open(source))
-result = {"schema_version": 1, "repository": repository, "revision": revision,
-          "files": [{"path": x["rfilename"], "size": x.get("size") or 0,
-                     "sha256": (x.get("lfs") or {}).get("sha256")}
-                    for x in remote.get("siblings", []) if not x["rfilename"].startswith(".")]}
-with open(destination, "w", encoding="utf-8") as stream:
-    json.dump(result, stream, indent=2); stream.write("\n")
-PY
+write_model_manifest complete
 printf 'done -> %s (%s), revision %s\n' "${DEST}" "$(du -sh "${DEST}" | cut -f1)" "${resolved_revision}"
