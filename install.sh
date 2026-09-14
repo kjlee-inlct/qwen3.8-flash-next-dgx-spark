@@ -12,6 +12,7 @@ CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
 YES=0; START=1; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
+PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 expand_user_path() {
@@ -34,6 +35,8 @@ write_state() {
     printf 'CONTAINER_NAME=%q\n' qwen38-flash-next; printf 'CONFIG_OVERRIDE=%q\n' "${CONFIG_OVERRIDE}"
     printf 'CONFIG_OWNED=%q\n' "${CONFIG_OWNED}"
     printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
+    printf 'PROXY_ENABLED=%q\n' "${PROXY_ENABLED}"; printf 'PROXY_OWNED=%q\n' "${PROXY_OWNED}"
+    printf 'PROXY_PORT=%q\n' "${PROXY_PORT}"
   } > "${STATE_FILE}.tmp"
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
@@ -63,6 +66,7 @@ if [[ -r "${STATE_FILE}" ]]; then
 fi
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
+PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
 for command in python3 curl docker sudo hf; do command -v "${command}" >/dev/null || die "${command} is required"; done
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
@@ -81,6 +85,8 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   fi
   read -r -p "Enable automatic low-memory protection? [y/N]: " answer
   [[ "${answer}" == y || "${answer}" == Y ]] && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+  read -r -p "Install docker0-only OpenWebUI proxy on port ${PROXY_PORT}? [y/N]: " answer
+  [[ "${answer}" == y || "${answer}" == Y ]] && PROXY_ENABLED=1 || PROXY_ENABLED=0
 fi
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
@@ -90,6 +96,7 @@ printf 'Installation plan\n  model       : %s\n  revision    : %s\n  directory  
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
 printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
+printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'docker0:%s -> loopback:8888' "${PROXY_PORT}" || printf disabled)"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 ask_yes_no "Continue?" || die "cancelled"
 
@@ -132,6 +139,15 @@ write_state inspected
 printf '\nPreparing vLLM image...\n'
 docker pull "${IMAGE}"
 write_state image_ready
+
+if [[ "${PROXY_ENABLED}" == 1 ]]; then
+  if ! "${ROOT_DIR}/scripts/manage-proxy.sh" status >/dev/null 2>&1; then
+    printf '\nInstalling docker0-only OpenWebUI proxy...\n'
+    sudo "${ROOT_DIR}/scripts/manage-proxy.sh" create --listen-port "${PROXY_PORT}" --backend-port 8888 --yes
+    PROXY_OWNED=1
+  fi
+  write_state proxy_ready
+fi
 
 if [[ "${START}" == 1 ]]; then
   printf '\nStarting service...\n'
