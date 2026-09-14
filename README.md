@@ -569,6 +569,9 @@ are never modified.
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
 
+# Interactive terminals show per-file percent, speed and ETA. For clean CI logs:
+./scripts/download-weights.sh --quiet
+
 # 2. swap for the PLE table -- NOT optional, the load OOMs without it
 sudo fallocate -l 128G /swap-ple.img
 sudo chmod 600 /swap-ple.img
