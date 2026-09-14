@@ -628,6 +628,13 @@ Run `adopt` without `sudo`. It accepts only this tool's root-owned, marker-beari
 and a current-user-owned, non-symlink installation manifest. After adoption, `uninstall.sh`
 removes the proxy just as if the installer wizard had created it.
 
+Both `install.sh` and `uninstall.sh` default to interactive CLI wizards with English and
+Korean UI. Choose the language interactively or pass `--lang en` / `--lang ko`; the installer
+stores the choice for the uninstaller. Automation options such as `--yes`, `--no-start`, and
+the independent purge flags remain available. With no purge flags, the uninstall wizard asks
+separately whether to remove the model, dedicated swap, and Docker image before showing its
+final plan.
+
 Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment with separate
 access controls. Prefix caching is explicitly disabled in the OrcaRouter compatibility
 baseline; set `PREFIX_CACHE=1` to enable it together with the required Mamba alignment mode.
