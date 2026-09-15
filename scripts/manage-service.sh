@@ -130,18 +130,24 @@ install -o root -g root -m 0644 "${tmp_dir}/${UNIT}" "${UNIT_FILE}"
 systemctl daemon-reload
 systemctl enable "${UNIT}"
 if [[ "${START}" == 1 ]]; then
+  previous_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
   systemctl reset-failed "${UNIT}" 2>/dev/null || true
   systemctl stop "${UNIT}" 2>/dev/null || true
   systemctl start "${UNIT}"
   ready=0
   for attempt in $(seq 1 180); do
-    if curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1; then ready=1; break; fi
     unit_state="$(systemctl show "${UNIT}" --property=ActiveState --value)"
     case "${unit_state}" in active|activating|reloading) ;; *) die "service stopped before readiness (state=${unit_state})" ;; esac
-    if (( attempt % 6 == 0 )); then printf 'Waiting for API readiness: %d/1800 seconds\n' "$((attempt * 10))"; fi
+    candidate_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+    if [[ -n "${candidate_container_id}" && "${candidate_container_id}" != "${previous_container_id}" ]] && \
+       curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    if (( attempt % 6 == 0 )); then printf 'Waiting for committed replacement runtime: %d/1800 seconds\n' "$((attempt * 10))"; fi
     sleep 10
   done
-  [[ "${ready}" == 1 ]] || die "API did not become healthy within 30 minutes"
+  [[ "${ready}" == 1 ]] || die "replacement runtime did not become healthy within 30 minutes"
   models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
   python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
     "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}" || die "served model ID validation failed"
