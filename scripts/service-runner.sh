@@ -14,7 +14,7 @@ MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
 
 [[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
 [[ -x "${INSTALL_ROOT:-}/scripts/serve.sh" ]] || { printf 'FATAL: invalid INSTALL_ROOT in manifest\n' >&2; exit 1; }
-[[ -x "${INSTALL_ROOT:-}/scripts/runtime-transition.sh" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
+[[ -r "${INSTALL_ROOT:-}/scripts/runtime-transition.sh" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || { printf 'FATAL: unexpected container name\n' >&2; exit 1; }
 
 export MODEL_PROFILE MODEL_DIR VLLM_IMAGE CONFIG_OVERRIDE MONITOR_ENABLED MONITOR_PROTECT SERVED_NAME
@@ -32,14 +32,14 @@ rollback_transition() {
   local rc=$?
   if [[ "${transition_active}" == 1 ]]; then
     printf 'Candidate runtime failed validation; restoring previous container.\n' >&2
-    "${INSTALL_ROOT}/scripts/runtime-transition.sh" rollback || \
+    bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" rollback || \
       printf 'FATAL: automatic runtime rollback failed; run doctor and inspect Docker state.\n' >&2
   fi
   exit "${rc}"
 }
 trap rollback_transition ERR INT TERM
 
-"${INSTALL_ROOT}/scripts/runtime-transition.sh" prepare
+bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" prepare
 transition_active=1
 "${INSTALL_ROOT}/scripts/serve.sh"
 
@@ -62,7 +62,7 @@ models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
 python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
   "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}"
 
-"${INSTALL_ROOT}/scripts/runtime-transition.sh" commit
+bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" commit
 transition_active=0
 trap - ERR INT TERM
 
