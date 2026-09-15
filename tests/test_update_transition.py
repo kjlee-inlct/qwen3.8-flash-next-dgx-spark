@@ -47,14 +47,14 @@ class UpdateTransitionTests(unittest.TestCase):
     def rev(self, ref: str) -> str:
         return subprocess.check_output(["git", "-C", str(self.source), "rev-parse", ref], text=True).strip()
 
-    def run(self, script: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def run_script(self, script: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["bash", str(script), *args], env=self.env, text=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check,
         )
 
     def stage_and_mark_qualified(self, release_id: str) -> None:
-        self.run(RELEASE_MANAGER, "stage", release_id)
+        self.run_script(RELEASE_MANAGER, "stage", release_id)
         qualified = self.data / "qwen38-spark" / "qualified"
         qualified.mkdir(parents=True, exist_ok=True)
         (qualified / f"{release_id}.env").write_text(
@@ -63,41 +63,41 @@ class UpdateTransitionTests(unittest.TestCase):
         )
 
     def status(self) -> str:
-        return self.run(RELEASE_MANAGER, "status").stdout
+        return self.run_script(RELEASE_MANAGER, "status").stdout
 
     def test_prepare_then_commit_keeps_target_current(self) -> None:
-        self.run(RELEASE_MANAGER, "activate", self.first)
-        self.run(UPDATE, "prepare", self.second)
+        self.run_script(RELEASE_MANAGER, "activate", self.first)
+        self.run_script(UPDATE, "prepare", self.second)
         self.assertIn(f"CURRENT_RELEASE={self.second}", self.status())
-        self.run(UPDATE, "commit")
-        self.assertIn("UPDATE_STATE=idle", self.run(UPDATE, "status").stdout)
+        self.run_script(UPDATE, "commit")
+        self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
         self.assertIn(f"CURRENT_RELEASE={self.second}", self.status())
         self.assertIn(f"PREVIOUS_RELEASE={self.first}", self.status())
 
     def test_rollback_restores_exact_previous_pointers(self) -> None:
-        self.run(RELEASE_MANAGER, "activate", self.first)
-        self.run(UPDATE, "prepare", self.second)
-        self.run(UPDATE, "rollback")
+        self.run_script(RELEASE_MANAGER, "activate", self.first)
+        self.run_script(UPDATE, "prepare", self.second)
+        self.run_script(UPDATE, "rollback")
         status = self.status()
         self.assertIn(f"CURRENT_RELEASE={self.first}", status)
         self.assertIn("PREVIOUS_RELEASE=none", status)
 
     def test_recover_restores_previous_pointers(self) -> None:
-        self.run(RELEASE_MANAGER, "activate", self.first)
-        self.run(UPDATE, "prepare", self.second)
-        self.run(UPDATE, "recover")
+        self.run_script(RELEASE_MANAGER, "activate", self.first)
+        self.run_script(UPDATE, "prepare", self.second)
+        self.run_script(UPDATE, "recover")
         status = self.status()
         self.assertIn(f"CURRENT_RELEASE={self.first}", status)
         self.assertIn("PREVIOUS_RELEASE=none", status)
-        self.assertIn("UPDATE_STATE=idle", self.run(UPDATE, "status").stdout)
+        self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
 
     def test_prepare_rejects_unqualified_release(self) -> None:
         marker = self.data / "qwen38-spark" / "qualified" / f"{self.second}.env"
         marker.unlink()
-        result = self.run(UPDATE, "prepare", self.second, check=False)
+        result = self.run_script(UPDATE, "prepare", self.second, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not qualified", result.stderr)
-        self.assertIn("UPDATE_STATE=idle", self.run(UPDATE, "status").stdout)
+        self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
 
 
 if __name__ == "__main__":
