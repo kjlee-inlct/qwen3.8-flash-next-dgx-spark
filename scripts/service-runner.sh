@@ -85,11 +85,12 @@ container_status="$(docker wait "${CONTAINER_NAME}")"
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
 
 if [[ -r "${STOP_REASON_FILE}" ]]; then
-  STOP_REASON=""; STOP_CONTAINER_NAME=""; CONTAINER_ID=""
+  STOP_REASON=""; STOP_CONTAINER_NAME=""; STOP_CONTAINER_ID=""
   # shellcheck disable=SC1090
   source "${STOP_REASON_FILE}"
-  STOP_CONTAINER_NAME="${CONTAINER_NAME:-${STOP_CONTAINER_NAME:-}}"
-  if [[ "${STOP_REASON:-}" == memory-protection && "${CONTAINER_ID:-}" == "${container_id}" && -n "${container_id}" ]]; then
+  if [[ "${STOP_REASON:-}" == memory-protection && \
+        "${STOP_CONTAINER_NAME:-}" == "${CONTAINER_NAME}" && \
+        "${STOP_CONTAINER_ID:-}" == "${container_id}" && -n "${container_id}" ]]; then
     rm -f -- "${STOP_REASON_FILE}"
     printf 'Inference container stopped intentionally by memory protection; leaving service stopped.\n' >&2
     exit 0
