@@ -120,7 +120,6 @@ systemctl enable "${UNIT}"
 if [[ "${START}" == 1 ]]; then
   systemctl reset-failed "${UNIT}" 2>/dev/null || true
   systemctl stop "${UNIT}" 2>/dev/null || true
-  docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
   systemctl start "${UNIT}"
   ready=0
   for attempt in $(seq 1 180); do
