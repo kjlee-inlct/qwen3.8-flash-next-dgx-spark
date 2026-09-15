@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Read-only installation and runtime diagnostics for the OrcaRouter profile.
+# Read-only installation and runtime diagnostics for a supported model profile.
 # shellcheck disable=SC1090,SC2154
 set -u
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
-EXPECTED_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-EXPECTED_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=model-profiles.sh
+source "${SCRIPT_DIR}/model-profiles.sh"
 SERVICE_UNIT="qwen38-flash-next.service"
 STRICT=0
 ERRORS=0
@@ -38,6 +39,15 @@ if [[ -r "${STATE_FILE}" ]]; then
   pass "installation manifest is readable (${PHASE:-unknown})"
 else
   fail "installation manifest is missing: ${STATE_FILE}"
+fi
+
+if load_model_profile "${MODEL_PROFILE:-}" 2>/dev/null; then
+  EXPECTED_REPO="${PROFILE_REPO}"
+  EXPECTED_REVISION="${PROFILE_REVISION}"
+  pass "model profile is supported (${MODEL_PROFILE})"
+else
+  EXPECTED_REPO=""; EXPECTED_REVISION=""
+  fail "unsupported model profile: ${MODEL_PROFILE:-missing}"
 fi
 
 if [[ "${MODEL_REPO:-}" == "${EXPECTED_REPO}" ]]; then pass "model repository is pinned"; else fail "unexpected model repository: ${MODEL_REPO:-missing}"; fi

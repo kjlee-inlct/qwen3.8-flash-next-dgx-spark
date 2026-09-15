@@ -3,14 +3,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/model-profiles.sh
+source "${ROOT_DIR}/scripts/model-profiles.sh"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
-MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
-IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
-REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
+MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
+MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
@@ -29,11 +29,12 @@ write_state() {
   mkdir -p "${STATE_DIR}"; umask 077
   {
     printf 'SCHEMA_VERSION=%q\n' 2; printf 'PHASE=%q\n' "${phase}"
-    printf 'INSTALL_ROOT=%q\n' "${ROOT_DIR}"; printf 'MODEL_PROFILE=%q\n' orcarouter
+    printf 'INSTALL_ROOT=%q\n' "${ROOT_DIR}"; printf 'MODEL_PROFILE=%q\n' "${MODEL_PROFILE}"
     printf 'MODEL_REPO=%q\n' "${REPO}"; printf 'MODEL_REVISION=%q\n' "${REVISION}"
     printf 'MODEL_DIR=%q\n' "${MODEL_DIR}"; printf 'MODEL_OWNED=%q\n' "${MODEL_OWNED}"
     printf 'SWAP_FILE=%q\n' "${SWAP_FILE}"; printf 'SWAP_OWNED=%q\n' "${SWAP_OWNED}"
     printf 'VLLM_IMAGE=%q\n' "${IMAGE}"; printf 'IMAGE_OWNED=%q\n' "${IMAGE_OWNED}"
+    printf 'SERVED_NAME=%q\n' "${SERVED_NAME}"
     printf 'CONTAINER_NAME=%q\n' qwen38-flash-next; printf 'CONFIG_OVERRIDE=%q\n' "${CONFIG_OVERRIDE}"
     printf 'CONFIG_OWNED=%q\n' "${CONFIG_OWNED}"
     printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
@@ -46,7 +47,7 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model orcarouter|nvidia] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -58,6 +59,7 @@ ask_yes_no() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
+    --model) [[ $# -ge 2 ]] || die "--model requires orcarouter or nvidia"; MODEL_CLI="$2"; shift ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
     --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
@@ -66,12 +68,31 @@ done
 
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
-  # Created by write_state with shell-escaped values and mode 600.
-  # shellcheck disable=SC1090
-  source "${STATE_FILE}"
+  manifest_profile="$({
+    # Created by write_state with shell-escaped values and mode 600.
+    # shellcheck disable=SC1090
+    source "${STATE_FILE}"
+    printf '%s' "${MODEL_PROFILE:-}"
+  })"
+  if [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
+    [[ "${DRY_RUN}" == 1 ]] || \
+      die "installed profile is ${manifest_profile}; uninstall it before selecting ${MODEL_CLI}"
+  else
+    # shellcheck disable=SC1090
+    source "${STATE_FILE}"
+    RESUME=1
+  fi
+fi
+[[ -z "${MODEL_CLI}" ]] || MODEL_PROFILE="${MODEL_CLI}"
+load_model_profile "${MODEL_PROFILE}" || exit $?
+REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
+MODEL_DIR="${MODEL_DIR:-${PROFILE_MODEL_DIR}}"
+IMAGE="${VLLM_IMAGE:-${PROFILE_IMAGE}}"
+SERVED_NAME="${SERVED_NAME:-${PROFILE_SERVED_NAME}}"
+if [[ "${RESUME}" == 1 ]]; then
   [[ "${MODEL_REPO:-}" == "${REPO}" && "${MODEL_REVISION:-}" == "${REVISION}" ]] || \
     die "existing manifest belongs to a different model or revision: ${STATE_FILE}"
-  IMAGE="${VLLM_IMAGE}"; RESUME=1
+  IMAGE="${VLLM_IMAGE}"; SERVED_NAME="${SERVED_NAME:-${PROFILE_SERVED_NAME}}"
 fi
 [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
 if [[ -z "${UI_LANG}" ]]; then
@@ -87,6 +108,18 @@ if [[ "${UI_LANG}" == ko ]]; then
 else
   printf 'Qwen3.8 Flash Next — DGX Spark installer wizard\n\n'
   [[ "${RESUME}" == 0 ]] || printf 'Resuming installation from phase: %s\n' "${PHASE:-unknown}"
+fi
+if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
+  if [[ "${UI_LANG}" == ko ]]; then
+    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4] (1): ' answer
+  else
+    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4] (1): ' answer
+  fi
+  [[ "${answer}" == 2 || "${answer}" == nvidia ]] && MODEL_PROFILE=nvidia || MODEL_PROFILE=orcarouter
+  load_model_profile "${MODEL_PROFILE}" || exit $?
+  REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
+  [[ -n "${MODEL_DIR:-}" && "${MODEL_DIR}" != "$HOME/models/qwen3.8-flash-next-orcarouter" ]] || MODEL_DIR="${PROFILE_MODEL_DIR}"
+  IMAGE="${PROFILE_IMAGE}"; SERVED_NAME="${PROFILE_SERVED_NAME}"
 fi
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
@@ -126,6 +159,7 @@ MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
 [[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
 printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
+printf '  profile     : %s\n' "${MODEL_PROFILE}"
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
 printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
@@ -144,9 +178,12 @@ if [[ "${DRY_RUN}" == 1 ]]; then
   exit 0
 fi
 
-for command in python3 curl docker sudo hf; do command -v "${command}" >/dev/null || die "${command} is required"; done
+for command in python3 curl docker sudo; do command -v "${command}" >/dev/null || die "${command} is required"; done
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
-hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
+if [[ "${PROFILE_GATED}" == 1 ]]; then
+  command -v hf >/dev/null || die "hf is required for the gated OrcaRouter profile"
+  hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
+fi
 
 if [[ "${RESUME}" != 1 ]]; then
   [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1
@@ -154,7 +191,7 @@ if [[ "${RESUME}" != 1 ]]; then
 fi
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
-MODEL_PROFILE=orcarouter REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
+MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
   "${ROOT_DIR}/scripts/download-weights.sh" --check
 write_state prepared
 
@@ -169,10 +206,10 @@ write_state swap_ready
 
 printf '\nDownloading and verifying pinned checkpoint...\n'
 write_state downloading
-MODEL_PROFILE=orcarouter REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
+MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
   "${ROOT_DIR}/scripts/download-weights.sh"
 write_state weights_ready
-if [[ -z "${CONFIG_OVERRIDE}" ]]; then
+if [[ -z "${CONFIG_OVERRIDE}" && "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
   CONFIG_OVERRIDE="${STATE_DIR}/config.vllm.json"
   printf '\nPreparing vLLM-compatible model config...\n'
   python3 "${ROOT_DIR}/scripts/prepare-config.py" --model-dir "${MODEL_DIR}" --output "${CONFIG_OVERRIDE}"
@@ -180,12 +217,19 @@ if [[ -z "${CONFIG_OVERRIDE}" ]]; then
   write_state config_ready
 fi
 printf '\nInspecting checkpoint tensor headers...\n'
-inspect_args=(--offline --model-dir "${MODEL_DIR}")
+inspect_args=(--offline --repo "${REPO}" --model-dir "${MODEL_DIR}")
 [[ -n "${CONFIG_OVERRIDE}" ]] && inspect_args+=(--config-override "${CONFIG_OVERRIDE}")
 python3 "${ROOT_DIR}/scripts/inspect-model.py" "${inspect_args[@]}"
 write_state inspected
 printf '\nPreparing vLLM image...\n'
-docker pull "${IMAGE}"
+if [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
+  if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+    docker build -t vllm-skinny-tp1:v1 -f "${ROOT_DIR}/scripts/Dockerfile.skinny-gemm" "${ROOT_DIR}/scripts"
+    docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.nv-mixed" "${ROOT_DIR}/scripts"
+  fi
+else
+  docker pull "${IMAGE}"
+fi
 write_state image_ready
 
 if [[ "${PROXY_ENABLED}" == 1 ]]; then
@@ -206,7 +250,7 @@ if [[ "${SERVICE_ENABLED}" == 1 ]]; then
     "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
 elif [[ "${START}" == 1 ]]; then
   printf '\nStarting service...\n'
-  MODEL_PROFILE=orcarouter MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" \
+  MODEL_PROFILE="${MODEL_PROFILE}" MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" SERVED_NAME="${SERVED_NAME}" \
     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" MONITOR_PROTECT="${MONITOR_PROTECT}" \
     "${ROOT_DIR}/scripts/serve.sh"
 fi

@@ -475,7 +475,28 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 
 ### Guided install and uninstall
 
-The installer defaults to the pinned OrcaRouter checkpoint. It checks Docker and Hugging
+The installer offers two checkpoint-specific profiles and defaults to OrcaRouter. Choose
+interactively, or use `--model orcarouter` / `--model nvidia` for automation. Repositories,
+pinned revisions, model directories, served IDs, images and runtime tuning stay separate;
+checkpoint files are never mixed in one directory.
+
+| Profile | Checkpoint | Runtime image |
+|---|---|---|
+| `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | stock Qwen3.8 vLLM image |
+| `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | locally built `vllm-nv-mixed:v2` with the required patches |
+
+```bash
+./install.sh                       # bilingual interactive profile selection
+./install.sh --model orcarouter
+./install.sh --model nvidia
+```
+
+The shared `scripts/model-profiles.sh` registry is intentionally not a second lifecycle
+manager: installation, activation, service ownership and removal remain transactional in
+`install.sh` and `uninstall.sh`. To change the active profile, uninstall while preserving
+the downloaded model, then run the installer for the other profile.
+
+The installer checks Docker and Hugging
 Face authentication, creates only the dedicated PLE swap when needed, downloads and
 verifies every checkpoint file, inspects tensor headers, records an installation manifest,
 and starts the conservative TP=1 profile:
