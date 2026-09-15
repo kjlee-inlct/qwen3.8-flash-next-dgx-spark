@@ -9,9 +9,10 @@ ACTION="${1:-status}"
 [[ $# -eq 0 ]] || shift
 START=1
 YES=0
+RUNTIME_ROOT_OVERRIDE=""
 
 usage() {
-  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--yes]\n'
+  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--runtime-root PATH] [--yes]\n'
   printf '       sudo ./scripts/manage-service.sh remove [--yes]\n'
   printf '       ./scripts/manage-service.sh status\n'
 }
@@ -22,6 +23,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --start) START=1 ;;
     --no-start) START=0 ;;
+    --runtime-root)
+      [[ $# -ge 2 ]] || die "--runtime-root requires a path"
+      RUNTIME_ROOT_OVERRIDE="$2"
+      shift
+      ;;
     --yes) YES=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -74,9 +80,15 @@ STATE_FILE="${CALLER_STATE_HOME}/qwen38-spark/install.env"
 # The installer writes shell-escaped values with mode 600.
 # shellcheck disable=SC1090
 source "${STATE_FILE}"
-[[ "${INSTALL_ROOT:-}" == /* && -x "${INSTALL_ROOT}/scripts/service-runner.sh" ]] || die "invalid install root in manifest"
+[[ "${INSTALL_ROOT:-}" == /* ]] || die "invalid install root in manifest"
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || die "unexpected container name in manifest"
-[[ "${INSTALL_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
+
+RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
+[[ "${RUNTIME_ROOT}" == /* ]] || die "runtime root must be an absolute path"
+[[ -x "${RUNTIME_ROOT}/scripts/service-runner.sh" ]] || die "runtime root has no service runner: ${RUNTIME_ROOT}"
+[[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || die "runtime root has no serve helper: ${RUNTIME_ROOT}"
+[[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || die "runtime root has no transition helper: ${RUNTIME_ROOT}"
+[[ "${RUNTIME_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
 
 if [[ -e "${UNIT_FILE}" ]]; then
   managed_file "${UNIT_FILE}" || die "refusing to replace unmanaged unit: ${UNIT_FILE}"
@@ -99,10 +111,10 @@ StartLimitBurst=2
 Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
-WorkingDirectory=${INSTALL_ROOT}
+WorkingDirectory=${RUNTIME_ROOT}
 Environment=HOME=${SERVICE_HOME}
 Environment=QWEN38_STATE_FILE=${STATE_FILE}
-ExecStart=/bin/bash ${INSTALL_ROOT}/scripts/service-runner.sh
+ExecStart=/bin/bash ${RUNTIME_ROOT}/scripts/service-runner.sh
 ExecStop=-/usr/bin/docker stop --timeout 30 ${CONTAINER_NAME}
 Restart=on-failure
 RestartSec=60
