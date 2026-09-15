@@ -6,6 +6,7 @@ CONTAINER="qwen38-flash-next"
 MIN_AVAILABLE_GIB=6
 MIN_FREE_GIB=2
 FREE_GATE_GIB=10
+MIN_SWAP_FREE_GIB=8
 CONSECUTIVE=5
 INTERVAL=2
 HEARTBEAT=60
@@ -18,6 +19,7 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --min-available-gib N        MemAvailable warning floor (default: 6)
   --min-free-gib N             MemFree warning floor (default: 2)
   --free-gate-gib N            Apply MemFree floor below this MemAvailable (default: 10)
+  --min-swap-free-gib N         SwapFree warning floor (default: 8)
   --consecutive N              Consecutive low samples before protection (default: 5)
   --interval N                 Sampling interval in seconds (default: 2)
   --heartbeat N                Healthy status interval in seconds; 0 disables (default: 60)
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --min-available-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MIN_AVAILABLE_GIB="$2"; shift ;;
     --min-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MIN_FREE_GIB="$2"; shift ;;
     --free-gate-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; FREE_GATE_GIB="$2"; shift ;;
+    --min-swap-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MIN_SWAP_FREE_GIB="$2"; shift ;;
     --consecutive) [[ $# -ge 2 ]] || die "$1 requires a value"; CONSECUTIVE="$2"; shift ;;
     --interval) [[ $# -ge 2 ]] || die "$1 requires a value"; INTERVAL="$2"; shift ;;
     --heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; HEARTBEAT="$2"; shift ;;
@@ -46,7 +49,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 [[ -n "${CONTAINER}" && "${CONTAINER}" != */* ]] || die "invalid container name"
-for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${CONSECUTIVE}" "${INTERVAL}"; do
+for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_SWAP_FREE_GIB}" "${CONSECUTIVE}" "${INTERVAL}"; do
   positive_integer "${value}" || die "thresholds and intervals must be positive integers"
 done
 nonnegative_integer "${HEARTBEAT}" || die "heartbeat must be a non-negative integer"
@@ -57,17 +60,18 @@ docker inspect "${CONTAINER}" >/dev/null 2>&1 || die "container not found: ${CON
 available_floor=$((MIN_AVAILABLE_GIB * 1048576))
 free_floor=$((MIN_FREE_GIB * 1048576))
 free_gate=$((FREE_GATE_GIB * 1048576))
+swap_free_floor=$((MIN_SWAP_FREE_GIB * 1048576))
 low_count=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
-printf '%s monitor started: container=%s mode=%s available=%sGiB free=%sGiB/%sGiB gate\n' \
-  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}"
+printf '%s monitor started: container=%s mode=%s available=%sGiB free=%sGiB/%sGiB gate swapfree=%sGiB\n' \
+  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_SWAP_FREE_GIB}"
 next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
   mem_available="$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"
   mem_free="$(awk '$1=="MemFree:" {print $2}' /proc/meminfo)"
   swap_free="$(awk '$1=="SwapFree:" {print $2}' /proc/meminfo)"
-  if (( mem_available < available_floor || (mem_free < free_floor && mem_available < free_gate) )); then
+  if (( mem_available < available_floor || swap_free < swap_free_floor || (mem_free < free_floor && mem_available < free_gate) )); then
     low_count=$((low_count + 1))
     printf '%s WARNING memory margin low %d/%d: available=%dMiB free=%dMiB swapfree=%dMiB\n' \
       "$(date '+%F %T')" "${low_count}" "${CONSECUTIVE}" \

@@ -18,6 +18,7 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("PUBLISH_HOST=127.0.0.1", runner)
         self.assertIn("RESTART_POLICY=no", runner)
         self.assertIn("docker wait", runner)
+        self.assertIn("preflight-runtime.sh", runner)
         server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
         self.assertIn("--init", server)
 

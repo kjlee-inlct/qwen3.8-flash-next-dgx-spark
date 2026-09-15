@@ -53,6 +53,19 @@ fi
 if [[ "${MODEL_REPO:-}" == "${EXPECTED_REPO}" ]]; then pass "model repository is pinned"; else fail "unexpected model repository: ${MODEL_REPO:-missing}"; fi
 if [[ "${MODEL_REVISION:-}" == "${EXPECTED_REVISION}" ]]; then pass "model revision is pinned"; else fail "unexpected model revision: ${MODEL_REVISION:-missing}"; fi
 if [[ "${PHASE:-}" == complete ]]; then pass "installation phase is complete"; else warn "installation phase is ${PHASE:-unknown}"; fi
+if (( ${SCHEMA_VERSION:-0} >= 3 )); then
+  pass "installation manifest schema supports runtime safety settings"
+else
+  warn "installation manifest schema is ${SCHEMA_VERSION:-missing}; run ./install.sh --migrate-manifest to migrate it"
+fi
+
+MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
+MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
+MONITOR_MIN_FREE_GIB="${MONITOR_MIN_FREE_GIB:-2}"
+MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB:-10}"
+MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB:-8}"
+MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE:-5}"
+MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT:-60}"
 
 if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then
   pass "model index is present"
@@ -108,12 +121,42 @@ else
   fail "dedicated PLE swap is not active (${SWAP_FILE:-unset})"
 fi
 
+if [[ -r /proc/meminfo ]]; then
+  mem_available_kib="$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"
+  swap_free_kib="$(awk '$1=="SwapFree:" {print $2}' /proc/meminfo)"
+  if (( mem_available_kib >= MONITOR_MIN_AVAILABLE_GIB * 1048576 )); then
+    pass "memory reserve is healthy ($((mem_available_kib / 1048576)) GiB available)"
+  else
+    warn "memory reserve is below ${MONITOR_MIN_AVAILABLE_GIB} GiB ($((mem_available_kib / 1024)) MiB available)"
+  fi
+  if (( swap_free_kib >= MONITOR_MIN_SWAP_FREE_GIB * 1048576 )); then
+    pass "swap reserve is healthy ($((swap_free_kib / 1048576)) GiB free)"
+  elif (( swap_free_kib >= 2 * 1048576 )); then
+    warn "swap reserve is below ${MONITOR_MIN_SWAP_FREE_GIB} GiB ($((swap_free_kib / 1024)) MiB free)"
+  else
+    fail "swap reserve is critically low ($((swap_free_kib / 1024)) MiB free)"
+  fi
+fi
+
+if [[ -d "${MODEL_DIR:-}" ]]; then
+  disk_available_kib="$(df -Pk "${MODEL_DIR}" | awk 'NR==2 {print $4}')"
+  if (( disk_available_kib >= 20 * 1048576 )); then
+    pass "model filesystem has at least 20 GiB free ($((disk_available_kib / 1048576)) GiB)"
+  elif (( disk_available_kib >= 5 * 1048576 )); then
+    warn "model filesystem has less than 20 GiB free ($((disk_available_kib / 1048576)) GiB)"
+  else
+    fail "model filesystem has less than 5 GiB free ($((disk_available_kib / 1024)) MiB)"
+  fi
+fi
+
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   pass "Docker daemon is available"
   if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then pass "vLLM image is present"; else fail "vLLM image is missing"; fi
   if docker inspect "${CONTAINER_NAME:-qwen38-flash-next}" >/dev/null 2>&1; then
     state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null)"
     [[ "${state}" == running ]] && pass "container is running" || fail "container state is ${state}"
+    init_enabled="$(docker inspect --format '{{.HostConfig.Init}}' "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null)"
+    [[ "${init_enabled}" == true ]] && pass "container init process is enabled" || warn "container was created without --init; apply on the next maintenance restart"
     ports="$(docker port "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null || true)"
     if grep -Eq '(^|[[:space:]])127\.0\.0\.1:8888$' <<<"${ports}" && ! grep -Eq '0\.0\.0\.0:8888|\[::\]:8888' <<<"${ports}"; then
       pass "API is published on loopback only"
@@ -134,11 +177,11 @@ else
   warn "systemd runtime service is not installed; boot persistence relies on Docker restart policy"
 fi
 
-if [[ "${MONITOR_PROTECT:-0}" == 1 ]]; then
+if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   if [[ -r "${STATE_DIR}/monitor.pid" ]]; then
     monitor_pid="$(<"${STATE_DIR}/monitor.pid")"
     if [[ "${monitor_pid}" =~ ^[0-9]+$ && -r "/proc/${monitor_pid}/cmdline" ]] && tr '\0' ' ' <"/proc/${monitor_pid}/cmdline" | grep -Fq monitor-runtime.sh; then
-      pass "memory protection monitor is running"
+      pass "memory monitor is running (protect=${MONITOR_PROTECT:-0}, heartbeat=${MONITOR_HEARTBEAT}s)"
     else
       fail "memory protection monitor PID is stale"
     fi
@@ -146,7 +189,7 @@ if [[ "${MONITOR_PROTECT:-0}" == 1 ]]; then
     fail "memory protection monitor PID file is missing"
   fi
 else
-  warn "automatic low-memory protection is disabled"
+  warn "runtime memory monitor is disabled"
 fi
 
 if [[ "${PROXY_ENABLED:-0}" == 1 ]]; then
