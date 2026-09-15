@@ -473,9 +473,229 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 
 ## Reproducing
 
+### Guided install and uninstall
+
+The installer defaults to the pinned OrcaRouter checkpoint. It checks Docker and Hugging
+Face authentication, creates only the dedicated PLE swap when needed, downloads and
+verifies every checkpoint file, inspects tensor headers, records an installation manifest,
+and starts the conservative TP=1 profile:
+
+```bash
+./install.sh
+```
+
+The model revision is pinned to `c1209bda15a6bbc4c68b585e93d40c0d85f50306`.
+The gated model terms must be accepted and `hf auth login` completed first. Downloads are
+resumable; files backed by Hugging Face LFS are checked against their published SHA-256,
+and the resolved repository revision and file manifest are stored with the model.
+The optional config override prompt normally answers **No**; choose Yes only when an
+existing, separately tested `config.json` must be mounted over the checkpoint's own file.
+Both manifests are written before the long download begins. The installation manifest
+tracks `prepared`, `swap_ready`, `downloading`, `weights_ready`, `inspected`, `image_ready`
+and `complete` phases plus ownership of the model directory, swap and image. The model
+manifest starts with `status: downloading` and changes atomically to `status: complete`
+only after every file passes verification. Re-running `install.sh` resumes an interrupted
+installation from the recorded paths without taking ownership of pre-existing resources.
+
+The default uninstaller removes only the recorded container and preserves expensive or
+shared resources:
+
+```bash
+./uninstall.sh
+./uninstall.sh --purge-model
+./uninstall.sh --purge-swap
+./uninstall.sh --purge-all
+```
+
+Destructive model removal is allowed only below `$HOME/models` and only when the download
+manifest exists. Dedicated swap removal delegates to `manage-swap.sh`; `/swap.img` is
+never selected. Use `--yes` only for already-reviewed automation.
+
+### Inspect a checkpoint before downloading or serving
+
+The OrcaRouter checkpoint is gated and is substantially larger than the NVIDIA build.
+Inspect its remote manifest first, then inspect the downloaded safetensors headers. The
+local inspection reads only JSON headers; it does not load the 170+ GiB checkpoint into
+memory.
+
+```bash
+# Public metadata: revision, total size, large shards and gated status.
+python3 scripts/inspect-model.py
+
+# Definitive PLE/MTP dtype and tensor-layout inspection after `hf auth login` + download.
+python3 scripts/inspect-model.py \
+  --model-dir /home/jay/model_zoo/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --config-override /home/jay/vllm-qwen38/config.json
+
+# Machine-readable report for CI or an installation manifest.
+python3 scripts/inspect-model.py --model-dir /path/to/model --json
+```
+
+Exit status is `2` when a required file cannot be read or no PLE tensors are found. A
+warning means the layout needs review but does not prove incompatibility. In particular,
+do not apply `patch-nv-mixed.py` merely because a checkpoint is named NVFP4: that patch is
+specific to NVIDIA's `MIXED_PRECISION` PLE and block-FP8 MTP layout.
+
+The known OrcaRouter TP=1 starting point uses the stock
+`vllm/vllm-openai:qwen38-flash-next-arm64-cu130` image, PLE CPU offload, the `mp`
+executor, native 262144 context, 24 GiB of pinned KV, MTP `k=2`, disabled prefix cache,
+disabled FlashInfer autotune, and disabled async scheduling. Treat that as a compatibility
+baseline; re-enable optimizations one at a time after recording output quality, step rate,
+MTP acceptance, memory and swap use.
+
+### Manage the dedicated PLE swap
+
+Use the swap wizard to add `/swap-ple.img` without resizing, formatting, or otherwise
+changing an existing `/swap.img`:
+
+```bash
+sudo ./scripts/manage-swap.sh
+```
+
+The same operations are available non-interactively for a future installer:
+
+```bash
+sudo ./scripts/manage-swap.sh create --size-gib 128 --persist --yes
+./scripts/manage-swap.sh status
+sudo ./scripts/manage-swap.sh remove
+```
+
+Creation refuses to overwrite an existing path and preserves a 32 GiB disk-space reserve.
+Removal accepts only a regular non-symlink file, deactivates it before deletion, and manages
+only the exact `/etc/fstab` entry marked `# qwen38-ple-swap`. Other swap files and entries
+are never modified.
+
+### Monitor DGX Spark unified memory
+
+The runtime monitor is warning-only by default. It samples `MemAvailable`, `MemFree`, and
+`SwapFree`, debounces transient pressure, emits a healthy heartbeat every 60 seconds, and
+exits when the container stops:
+
+```bash
+./scripts/monitor-runtime.sh
+```
+
+Automatic protection is deliberately opt-in. With `--protect`, five consecutive low-memory
+samples cause a graceful 30-second container stop instead of letting unified-memory pressure
+make the host unresponsive:
+
+```bash
+./scripts/monitor-runtime.sh --protect
+```
+
+Change or disable the heartbeat without changing the two-second safety sampling interval:
+
+```bash
+./scripts/monitor-runtime.sh --heartbeat 30
+./scripts/monitor-runtime.sh --heartbeat 0
+```
+
+The interactive installer asks whether to enable this protection. If enabled, `serve.sh`
+runs the monitor in the background and records its PID and log under
+`${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark`; `uninstall.sh` stops only that recorded
+monitor process. Non-interactive installs keep protection disabled unless
+`MONITOR_PROTECT=1` is explicitly supplied.
+
+For the OrcaRouter checkpoint, `install.sh` now generates a separate
+`~/.local/state/qwen38-spark/config.vllm.json` automatically. It converts the checkpoint's
+`qwen_sparse_attention` layer labels to `full_attention`, which passes the generic validator;
+the Qwen3.8 implementation then selects QSA through `indexer_n_heads`. This leaves
+`model/config.json` unchanged. Direct
+`serve.sh` invocations do the same when `CONFIG_OVERRIDE` is not supplied. Container restart
+defaults to `on-failure:3`, preventing a bad startup config from entering an infinite loop;
+override it explicitly with `RESTART_POLICY` only when needed.
+
+`serve.sh` publishes the API on host loopback only (`127.0.0.1:8888`) by default. This keeps
+the unauthenticated vLLM API off the LAN. For an existing Dockerized OpenWebUI, install the
+optional managed socket proxy, which listens only on the IPv4 address assigned to `docker0`:
+
+```bash
+sudo ./scripts/manage-proxy.sh create
+./scripts/manage-proxy.sh status
+docker exec open-webui curl -fsS http://host.docker.internal:8000/v1/models
+```
+
+The interactive installer can create it and records ownership in the installation manifest.
+The uninstaller removes it only when that installation created it. Standalone removal refuses
+unmanaged or symlinked unit files:
+
+```bash
+./scripts/manage-proxy.sh adopt   # record a manually created managed proxy
+sudo ./scripts/manage-proxy.sh remove
+```
+
+Run `adopt` without `sudo`. It accepts only this tool's root-owned, marker-bearing unit pair
+and a current-user-owned, non-symlink installation manifest. After adoption, `uninstall.sh`
+removes the proxy just as if the installer wizard had created it.
+
+Both `install.sh` and `uninstall.sh` default to interactive CLI wizards with English and
+Korean UI. Choose the language interactively or pass `--lang en` / `--lang ko`; the installer
+stores the choice for the uninstaller. Automation options such as `--yes`, `--no-start`, and
+the independent purge flags remain available. With no purge flags, the uninstall wizard asks
+separately whether to remove the model, dedicated swap, and Docker image before showing its
+final plan.
+
+Preview either wizard without changing the machine by adding `--dry-run`. The installer
+does not authenticate, download, create swap, write its manifest, pull an image, start a
+container, or install the proxy/service. The uninstaller prints the selected cleanup plan without
+stopping or deleting anything:
+
+```bash
+./install.sh --dry-run
+./uninstall.sh --dry-run
+```
+
+After installation, the read-only doctor checks the checkpoint and config manifests,
+dedicated swap, Docker image and container, loopback port binding, optional monitor/proxy,
+systemd service registration, and the health endpoint:
+
+```bash
+./scripts/doctor.sh
+./scripts/doctor.sh --strict   # warnings also make the command fail
+```
+
+Once the API is ready, validate ordinary chat, streaming, required tool calls, and three
+concurrent requests. The optional JSON report is written atomically and does not store the
+generated answer text:
+
+```bash
+python3 scripts/validate-runtime.py \
+  --output ~/.local/state/qwen38-spark/runtime-validation.json
+```
+
+The installer enables a managed `qwen38-flash-next.service` by default. It starts after
+Docker and the network are ready, forces the unauthenticated API to loopback, disables the
+container's own restart loop, waits up to 30 minutes for readiness, verifies the served
+model ID, follows container logs into the journal, and uses bounded systemd recovery. Use
+`--no-service` only when another supervisor owns the container. `--no-start` installs and
+enables the unit without interrupting a currently running container:
+
+```bash
+./install.sh --no-start
+./scripts/manage-service.sh status
+sudo systemctl start qwen38-flash-next.service
+journalctl -fu qwen38-flash-next.service
+```
+
+The uninstaller removes the unit only when its installation manifest records
+`SERVICE_OWNED=1`. Standalone management also refuses to replace or remove a unit that does
+not contain this project's ownership marker:
+
+```bash
+./scripts/manage-service.sh status
+sudo ./scripts/manage-service.sh remove
+```
+
+Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment with separate
+access controls. Prefix caching is explicitly disabled in the OrcaRouter compatibility
+baseline; set `PREFIX_CACHE=1` to enable it together with the required Mamba alignment mode.
+
 ```bash
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
+
+# Interactive terminals show per-file percent, speed and ETA. For clean CI logs:
+./scripts/download-weights.sh --quiet
 
 # 2. swap for the PLE table -- NOT optional, the load OOMs without it
 sudo fallocate -l 128G /swap-ple.img

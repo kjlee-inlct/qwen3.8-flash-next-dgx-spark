@@ -1,89 +1,174 @@
-#!/bin/bash
-# Download nvidia/Qwen3.8-Flash-Next-NVFP4 (123.6 GiB, 24 files).
-#
-# Qwen3.8-Flash-Next: Qwen4 architecture preview, arch Qwen4ExpForConditionalGeneration /
-# qwen4_exp. 125B total with 6B activated, PLUS a 51B n-gram embedding table and a 4B MTP
-# layer -- 180B params, 335 GiB in BF16. 48 layers as 12 x (3 x Gated DeltaNet -> 1 x Qwen
-# Sparse Attention), 512 experts top-10 + shared, hidden 2560, GQA 24/2 at head_dim 256,
-# interleaved M-RoPE, VLM, native 262144 context (YaRN factor 4 -> 1M per the card).
-#
-# WHY THIS BUILD (changed 2026-09-06; this script used to fetch Inferact):
-#   - nvidia NVFP4 (this one): quant_algo=MIXED_PRECISION, described per layer --
-#     NVFP4 routed experts (gs 16), FP8 PLE, FP8_PB_WO MTP experts (gs 128). 123.6 GiB,
-#     46.7 GiB less than Inferact, and the PLE is 47.7 GiB rather than 95.37. Officially
-#     published, and it ships its own eval numbers. Needs patch-nv-mixed.py: the pinned
-#     image cannot load a mixed-precision PLE and cannot draft with an FP8_PB_WO MTP.
-#   - Inferact NVFP4 (170.3 GiB, PLE BF16 95.4 GiB) is what this repo served until now and
-#     still loads with no source changes. Slower here: 32.65 tok/s against 33.02, and
-#     ~98 GiB of swap against 55.
-#   - RadixArk NVFP4 (126.0 GiB, PLE fp8) loads only with the same ple_layer.py gate
-#     relaxed; superseded by the official build, which needs the fix anyway.
-#   - Qwen/Qwen3.8-Flash-Next-FP8 (172.8 GiB): body alone is ~125 GiB, does not fit.
-#
-# MEMORY PLAN on the Spark (121 GiB unified, ~7 GiB OS):
-#   body 75.9 GiB resident + KV 24 KiB/token (only 12 of 48 layers hold KV: 2 kv heads x
-#   (256+256) x 2B x 12) => 6 GiB at 262144, 24 GiB at 1M. PLE 47.7 GiB lives in the
-#   offload process and is paged to /swap-ple.img (128 GiB). Measured steady state: 55 GiB
-#   of swap in use. Three separate attempts to make the PLE resident instead all failed --
-#   see the README; the kernel treats a table touched 18 rows at a time as cold no matter
-#   how much room you give it.
-#   Needs VLLM_PLE_CPU_OFFLOAD=1 and the image vllm/vllm-openai:qwen38-flash-next-arm64-cu130
-#   (vllm 0.1.dev20073+g8e685d198, ships vllm/v1/ple_offload/ and the env var).
-#
-# Sequential curl -C -. Parallel pulls did not beat ~10 MB/s on this host and the hf
-# CLI stalled at 0 B/s on Xet, so this keeps it simple and resumable.
+#!/usr/bin/env bash
+# Resumable, revision-pinned Hugging Face checkpoint downloader.
 set -uo pipefail
 
-REPO="${REPO:-nvidia/Qwen3.8-Flash-Next-NVFP4}"
-DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-nvidia}"
-BASE="https://huggingface.co/${REPO}/resolve/main"
-mkdir -p "$DEST" || exit 1
+CHECK_ONLY=0
+QUIET=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check) CHECK_ONLY=1 ;;
+    -q|--quiet) QUIET=1 ;;
+    -h|--help)
+      printf 'Usage: [MODEL_PROFILE=orcarouter|nvidia] ./scripts/download-weights.sh [--check] [--quiet]\n'
+      printf 'Interactive downloads show per-file and overall progress by default.\n'
+      exit 0 ;;
+    *) printf 'FATAL: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
 
-# size AND lfs.sha256: a size-correct but truncated/corrupt shard loads cleanly, reports
-# sane shapes, produces correct-magnitude activations, and yields fluent garbage that
-# survives every configuration change. Someone lost a day to exactly that on this model.
-manifest=$(curl -sL "https://huggingface.co/api/models/${REPO}?blobs=true" | python3 -c "
-import sys, json
-for f in json.load(sys.stdin).get('siblings', []):
-    n = f['rfilename']
-    if n.startswith('.'):
-        continue
-    lfs = f.get('lfs') or {}
-    print(n, f.get('size') or 0, lfs.get('sha256') or '-')
-")
+readonly ORCA_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+readonly ORCA_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
+readonly NVIDIA_REPO="nvidia/Qwen3.8-Flash-Next-NVFP4"
 
-[[ -z "$manifest" ]] && { echo 'FATAL: could not read file manifest' >&2; exit 1; }
-
-verify() {   # $1 path  $2 expected size  $3 expected sha256 ("-" to skip)
-    [[ -f "$1" ]] || return 1
-    [[ "$(stat -c %s "$1")" == "$2" ]] || return 1
-    [[ "$3" == "-" ]] && return 0
-    [[ "$(sha256sum "$1" | cut -d" " -f1)" == "$3" ]]
+expand_user_path() {
+  case "$1" in
+    "~") printf '%s\n' "${HOME}" ;;
+    "~/"*) printf '%s/%s\n' "${HOME}" "${1:2}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
 }
 
-fail=0
-while read -r name size sha; do
-    [[ -z "$name" ]] && continue
-    out="${DEST}/${name}"
-    mkdir -p "$(dirname "$out")"
-    if verify "$out" "$size" "$sha"; then
-        printf '  ok    %s\n' "$name"
-        continue
-    fi
-    if [[ -f "$out" ]] && [[ "$(stat -c %s "$out")" == "$size" ]]; then
-        printf '  BAD   %s (size matches, sha256 does not) -- refetching\n' "$name" >&2
-        rm -f "$out"
-    fi
-    printf '  get   %s (%.2f GiB)\n' "$name" "$(echo "$size" | awk '{print $1/1073741824}')"
-    curl -fL -C - --retry 5 --retry-delay 5 --retry-all-errors --no-progress-meter \
-         -o "$out" "${BASE}/${name}" || { echo "  FAIL  $name" >&2; fail=1; continue; }
-    verify "$out" "$size" "$sha" || { echo "  FAIL  $name (verification failed after download)" >&2; fail=1; }
-done <<< "$manifest"
+PROFILE="${MODEL_PROFILE:-orcarouter}"
+case "${PROFILE}" in
+  orcarouter)
+    REPO="${REPO:-${ORCA_REPO}}"; REVISION="${REVISION:-${ORCA_REVISION}}"
+    DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-orcarouter}"; REQUIRE_TOKEN=1 ;;
+  nvidia)
+    REPO="${REPO:-${NVIDIA_REPO}}"; REVISION="${REVISION:-main}"
+    DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-nvidia}"; REQUIRE_TOKEN=0 ;;
+  *) printf 'FATAL: unknown MODEL_PROFILE: %s\n' "${PROFILE}" >&2; exit 2 ;;
+esac
+DEST="$(realpath -m -- "$(expand_user_path "${DEST}")")"
 
-echo
-if [[ "$fail" == 0 ]]; then
-    echo "done -> ${DEST}  ($(du -sh "$DEST" | cut -f1))"
-else
-    echo "FINISHED WITH ERRORS -- rerun to resume (curl -C - continues partial files)" >&2
-    exit 1
+TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"
+if [[ -z "${TOKEN}" ]]; then
+  TOKEN="$(python3 - <<'PY' 2>/dev/null || true
+try:
+    from huggingface_hub import get_token
+    print(get_token() or "", end="")
+except ImportError:
+    pass
+PY
+)"
 fi
+[[ -n "${TOKEN}" || ! -r "${HOME}/.cache/huggingface/token" ]] || TOKEN="$(<"${HOME}/.cache/huggingface/token")"
+if [[ "${REQUIRE_TOKEN}" == 1 && -z "${TOKEN}" ]]; then
+  printf 'FATAL: OrcaRouter is gated. Accept its terms and run `hf auth login`.\n' >&2; exit 3
+fi
+AUTH_ARGS=(); [[ -n "${TOKEN}" ]] && AUTH_ARGS=(-H "Authorization: Bearer ${TOKEN}")
+API_URL="https://huggingface.co/api/models/${REPO}/revision/${REVISION}?blobs=true"
+BASE_URL="https://huggingface.co/${REPO}/resolve/${REVISION}"
+
+metadata_file="$(mktemp)"
+trap 'rm -f "${metadata_file}"' EXIT
+http_code="$(curl -sS -L -o "${metadata_file}" -w '%{http_code}' "${AUTH_ARGS[@]}" "${API_URL}" || true)"
+if [[ "${http_code}" != 200 ]]; then
+  printf 'FATAL: Hugging Face metadata request returned HTTP %s.\n' "${http_code}" >&2
+  [[ "${http_code}" == 401 || "${http_code}" == 403 ]] && printf 'Accept the model terms and run `hf auth login`.\n' >&2
+  exit 4
+fi
+resolved_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("sha", ""))' "${metadata_file}")"
+[[ -n "${resolved_revision}" ]] || { printf 'FATAL: repository revision was not returned\n' >&2; exit 4; }
+if [[ "${REVISION}" =~ ^[0-9a-f]{40}$ && "${resolved_revision}" != "${REVISION}" ]]; then
+  printf 'FATAL: requested revision %s resolved to unexpected %s\n' "${REVISION}" "${resolved_revision}" >&2; exit 4
+fi
+file_http_code=200
+if [[ "${REQUIRE_TOKEN}" == 1 ]]; then
+  file_http_code="$(curl -sS -L --range 0-0 -o /dev/null -w '%{http_code}' \
+    "${AUTH_ARGS[@]}" "${BASE_URL}/config.json" || true)"
+fi
+if [[ "${file_http_code}" != 200 && "${file_http_code}" != 206 ]]; then
+  printf 'FATAL: authenticated model-file access returned HTTP %s.\n' "${file_http_code}" >&2
+  printf 'The token is valid enough for metadata but cannot download this gated repository.\n' >&2
+  printf '1. Accept access at: https://huggingface.co/%s\n' "${REPO}" >&2
+  printf '2. Ensure the token has read access to public gated repositories.\n' >&2
+  printf '3. Refresh it with `hf auth login --force`, then test:\n' >&2
+  printf '   hf download %s config.json --revision %s\n' "${REPO}" "${REVISION}" >&2
+  exit 4
+fi
+
+manifest="$(python3 - "${metadata_file}" <<'PY'
+import json, sys
+for item in json.load(open(sys.argv[1])).get("siblings", []):
+    name = item["rfilename"]
+    if not name.startswith("."):
+        lfs = item.get("lfs") or {}
+        print(name, item.get("size") or 0, lfs.get("sha256") or "-", sep="\t")
+PY
+)"
+[[ -n "${manifest}" ]] || { printf 'FATAL: empty model manifest\n' >&2; exit 4; }
+required_bytes="$(python3 -c 'import json,sys; print(sum(int(x.get("size") or 0) for x in json.load(open(sys.argv[1])).get("siblings", [])))' "${metadata_file}")"
+space_probe="${DEST}"
+while [[ ! -e "${space_probe}" ]]; do space_probe="$(dirname -- "${space_probe}")"; done
+available_bytes="$(df --output=avail -B1 "${space_probe}" | tail -n1 | tr -d ' ')"
+existing_bytes=0; [[ ! -d "${DEST}" ]] || existing_bytes="$(du -sb "${DEST}" | cut -f1)"
+(( available_bytes + existing_bytes >= required_bytes + 20 * 1024 * 1024 * 1024 )) || {
+  printf 'FATAL: insufficient disk space for checkpoint plus 20 GiB reserve.\n' >&2; exit 5; }
+if [[ "${CHECK_ONLY}" == 1 ]]; then
+  printf 'Preflight passed: %s at %s, %.2f GiB, destination %s\n' \
+    "${REPO}" "${resolved_revision}" "$(awk -v n="${required_bytes}" 'BEGIN {print n/1073741824}')" "${DEST}"
+  exit 0
+fi
+
+mkdir -p "${DEST}" || exit 1
+write_model_manifest() {
+  local status="$1"
+  python3 - "${metadata_file}" "${DEST}/.qwen38-model-manifest.json" "${REPO}" \
+    "${resolved_revision}" "${status}" <<'PY'
+import json, sys
+source, destination, repository, revision, status = sys.argv[1:]
+remote = json.load(open(source))
+result = {"schema_version": 1, "status": status, "repository": repository,
+          "revision": revision,
+          "files": [{"path": x["rfilename"], "size": x.get("size") or 0,
+                     "sha256": (x.get("lfs") or {}).get("sha256")}
+                    for x in remote.get("siblings", []) if not x["rfilename"].startswith(".")]}
+temporary = destination + ".tmp"
+with open(temporary, "w", encoding="utf-8") as stream:
+    json.dump(result, stream, indent=2); stream.write("\n")
+import os
+os.replace(temporary, destination)
+PY
+}
+write_model_manifest downloading
+
+verify() {
+  local path="$1" size="$2" sha="$3"
+  [[ -f "${path}" && "$(stat -c %s -- "${path}")" == "${size}" ]] || return 1
+  [[ "${sha}" == - || "$(sha256sum -- "${path}" | cut -d' ' -f1)" == "${sha}" ]]
+}
+printf 'Checkpoint download\n  repository : %s\n  revision   : %s\n  destination: %s\n' "${REPO}" "${resolved_revision}" "${DEST}"
+fail=0
+file_count="$(printf '%s\n' "${manifest}" | awk 'NF {count++} END {print count+0}')"
+file_index=0
+completed_bytes=0
+curl_progress=(--no-progress-meter)
+if [[ "${QUIET}" == 0 && -t 2 ]]; then curl_progress=(--progress-bar); fi
+while IFS=$'\t' read -r name size sha; do
+  [[ -n "${name}" ]] || continue
+  file_index=$((file_index + 1))
+  output="${DEST}/${name}"; mkdir -p "$(dirname -- "${output}")"
+  overall_pct="$(awk -v done="${completed_bytes}" -v total="${required_bytes}" 'BEGIN {printf "%.1f", total ? done*100/total : 100}')"
+  if verify "${output}" "${size}" "${sha}"; then
+    printf '  [%d/%d | %s%%] ok   %s\n' "${file_index}" "${file_count}" "${overall_pct}" "${name}"
+    completed_bytes=$((completed_bytes + size))
+    continue
+  fi
+  if [[ -f "${output}" && "$(stat -c %s -- "${output}")" == "${size}" ]]; then
+    printf '  BAD   %s (SHA-256 mismatch; refetching)\n' "${name}" >&2; rm -f -- "${output}"
+  fi
+  printf '  [%d/%d | %s%%] get  %s (%.2f GiB)\n' "${file_index}" "${file_count}" \
+    "${overall_pct}" "${name}" "$(awk -v n="${size}" 'BEGIN {print n/1073741824}')"
+  curl -fL -C - --retry 5 --retry-delay 5 --retry-all-errors "${curl_progress[@]}" \
+    "${AUTH_ARGS[@]}" -o "${output}" "${BASE_URL}/${name}" || { printf '  FAIL  %s\n' "${name}" >&2; fail=1; continue; }
+  if verify "${output}" "${size}" "${sha}"; then
+    completed_bytes=$((completed_bytes + size))
+  else
+    printf '  FAIL  %s (verification failed)\n' "${name}" >&2; fail=1
+  fi
+done <<< "${manifest}"
+[[ "${fail}" == 0 ]] || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
+
+write_model_manifest complete
+printf 'done -> %s (%s), revision %s\n' "${DEST}" "$(du -sh "${DEST}" | cut -f1)" "${resolved_revision}"
