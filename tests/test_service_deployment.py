@@ -13,10 +13,13 @@ class ServiceDeploymentTests(unittest.TestCase):
         runner = (ROOT / "scripts" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn("StartLimitBurst=2", manager)
         self.assertIn("Restart=on-failure", manager)
+        self.assertIn("docker stop --timeout 30", manager)
         self.assertIn("WantedBy=multi-user.target", manager)
         self.assertIn("PUBLISH_HOST=127.0.0.1", runner)
         self.assertIn("RESTART_POLICY=no", runner)
         self.assertIn("docker wait", runner)
+        server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        self.assertIn("--init", server)
 
     def test_uninstaller_removes_only_owned_service(self) -> None:
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")

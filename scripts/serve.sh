@@ -174,6 +174,7 @@ docker rm -f "${NAME}" >/dev/null 2>&1 || true
 
 docker run -d \
   --name "${NAME}" \
+  --init \
   --user root \
   -p "${PUBLISH_HOST}:${PORT}:${PORT}" \
   --restart "${RESTART_POLICY}" \
