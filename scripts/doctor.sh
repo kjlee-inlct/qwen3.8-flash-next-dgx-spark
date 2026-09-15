@@ -64,8 +64,17 @@ else
   fail "checkpoint manifest is missing"
 fi
 
-if [[ -r "${CONFIG_OVERRIDE:-}" ]]; then
-  if python3 - "${CONFIG_OVERRIDE}" <<'PY'
+CONFIG_CANDIDATE="${CONFIG_OVERRIDE:-}"
+if [[ ! -r "${CONFIG_CANDIDATE}" && -r "${STATE_DIR}/config.vllm.json" ]]; then
+  CONFIG_CANDIDATE="${STATE_DIR}/config.vllm.json"
+fi
+if [[ ! -r "${CONFIG_CANDIDATE}" ]] && command -v docker >/dev/null 2>&1 && \
+   docker inspect "${CONTAINER_NAME:-qwen38-flash-next}" >/dev/null 2>&1; then
+  CONFIG_CANDIDATE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model/config.json"}}{{.Source}}{{end}}{{end}}' \
+    "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null || true)"
+fi
+if [[ -r "${CONFIG_CANDIDATE}" ]]; then
+  if python3 - "${CONFIG_CANDIDATE}" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 values = []
@@ -78,9 +87,9 @@ def walk(item):
 walk(data)
 assert "qwen_sparse_attention" not in values
 PY
-  then pass "vLLM config override is compatible"; else fail "config override still contains incompatible layer values"; fi
+  then pass "vLLM config is compatible (${CONFIG_CANDIDATE})"; else fail "vLLM config still contains incompatible layer values"; fi
 else
-  fail "config override is missing: ${CONFIG_OVERRIDE:-unset}"
+  fail "vLLM config override is missing (manifest, generated config, and container mount checked)"
 fi
 
 if command -v swapon >/dev/null 2>&1 && swapon --show=NAME --noheadings | awk '{$1=$1};1' | grep -Fxq "${SWAP_FILE:-}"; then

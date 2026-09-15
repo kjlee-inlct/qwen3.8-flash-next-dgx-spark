@@ -37,6 +37,7 @@ fi
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_OWNED="${PROXY_OWNED:-0}"
+SERVICE_OWNED="${SERVICE_OWNED:-0}"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 
 if [[ "${YES}" == 0 && "${PURGE_SELECTED}" == 0 ]]; then
@@ -56,11 +57,13 @@ if [[ "${UI_LANG}" == ko ]]; then
   printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf 제거 || printf 유지)"
   printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf 제거 || printf 유지)"
   printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf 제거 || printf 유지)"
+  printf '  service  : %s\n' "$([[ "${SERVICE_OWNED}" == 1 ]] && printf 제거 || printf 유지)"
 else
   printf 'Qwen3.8 Flash Next uninstaller wizard\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
   printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
   printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf remove || printf keep)"
   printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf remove || printf keep)"
+  printf '  service  : %s\n' "$([[ "${SERVICE_OWNED}" == 1 ]] && printf remove || printf keep)"
 fi
 if [[ "${DRY_RUN}" == 1 ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
@@ -69,6 +72,9 @@ if [[ "${DRY_RUN}" == 1 ]]; then
     printf '\nDRY-RUN complete: no container, monitor, proxy, model, swap, image, or manifest changes were made.\n'
   fi
   exit 0
+fi
+if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
+  die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
 fi
 if [[ "${YES}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '
@@ -82,6 +88,9 @@ if [[ -r "${MONITOR_PID_FILE}" ]]; then
     kill "${monitor_pid}" 2>/dev/null || true
   fi
   rm -f -- "${MONITOR_PID_FILE}"
+fi
+if [[ "${SERVICE_OWNED}" == 1 ]]; then
+  sudo "${INSTALL_ROOT}/scripts/manage-service.sh" remove --yes
 fi
 if [[ "${PROXY_OWNED}" == 1 ]]; then
   sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes

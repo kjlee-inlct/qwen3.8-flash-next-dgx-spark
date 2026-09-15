@@ -13,6 +13,7 @@ REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
 YES=0; START=1; DRY_RUN=0; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
+SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -27,7 +28,7 @@ write_state() {
   local phase="$1"
   mkdir -p "${STATE_DIR}"; umask 077
   {
-    printf 'SCHEMA_VERSION=%q\n' 1; printf 'PHASE=%q\n' "${phase}"
+    printf 'SCHEMA_VERSION=%q\n' 2; printf 'PHASE=%q\n' "${phase}"
     printf 'INSTALL_ROOT=%q\n' "${ROOT_DIR}"; printf 'MODEL_PROFILE=%q\n' orcarouter
     printf 'MODEL_REPO=%q\n' "${REPO}"; printf 'MODEL_REVISION=%q\n' "${REVISION}"
     printf 'MODEL_DIR=%q\n' "${MODEL_DIR}"; printf 'MODEL_OWNED=%q\n' "${MODEL_OWNED}"
@@ -38,12 +39,14 @@ write_state() {
     printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
     printf 'PROXY_ENABLED=%q\n' "${PROXY_ENABLED}"; printf 'PROXY_OWNED=%q\n' "${PROXY_OWNED}"
     printf 'PROXY_PORT=%q\n' "${PROXY_PORT}"
+    printf 'SERVICE_ENABLED=%q\n' "${SERVICE_ENABLED}"; printf 'SERVICE_OWNED=%q\n' "${SERVICE_OWNED}"
+    printf 'SERVICE_UNIT=%q\n' qwen38-flash-next.service
     printf 'UI_LANG=%q\n' "${UI_LANG}"
   } > "${STATE_FILE}.tmp"
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--lang en|ko] [--yes] [--no-start] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -55,7 +58,8 @@ ask_yes_no() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
-    --yes) YES=1 ;; --no-start) START=0 ;; --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
+    --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
+    --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
   shift
 done
@@ -87,6 +91,8 @@ fi
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
+SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED="${SERVICE_OWNED:-0}"
+[[ -z "${SERVICE_CLI}" ]] || SERVICE_ENABLED="${SERVICE_CLI}"
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
 if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && prompt="모델 디렉터리 [${MODEL_DIR}]: " || prompt="Model directory [${MODEL_DIR}]: "
@@ -110,6 +116,9 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && prompt="docker0 전용 OpenWebUI proxy를 ${PROXY_PORT} 포트에 설치합니까? [y/N]: " || prompt="Install docker0-only OpenWebUI proxy on port ${PROXY_PORT}? [y/N]: "
   read -r -p "${prompt}" answer
   [[ "${answer}" == y || "${answer}" == Y ]] && PROXY_ENABLED=1 || PROXY_ENABLED=0
+  [[ "${UI_LANG}" == ko ]] && prompt='부팅 시 자동 시작되는 systemd 서비스를 등록합니까? [Y/n]: ' || prompt='Install a systemd service that starts at boot? [Y/n]: '
+  read -r -p "${prompt}" answer
+  [[ "${answer}" == n || "${answer}" == N ]] && SERVICE_ENABLED=0 || SERVICE_ENABLED=1
 fi
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
@@ -121,15 +130,16 @@ printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %
 printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'docker0:%s -> loopback:8888' "${PROXY_PORT}" || printf disabled)"
+printf '  service     : %s\n\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service' || printf 'Docker container only')"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
 ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
 
 if [[ "${DRY_RUN}" == 1 ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '\nDRY-RUN 완료: 다운로드, swap, proxy, Docker 및 manifest를 변경하지 않았습니다.\n'
+    printf '\nDRY-RUN 완료: 다운로드, swap, proxy, service, Docker 및 manifest를 변경하지 않았습니다.\n'
   else
-    printf '\nDRY-RUN complete: no download, swap, proxy, Docker, or manifest changes were made.\n'
+    printf '\nDRY-RUN complete: no download, swap, proxy, service, Docker, or manifest changes were made.\n'
   fi
   exit 0
 fi
@@ -187,7 +197,14 @@ if [[ "${PROXY_ENABLED}" == 1 ]]; then
   write_state proxy_ready
 fi
 
-if [[ "${START}" == 1 ]]; then
+if [[ "${SERVICE_ENABLED}" == 1 ]]; then
+  SERVICE_OWNED=1
+  write_state service_ready
+  service_args=(create --yes)
+  [[ "${START}" == 1 ]] && service_args+=(--start) || service_args+=(--no-start)
+  sudo env QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
+    "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
+elif [[ "${START}" == 1 ]]; then
   printf '\nStarting service...\n'
   MODEL_PROFILE=orcarouter MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" \
     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" MONITOR_PROTECT="${MONITOR_PROTECT}" \
@@ -195,7 +212,9 @@ if [[ "${START}" == 1 ]]; then
 fi
 write_state complete
 if [[ "${UI_LANG}" == ko ]]; then
-  printf '\n설치가 완료되었습니다.\n  manifest: %s\n  logs: docker logs -f qwen38-flash-next\n' "${STATE_FILE}"
+  printf '\n설치가 완료되었습니다.\n  manifest: %s\n' "${STATE_FILE}"
+  [[ "${SERVICE_ENABLED}" == 1 ]] && printf '  logs: journalctl -fu qwen38-flash-next.service\n' || printf '  logs: docker logs -f qwen38-flash-next\n'
 else
-  printf '\nInstallation completed.\n  manifest: %s\n  logs: docker logs -f qwen38-flash-next\n' "${STATE_FILE}"
+  printf '\nInstallation completed.\n  manifest: %s\n' "${STATE_FILE}"
+  [[ "${SERVICE_ENABLED}" == 1 ]] && printf '  logs: journalctl -fu qwen38-flash-next.service\n' || printf '  logs: docker logs -f qwen38-flash-next\n'
 fi

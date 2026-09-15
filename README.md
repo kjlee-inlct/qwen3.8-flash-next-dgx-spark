@@ -637,7 +637,7 @@ final plan.
 
 Preview either wizard without changing the machine by adding `--dry-run`. The installer
 does not authenticate, download, create swap, write its manifest, pull an image, start a
-container, or install the proxy. The uninstaller prints the selected cleanup plan without
+container, or install the proxy/service. The uninstaller prints the selected cleanup plan without
 stopping or deleting anything:
 
 ```bash
@@ -661,6 +661,29 @@ generated answer text:
 ```bash
 python3 scripts/validate-runtime.py \
   --output ~/.local/state/qwen38-spark/runtime-validation.json
+```
+
+The installer enables a managed `qwen38-flash-next.service` by default. It starts after
+Docker and the network are ready, forces the unauthenticated API to loopback, disables the
+container's own restart loop, waits up to 30 minutes for readiness, verifies the served
+model ID, follows container logs into the journal, and uses bounded systemd recovery. Use
+`--no-service` only when another supervisor owns the container. `--no-start` installs and
+enables the unit without interrupting a currently running container:
+
+```bash
+./install.sh --no-start
+./scripts/manage-service.sh status
+sudo systemctl start qwen38-flash-next.service
+journalctl -fu qwen38-flash-next.service
+```
+
+The uninstaller removes the unit only when its installation manifest records
+`SERVICE_OWNED=1`. Standalone management also refuses to replace or remove a unit that does
+not contain this project's ownership marker:
+
+```bash
+./scripts/manage-service.sh status
+sudo ./scripts/manage-service.sh remove
 ```
 
 Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment with separate

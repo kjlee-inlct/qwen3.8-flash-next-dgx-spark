@@ -24,6 +24,7 @@ class DryRunTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("DRY-RUN complete", result.stdout)
+            self.assertIn("systemd boot service", result.stdout)
             self.assertFalse((home / "state").exists())
 
     def test_uninstall_dry_run_preserves_manifest(self) -> None:
