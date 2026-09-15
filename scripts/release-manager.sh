@@ -52,15 +52,15 @@ atomic_link() {
 
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
 action="$1"; shift
-require_command git
 require_command python3
-require_command tar
-[[ -d "${SOURCE_ROOT}/.git" ]] || die "source root is not a git checkout: ${SOURCE_ROOT}"
 [[ -f "${MANIFEST_TOOL}" ]] || die "release manifest tool is unavailable: ${MANIFEST_TOOL}"
 
 case "${action}" in
   stage)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    require_command git
+    require_command tar
+    git -C "${SOURCE_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "source root is not a git checkout: ${SOURCE_ROOT}"
     requested="$1"
     revision="$(git -C "${SOURCE_ROOT}" rev-parse --verify "${requested}^{commit}" 2>/dev/null)" || die "unknown git revision: ${requested}"
     release_id="${revision}"
