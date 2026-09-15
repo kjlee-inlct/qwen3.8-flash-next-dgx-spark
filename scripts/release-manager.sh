@@ -45,7 +45,10 @@ verify_release() {
   python3 "${MANIFEST_TOOL}" verify "${path}" --revision "${release_id}"
 }
 atomic_link() {
-  local target="$1" link="$2" tmp="${link}.tmp.$$"
+  local target link tmp
+  target="$1"
+  link="$2"
+  tmp="${link}.tmp.$$"
   ln -s -- "${target}" "${tmp}"
   mv -Tf -- "${tmp}" "${link}"
 }
