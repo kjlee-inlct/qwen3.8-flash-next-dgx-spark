@@ -5,6 +5,7 @@ set -u
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+TRANSITION_STATE_FILE="${STATE_DIR}/runtime-transition.env"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=model-profiles.sh
 source "${SCRIPT_DIR}/model-profiles.sh"
@@ -66,6 +67,8 @@ MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB:-10}"
 MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB:-8}"
 MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE:-5}"
 MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT:-60}"
+RUNTIME_CONTAINER="${CONTAINER_NAME:-qwen38-flash-next}"
+ROLLBACK_CONTAINER="${RUNTIME_CONTAINER}.rollback"
 
 if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then
   pass "model index is present"
@@ -92,9 +95,9 @@ if [[ ! -r "${CONFIG_CANDIDATE}" && -r "${STATE_DIR}/config.vllm.json" ]]; then
   CONFIG_CANDIDATE="${STATE_DIR}/config.vllm.json"
 fi
 if [[ ! -r "${CONFIG_CANDIDATE}" ]] && command -v docker >/dev/null 2>&1 && \
-   docker inspect "${CONTAINER_NAME:-qwen38-flash-next}" >/dev/null 2>&1; then
+   docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
   CONFIG_CANDIDATE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model/config.json"}}{{.Source}}{{end}}{{end}}' \
-    "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null || true)"
+    "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
 fi
 if [[ -r "${CONFIG_CANDIDATE}" ]]; then
   if python3 - "${CONFIG_CANDIDATE}" <<'PY'
@@ -149,22 +152,64 @@ if [[ -d "${MODEL_DIR:-}" ]]; then
   fi
 fi
 
+if [[ -r "${TRANSITION_STATE_FILE}" ]]; then
+  transition_state="$(awk -F= '$1=="TRANSACTION_STATE" {print $2; exit}' "${TRANSITION_STATE_FILE}" 2>/dev/null || true)"
+  fail "runtime transition is incomplete (${transition_state:-unknown}); run runtime-transition.sh recover before maintenance"
+else
+  pass "no incomplete runtime transition exists"
+fi
+
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   pass "Docker daemon is available"
   if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then pass "vLLM image is present"; else fail "vLLM image is missing"; fi
-  if docker inspect "${CONTAINER_NAME:-qwen38-flash-next}" >/dev/null 2>&1; then
-    state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null)"
+
+  if docker inspect "${ROLLBACK_CONTAINER}" >/dev/null 2>&1; then
+    if [[ -r "${TRANSITION_STATE_FILE}" ]]; then
+      fail "rollback container exists while a runtime transition is incomplete (${ROLLBACK_CONTAINER})"
+    else
+      warn "stale rollback container exists (${ROLLBACK_CONTAINER})"
+    fi
+  else
+    pass "no stale rollback container exists"
+  fi
+
+  if docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
+    state="$(docker inspect --format '{{.State.Status}}' "${RUNTIME_CONTAINER}" 2>/dev/null)"
     [[ "${state}" == running ]] && pass "container is running" || fail "container state is ${state}"
-    init_enabled="$(docker inspect --format '{{.HostConfig.Init}}' "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null)"
+
+    runtime_image="$(docker inspect --format '{{.Config.Image}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+    if [[ "${runtime_image}" == "${VLLM_IMAGE:-}" ]]; then
+      pass "runtime container image matches installation manifest"
+    else
+      warn "runtime image drift: running=${runtime_image:-unknown}, manifest=${VLLM_IMAGE:-missing}"
+    fi
+
+    runtime_model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+    if [[ "${runtime_model_mount}" == "${MODEL_DIR:-}" ]]; then
+      pass "runtime model mount matches installation manifest"
+    else
+      warn "runtime model mount drift: running=${runtime_model_mount:-missing}, manifest=${MODEL_DIR:-missing}"
+    fi
+
+    runtime_served_name="$(docker inspect --format '{{json .Config.Cmd}}' "${RUNTIME_CONTAINER}" 2>/dev/null | python3 -c 'import json,sys; cmd=json.load(sys.stdin); print(cmd[cmd.index("--served-model-name")+1] if "--served-model-name" in cmd and cmd.index("--served-model-name")+1 < len(cmd) else "")' 2>/dev/null || true)"
+    if [[ -n "${runtime_served_name}" && "${runtime_served_name}" == "${SERVED_NAME:-}" ]]; then
+      pass "runtime served model name matches installation manifest"
+    elif [[ -n "${runtime_served_name}" ]]; then
+      warn "runtime served-name drift: running=${runtime_served_name}, manifest=${SERVED_NAME:-missing}"
+    else
+      warn "runtime served model name could not be determined from container command"
+    fi
+
+    init_enabled="$(docker inspect --format '{{.HostConfig.Init}}' "${RUNTIME_CONTAINER}" 2>/dev/null)"
     [[ "${init_enabled}" == true ]] && pass "container init process is enabled" || warn "container was created without --init; apply on the next maintenance restart"
-    ports="$(docker port "${CONTAINER_NAME:-qwen38-flash-next}" 2>/dev/null || true)"
+    ports="$(docker port "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
     if grep -Eq '(^|[[:space:]])127\.0\.0\.1:8888$' <<<"${ports}" && ! grep -Eq '0\.0\.0\.0:8888|\[::\]:8888' <<<"${ports}"; then
       pass "API is published on loopback only"
     else
       fail "API port is not loopback-only: ${ports:-no published port}"
     fi
   else
-    fail "container is missing: ${CONTAINER_NAME:-qwen38-flash-next}"
+    fail "container is missing: ${RUNTIME_CONTAINER}"
   fi
 else
   fail "Docker daemon is unavailable"

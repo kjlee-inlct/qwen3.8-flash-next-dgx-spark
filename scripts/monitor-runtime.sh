@@ -11,6 +11,8 @@ CONSECUTIVE=5
 INTERVAL=2
 HEARTBEAT=60
 PROTECT=0
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
+STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 
 usage() {
   cat <<'EOF'
@@ -31,6 +33,19 @@ EOF
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 positive_integer() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 nonnegative_integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
+write_stop_reason() {
+  local container_id="$1"
+  mkdir -p "${STATE_DIR}"
+  umask 077
+  {
+    printf 'RUNTIME_STOP_SCHEMA_VERSION=%q\n' 1
+    printf 'STOP_REASON=%q\n' memory-protection
+    printf 'STOP_CONTAINER_NAME=%q\n' "${CONTAINER}"
+    printf 'STOP_CONTAINER_ID=%q\n' "${container_id}"
+    printf 'UPDATED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } >"${STOP_REASON_FILE}.tmp"
+  mv -- "${STOP_REASON_FILE}.tmp" "${STOP_REASON_FILE}"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,7 +94,12 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
     if [[ "${PROTECT}" == 1 && "${low_count}" -ge "${CONSECUTIVE}" ]]; then
       printf '%s PROTECT stopping %s gracefully to preserve host stability\n' "$(date '+%F %T')" "${CONTAINER}" >&2
       docker logs --tail 1000 "${CONTAINER}" 2>&1 || true
-      docker stop --timeout 30 "${CONTAINER}" >/dev/null
+      container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER}")"
+      write_stop_reason "${container_id}"
+      if ! docker stop --timeout 30 "${CONTAINER}" >/dev/null; then
+        rm -f -- "${STOP_REASON_FILE}"
+        die "failed to stop protected container"
+      fi
       exit 2
     fi
   else
