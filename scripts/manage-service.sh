@@ -88,7 +88,7 @@ trap 'rm -rf -- "${tmp_dir}"' EXIT
 cat >"${tmp_dir}/${UNIT}" <<EOF
 # ${MARKER}; installed by scripts/manage-service.sh
 [Unit]
-Description=Qwen3.8 Flash Next OrcaRouter service on one DGX Spark
+Description=Qwen3.8 Flash Next service on one DGX Spark
 Requires=docker.service
 Wants=network-online.target
 After=docker.service network-online.target
@@ -133,7 +133,7 @@ if [[ "${START}" == 1 ]]; then
   [[ "${ready}" == 1 ]] || die "API did not become healthy within 30 minutes"
   models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
   python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
-    "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4" <<<"${models}" || die "served model ID validation failed"
+    "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}" || die "served model ID validation failed"
   systemctl is-active --quiet "${UNIT}" || die "service became inactive after readiness"
   printf 'Runtime service is enabled and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
 else

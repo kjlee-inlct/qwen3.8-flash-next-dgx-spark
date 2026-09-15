@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_URL = "http://127.0.0.1:8888"
-DEFAULT_MODEL = "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+DEFAULT_MODEL = None
 
 
 class ValidationError(RuntimeError):
@@ -141,7 +141,11 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default=DEFAULT_URL)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="served model id; defaults to the sole /v1/models entry",
+    )
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--concurrency", type=int, default=3)
     parser.add_argument("--skip-stream", action="store_true")
@@ -160,26 +164,34 @@ def main() -> int:
 
         models = request_json(f"{url}/v1/models", payload=None, timeout=args.timeout)
         model_ids = [item.get("id") for item in models.get("data", []) if isinstance(item, dict)]
-        if args.model not in model_ids:
+        model = args.model
+        if model is None:
+            if len(model_ids) != 1:
+                raise ValidationError(
+                    "--model is required when /v1/models does not contain exactly one model"
+                )
+            model = model_ids[0]
+            report["model"] = model
+        if model not in model_ids:
             raise ValidationError(f"served model is missing; received: {model_ids}")
         report["checks"]["models"] = "pass"
 
         response = request_json(
-            f"{url}/v1/chat/completions", payload=chat_payload(args.model), timeout=args.timeout
+            f"{url}/v1/chat/completions", payload=chat_payload(model), timeout=args.timeout
         )
         validate_chat_response(response)
         report["checks"]["chat"] = "pass"
 
         if not args.skip_stream:
-            report["stream_chunks"] = validate_stream(url, args.model, args.timeout)
+            report["stream_chunks"] = validate_stream(url, model, args.timeout)
             report["checks"]["stream"] = "pass"
         if not args.skip_tool:
-            validate_tool_call(url, args.model, args.timeout)
+            validate_tool_call(url, model, args.timeout)
             report["checks"]["tool_call"] = "pass"
 
         def one_request(_: int) -> None:
             result = request_json(
-                f"{url}/v1/chat/completions", payload=chat_payload(args.model), timeout=args.timeout
+                f"{url}/v1/chat/completions", payload=chat_payload(model), timeout=args.timeout
             )
             validate_chat_response(result)
 

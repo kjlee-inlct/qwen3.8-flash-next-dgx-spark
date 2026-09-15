@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Resumable, revision-pinned Hugging Face checkpoint downloader.
 set -uo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=model-profiles.sh
+source "${SCRIPT_DIR}/model-profiles.sh"
 
 CHECK_ONLY=0
 QUIET=0
@@ -17,10 +20,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-readonly ORCA_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-readonly ORCA_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-readonly NVIDIA_REPO="nvidia/Qwen3.8-Flash-Next-NVFP4"
-
 expand_user_path() {
   case "$1" in
     "~") printf '%s\n' "${HOME}" ;;
@@ -30,15 +29,9 @@ expand_user_path() {
 }
 
 PROFILE="${MODEL_PROFILE:-orcarouter}"
-case "${PROFILE}" in
-  orcarouter)
-    REPO="${REPO:-${ORCA_REPO}}"; REVISION="${REVISION:-${ORCA_REVISION}}"
-    DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-orcarouter}"; REQUIRE_TOKEN=1 ;;
-  nvidia)
-    REPO="${REPO:-${NVIDIA_REPO}}"; REVISION="${REVISION:-main}"
-    DEST="${DEST:-${MODELS_DIR:-$HOME/models}/qwen3.8-flash-next-nvidia}"; REQUIRE_TOKEN=0 ;;
-  *) printf 'FATAL: unknown MODEL_PROFILE: %s\n' "${PROFILE}" >&2; exit 2 ;;
-esac
+load_model_profile "${PROFILE}" || exit $?
+REPO="${REPO:-${PROFILE_REPO}}"; REVISION="${REVISION:-${PROFILE_REVISION}}"
+DEST="${DEST:-${MODELS_DIR:-$HOME/models}/$(basename "${PROFILE_MODEL_DIR}")}"; REQUIRE_TOKEN="${PROFILE_GATED}"
 DEST="$(realpath -m -- "$(expand_user_path "${DEST}")")"
 
 TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"

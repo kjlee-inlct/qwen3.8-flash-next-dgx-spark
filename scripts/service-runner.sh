@@ -11,11 +11,11 @@ source "${STATE_FILE}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 
-[[ "${MODEL_PROFILE:-}" == orcarouter ]] || { printf 'FATAL: service requires the OrcaRouter profile\n' >&2; exit 1; }
+[[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
 [[ -x "${INSTALL_ROOT:-}/scripts/serve.sh" ]] || { printf 'FATAL: invalid INSTALL_ROOT in manifest\n' >&2; exit 1; }
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || { printf 'FATAL: unexpected container name\n' >&2; exit 1; }
 
-export MODEL_PROFILE MODEL_DIR VLLM_IMAGE CONFIG_OVERRIDE MONITOR_PROTECT
+export MODEL_PROFILE MODEL_DIR VLLM_IMAGE CONFIG_OVERRIDE MONITOR_PROTECT SERVED_NAME
 export NAME="${CONTAINER_NAME}"
 export RESTART_POLICY=no
 export PUBLISH_HOST=127.0.0.1
