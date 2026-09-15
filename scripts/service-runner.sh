@@ -8,6 +8,8 @@ STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-sp
 # shellcheck disable=SC1090
 source "${STATE_FILE}"
 
+STATE_DIR="$(dirname -- "${STATE_FILE}")"
+STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
@@ -80,5 +82,21 @@ docker logs --follow --since 0s "${CONTAINER_NAME}" &
 log_pid=$!
 trap 'kill "${log_pid}" 2>/dev/null || true' EXIT
 container_status="$(docker wait "${CONTAINER_NAME}")"
+container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+
+if [[ -r "${STOP_REASON_FILE}" ]]; then
+  STOP_REASON=""; STOP_CONTAINER_NAME=""; CONTAINER_ID=""
+  # shellcheck disable=SC1090
+  source "${STOP_REASON_FILE}"
+  STOP_CONTAINER_NAME="${CONTAINER_NAME:-${STOP_CONTAINER_NAME:-}}"
+  if [[ "${STOP_REASON:-}" == memory-protection && "${CONTAINER_ID:-}" == "${container_id}" && -n "${container_id}" ]]; then
+    rm -f -- "${STOP_REASON_FILE}"
+    printf 'Inference container stopped intentionally by memory protection; leaving service stopped.\n' >&2
+    exit 0
+  fi
+  printf 'WARNING: ignoring stale runtime stop marker; container will be treated as failed.\n' >&2
+  rm -f -- "${STOP_REASON_FILE}"
+fi
+
 printf 'Inference container stopped (exit %s); marking service failed.\n' "${container_status}" >&2
 exit 1
