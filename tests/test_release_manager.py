@@ -50,14 +50,20 @@ class ReleaseManagerTests(unittest.TestCase):
         return self.data_home / "qwen38-spark" / "releases"
 
     def run_manager(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
+        result = subprocess.run(
             ["bash", str(SCRIPT), *args],
             env=self.env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=check,
+            check=False,
         )
+        if check and result.returncode != 0:
+            self.fail(
+                f"release-manager {' '.join(args)} failed with {result.returncode}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+        return result
 
     def test_stage_exports_only_committed_payload_and_reuses_verified_release(self) -> None:
         (self.source / "secret.env").write_text("TOKEN=secret\n", encoding="utf-8")
