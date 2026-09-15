@@ -675,6 +675,20 @@ systemd service registration, and the health endpoint:
 ./scripts/doctor.sh --strict   # warnings also make the command fail
 ```
 
+Create a read-only support bundle when diagnosing an installation or runtime failure:
+
+```bash
+./scripts/collect-diagnostics.sh
+./scripts/collect-diagnostics.sh --no-logs
+./scripts/collect-diagnostics.sh --dry-run --output /tmp/qwen38-report.tar.gz
+```
+
+The archive contains bounded service/container logs, doctor output, hardware resource
+status, a whitelisted installation-manifest view and the newest runtime-validation JSON.
+It excludes model weights, caches, authentication files and the full container environment,
+replaces the home path, and redacts common token/secret patterns. The archive is mode 0600;
+automated redaction is best-effort, so review its contents before sharing it.
+
 Once the API is ready, validate ordinary chat, streaming, required tool calls, and three
 concurrent requests. The optional JSON report is written atomically and does not store the
 generated answer text:
