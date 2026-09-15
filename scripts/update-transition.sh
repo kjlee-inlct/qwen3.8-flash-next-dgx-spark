@@ -26,7 +26,9 @@ read_link_id() {
 }
 atomic_link() {
   local target link tmp
-  target="$1"; link="$2"; tmp="${link}.tmp.$$"
+  target="$1"
+  link="$2"
+  tmp="${link}.tmp.$$"
   mkdir -p -- "$(dirname -- "${link}")"
   ln -s -- "${target}" "${tmp}"
   mv -Tf -- "${tmp}" "${link}"
@@ -55,7 +57,9 @@ load_state() {
   [[ -z "${OLD_PREVIOUS_RELEASE:-}" || "${OLD_PREVIOUS_RELEASE}" =~ ^[0-9a-f]{12,40}$ ]] || die 'invalid old previous release'
 }
 verify_qualified() {
-  local release_id="$1" marker="${QUALIFIED_DIR}/${release_id}.env"
+  local release_id marker
+  release_id="$1"
+  marker="${QUALIFIED_DIR}/${release_id}.env"
   bash "${RELEASE_MANAGER}" verify "${release_id}"
   [[ -f "${marker}" && ! -L "${marker}" ]] || die "release is not qualified: ${release_id}"
   (
