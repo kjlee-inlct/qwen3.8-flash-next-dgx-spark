@@ -2,12 +2,13 @@
 # Stage and inspect immutable code releases without mutating the active runtime.
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SOURCE_ROOT="${QWEN38_SOURCE_ROOT:-${SCRIPT_ROOT}}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 RELEASES_DIR="${QWEN38_RELEASES_DIR:-${DATA_HOME}/releases}"
 CURRENT_LINK="${QWEN38_CURRENT_RELEASE_LINK:-${DATA_HOME}/current}"
 PREVIOUS_LINK="${QWEN38_PREVIOUS_RELEASE_LINK:-${DATA_HOME}/previous}"
-MANIFEST_TOOL="${ROOT_DIR}/scripts/release_manifest.py"
+MANIFEST_TOOL="${SCRIPT_ROOT}/scripts/release_manifest.py"
 
 usage() {
   cat <<'EOF'
@@ -54,13 +55,14 @@ action="$1"; shift
 require_command git
 require_command python3
 require_command tar
+[[ -d "${SOURCE_ROOT}/.git" ]] || die "source root is not a git checkout: ${SOURCE_ROOT}"
 [[ -f "${MANIFEST_TOOL}" ]] || die "release manifest tool is unavailable: ${MANIFEST_TOOL}"
 
 case "${action}" in
   stage)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     requested="$1"
-    revision="$(git -C "${ROOT_DIR}" rev-parse --verify "${requested}^{commit}" 2>/dev/null)" || die "unknown git revision: ${requested}"
+    revision="$(git -C "${SOURCE_ROOT}" rev-parse --verify "${requested}^{commit}" 2>/dev/null)" || die "unknown git revision: ${requested}"
     release_id="${revision}"
     destination="$(release_path "${release_id}")"
     mkdir -p -- "${RELEASES_DIR}"
@@ -73,7 +75,7 @@ case "${action}" in
     staging="${destination}.staging.$$"
     trap 'rm -rf -- "${staging}"' EXIT INT TERM
     mkdir -p -- "${staging}"
-    git -C "${ROOT_DIR}" archive --format=tar "${revision}" | tar -xf - -C "${staging}"
+    git -C "${SOURCE_ROOT}" archive --format=tar "${revision}" | tar -xf - -C "${staging}"
     python3 "${MANIFEST_TOOL}" build "${staging}" "${release_id}"
     python3 "${MANIFEST_TOOL}" verify "${staging}" --revision "${release_id}"
     mv -- "${staging}" "${destination}"
