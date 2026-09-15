@@ -212,6 +212,31 @@ class RuntimeTransitionTests(unittest.TestCase):
         self.assertTrue(self.container_path("qwen38-flash-next").exists())
         self.assertTrue(self.container_path("qwen38-flash-next.rollback").exists())
 
+    def test_recover_rejects_rollback_container_mismatch(self) -> None:
+        self.set_container("qwen38-flash-next", "stopped")
+        self.set_container("unexpected.rollback", "stopped")
+        self.transition_file.parent.mkdir(parents=True)
+        self.transition_file.write_text(
+            textwrap.dedent(
+                """\
+                RUNTIME_SCHEMA_VERSION=1
+                TRANSACTION_STATE=previous_preserved
+                CURRENT_CONTAINER=qwen38-flash-next
+                ROLLBACK_CONTAINER=unexpected.rollback
+                HAD_PREVIOUS=1
+                UPDATED_AT=2026-09-15T00:00:00Z
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.run_transition("recover", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rollback-container mismatch", result.stderr)
+        self.assertTrue(self.container_path("qwen38-flash-next").exists())
+        self.assertTrue(self.container_path("unexpected.rollback").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
