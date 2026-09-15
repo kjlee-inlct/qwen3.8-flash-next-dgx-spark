@@ -29,13 +29,19 @@ write_state() {
 }
 clear_state() { rm -f -- "${STATE_FILE}" "${STATE_FILE}.tmp"; }
 load_state() {
+  local expected_container="${CONTAINER}"
+  local expected_rollback_container="${ROLLBACK_CONTAINER}"
   [[ -r "${STATE_FILE}" ]] || die 'no runtime transition is active'
   # shellcheck disable=SC1090
   source "${STATE_FILE}"
   [[ "${RUNTIME_SCHEMA_VERSION:-}" == 1 ]] || die 'unsupported runtime transition schema'
-  [[ "${CURRENT_CONTAINER:-}" == "${CONTAINER}" ]] || die 'runtime transition current-container mismatch'
-  [[ "${ROLLBACK_CONTAINER:-}" == "${ROLLBACK_CONTAINER}" ]] || die 'runtime transition rollback-container mismatch'
+  [[ "${CURRENT_CONTAINER:-}" == "${expected_container}" ]] || die 'runtime transition current-container mismatch'
+  [[ "${ROLLBACK_CONTAINER:-}" == "${expected_rollback_container}" ]] || die 'runtime transition rollback-container mismatch'
   [[ "${HAD_PREVIOUS:-}" == 0 || "${HAD_PREVIOUS:-}" == 1 ]] || die 'invalid HAD_PREVIOUS in runtime transition state'
+  # The state file is descriptive, not authoritative for which Docker objects this
+  # invocation is allowed to mutate. Restore the validated invocation-scoped names.
+  CONTAINER="${expected_container}"
+  ROLLBACK_CONTAINER="${expected_rollback_container}"
 }
 restore_previous() {
   container_exists "${ROLLBACK_CONTAINER}" || die "rollback container is missing: ${ROLLBACK_CONTAINER}"
