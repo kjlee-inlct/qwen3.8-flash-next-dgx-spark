@@ -51,6 +51,11 @@ class DiagnosticBundleTests(unittest.TestCase):
             with tarfile.open(output, "r:gz") as archive:
                 names = archive.getnames()
                 self.assertIn("qwen38-diagnostics/ABOUT.txt", names)
+                for member in archive.getmembers():
+                    self.assertEqual(member.uid, 0)
+                    self.assertEqual(member.gid, 0)
+                    expected_mode = 0o700 if member.isdir() else 0o600
+                    self.assertEqual(member.mode & 0o777, expected_mode)
                 payload = b"".join(
                     archive.extractfile(name).read()
                     for name in names

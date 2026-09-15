@@ -81,11 +81,16 @@ capture() {
 
 redact_file() {
   local path="$1" temporary="${path}.redacted"
+  local host_name escaped_host
+  host_name="$(hostname 2>/dev/null || true)"
+  escaped_host="${host_name//./\\.}"
+  escaped_host="${escaped_host//#/\\#}"
   sed -E \
     -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1<REDACTED>/Ig' \
     -e 's/hf_[A-Za-z0-9]{10,}/<REDACTED_HF_TOKEN>/g' \
     -e 's/((TOKEN|PASSWORD|SECRET|API_KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1<REDACTED>/Ig' \
     -e "s#${HOME//\#/\\#}#<HOME>#g" \
+    ${escaped_host:+-e "s#${escaped_host}#<HOST>#g"} \
     "${path}" >"${temporary}"
   mv -- "${temporary}" "${path}"
 }
@@ -152,9 +157,11 @@ fi
 for path in "${bundle_dir}"/*; do
   [[ -f "${path}" ]] && redact_file "${path}"
 done
+chmod 0700 "${bundle_dir}"
+chmod 0600 "${bundle_dir}"/*
 
 temporary_archive="${work_dir}/bundle.tar.gz"
-tar -C "${work_dir}" -czf "${temporary_archive}" qwen38-diagnostics
+tar --owner=0 --group=0 --numeric-owner -C "${work_dir}" -czf "${temporary_archive}" qwen38-diagnostics
 if [[ "${FORCE}" == 1 ]]; then
   install -m 0600 "${temporary_archive}" "${OUTPUT}"
 else

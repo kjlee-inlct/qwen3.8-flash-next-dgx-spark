@@ -75,7 +75,7 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
     if [[ "${PROTECT}" == 1 && "${low_count}" -ge "${CONSECUTIVE}" ]]; then
       printf '%s PROTECT stopping %s gracefully to preserve host stability\n' "$(date '+%F %T')" "${CONTAINER}" >&2
       docker logs --tail 1000 "${CONTAINER}" 2>&1 || true
-      docker stop --time 30 "${CONTAINER}" >/dev/null
+      docker stop --timeout 30 "${CONTAINER}" >/dev/null
       exit 2
     fi
   else

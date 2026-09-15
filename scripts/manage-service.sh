@@ -103,7 +103,7 @@ WorkingDirectory=${INSTALL_ROOT}
 Environment=HOME=${SERVICE_HOME}
 Environment=QWEN38_STATE_FILE=${STATE_FILE}
 ExecStart=/bin/bash ${INSTALL_ROOT}/scripts/service-runner.sh
-ExecStop=-/usr/bin/docker stop --time 30 ${CONTAINER_NAME}
+ExecStop=-/usr/bin/docker stop --timeout 30 ${CONTAINER_NAME}
 Restart=on-failure
 RestartSec=60
 TimeoutStartSec=infinity
