@@ -40,8 +40,8 @@ write_stop_reason() {
   {
     printf 'RUNTIME_STOP_SCHEMA_VERSION=%q\n' 1
     printf 'STOP_REASON=%q\n' memory-protection
-    printf 'CONTAINER_NAME=%q\n' "${CONTAINER}"
-    printf 'CONTAINER_ID=%q\n' "${container_id}"
+    printf 'STOP_CONTAINER_NAME=%q\n' "${CONTAINER}"
+    printf 'STOP_CONTAINER_ID=%q\n' "${container_id}"
     printf 'UPDATED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   } >"${STOP_REASON_FILE}.tmp"
   mv -- "${STOP_REASON_FILE}.tmp" "${STOP_REASON_FILE}"
