@@ -4,3 +4,4 @@ __pycache__/
 *.py[cod]
 /config.vllm.json
 /model/
+/qwen38-diagnostics-*.tar.gz
