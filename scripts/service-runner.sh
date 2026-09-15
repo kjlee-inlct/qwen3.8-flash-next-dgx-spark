@@ -26,22 +26,31 @@ export RESTART_POLICY=no
 export PUBLISH_HOST=127.0.0.1
 
 "${INSTALL_ROOT}/scripts/preflight-runtime.sh"
+bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" recover
 
 transition_active=0
 rollback_transition() {
-  local rc=$?
+  local rc="${1:-1}"
+  trap - ERR INT TERM
+  set +e
   if [[ "${transition_active}" == 1 ]]; then
     printf 'Candidate runtime failed validation; restoring previous container.\n' >&2
-    bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" rollback || \
+    if ! bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" rollback; then
       printf 'FATAL: automatic runtime rollback failed; run doctor and inspect Docker state.\n' >&2
+      exit 70
+    fi
   fi
   exit "${rc}"
 }
-trap rollback_transition ERR INT TERM
+trap 'rollback_transition $?' ERR
+trap 'rollback_transition 130' INT
+trap 'rollback_transition 143' TERM
 
 bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" prepare
 transition_active=1
 "${INSTALL_ROOT}/scripts/serve.sh"
+bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" candidate-started
+bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" validating
 
 ready=0
 for attempt in $(seq 1 180); do
