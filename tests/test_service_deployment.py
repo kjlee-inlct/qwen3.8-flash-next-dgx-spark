@@ -19,8 +19,21 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("RESTART_POLICY=no", runner)
         self.assertIn("docker wait", runner)
         self.assertIn("preflight-runtime.sh", runner)
+        self.assertIn("runtime-transition.sh\" recover", runner)
         server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
         self.assertIn("--init", server)
+
+    def test_doctor_checks_runtime_lifecycle_drift(self) -> None:
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        self.assertIn("runtime-transition.env", doctor)
+        self.assertIn("no incomplete runtime transition exists", doctor)
+        self.assertIn("no stale rollback container exists", doctor)
+        self.assertIn("runtime container image matches installation manifest", doctor)
+        self.assertIn("runtime model mount matches installation manifest", doctor)
+        self.assertIn("runtime served model name matches installation manifest", doctor)
+        self.assertIn("runtime image drift", doctor)
+        self.assertIn("runtime model mount drift", doctor)
+        self.assertIn("runtime served-name drift", doctor)
 
     def test_uninstaller_removes_only_owned_service(self) -> None:
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
