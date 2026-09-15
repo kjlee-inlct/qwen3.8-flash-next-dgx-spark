@@ -11,7 +11,7 @@ IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-YES=0; START=1; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
+YES=0; START=1; DRY_RUN=0; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
 
@@ -43,7 +43,7 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--lang en|ko] [--yes] [--no-start]\n'
+  printf 'Usage: ./install.sh [--lang en|ko] [--yes] [--no-start] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -55,7 +55,7 @@ ask_yes_no() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
-    --yes) YES=1 ;; --no-start) START=0 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
+    --yes) YES=1 ;; --no-start) START=0 ;; --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
   shift
 done
@@ -87,9 +87,6 @@ MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${I
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
-for command in python3 curl docker sudo hf; do command -v "${command}" >/dev/null || die "${command} is required"; done
-docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
-hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
 if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && prompt="모델 디렉터리 [${MODEL_DIR}]: " || prompt="Model directory [${MODEL_DIR}]: "
   read -r -p "${prompt}" answer; MODEL_DIR="${answer:-${MODEL_DIR}}"
@@ -126,6 +123,19 @@ printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'dock
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
 ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
+
+if [[ "${DRY_RUN}" == 1 ]]; then
+  if [[ "${UI_LANG}" == ko ]]; then
+    printf '\nDRY-RUN 완료: 다운로드, swap, proxy, Docker 및 manifest를 변경하지 않았습니다.\n'
+  else
+    printf '\nDRY-RUN complete: no download, swap, proxy, Docker, or manifest changes were made.\n'
+  fi
+  exit 0
+fi
+
+for command in python3 curl docker sudo hf; do command -v "${command}" >/dev/null || die "${command} is required"; done
+docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
+hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
 
 if [[ "${RESUME}" != 1 ]]; then
   [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1

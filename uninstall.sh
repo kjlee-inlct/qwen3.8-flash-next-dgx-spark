@@ -4,18 +4,18 @@ set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
-PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; YES=0
+PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; YES=0; DRY_RUN=0
 CLI_LANG=""
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: ./uninstall.sh [--lang en|ko] [--purge-model] [--purge-swap] [--purge-image] [--purge-all] [--yes]\n'
+  printf 'Usage: ./uninstall.sh [--lang en|ko] [--purge-model] [--purge-swap] [--purge-image] [--purge-all] [--yes] [--dry-run]\n'
   printf '       ./uninstall.sh  # interactive English/Korean wizard (default)\n'
 }
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --purge-model) PURGE_MODEL=1; PURGE_SELECTED=1 ;; --purge-swap) PURGE_SWAP=1; PURGE_SELECTED=1 ;; --purge-image) PURGE_IMAGE=1; PURGE_SELECTED=1 ;;
-    --purge-all) PURGE_MODEL=1; PURGE_SWAP=1; PURGE_IMAGE=1; PURGE_SELECTED=1 ;; --yes) YES=1 ;;
+    --purge-all) PURGE_MODEL=1; PURGE_SWAP=1; PURGE_IMAGE=1; PURGE_SELECTED=1 ;; --yes) YES=1 ;; --dry-run) DRY_RUN=1 ;;
     -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
   shift
@@ -60,6 +60,14 @@ else
   printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
   printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf remove || printf keep)"
   printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf remove || printf keep)"
+fi
+if [[ "${DRY_RUN}" == 1 ]]; then
+  if [[ "${UI_LANG}" == ko ]]; then
+    printf '\nDRY-RUN 완료: container, monitor, proxy, 모델, swap, image 및 manifest를 변경하지 않았습니다.\n'
+  else
+    printf '\nDRY-RUN complete: no container, monitor, proxy, model, swap, image, or manifest changes were made.\n'
+  fi
+  exit 0
 fi
 if [[ "${YES}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '

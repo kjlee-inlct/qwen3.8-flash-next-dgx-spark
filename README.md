@@ -635,6 +635,34 @@ the independent purge flags remain available. With no purge flags, the uninstall
 separately whether to remove the model, dedicated swap, and Docker image before showing its
 final plan.
 
+Preview either wizard without changing the machine by adding `--dry-run`. The installer
+does not authenticate, download, create swap, write its manifest, pull an image, start a
+container, or install the proxy. The uninstaller prints the selected cleanup plan without
+stopping or deleting anything:
+
+```bash
+./install.sh --dry-run
+./uninstall.sh --dry-run
+```
+
+After installation, the read-only doctor checks the checkpoint and config manifests,
+dedicated swap, Docker image and container, loopback port binding, optional monitor/proxy,
+systemd service registration, and the health endpoint:
+
+```bash
+./scripts/doctor.sh
+./scripts/doctor.sh --strict   # warnings also make the command fail
+```
+
+Once the API is ready, validate ordinary chat, streaming, required tool calls, and three
+concurrent requests. The optional JSON report is written atomically and does not store the
+generated answer text:
+
+```bash
+python3 scripts/validate-runtime.py \
+  --output ~/.local/state/qwen38-spark/runtime-validation.json
+```
+
 Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment with separate
 access controls. Prefix caching is explicitly disabled in the OrcaRouter compatibility
 baseline; set `PREFIX_CACHE=1` to enable it together with the required Mamba alignment mode.
