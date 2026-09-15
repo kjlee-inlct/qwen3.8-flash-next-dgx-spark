@@ -62,7 +62,8 @@ done
 
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
-  # shellcheck disable=SC1090 -- created by write_state with shell-escaped values and mode 600.
+  # Created by write_state with shell-escaped values and mode 600.
+  # shellcheck disable=SC1090
   source "${STATE_FILE}"
   [[ "${MODEL_REPO:-}" == "${REPO}" && "${MODEL_REVISION:-}" == "${REVISION}" ]] || \
     die "existing manifest belongs to a different model or revision: ${STATE_FILE}"

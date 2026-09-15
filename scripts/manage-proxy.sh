@@ -65,7 +65,8 @@ if [[ "${ACTION}" == adopt ]]; then
   [[ "$(stat -c %u "${SOCKET_FILE}")" == 0 && "$(stat -c %u "${SERVICE_FILE}")" == 0 ]] || die "proxy units are not root-owned"
   recorded_port="$(awk -F'[=:]' '$1=="ListenStream" {print $NF}' "${SOCKET_FILE}")"
   valid_port "${recorded_port}" || die "cannot determine proxy listen port"
-  # shellcheck disable=SC1090 -- install.sh writes shell-escaped values to a user-owned mode-600 file.
+  # install.sh writes shell-escaped values to a user-owned mode-600 file.
+  # shellcheck disable=SC1090
   source "${STATE_FILE}"
   [[ -n "${INSTALL_ROOT:-}" && -d "${INSTALL_ROOT}" ]] || die "invalid installation manifest"
   temporary="$(mktemp "${STATE_FILE}.XXXXXX")"

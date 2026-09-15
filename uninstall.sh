@@ -21,7 +21,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 [[ -r "${STATE_FILE}" ]] || die "installation manifest not found: ${STATE_FILE}"
-# shellcheck disable=SC1090 -- created by install.sh with shell-escaped values and mode 600.
+# Created by install.sh with shell-escaped values and mode 600.
+# shellcheck disable=SC1090
 source "${STATE_FILE}"
 [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
 if [[ -z "${UI_LANG:-}" ]]; then

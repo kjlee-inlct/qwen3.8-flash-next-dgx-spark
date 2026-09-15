@@ -32,7 +32,8 @@ done
 printf 'Qwen3.8 Flash Next doctor (read-only)\n\n'
 
 if [[ -r "${STATE_FILE}" ]]; then
-  # shellcheck disable=SC1090 -- installer writes shell-escaped values with mode 600.
+  # The installer writes shell-escaped values with mode 600.
+  # shellcheck disable=SC1090
   source "${STATE_FILE}"
   pass "installation manifest is readable (${PHASE:-unknown})"
 else
