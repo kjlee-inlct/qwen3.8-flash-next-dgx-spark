@@ -68,12 +68,20 @@ done
 
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
-  # Created by write_state with shell-escaped values and mode 600.
-  # shellcheck disable=SC1090
-  source "${STATE_FILE}"
-  [[ -z "${MODEL_CLI}" || "${MODEL_CLI}" == "${MODEL_PROFILE:-}" ]] || \
-    die "installed profile is ${MODEL_PROFILE}; uninstall it before selecting ${MODEL_CLI}"
-  RESUME=1
+  manifest_profile="$({
+    # Created by write_state with shell-escaped values and mode 600.
+    # shellcheck disable=SC1090
+    source "${STATE_FILE}"
+    printf '%s' "${MODEL_PROFILE:-}"
+  })"
+  if [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
+    [[ "${DRY_RUN}" == 1 ]] || \
+      die "installed profile is ${manifest_profile}; uninstall it before selecting ${MODEL_CLI}"
+  else
+    # shellcheck disable=SC1090
+    source "${STATE_FILE}"
+    RESUME=1
+  fi
 fi
 [[ -z "${MODEL_CLI}" ]] || MODEL_PROFILE="${MODEL_CLI}"
 load_model_profile "${MODEL_PROFILE}" || exit $?

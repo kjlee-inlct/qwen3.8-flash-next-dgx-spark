@@ -41,6 +41,27 @@ class ModelProfileTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unknown model profile", result.stderr)
 
+    def test_dry_run_can_preview_another_installed_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state" / "qwen38-spark"
+            state.mkdir(parents=True)
+            (state / "install.env").write_text(
+                "MODEL_PROFILE=orcarouter\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--model", "nvidia", "--lang", "en", "--yes", "--no-start", "--dry-run"],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("profile     : nvidia", result.stdout)
+            self.assertNotIn("Resuming installation", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
