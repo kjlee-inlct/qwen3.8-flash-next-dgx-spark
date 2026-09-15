@@ -15,6 +15,7 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("Restart=on-failure", manager)
         self.assertIn("docker stop --timeout 30", manager)
         self.assertIn("WantedBy=multi-user.target", manager)
+        self.assertNotIn('docker rm -f "${CONTAINER_NAME}"', manager)
         self.assertIn("PUBLISH_HOST=127.0.0.1", runner)
         self.assertIn("RESTART_POLICY=no", runner)
         self.assertIn("docker wait", runner)
@@ -22,6 +23,20 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime-transition.sh\" recover", runner)
         server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
         self.assertIn("--init", server)
+
+    def test_memory_protection_stop_is_not_restarted_as_failure(self) -> None:
+        monitor = (ROOT / "scripts" / "monitor-runtime.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "service-runner.sh").read_text(encoding="utf-8")
+        self.assertIn("runtime-stop.env", monitor)
+        self.assertIn("STOP_REASON=%q", monitor)
+        self.assertIn("STOP_CONTAINER_NAME=%q", monitor)
+        self.assertIn("STOP_CONTAINER_ID=%q", monitor)
+        self.assertIn("runtime-stop.env", runner)
+        self.assertIn("memory-protection", runner)
+        self.assertIn('"${STOP_CONTAINER_ID:-}" == "${container_id}"', runner)
+        self.assertIn("leaving service stopped", runner)
+        self.assertIn("exit 0", runner)
+        self.assertIn("ignoring stale runtime stop marker", runner)
 
     def test_doctor_checks_runtime_lifecycle_drift(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
