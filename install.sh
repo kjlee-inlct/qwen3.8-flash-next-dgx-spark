@@ -11,10 +11,21 @@ SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
-YES=0; START=1; DRY_RUN=0; MONITOR_PROTECT="${MONITOR_PROTECT:-0}"; CONFIG_OWNED=0
+YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; CONFIG_OWNED=0
+MONITOR_ENABLED="${MONITOR_ENABLED:-}"
+MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
+MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
+MONITOR_MIN_FREE_GIB="${MONITOR_MIN_FREE_GIB:-2}"
+MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB:-10}"
+MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB:-8}"
+MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE:-5}"
+MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT:-60}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
+MONITOR_ENABLED_CLI=""; MONITOR_PROTECT_CLI=""; MONITOR_MIN_AVAILABLE_CLI=""
+MONITOR_MIN_FREE_CLI=""; MONITOR_FREE_GATE_CLI=""; MONITOR_MIN_SWAP_FREE_CLI=""
+MONITOR_CONSECUTIVE_CLI=""; MONITOR_HEARTBEAT_CLI=""
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 expand_user_path() {
@@ -28,7 +39,7 @@ write_state() {
   local phase="$1"
   mkdir -p "${STATE_DIR}"; umask 077
   {
-    printf 'SCHEMA_VERSION=%q\n' 2; printf 'PHASE=%q\n' "${phase}"
+    printf 'SCHEMA_VERSION=%q\n' 3; printf 'PHASE=%q\n' "${phase}"
     printf 'INSTALL_ROOT=%q\n' "${ROOT_DIR}"; printf 'MODEL_PROFILE=%q\n' "${MODEL_PROFILE}"
     printf 'MODEL_REPO=%q\n' "${REPO}"; printf 'MODEL_REVISION=%q\n' "${REVISION}"
     printf 'MODEL_DIR=%q\n' "${MODEL_DIR}"; printf 'MODEL_OWNED=%q\n' "${MODEL_OWNED}"
@@ -38,6 +49,13 @@ write_state() {
     printf 'CONTAINER_NAME=%q\n' qwen38-flash-next; printf 'CONFIG_OVERRIDE=%q\n' "${CONFIG_OVERRIDE}"
     printf 'CONFIG_OWNED=%q\n' "${CONFIG_OWNED}"
     printf 'MONITOR_PROTECT=%q\n' "${MONITOR_PROTECT}"
+    printf 'MONITOR_ENABLED=%q\n' "${MONITOR_ENABLED}"
+    printf 'MONITOR_MIN_AVAILABLE_GIB=%q\n' "${MONITOR_MIN_AVAILABLE_GIB}"
+    printf 'MONITOR_MIN_FREE_GIB=%q\n' "${MONITOR_MIN_FREE_GIB}"
+    printf 'MONITOR_FREE_GATE_GIB=%q\n' "${MONITOR_FREE_GATE_GIB}"
+    printf 'MONITOR_MIN_SWAP_FREE_GIB=%q\n' "${MONITOR_MIN_SWAP_FREE_GIB}"
+    printf 'MONITOR_CONSECUTIVE=%q\n' "${MONITOR_CONSECUTIVE}"
+    printf 'MONITOR_HEARTBEAT=%q\n' "${MONITOR_HEARTBEAT}"
     printf 'PROXY_ENABLED=%q\n' "${PROXY_ENABLED}"; printf 'PROXY_OWNED=%q\n' "${PROXY_OWNED}"
     printf 'PROXY_PORT=%q\n' "${PROXY_PORT}"
     printf 'SERVICE_ENABLED=%q\n' "${SERVICE_ENABLED}"; printf 'SERVICE_OWNED=%q\n' "${SERVICE_OWNED}"
@@ -47,7 +65,7 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--model orcarouter|nvidia] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model PROFILE] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--migrate-manifest] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -56,10 +74,33 @@ ask_yes_no() {
   read -r -p "${prompt} [Y/n]: " answer
   [[ -z "${answer}" || "${answer}" == y || "${answer}" == Y ]]
 }
+positive_integer() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
+nonnegative_integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
+validate_monitor_settings() {
+  local value
+  for value in "${MONITOR_MIN_AVAILABLE_GIB}" "${MONITOR_MIN_FREE_GIB}" "${MONITOR_FREE_GATE_GIB}" \
+    "${MONITOR_MIN_SWAP_FREE_GIB}" "${MONITOR_CONSECUTIVE}"; do
+    positive_integer "${value}" || die "monitor thresholds must be positive integers"
+  done
+  nonnegative_integer "${MONITOR_HEARTBEAT}" || die "monitor heartbeat must be a non-negative integer"
+  [[ "${MONITOR_ENABLED}" == 0 || "${MONITOR_ENABLED}" == 1 ]] || die "MONITOR_ENABLED must be 0 or 1"
+  [[ "${MONITOR_PROTECT}" == 0 || "${MONITOR_PROTECT}" == 1 ]] || die "MONITOR_PROTECT must be 0 or 1"
+  [[ "${MONITOR_ENABLED}" == 1 || "${MONITOR_PROTECT}" == 0 ]] || die "protection requires the monitor"
+}
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires orcarouter or nvidia"; MODEL_CLI="$2"; shift ;;
+    --monitor) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=0 ;;
+    --no-monitor) MONITOR_ENABLED_CLI=0; MONITOR_PROTECT_CLI=0 ;;
+    --protect) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=1 ;;
+    --monitor-min-available-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_MIN_AVAILABLE_CLI="$2"; shift ;;
+    --monitor-min-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_MIN_FREE_CLI="$2"; shift ;;
+    --monitor-free-gate-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_FREE_GATE_CLI="$2"; shift ;;
+    --monitor-min-swap-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_MIN_SWAP_FREE_CLI="$2"; shift ;;
+    --monitor-consecutive) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_CONSECUTIVE_CLI="$2"; shift ;;
+    --monitor-heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_HEARTBEAT_CLI="$2"; shift ;;
+    --migrate-manifest) MIGRATE_MANIFEST=1 ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
     --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
@@ -83,6 +124,16 @@ if [[ -r "${STATE_FILE}" ]]; then
     RESUME=1
   fi
 fi
+MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
+[[ -z "${MONITOR_ENABLED_CLI}" ]] || MONITOR_ENABLED="${MONITOR_ENABLED_CLI}"
+[[ -z "${MONITOR_PROTECT_CLI}" ]] || MONITOR_PROTECT="${MONITOR_PROTECT_CLI}"
+[[ -z "${MONITOR_MIN_AVAILABLE_CLI}" ]] || MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_CLI}"
+[[ -z "${MONITOR_MIN_FREE_CLI}" ]] || MONITOR_MIN_FREE_GIB="${MONITOR_MIN_FREE_CLI}"
+[[ -z "${MONITOR_FREE_GATE_CLI}" ]] || MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_CLI}"
+[[ -z "${MONITOR_MIN_SWAP_FREE_CLI}" ]] || MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_CLI}"
+[[ -z "${MONITOR_CONSECUTIVE_CLI}" ]] || MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE_CLI}"
+[[ -z "${MONITOR_HEARTBEAT_CLI}" ]] || MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT_CLI}"
+validate_monitor_settings
 [[ -z "${MODEL_CLI}" ]] || MODEL_PROFILE="${MODEL_CLI}"
 load_model_profile "${MODEL_PROFILE}" || exit $?
 REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
@@ -126,6 +177,12 @@ CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED="${SERVICE_OWNED:-0}"
 [[ -z "${SERVICE_CLI}" ]] || SERVICE_ENABLED="${SERVICE_CLI}"
+if [[ "${MIGRATE_MANIFEST}" == 1 ]]; then
+  [[ "${RESUME}" == 1 ]] || die "--migrate-manifest requires an existing installation manifest"
+  write_state "${PHASE:-complete}"
+  printf 'Installation manifest migrated to schema 3: %s\n' "${STATE_FILE}"
+  exit 0
+fi
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
 if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && prompt="모델 디렉터리 [${MODEL_DIR}]: " || prompt="Model directory [${MODEL_DIR}]: "
@@ -143,9 +200,26 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
       [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
     fi
   fi
-  [[ "${UI_LANG}" == ko ]] && prompt='자동 저메모리 보호 기능을 활성화합니까? [y/N]: ' || prompt='Enable automatic low-memory protection? [y/N]: '
+  [[ "${UI_LANG}" == ko ]] && prompt='런타임 메모리 모니터를 활성화합니까? [Y/n]: ' || prompt='Enable the runtime memory monitor? [Y/n]: '
   read -r -p "${prompt}" answer
-  [[ "${answer}" == y || "${answer}" == Y ]] && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+  [[ "${answer}" == n || "${answer}" == N ]] && MONITOR_ENABLED=0 || MONITOR_ENABLED=1
+  if [[ "${MONITOR_ENABLED}" == 1 ]]; then
+    [[ "${UI_LANG}" == ko ]] && prompt='지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까? [y/N]: ' || prompt='Stop the container safely after sustained low memory? [y/N]: '
+    read -r -p "${prompt}" answer
+    [[ "${answer}" == y || "${answer}" == Y ]] && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+    [[ "${UI_LANG}" == ko ]] && prompt='권장 모니터 임계값과 heartbeat를 변경합니까? [y/N]: ' || prompt='Customize the recommended monitor thresholds and heartbeat? [y/N]: '
+    read -r -p "${prompt}" answer
+    if [[ "${answer}" == y || "${answer}" == Y ]]; then
+      read -r -p "MemAvailable GiB [${MONITOR_MIN_AVAILABLE_GIB}]: " answer; MONITOR_MIN_AVAILABLE_GIB="${answer:-${MONITOR_MIN_AVAILABLE_GIB}}"
+      read -r -p "MemFree GiB [${MONITOR_MIN_FREE_GIB}]: " answer; MONITOR_MIN_FREE_GIB="${answer:-${MONITOR_MIN_FREE_GIB}}"
+      read -r -p "MemAvailable gate GiB [${MONITOR_FREE_GATE_GIB}]: " answer; MONITOR_FREE_GATE_GIB="${answer:-${MONITOR_FREE_GATE_GIB}}"
+      read -r -p "SwapFree GiB [${MONITOR_MIN_SWAP_FREE_GIB}]: " answer; MONITOR_MIN_SWAP_FREE_GIB="${answer:-${MONITOR_MIN_SWAP_FREE_GIB}}"
+      read -r -p "Consecutive samples [${MONITOR_CONSECUTIVE}]: " answer; MONITOR_CONSECUTIVE="${answer:-${MONITOR_CONSECUTIVE}}"
+      read -r -p "Heartbeat seconds, 0 disables [${MONITOR_HEARTBEAT}]: " answer; MONITOR_HEARTBEAT="${answer:-${MONITOR_HEARTBEAT}}"
+    fi
+  else
+    MONITOR_PROTECT=0
+  fi
   [[ "${UI_LANG}" == ko ]] && prompt="docker0 전용 OpenWebUI proxy를 ${PROXY_PORT} 포트에 설치합니까? [y/N]: " || prompt="Install docker0-only OpenWebUI proxy on port ${PROXY_PORT}? [y/N]: "
   read -r -p "${prompt}" answer
   [[ "${answer}" == y || "${answer}" == Y ]] && PROXY_ENABLED=1 || PROXY_ENABLED=0
@@ -153,6 +227,7 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   read -r -p "${prompt}" answer
   [[ "${answer}" == n || "${answer}" == N ]] && SERVICE_ENABLED=0 || SERVICE_ENABLED=1
 fi
+validate_monitor_settings
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
 MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
@@ -163,6 +238,10 @@ printf '  profile     : %s\n' "${MODEL_PROFILE}"
 printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
 printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
+printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s GiB, %s samples, heartbeat=%ss)\n\n' \
+  "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)" "${MONITOR_MIN_AVAILABLE_GIB}" \
+  "${MONITOR_MIN_FREE_GIB}" "${MONITOR_FREE_GATE_GIB}" "${MONITOR_MIN_SWAP_FREE_GIB}" \
+  "${MONITOR_CONSECUTIVE}" "${MONITOR_HEARTBEAT}"
 printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'docker0:%s -> loopback:8888' "${PROXY_PORT}" || printf disabled)"
 printf '  service     : %s\n\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service' || printf 'Docker container only')"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
@@ -251,7 +330,10 @@ if [[ "${SERVICE_ENABLED}" == 1 ]]; then
 elif [[ "${START}" == 1 ]]; then
   printf '\nStarting service...\n'
   MODEL_PROFILE="${MODEL_PROFILE}" MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" SERVED_NAME="${SERVED_NAME}" \
-    CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" MONITOR_PROTECT="${MONITOR_PROTECT}" \
+    CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" MONITOR_ENABLED="${MONITOR_ENABLED}" MONITOR_PROTECT="${MONITOR_PROTECT}" \
+    MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB}" MONITOR_MIN_FREE_GIB="${MONITOR_MIN_FREE_GIB}" \
+    MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB}" MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB}" \
+    MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE}" MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT}" \
     "${ROOT_DIR}/scripts/serve.sh"
 fi
 write_state complete

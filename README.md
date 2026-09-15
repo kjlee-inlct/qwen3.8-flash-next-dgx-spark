@@ -611,6 +611,29 @@ Change or disable the heartbeat without changing the two-second safety sampling 
 ./scripts/monitor-runtime.sh --heartbeat 0
 ```
 
+New interactive installations ask whether to enable the monitor, whether sustained pressure
+may stop the container, and optionally whether to customize the thresholds. Automation can
+set the same policy explicitly:
+
+```bash
+./install.sh --monitor --monitor-heartbeat 60 --no-start
+./install.sh --protect --monitor-min-available-gib 6 \
+  --monitor-min-swap-free-gib 8 --monitor-consecutive 5 --no-start
+```
+
+The manifest records the monitor mode, `MemAvailable`, `MemFree`, conditional free-memory
+gate, `SwapFree`, consecutive-sample count and heartbeat. Schema-2 installations can add
+these defaults atomically without downloading or restarting anything:
+
+```bash
+./install.sh --migrate-manifest
+```
+
+Before every systemd-managed start, `preflight-runtime.sh` verifies the model index, image,
+dedicated swap and hard minimum reserves of 2 GiB available memory, 2 GiB free swap and
+5 GiB free disk. `doctor.sh` reports the configured live memory/swap margins, requires a
+20 GiB recommended disk reserve, and warns when the current container predates `--init`.
+
 The interactive installer asks whether to enable this protection. If enabled, `serve.sh`
 runs the monitor in the background and records its PID and log under
 `${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark`; `uninstall.sh` stops only that recorded

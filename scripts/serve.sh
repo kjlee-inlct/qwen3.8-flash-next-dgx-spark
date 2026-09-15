@@ -38,6 +38,13 @@ NAME="${NAME:-qwen38-flash-next}"
 PORT="${PORT:-8888}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
+MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
+MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
+MONITOR_MIN_FREE_GIB="${MONITOR_MIN_FREE_GIB:-2}"
+MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB:-10}"
+MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB:-8}"
+MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE:-5}"
+MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT:-60}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 MONITOR_LOG="${STATE_DIR}/monitor.log"
@@ -221,7 +228,7 @@ docker run -d \
     --limit-mm-per-prompt '{"image":4}' \
     "${SPEC_ARGS[@]}"
 
-if [[ "${MONITOR_PROTECT}" == 1 ]]; then
+if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   mkdir -p "${STATE_DIR}"
   if [[ -r "${MONITOR_PID_FILE}" ]]; then
     old_pid="$(<"${MONITOR_PID_FILE}")"
@@ -230,11 +237,16 @@ if [[ "${MONITOR_PROTECT}" == 1 ]]; then
       kill "${old_pid}" 2>/dev/null || true
     fi
   fi
-  nohup "${SCRIPT_DIR}/monitor-runtime.sh" --container "${NAME}" --protect --heartbeat 60 \
+  monitor_args=(--container "${NAME}" --min-available-gib "${MONITOR_MIN_AVAILABLE_GIB}" \
+    --min-free-gib "${MONITOR_MIN_FREE_GIB}" --free-gate-gib "${MONITOR_FREE_GATE_GIB}" \
+    --min-swap-free-gib "${MONITOR_MIN_SWAP_FREE_GIB}" --consecutive "${MONITOR_CONSECUTIVE}" \
+    --heartbeat "${MONITOR_HEARTBEAT}")
+  [[ "${MONITOR_PROTECT}" == 1 ]] && monitor_args+=(--protect)
+  nohup "${SCRIPT_DIR}/monitor-runtime.sh" "${monitor_args[@]}" \
     >>"${MONITOR_LOG}" 2>&1 &
   monitor_pid=$!
   printf '%s\n' "${monitor_pid}" > "${MONITOR_PID_FILE}"
-  echo "memory protection monitor started (pid=${monitor_pid}, log=${MONITOR_LOG})"
+  echo "memory monitor started (protect=${MONITOR_PROTECT}, pid=${monitor_pid}, log=${MONITOR_LOG})"
 fi
 
 echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
