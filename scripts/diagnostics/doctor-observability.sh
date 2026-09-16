@@ -10,6 +10,7 @@ OBS_PREVIOUS_LINK="${DATA_HOME}/previous"
 OBS_RELEASES_DIR="${DATA_HOME}/releases"
 OBS_QUALIFIED_DIR="${DATA_HOME}/qualified"
 OBS_RELEASE_MANAGER="${SCRIPT_DIR}/release-manager.sh"
+OBS_API_SOCKET_UNIT="qwen38-openwebui-proxy.socket"
 
 obs_read_release_id() {
   local link target release_id
@@ -96,4 +97,38 @@ if command -v systemctl >/dev/null 2>&1 && systemctl cat "${SERVICE_UNIT}" >/dev
   else
     fail "systemd service runtime root does not match ${expected_runtime_root}"
   fi
+fi
+
+# Schema 4 records user-facing API access intent. Schema <=3 falls back to the
+# legacy docker0-only proxy semantics represented by PROXY_ENABLED/PROXY_PORT.
+obs_api_mode="${API_ACCESS_MODE:-}"
+if [[ -z "${obs_api_mode}" ]]; then
+  [[ "${PROXY_ENABLED:-0}" == 1 ]] && obs_api_mode=docker || obs_api_mode=local
+fi
+obs_docker_port="${API_DOCKER_PORT:-${PROXY_PORT:-8000}}"
+obs_lan_address="${API_LAN_ADDRESS:-}"
+obs_lan_port="${API_LAN_PORT:-8001}"
+if [[ "${obs_api_mode}" == local ]]; then
+  pass "API access mode is local-only"
+elif command -v systemctl >/dev/null 2>&1 && systemctl cat "${OBS_API_SOCKET_UNIT}" >/dev/null 2>&1; then
+  api_unit_text="$(systemctl cat "${OBS_API_SOCKET_UNIT}" 2>/dev/null || true)"
+  if systemctl is-active --quiet "${OBS_API_SOCKET_UNIT}" 2>/dev/null; then
+    pass "managed API access socket is active"
+  else
+    fail "managed API access socket is configured but inactive"
+  fi
+  if grep -Eq "^ListenStream=[^:]+:${obs_docker_port}$" <<<"${api_unit_text}"; then
+    pass "Docker-app API listener is configured on port ${obs_docker_port}"
+  else
+    fail "Docker-app API listener does not match configured port ${obs_docker_port}"
+  fi
+  if [[ "${obs_api_mode}" == lan ]]; then
+    if [[ -n "${obs_lan_address}" ]] && grep -Fqx "ListenStream=${obs_lan_address}:${obs_lan_port}" <<<"${api_unit_text}"; then
+      pass "LAN API listener matches ${obs_lan_address}:${obs_lan_port}"
+    else
+      fail "LAN API listener does not match configured endpoint ${obs_lan_address:-missing}:${obs_lan_port}"
+    fi
+  fi
+else
+  fail "managed API access was selected but its socket unit is missing"
 fi
