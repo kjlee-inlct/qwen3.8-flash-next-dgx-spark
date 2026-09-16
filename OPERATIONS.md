@@ -73,6 +73,35 @@ UPDATE_STATE=idle
 TRANSACTION_STATE=idle
 ```
 
+### Doctor lifecycle observability
+
+`doctor.sh` is read-only and reports more than container/API health. It also verifies the operational lifecycle around the runtime:
+
+- the `current` immutable release pointer resolves inside the managed release store;
+- the current release still matches its cryptographic manifest;
+- the current release has a qualification marker;
+- an optional `previous` release pointer is safe and its manifest remains verifiable;
+- no `update-transition.env` is left from an interrupted release cutover;
+- no stale or malformed `runtime-stop.env` marker is left behind;
+- an installed systemd unit executes from `~/.local/share/qwen38-spark/current` rather than the mutable checkout;
+- runtime image, model mount, served model name, loopback publication, and rollback-container state match the installation manifest.
+
+A memory monitor that was intentionally disabled at install time is reported as a healthy configured state:
+
+```text
+[PASS] runtime memory monitor is disabled by configuration
+```
+
+If the monitor is configured as enabled, a missing or stale monitor PID remains a failure. A low memory/swap reserve remains a warning or failure according to the configured thresholds.
+
+Use strict mode when maintenance automation should fail on warnings as well as hard failures:
+
+```bash
+./scripts/doctor.sh --strict
+```
+
+Examples of signals that require operator attention include an incomplete update/runtime transaction, a tampered current immutable release, an unsafe/dangling release pointer, a service that no longer points at the immutable `current` root, or a stale `runtime-stop.env` marker referencing a running or replaced container.
+
 ## Update a checkout revision
 
 Stage and qualify the target commit first:
