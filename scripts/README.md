@@ -28,8 +28,9 @@ add repository-specific helpers elsewhere rather than moving the upstream file.
 
 ## Stable local entry points
 
-The following repository-specific top-level paths are also treated as stable
-operator/API entry points and should not be moved without a compatibility shim:
+The following repository-specific top-level paths are treated as stable
+operator/API or compatibility entry points and must remain available even when
+their implementation moves internally:
 
 - `doctor.sh`
 - `manage-service.sh`
@@ -37,6 +38,14 @@ operator/API entry points and should not be moved without a compatibility shim:
 - `manage-swap.sh`
 - `release-manager.sh`
 - `update-release.sh`
+- `runtime-transition.sh`
+- `update-transition.sh`
+- `preflight-runtime.sh`
+- `service-runner.sh`
+
+Stable top-level compatibility paths are intentional. Existing systemd units,
+operator commands, immutable releases, and external automation may continue to
+reference them.
 
 ## Canonical internal categories
 
@@ -44,19 +53,36 @@ Only helpers added by this repository are reorganized into these categories:
 
 - `lib/`: reusable Python helpers used by lifecycle/runtime scripts.
 - `diagnostics/`: read-only diagnostic helpers sourced by operator commands.
-- future `runtime/`, `lifecycle/`, `model/`, and `service/` categories may be
-  introduced incrementally only for repository-specific helpers, with tests and
-  compatibility paths updated in the same change.
+- `runtime/`: internal runtime cutover, preflight, and service lifecycle logic.
+- `lifecycle/`: internal immutable-release/update transaction logic.
+- future `model/` and `service/` categories may be introduced incrementally only
+  for repository-specific helpers, with tests and compatibility paths updated in
+  the same change.
 
-Current canonical implementations moved in the first layout phase:
+Canonical implementations currently include:
 
 - `lib/state_file.py`
 - `lib/release_manifest.py`
 - `diagnostics/doctor-observability.sh`
+- `runtime/runtime-transition.sh`
+- `runtime/preflight-runtime.sh`
+- `runtime/service-runner.sh`
+- `lifecycle/update-transition.sh`
 
-The old top-level paths remain executable/importable compatibility shims.
+The old top-level paths remain compatibility shims. Internal canonical code
+should prefer canonical `lib/`, `runtime/`, and `lifecycle/` paths so new code
+does not grow dependencies on the shims.
+
+## Layout rules
+
+1. Do not relocate upstream-derived paths from `dolf3131/qwen3.8-flash-next-dgx-spark`.
+2. Move repository-specific implementation only when an explicit category adds
+   operational clarity.
+3. Preserve existing top-level operator/API paths with small compatibility shims.
+4. Update internal references, tests, documentation, and CI in the same change.
+5. Do not combine a layout refactor with unrelated runtime behaviour changes.
 
 ## CI rule
 
 Shell syntax and ShellCheck must recurse into script subdirectories. Python
-compilation already recurses through `scripts/`.
+compilation must recurse through `scripts/`, `bench/`, and `tests/`.

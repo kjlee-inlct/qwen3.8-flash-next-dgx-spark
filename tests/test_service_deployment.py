@@ -10,7 +10,8 @@ ROOT = Path(__file__).parents[1]
 class ServiceDeploymentTests(unittest.TestCase):
     def test_service_has_bounded_restart_and_loopback_runner(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
-        runner = (ROOT / "scripts" / "service-runner.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        shim = (ROOT / "scripts" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn("StartLimitBurst=2", manager)
         self.assertIn("Restart=on-failure", manager)
         self.assertIn("docker stop --timeout 30", manager)
@@ -23,8 +24,9 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("RESTART_POLICY=no", runner)
         self.assertIn("pwd -P", runner)
         self.assertIn("docker wait", runner)
-        self.assertIn("preflight-runtime.sh", runner)
-        self.assertIn("runtime-transition.sh\" recover", runner)
+        self.assertIn("runtime/preflight-runtime.sh", runner)
+        self.assertIn("runtime/runtime-transition.sh", runner)
+        self.assertIn("runtime/service-runner.sh", shim)
         server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
         self.assertIn("--init", server)
         self.assertIn('if docker inspect "${NAME}"', server)
@@ -38,7 +40,7 @@ class ServiceDeploymentTests(unittest.TestCase):
 
     def test_memory_protection_stop_is_not_restarted_as_failure(self) -> None:
         monitor = (ROOT / "scripts" / "monitor-runtime.sh").read_text(encoding="utf-8")
-        runner = (ROOT / "scripts" / "service-runner.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn("runtime-stop.env", monitor)
         self.assertIn("STOP_REASON=%q", monitor)
         self.assertIn("STOP_CONTAINER_NAME=%q", monitor)

@@ -16,17 +16,28 @@ class ScriptLayoutTests(unittest.TestCase):
             "lib/state_file.py",
             "lib/release_manifest.py",
             "diagnostics/doctor-observability.sh",
+            "runtime/runtime-transition.sh",
+            "runtime/preflight-runtime.sh",
+            "runtime/service-runner.sh",
+            "lifecycle/update-transition.sh",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((SCRIPTS / relative).is_file())
 
     def test_compatibility_entry_points_target_canonical_helpers(self) -> None:
-        state = (SCRIPTS / "state_file.py").read_text(encoding="utf-8")
-        manifest = (SCRIPTS / "release_manifest.py").read_text(encoding="utf-8")
-        observability = (SCRIPTS / "doctor-observability.sh").read_text(encoding="utf-8")
-        self.assertIn('"lib" / "state_file.py"', state)
-        self.assertIn('"lib" / "release_manifest.py"', manifest)
-        self.assertIn("diagnostics/doctor-observability.sh", observability)
+        expected = {
+            "state_file.py": '"lib" / "state_file.py"',
+            "release_manifest.py": '"lib" / "release_manifest.py"',
+            "doctor-observability.sh": "diagnostics/doctor-observability.sh",
+            "runtime-transition.sh": "runtime/runtime-transition.sh",
+            "preflight-runtime.sh": "runtime/preflight-runtime.sh",
+            "service-runner.sh": "runtime/service-runner.sh",
+            "update-transition.sh": "lifecycle/update-transition.sh",
+        }
+        for name, target in expected.items():
+            with self.subTest(name=name):
+                text = (SCRIPTS / name).read_text(encoding="utf-8")
+                self.assertIn(target, text)
 
     def test_state_parser_compatibility_entry_point_still_works(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -51,6 +62,26 @@ class ScriptLayoutTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"QUALIFIED_RELEASE", result.stdout)
 
+    def test_transition_compatibility_status_entry_points_work(self) -> None:
+        runtime = subprocess.run(
+            ["bash", str(SCRIPTS / "runtime-transition.sh"), "status"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        update = subprocess.run(
+            ["bash", str(SCRIPTS / "update-transition.sh"), "status"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(runtime.returncode, 0, runtime.stderr)
+        self.assertIn("TRANSACTION_STATE=idle", runtime.stdout)
+        self.assertEqual(update.returncode, 0, update.stderr)
+        self.assertIn("UPDATE_STATE=idle", update.stdout)
+
     def test_layout_policy_preserves_stable_entry_points(self) -> None:
         readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
         for name in (
@@ -61,6 +92,8 @@ class ScriptLayoutTests(unittest.TestCase):
             "manage-swap.sh",
             "release-manager.sh",
             "update-release.sh",
+            "runtime-transition.sh",
+            "update-transition.sh",
         ):
             with self.subTest(name=name):
                 self.assertIn(f"`{name}`", readme)
