@@ -127,6 +127,22 @@ class RuntimeTransitionTests(unittest.TestCase):
     def set_container(self, name: str, state: str) -> None:
         self.container_path(name).write_text(state, encoding="utf-8")
 
+    def write_transition_state(self, state: str, had_previous: int) -> None:
+        self.transition_file.parent.mkdir(parents=True, exist_ok=True)
+        self.transition_file.write_text(
+            textwrap.dedent(
+                f"""\
+                RUNTIME_SCHEMA_VERSION=1
+                TRANSACTION_STATE={state}
+                CURRENT_CONTAINER=qwen38-flash-next
+                ROLLBACK_CONTAINER=qwen38-flash-next.rollback
+                HAD_PREVIOUS={had_previous}
+                UPDATED_AT=2026-09-16T00:00:00Z
+                """
+            ),
+            encoding="utf-8",
+        )
+
     def run_transition(self, action: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["bash", str(SCRIPT), action],
@@ -169,20 +185,7 @@ class RuntimeTransitionTests(unittest.TestCase):
 
     def test_recover_preparing_state_before_rename(self) -> None:
         self.set_container("qwen38-flash-next", "stopped")
-        self.transition_file.parent.mkdir(parents=True)
-        self.transition_file.write_text(
-            textwrap.dedent(
-                """\
-                RUNTIME_SCHEMA_VERSION=1
-                TRANSACTION_STATE=preparing
-                CURRENT_CONTAINER=qwen38-flash-next
-                ROLLBACK_CONTAINER=qwen38-flash-next.rollback
-                HAD_PREVIOUS=1
-                UPDATED_AT=2026-09-15T00:00:00Z
-                """
-            ),
-            encoding="utf-8",
-        )
+        self.write_transition_state("preparing", 1)
 
         self.run_transition("recover")
 
@@ -199,6 +202,46 @@ class RuntimeTransitionTests(unittest.TestCase):
 
         self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
         self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
+        self.assertFalse(self.transition_file.exists())
+
+    def test_recover_committing_before_rollback_delete_restores_previous(self) -> None:
+        self.set_container("qwen38-flash-next", "running")
+        self.set_container("qwen38-flash-next.rollback", "stopped")
+        self.write_transition_state("committing", 1)
+
+        result = self.run_transition("recover")
+
+        self.assertIn("recovery complete", result.stdout)
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
+        self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
+        self.assertFalse(self.transition_file.exists())
+
+    def test_recover_committing_after_rollback_delete_accepts_candidate(self) -> None:
+        self.set_container("qwen38-flash-next", "running")
+        self.write_transition_state("committing", 1)
+
+        result = self.run_transition("recover")
+
+        self.assertIn("accepted committed candidate", result.stdout)
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
+        self.assertFalse(self.transition_file.exists())
+
+    def test_recover_committing_after_delete_restarts_stopped_candidate(self) -> None:
+        self.set_container("qwen38-flash-next", "stopped")
+        self.write_transition_state("committing", 1)
+
+        self.run_transition("recover")
+
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
+        self.assertFalse(self.transition_file.exists())
+
+    def test_recover_committing_without_previous_accepts_candidate(self) -> None:
+        self.set_container("qwen38-flash-next", "running")
+        self.write_transition_state("committing", 0)
+
+        self.run_transition("recover")
+
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
         self.assertFalse(self.transition_file.exists())
 
     def test_recover_refuses_ambiguous_containers_without_state(self) -> None:
