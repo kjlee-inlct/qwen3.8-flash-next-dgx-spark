@@ -12,6 +12,7 @@ source "${STATE_FILE}"
 
 STATE_DIR="$(dirname -- "${STATE_FILE}")"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
+RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
 STATE_PARSER="${RUNTIME_ROOT}/scripts/lib/state_file.py"
 RUNTIME_TRANSITION="${RUNTIME_ROOT}/scripts/runtime/runtime-transition.sh"
 RUNTIME_PREFLIGHT="${RUNTIME_ROOT}/scripts/runtime/preflight-runtime.sh"
@@ -32,6 +33,23 @@ parse_state_into_vars() {
   rm -f -- "${parsed}"
 }
 
+write_runtime_commit_attestation() {
+  local container_id="$1" temporary="${RUNTIME_COMMIT_FILE}.tmp"
+  [[ "${container_id}" =~ ^[0-9a-f]{12,128}$ ]] || return 1
+  [[ "${RUNTIME_ROOT}" == /* && "${RUNTIME_ROOT}" != *[[:space:]]* ]] || return 1
+  mkdir -p -- "${STATE_DIR}"
+  umask 077
+  {
+    printf 'RUNTIME_COMMIT_SCHEMA_VERSION=1\n'
+    printf 'RUNTIME_ROOT=%s\n' "${RUNTIME_ROOT}"
+    printf 'RUNTIME_CONTAINER_NAME=%s\n' "${CONTAINER_NAME}"
+    printf 'RUNTIME_CONTAINER_ID=%s\n' "${container_id}"
+    printf 'COMMITTED_AT=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } >"${temporary}"
+  python3 "${STATE_PARSER}" runtime-commit "${temporary}" >/dev/null
+  mv -- "${temporary}" "${RUNTIME_COMMIT_FILE}"
+}
+
 [[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
 [[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || { printf 'FATAL: invalid runtime release root\n' >&2; exit 1; }
 [[ -r "${RUNTIME_TRANSITION}" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
@@ -47,7 +65,9 @@ export CONTAINER_NAME
 export RESTART_POLICY=no
 export PUBLISH_HOST=127.0.0.1
 
-"${RUNTIME_PREFLIGHT}"
+# A previous attestation never proves this process has completed a new commit.
+rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
+bash "${RUNTIME_PREFLIGHT}"
 bash "${RUNTIME_TRANSITION}" recover
 
 transition_active=0
@@ -55,6 +75,7 @@ rollback_transition() {
   local rc="${1:-1}"
   trap - ERR INT TERM
   set +e
+  rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
   if [[ "${transition_active}" == 1 ]]; then
     printf 'Candidate runtime failed validation; restoring previous container.\n' >&2
     if ! bash "${RUNTIME_TRANSITION}" rollback; then
@@ -94,15 +115,20 @@ python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); as
   "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}"
 
 bash "${RUNTIME_TRANSITION}" commit
+# The runtime transaction is now final. Any attestation failure must fail the
+# service/update path, not attempt to roll back an already-committed transaction.
 transition_active=0
+container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}")"
+write_runtime_commit_attestation "${container_id}"
 trap - ERR INT TERM
 
-printf 'Qwen API is ready; runtime transition committed; following container logs.\n'
+printf 'Qwen API is ready; runtime transition committed and attested; following container logs.\n'
 docker logs --follow --since 0s "${CONTAINER_NAME}" &
 log_pid=$!
 trap 'kill "${log_pid}" 2>/dev/null || true' EXIT
 container_status="$(docker wait "${CONTAINER_NAME}")"
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
 
 if [[ -r "${STOP_REASON_FILE}" ]]; then
   unset RUNTIME_STOP_SCHEMA_VERSION STOP_REASON STOP_CONTAINER_NAME STOP_CONTAINER_ID UPDATED_AT

@@ -40,6 +40,17 @@ def optional(validator: Validator) -> Validator:
     return lambda value: value == "" or validator(value)
 
 
+def absolute_path(value: str) -> bool:
+    """Accept a simple absolute path without whitespace or shell metacharacters."""
+
+    return (
+        value.startswith("/")
+        and value != "/"
+        and not any(ch.isspace() for ch in value)
+        and not any(ch in value for ch in ("'", '"', "`", "\\", "$", ";"))
+    )
+
+
 SCHEMAS: dict[str, dict[str, Validator]] = {
     "update": {
         "UPDATE_SCHEMA_VERSION": exact("1"),
@@ -60,6 +71,13 @@ SCHEMAS: dict[str, dict[str, Validator]] = {
         "STOP_CONTAINER_NAME": matches(SAFE_NAME),
         "STOP_CONTAINER_ID": matches(HEX_CONTAINER),
         "UPDATED_AT": matches(TIMESTAMP),
+    },
+    "runtime-commit": {
+        "RUNTIME_COMMIT_SCHEMA_VERSION": exact("1"),
+        "RUNTIME_ROOT": absolute_path,
+        "RUNTIME_CONTAINER_NAME": matches(SAFE_NAME),
+        "RUNTIME_CONTAINER_ID": matches(HEX_CONTAINER),
+        "COMMITTED_AT": matches(TIMESTAMP),
     },
 }
 

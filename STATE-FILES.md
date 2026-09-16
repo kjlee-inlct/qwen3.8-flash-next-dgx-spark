@@ -8,6 +8,7 @@ The following files are parsed by `scripts/state_file.py` and are never evaluate
 
 - `~/.local/state/qwen38-spark/update-transition.env`
 - `~/.local/state/qwen38-spark/runtime-stop.env`
+- `~/.local/state/qwen38-spark/runtime-commit.env`
 - `~/.local/share/qwen38-spark/qualified/<release>.env`
 
 The parser uses a schema-specific key whitelist and rejects:
@@ -21,6 +22,19 @@ The parser uses a schema-specific key whitelist and rejects:
 The only legacy shell-escaped value accepted is `''` for an empty value. Existing transition files written by earlier versions remain compatible because all other lifecycle fields were already restricted to simple release IDs, enum values, container IDs, and UTC timestamps.
 
 Bash consumers receive validated key/value pairs through a NUL-delimited stream and assign only whitelisted variable names with `printf -v`. They do not use `source` or `eval` for these lifecycle files.
+
+## Runtime commit attestation
+
+`runtime-commit.env` is a short-lived proof that the managed service runner finished the runtime transition commit for the currently running replacement container. It is written atomically only after the runtime health/model checks and `runtime-transition.sh commit` succeed.
+
+The attestation binds:
+
+- the physical immutable runtime root after symlink resolution;
+- the expected runtime container name;
+- the exact Docker container ID;
+- the UTC commit timestamp.
+
+`manage-service.sh create --start` removes any stale attestation before starting the service and does not report readiness until a new container is healthy **and** a matching attestation exists. This prevents an API health response from being mistaken for a durably committed runtime transition. The service runner removes the attestation when the container exits.
 
 ## Installation manifest boundary
 

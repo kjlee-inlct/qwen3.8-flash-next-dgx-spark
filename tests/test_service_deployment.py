@@ -33,6 +33,24 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime container already exists", server)
         self.assertNotIn('docker rm -f "${NAME}"', server)
 
+    def test_service_readiness_requires_runtime_commit_attestation(self) -> None:
+        manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        self.assertIn("runtime-commit.env", manager)
+        self.assertIn("runtime-commit.env", runner)
+        self.assertIn('runtime_commit_matches "${candidate_container_id}"', manager)
+        self.assertIn('curl -fsS --max-time 3 http://127.0.0.1:8888/health', manager)
+        self.assertIn('bash "${RUNTIME_TRANSITION}" commit', runner)
+        self.assertIn('write_runtime_commit_attestation "${container_id}"', runner)
+        self.assertLess(
+            runner.index('bash "${RUNTIME_TRANSITION}" commit'),
+            runner.index('write_runtime_commit_attestation "${container_id}"'),
+        )
+        self.assertIn("EXPECTED_RUNTIME_ROOT", manager)
+        self.assertIn("ATTESTED_RUNTIME_ROOT", manager)
+        self.assertIn("ATTESTED_CONTAINER_ID", manager)
+        self.assertIn('rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"', manager)
+
     def test_release_qualification_does_not_mutate_payload(self) -> None:
         qualifier = (ROOT / "scripts" / "lifecycle" / "qualify-release.sh").read_text(encoding="utf-8")
         self.assertIn("PYTHONDONTWRITEBYTECODE=1", qualifier)

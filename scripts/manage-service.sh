@@ -48,7 +48,7 @@ if [[ "${ACTION}" == status ]]; then
 fi
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || die "create/remove requires sudo"
-for command in systemctl install grep getent cut stat mktemp docker curl python3 seq; do command -v "${command}" >/dev/null 2>&1 || die "${command} is required"; done
+for command in systemctl install grep getent cut stat mktemp realpath docker curl python3 seq; do command -v "${command}" >/dev/null 2>&1 || die "${command} is required"; done
 
 if [[ "${ACTION}" == remove ]]; then
   if [[ ! -e "${UNIT_FILE}" ]]; then printf 'Managed runtime service is not installed.\n'; exit 0; fi
@@ -74,7 +74,9 @@ SERVICE_GROUP="$(getent group "${SERVICE_GID}" | cut -d: -f1)"
 [[ -n "${SERVICE_GROUP}" && -d "${SERVICE_HOME}" ]] || die "cannot resolve service home/group"
 
 CALLER_STATE_HOME="${QWEN38_STATE_HOME:-${SERVICE_HOME}/.local/state}"
-STATE_FILE="${CALLER_STATE_HOME}/qwen38-spark/install.env"
+STATE_DIR="${CALLER_STATE_HOME}/qwen38-spark"
+STATE_FILE="${STATE_DIR}/install.env"
+RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
 [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "installation manifest is missing or unsafe: ${STATE_FILE}"
 [[ "$(stat -c %u "${STATE_FILE}")" == "${SERVICE_UID}" ]] || die "installation manifest is not owned by ${SERVICE_USER}"
 # The installer writes shell-escaped values with mode 600.
@@ -89,6 +91,43 @@ RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
 [[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || die "runtime root has no serve helper: ${RUNTIME_ROOT}"
 [[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || die "runtime root has no transition helper: ${RUNTIME_ROOT}"
 [[ "${RUNTIME_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
+EXPECTED_RUNTIME_ROOT="$(realpath -e -- "${RUNTIME_ROOT}")"
+STATE_PARSER="${EXPECTED_RUNTIME_ROOT}/scripts/lib/state_file.py"
+[[ -r "${STATE_PARSER}" ]] || die "runtime root has no state parser: ${EXPECTED_RUNTIME_ROOT}"
+
+parse_runtime_commit() {
+  local parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" runtime-commit "${RUNTIME_COMMIT_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  ATTESTED_RUNTIME_ROOT=""
+  ATTESTED_CONTAINER_NAME=""
+  ATTESTED_CONTAINER_ID=""
+  ATTESTED_COMMITTED_AT=""
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      RUNTIME_COMMIT_SCHEMA_VERSION) [[ "${value}" == 1 ]] || { rm -f -- "${parsed}"; return 1; } ;;
+      RUNTIME_ROOT) ATTESTED_RUNTIME_ROOT="${value}" ;;
+      RUNTIME_CONTAINER_NAME) ATTESTED_CONTAINER_NAME="${value}" ;;
+      RUNTIME_CONTAINER_ID) ATTESTED_CONTAINER_ID="${value}" ;;
+      COMMITTED_AT) ATTESTED_COMMITTED_AT="${value}" ;;
+      *) rm -f -- "${parsed}"; return 1 ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ -n "${ATTESTED_RUNTIME_ROOT}" && -n "${ATTESTED_CONTAINER_NAME}" && -n "${ATTESTED_CONTAINER_ID}" && -n "${ATTESTED_COMMITTED_AT}" ]]
+}
+
+runtime_commit_matches() {
+  local expected_container_id="$1"
+  [[ -f "${RUNTIME_COMMIT_FILE}" && ! -L "${RUNTIME_COMMIT_FILE}" ]] || return 1
+  parse_runtime_commit || die "runtime commit attestation is invalid: ${RUNTIME_COMMIT_FILE}"
+  [[ "${ATTESTED_RUNTIME_ROOT}" == "${EXPECTED_RUNTIME_ROOT}" ]] || return 1
+  [[ "${ATTESTED_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || return 1
+  [[ "${ATTESTED_CONTAINER_ID}" == "${expected_container_id}" ]] || return 1
+}
 
 if [[ -e "${UNIT_FILE}" ]]; then
   managed_file "${UNIT_FILE}" || die "refusing to replace unmanaged unit: ${UNIT_FILE}"
@@ -131,6 +170,8 @@ systemctl daemon-reload
 systemctl enable "${UNIT}"
 if [[ "${START}" == 1 ]]; then
   previous_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  # Never accept an attestation from a previous service process.
+  rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
   systemctl reset-failed "${UNIT}" 2>/dev/null || true
   systemctl stop "${UNIT}" 2>/dev/null || true
   systemctl start "${UNIT}"
@@ -140,19 +181,21 @@ if [[ "${START}" == 1 ]]; then
     case "${unit_state}" in active|activating|reloading) ;; *) die "service stopped before readiness (state=${unit_state})" ;; esac
     candidate_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
     if [[ -n "${candidate_container_id}" && "${candidate_container_id}" != "${previous_container_id}" ]] && \
-       curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1; then
+       curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1 && \
+       runtime_commit_matches "${candidate_container_id}"; then
       ready=1
       break
     fi
-    if (( attempt % 6 == 0 )); then printf 'Waiting for committed replacement runtime: %d/1800 seconds\n' "$((attempt * 10))"; fi
+    if (( attempt % 6 == 0 )); then printf 'Waiting for committed replacement runtime attestation: %d/1800 seconds\n' "$((attempt * 10))"; fi
     sleep 10
   done
-  [[ "${ready}" == 1 ]] || die "replacement runtime did not become healthy within 30 minutes"
+  [[ "${ready}" == 1 ]] || die "replacement runtime did not commit and attest within 30 minutes"
   models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
   python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
     "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}" || die "served model ID validation failed"
-  systemctl is-active --quiet "${UNIT}" || die "service became inactive after readiness"
-  printf 'Runtime service is enabled and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
+  runtime_commit_matches "${candidate_container_id}" || die "runtime commit attestation changed after model validation"
+  systemctl is-active --quiet "${UNIT}" || die "service became inactive after committed readiness"
+  printf 'Runtime service is enabled, committed, and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
 else
   printf 'Runtime service installed and enabled; current runtime was not restarted.\n'
 fi

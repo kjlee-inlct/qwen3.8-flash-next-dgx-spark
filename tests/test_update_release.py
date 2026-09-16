@@ -90,6 +90,14 @@ class UpdateReleaseTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not qualified", result.stderr)
 
+    def test_update_commits_only_after_managed_service_returns(self) -> None:
+        script = UPDATE_RELEASE.read_text(encoding="utf-8")
+        service_call = 'sudo bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes'
+        update_commit = 'bash "${UPDATE_TRANSITION}" commit'
+        self.assertIn(service_call, script)
+        self.assertIn(update_commit, script)
+        self.assertLess(script.index(service_call), script.index(update_commit))
+
 
 if __name__ == "__main__":
     unittest.main()
