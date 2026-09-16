@@ -9,6 +9,7 @@ import os
 import pathlib
 import statistics
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.parse
@@ -317,9 +318,9 @@ def environment_snapshot(base_url: str, model: str) -> dict[str, Any]:
         "max_model_len": selected.get("max_model_len"),
         "memory_gib": meminfo_gib(),
         "python": {
-            "major": os.sys.version_info.major,
-            "minor": os.sys.version_info.minor,
-            "micro": os.sys.version_info.micro,
+            "major": sys.version_info.major,
+            "minor": sys.version_info.minor,
+            "micro": sys.version_info.micro,
         },
         "generated_text_retained": False,
     }
