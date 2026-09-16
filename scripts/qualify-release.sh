@@ -36,9 +36,9 @@ mkdir -p -- "${QUALIFIED_DIR}"
 umask 077
 marker="${QUALIFIED_DIR}/${release_id}.env"
 {
-  printf 'QUALIFICATION_SCHEMA_VERSION=%q\n' 1
-  printf 'QUALIFIED_RELEASE=%q\n' "${release_id}"
-  printf 'QUALIFIED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  printf 'QUALIFICATION_SCHEMA_VERSION=%s\n' 1
+  printf 'QUALIFIED_RELEASE=%s\n' "${release_id}"
+  printf 'QUALIFIED_AT=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 } >"${marker}.tmp"
 mv -- "${marker}.tmp" "${marker}"
 printf 'Release qualified for cutover: %s\n' "${release_id}"
