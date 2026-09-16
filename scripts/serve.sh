@@ -177,7 +177,13 @@ if [[ -n "${CONFIG_OVERRIDE}" ]]; then
 fi
 mkdir -p "${HOME}/.cache/flashinfer" "${HOME}/.cache/vllm-qwen38"
 
-docker rm -f "${NAME}" >/dev/null 2>&1 || true
+# Direct/manual invocation must never destroy an existing canonical runtime. Managed
+# replacement first preserves the old container under the rollback name, leaving this
+# canonical name free before serve.sh is invoked.
+if docker inspect "${NAME}" >/dev/null 2>&1; then
+  echo "FATAL: runtime container already exists: ${NAME}; use the managed update/restart path" >&2
+  exit 1
+fi
 
 docker run -d \
   --name "${NAME}" \

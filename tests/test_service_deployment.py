@@ -27,6 +27,9 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime-transition.sh\" recover", runner)
         server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
         self.assertIn("--init", server)
+        self.assertIn('if docker inspect "${NAME}"', server)
+        self.assertIn("runtime container already exists", server)
+        self.assertNotIn('docker rm -f "${NAME}"', server)
 
     def test_release_qualification_does_not_mutate_payload(self) -> None:
         qualifier = (ROOT / "scripts" / "qualify-release.sh").read_text(encoding="utf-8")
