@@ -69,6 +69,8 @@ MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE:-5}"
 MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT:-60}"
 RUNTIME_CONTAINER="${CONTAINER_NAME:-qwen38-flash-next}"
 ROLLBACK_CONTAINER="${RUNTIME_CONTAINER}.rollback"
+# shellcheck source=doctor-observability.sh
+source "${SCRIPT_DIR}/doctor-observability.sh"
 
 if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then
   pass "model index is present"
@@ -234,7 +236,7 @@ if [[ "${MONITOR_ENABLED}" == 1 ]]; then
     fail "memory protection monitor PID file is missing"
   fi
 else
-  warn "runtime memory monitor is disabled"
+  pass "runtime memory monitor is disabled by configuration"
 fi
 
 if [[ "${PROXY_ENABLED:-0}" == 1 ]]; then
