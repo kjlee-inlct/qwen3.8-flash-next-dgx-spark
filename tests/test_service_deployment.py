@@ -34,12 +34,12 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertNotIn('docker rm -f "${NAME}"', server)
 
     def test_release_qualification_does_not_mutate_payload(self) -> None:
-        qualifier = (ROOT / "scripts" / "qualify-release.sh").read_text(encoding="utf-8")
+        qualifier = (ROOT / "scripts" / "lifecycle" / "qualify-release.sh").read_text(encoding="utf-8")
         self.assertIn("PYTHONDONTWRITEBYTECODE=1", qualifier)
         self.assertGreaterEqual(qualifier.count('bash "${RELEASE_MANAGER}" verify "${release_id}"'), 2)
 
     def test_memory_protection_stop_is_not_restarted_as_failure(self) -> None:
-        monitor = (ROOT / "scripts" / "monitor-runtime.sh").read_text(encoding="utf-8")
+        monitor = (ROOT / "scripts" / "runtime" / "monitor-runtime.sh").read_text(encoding="utf-8")
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn("runtime-stop.env", monitor)
         self.assertIn("STOP_REASON=%q", monitor)
