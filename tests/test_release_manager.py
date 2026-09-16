@@ -33,6 +33,7 @@ class ReleaseManagerTests(unittest.TestCase):
             {
                 "QWEN38_SOURCE_ROOT": str(self.source),
                 "XDG_DATA_HOME": str(self.data_home),
+                "XDG_STATE_HOME": str(self.root / "state"),
                 "HOME": str(self.root / "home"),
             }
         )
@@ -112,6 +113,31 @@ class ReleaseManagerTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.data_home / "qwen38-spark" / "current").exists())
+
+    def test_discard_removes_tampered_inactive_release(self) -> None:
+        self.run_manager("stage", self.first)
+        release = self.release_root / self.first
+        (release / "app.txt").write_text("tampered\n", encoding="utf-8")
+        qualified = self.data_home / "qwen38-spark" / "qualified"
+        qualified.mkdir(parents=True, exist_ok=True)
+        marker = qualified / f"{self.first}.env"
+        marker.write_text("stale\n", encoding="utf-8")
+
+        result = self.run_manager("discard", self.first)
+
+        self.assertIn("Inactive staged release discarded", result.stdout)
+        self.assertFalse(release.exists())
+        self.assertFalse(marker.exists())
+
+    def test_discard_refuses_current_release(self) -> None:
+        self.run_manager("stage", self.first)
+        self.run_manager("activate", self.first)
+
+        result = self.run_manager("discard", self.first, check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing to discard current release", result.stderr)
+        self.assertTrue((self.release_root / self.first).is_dir())
 
 
 if __name__ == "__main__":
