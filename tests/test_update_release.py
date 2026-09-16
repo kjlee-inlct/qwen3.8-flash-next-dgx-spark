@@ -36,7 +36,7 @@ class UpdateReleaseTests(unittest.TestCase):
         self.make_release(self.target, "target\n")
         (self.data / "current").symlink_to(self.releases / self.baseline)
         (self.qualified / f"{self.target}.env").write_text(
-            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={self.target}\nQUALIFIED_AT=test\n",
+            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={self.target}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
             encoding="utf-8",
         )
 
