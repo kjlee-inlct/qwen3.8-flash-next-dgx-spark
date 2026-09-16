@@ -115,9 +115,11 @@ python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); as
   "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}"
 
 bash "${RUNTIME_TRANSITION}" commit
+# The runtime transaction is now final. Any attestation failure must fail the
+# service/update path, not attempt to roll back an already-committed transaction.
+transition_active=0
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}")"
 write_runtime_commit_attestation "${container_id}"
-transition_active=0
 trap - ERR INT TERM
 
 printf 'Qwen API is ready; runtime transition committed and attested; following container logs.\n'
