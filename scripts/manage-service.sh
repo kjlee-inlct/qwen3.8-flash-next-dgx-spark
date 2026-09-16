@@ -102,20 +102,31 @@ parse_runtime_commit() {
     rm -f -- "${parsed}"
     return 1
   fi
-  unset RUNTIME_COMMIT_SCHEMA_VERSION RUNTIME_ROOT RUNTIME_CONTAINER_NAME RUNTIME_CONTAINER_ID COMMITTED_AT
+  ATTESTED_RUNTIME_ROOT=""
+  ATTESTED_CONTAINER_NAME=""
+  ATTESTED_CONTAINER_ID=""
+  ATTESTED_COMMITTED_AT=""
   while IFS= read -r -d '' key && IFS= read -r -d '' value; do
-    printf -v "${key}" '%s' "${value}"
+    case "${key}" in
+      RUNTIME_COMMIT_SCHEMA_VERSION) [[ "${value}" == 1 ]] || { rm -f -- "${parsed}"; return 1; } ;;
+      RUNTIME_ROOT) ATTESTED_RUNTIME_ROOT="${value}" ;;
+      RUNTIME_CONTAINER_NAME) ATTESTED_CONTAINER_NAME="${value}" ;;
+      RUNTIME_CONTAINER_ID) ATTESTED_CONTAINER_ID="${value}" ;;
+      COMMITTED_AT) ATTESTED_COMMITTED_AT="${value}" ;;
+      *) rm -f -- "${parsed}"; return 1 ;;
+    esac
   done <"${parsed}"
   rm -f -- "${parsed}"
+  [[ -n "${ATTESTED_RUNTIME_ROOT}" && -n "${ATTESTED_CONTAINER_NAME}" && -n "${ATTESTED_CONTAINER_ID}" && -n "${ATTESTED_COMMITTED_AT}" ]]
 }
 
 runtime_commit_matches() {
   local expected_container_id="$1"
   [[ -f "${RUNTIME_COMMIT_FILE}" && ! -L "${RUNTIME_COMMIT_FILE}" ]] || return 1
   parse_runtime_commit || die "runtime commit attestation is invalid: ${RUNTIME_COMMIT_FILE}"
-  [[ "${RUNTIME_ROOT}" == "${EXPECTED_RUNTIME_ROOT}" ]] || return 1
-  [[ "${RUNTIME_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || return 1
-  [[ "${RUNTIME_CONTAINER_ID}" == "${expected_container_id}" ]] || return 1
+  [[ "${ATTESTED_RUNTIME_ROOT}" == "${EXPECTED_RUNTIME_ROOT}" ]] || return 1
+  [[ "${ATTESTED_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || return 1
+  [[ "${ATTESTED_CONTAINER_ID}" == "${expected_container_id}" ]] || return 1
 }
 
 if [[ -e "${UNIT_FILE}" ]]; then
