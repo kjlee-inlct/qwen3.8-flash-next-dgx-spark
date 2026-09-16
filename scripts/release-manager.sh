@@ -5,9 +5,12 @@ set -Eeuo pipefail
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_ROOT="${QWEN38_SOURCE_ROOT:-${SCRIPT_ROOT}}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 RELEASES_DIR="${QWEN38_RELEASES_DIR:-${DATA_HOME}/releases}"
 CURRENT_LINK="${QWEN38_CURRENT_RELEASE_LINK:-${DATA_HOME}/current}"
 PREVIOUS_LINK="${QWEN38_PREVIOUS_RELEASE_LINK:-${DATA_HOME}/previous}"
+QUALIFIED_DIR="${QWEN38_QUALIFIED_DIR:-${DATA_HOME}/qualified}"
+UPDATE_STATE_FILE="${QWEN38_UPDATE_STATE_FILE:-${STATE_HOME}/update-transition.env}"
 MANIFEST_TOOL="${SCRIPT_ROOT}/scripts/release_manifest.py"
 
 usage() {
@@ -15,12 +18,14 @@ usage() {
 Usage: ./scripts/release-manager.sh stage REVISION
        ./scripts/release-manager.sh verify RELEASE_ID
        ./scripts/release-manager.sh activate RELEASE_ID
+       ./scripts/release-manager.sh discard RELEASE_ID
        ./scripts/release-manager.sh rollback
        ./scripts/release-manager.sh status
 
 stage     Export tracked files from REVISION into an immutable release directory.
 verify    Verify one staged release against its cryptographic manifest.
 activate  Atomically move the user-space current pointer; does not restart services.
+discard   Remove an inactive staged release and qualification marker.
 rollback  Atomically swap current and previous user-space release pointers.
 status    Print current/previous release pointers.
 EOF
@@ -105,6 +110,26 @@ case "${action}" in
     fi
     atomic_link "$(release_path "${release_id}")" "${CURRENT_LINK}"
     printf 'Current release pointer updated: %s\n' "${release_id}"
+    ;;
+  discard)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    release_id="$1"
+    validate_release_id "${release_id}"
+    [[ ! -e "${UPDATE_STATE_FILE}" ]] || die "cannot discard releases while an update transition is active"
+    current_id="$(read_link_release_id "${CURRENT_LINK}" 2>/dev/null || true)"
+    previous_id="$(read_link_release_id "${PREVIOUS_LINK}" 2>/dev/null || true)"
+    [[ "${release_id}" != "${current_id}" ]] || die "refusing to discard current release: ${release_id}"
+    [[ "${release_id}" != "${previous_id}" ]] || die "refusing to discard previous release: ${release_id}"
+    destination="$(release_path "${release_id}")"
+    if [[ -L "${destination}" ]]; then
+      die "refusing to discard symlinked release path: ${destination}"
+    fi
+    if [[ -e "${destination}" ]]; then
+      [[ -d "${destination}" ]] || die "release path is not a directory: ${destination}"
+      rm -rf -- "${destination}"
+    fi
+    rm -f -- "${QUALIFIED_DIR}/${release_id}.env" "${QUALIFIED_DIR}/${release_id}.env.tmp"
+    printf 'Inactive staged release discarded: %s\n' "${release_id}"
     ;;
   rollback)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
