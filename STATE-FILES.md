@@ -19,7 +19,7 @@ The parser uses a schema-specific key whitelist and rejects:
 - malformed values;
 - shell quoting/escaping or command syntax such as `$()`, backticks, backslashes, and semicolons.
 
-The only legacy shell-escaped value accepted is `''` for an empty value. Existing transition files written by earlier versions remain compatible because all other lifecycle fields were already restricted to simple release IDs, enum values, container IDs, and UTC timestamps.
+The only legacy shell-escaped value accepted by lifecycle schemas is `''` for an empty value. Existing transition files written by earlier versions remain compatible because all other lifecycle fields were already restricted to simple release IDs, enum values, container IDs, and UTC timestamps.
 
 Bash consumers receive validated key/value pairs through a NUL-delimited stream and assign only whitelisted variable names with `printf -v`. They do not use `source` or `eval` for these lifecycle files.
 
@@ -38,9 +38,19 @@ The attestation binds:
 
 ## Installation manifest boundary
 
-`~/.local/state/qwen38-spark/install.env` is still written and read as an installer-owned, mode-600 shell-escaped manifest. It contains a wider compatibility surface, including filesystem paths and installer configuration, and is intentionally not migrated in the same change as transient lifecycle state.
+`~/.local/state/qwen38-spark/install.env` is written by `install.sh` using Bash `printf %q` encoding and mode 600. Because it contains a wider compatibility surface than the transient lifecycle files, migration is incremental.
 
-Migration of `install.env` to a strict data parser should be handled as a separate compatibility-focused change with explicit tests for paths containing whitespace and existing schema-3 manifests.
+The managed `service-runner.sh` no longer sources this manifest. It invokes the `install-runtime` schema in `scripts/state_file.py`, which:
+
+- accepts only the closed set of installer keys used by schema 3/4 manifests;
+- decodes ordinary `printf %q` backslash quoting without invoking a shell, including paths containing whitespace;
+- rejects unknown and duplicate keys;
+- rejects ANSI-C/control-character quoting;
+- validates the runtime-required fields and emits only those fields through the NUL-delimited interface.
+
+This removes executable shell input from the long-lived runtime service boundary while preserving existing installer-manifest compatibility.
+
+Other installer/maintenance consumers (`install.sh`, `manage-service.sh`, `doctor.sh`, and `uninstall.sh`) still source the mode-600 installer-owned manifest for compatibility. Moving those consumers to the same strict parser should be done in follow-up changes so each operational path can be tested independently.
 
 ## Operator rule
 

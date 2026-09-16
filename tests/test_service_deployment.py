@@ -33,6 +33,13 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime container already exists", server)
         self.assertNotIn('docker rm -f "${NAME}"', server)
 
+    def test_service_runner_strictly_parses_install_manifest(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        self.assertIn('parse_state_into_vars install-runtime "${STATE_FILE}"', runner)
+        self.assertIn("installation manifest failed strict runtime parsing", runner)
+        self.assertNotIn('source "${STATE_FILE}"', runner)
+        self.assertNotIn("shellcheck disable=SC1090", runner)
+
     def test_service_readiness_requires_runtime_commit_attestation(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
