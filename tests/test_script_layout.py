@@ -66,6 +66,22 @@ class ScriptLayoutTests(unittest.TestCase):
                 self.assertIn(f"`{name}`", readme)
                 self.assertTrue((SCRIPTS / name).is_file())
 
+    def test_upstream_derived_script_paths_are_preserved(self) -> None:
+        readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
+        self.assertIn("dolf3131/qwen3.8-flash-next-dgx-spark", readme)
+        for name in (
+            "Dockerfile.nv-mixed",
+            "Dockerfile.skinny-gemm",
+            "bench-prefill.py",
+            "download-weights.sh",
+            "patch-nv-mixed.py",
+            "patch-skinny-gemm-tp1.py",
+            "serve.sh",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue((SCRIPTS / name).is_file())
+                self.assertIn(f"`{name}`", readme)
+
 
 if __name__ == "__main__":
     unittest.main()
