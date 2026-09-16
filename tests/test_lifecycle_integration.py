@@ -24,6 +24,20 @@ class LifecycleIntegrationTests(unittest.TestCase):
             installer.index('service_args=(create --runtime-root'),
         )
 
+    def test_install_records_api_access_modes_and_legacy_fields(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+        self.assertIn("API_ACCESS_MODE", installer)
+        self.assertIn("API_DOCKER_PORT", installer)
+        self.assertIn("API_LAN_ADDRESS", installer)
+        self.assertIn("API_LAN_PORT", installer)
+        self.assertIn("PROXY_ENABLED", installer)
+        self.assertIn("PROXY_PORT", installer)
+        self.assertIn("--api-access", installer)
+        self.assertIn("--api-lan-port", installer)
+        self.assertIn("8001 recommended for new installs", installer)
+        self.assertIn("use 8000 for legacy URL compatibility", installer)
+
     def test_install_dry_run_mentions_release_without_mutating_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -121,6 +135,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
             "scripts/update-transition.sh",
             "scripts/runtime-transition.sh",
             "scripts/doctor.sh",
+            "scripts/manage-proxy.sh",
         ):
             self.assertTrue((ROOT / relative_path).is_file(), relative_path)
             self.assertIn(relative_path, operations)
@@ -128,6 +143,8 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn("./uninstall.sh --purge-all --yes", operations)
         self.assertIn("UPDATE_STATE=idle", operations)
         self.assertIn("TRANSACTION_STATE=idle", operations)
+        self.assertIn("LAN port `8001` is recommended", operations)
+        self.assertIn("enter `8000` as the LAN port", operations)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 HELPER = ROOT / "scripts" / "doctor-observability.sh"
+CANONICAL_HELPER = ROOT / "scripts" / "diagnostics" / "doctor-observability.sh"
 MANIFEST_TOOL = ROOT / "scripts" / "release_manifest.py"
 
 
@@ -95,6 +96,7 @@ source {HELPER!s}
         self.assertIn("[PASS] current immutable release is qualified", result.stdout)
         self.assertIn("[PASS] no previous immutable release is registered", result.stdout)
         self.assertIn("[PASS] no stale runtime stop marker exists", result.stdout)
+        self.assertIn("[PASS] API access mode is local-only", result.stdout)
 
     def test_active_update_transaction_is_reported_as_failure(self) -> None:
         release_id = "b" * 40
@@ -114,11 +116,19 @@ source {HELPER!s}
         self.assertIn('pass "runtime memory monitor is disabled by configuration"', doctor)
         self.assertNotIn('warn "runtime memory monitor is disabled"', doctor)
 
+    def test_doctor_checks_configured_api_listeners(self) -> None:
+        helper = CANONICAL_HELPER.read_text(encoding="utf-8")
+        self.assertIn("API_ACCESS_MODE", helper)
+        self.assertIn("Docker-app API listener is configured", helper)
+        self.assertIn("LAN API listener matches", helper)
+        self.assertIn("managed API access socket is active", helper)
+
     def test_operations_guide_documents_observability_signals(self) -> None:
         operations = (ROOT / "OPERATIONS.md").read_text(encoding="utf-8")
         self.assertIn("current immutable release", operations)
         self.assertIn("runtime-stop.env", operations)
         self.assertIn("disabled by configuration", operations)
+        self.assertIn("managed Docker-app and LAN API listeners", operations)
 
 
 if __name__ == "__main__":
