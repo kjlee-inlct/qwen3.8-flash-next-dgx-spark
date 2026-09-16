@@ -22,7 +22,13 @@ MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB:-10}"
 MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB:-8}"
 MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE:-5}"
 MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT:-60}"
+# PROXY_* are retained as compatibility fields for schema <=3 and uninstall/doctor consumers.
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED=0; PROXY_PORT="${PROXY_PORT:-8000}"
+API_ACCESS_MODE="${API_ACCESS_MODE:-}"
+API_DOCKER_PORT="${API_DOCKER_PORT:-${PROXY_PORT}}"
+API_LAN_ADDRESS="${API_LAN_ADDRESS:-}"
+API_LAN_PORT="${API_LAN_PORT:-8001}"
+API_ACCESS_CLI=""; API_DOCKER_PORT_CLI=""; API_LAN_ADDRESS_CLI=""; API_LAN_PORT_CLI=""
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
 MONITOR_ENABLED_CLI=""; MONITOR_PROTECT_CLI=""; MONITOR_MIN_AVAILABLE_CLI=""
@@ -37,11 +43,44 @@ expand_user_path() {
     *) printf '%s\n' "$1" ;;
   esac
 }
+detect_lan_ipv4() {
+  command -v ip >/dev/null 2>&1 || return 0
+  ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src" && i<NF) {print $(i+1); exit}}'
+}
+valid_port() { [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
+valid_ipv4() {
+  local ip="$1" IFS=. octets index
+  [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  read -r -a octets <<<"${ip}"
+  [[ ${#octets[@]} -eq 4 ]] || return 1
+  for index in 0 1 2 3; do
+    (( 10#${octets[$index]} >= 0 && 10#${octets[$index]} <= 255 )) || return 1
+  done
+}
+sync_legacy_proxy_fields() {
+  case "${API_ACCESS_MODE}" in
+    local) PROXY_ENABLED=0 ;;
+    docker|lan) PROXY_ENABLED=1 ;;
+    *) die "API_ACCESS_MODE must be local, docker, or lan" ;;
+  esac
+  PROXY_PORT="${API_DOCKER_PORT}"
+}
+validate_api_access_settings() {
+  [[ "${API_ACCESS_MODE}" == local || "${API_ACCESS_MODE}" == docker || "${API_ACCESS_MODE}" == lan ]] || \
+    die "API access mode must be local, docker, or lan"
+  valid_port "${API_DOCKER_PORT}" || die "API Docker port must be between 1 and 65535"
+  if [[ "${API_ACCESS_MODE}" == lan ]]; then
+    valid_ipv4 "${API_LAN_ADDRESS}" || die "LAN API requires a specific IPv4 address"
+    [[ "${API_LAN_ADDRESS}" != 0.0.0.0 && "${API_LAN_ADDRESS}" != 127.* ]] || die "LAN API address must be non-loopback"
+    valid_port "${API_LAN_PORT}" || die "LAN API port must be between 1 and 65535"
+  fi
+  sync_legacy_proxy_fields
+}
 write_state() {
   local phase="$1"
   mkdir -p "${STATE_DIR}"; umask 077
   {
-    printf 'SCHEMA_VERSION=%q\n' 3; printf 'PHASE=%q\n' "${phase}"
+    printf 'SCHEMA_VERSION=%q\n' 4; printf 'PHASE=%q\n' "${phase}"
     printf 'INSTALL_ROOT=%q\n' "${ROOT_DIR}"; printf 'MODEL_PROFILE=%q\n' "${MODEL_PROFILE}"
     printf 'MODEL_REPO=%q\n' "${REPO}"; printf 'MODEL_REVISION=%q\n' "${REVISION}"
     printf 'MODEL_DIR=%q\n' "${MODEL_DIR}"; printf 'MODEL_OWNED=%q\n' "${MODEL_OWNED}"
@@ -58,6 +97,10 @@ write_state() {
     printf 'MONITOR_MIN_SWAP_FREE_GIB=%q\n' "${MONITOR_MIN_SWAP_FREE_GIB}"
     printf 'MONITOR_CONSECUTIVE=%q\n' "${MONITOR_CONSECUTIVE}"
     printf 'MONITOR_HEARTBEAT=%q\n' "${MONITOR_HEARTBEAT}"
+    printf 'API_ACCESS_MODE=%q\n' "${API_ACCESS_MODE}"
+    printf 'API_DOCKER_PORT=%q\n' "${API_DOCKER_PORT}"
+    printf 'API_LAN_ADDRESS=%q\n' "${API_LAN_ADDRESS}"
+    printf 'API_LAN_PORT=%q\n' "${API_LAN_PORT}"
     printf 'PROXY_ENABLED=%q\n' "${PROXY_ENABLED}"; printf 'PROXY_OWNED=%q\n' "${PROXY_OWNED}"
     printf 'PROXY_PORT=%q\n' "${PROXY_PORT}"
     printf 'SERVICE_ENABLED=%q\n' "${SERVICE_ENABLED}"; printf 'SERVICE_OWNED=%q\n' "${SERVICE_OWNED}"
@@ -67,7 +110,7 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--model PROFILE] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--migrate-manifest] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model PROFILE] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -102,6 +145,10 @@ while [[ $# -gt 0 ]]; do
     --monitor-min-swap-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_MIN_SWAP_FREE_CLI="$2"; shift ;;
     --monitor-consecutive) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_CONSECUTIVE_CLI="$2"; shift ;;
     --monitor-heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; MONITOR_HEARTBEAT_CLI="$2"; shift ;;
+    --api-access) [[ $# -ge 2 ]] || die "$1 requires local, docker, or lan"; API_ACCESS_CLI="$2"; shift ;;
+    --api-docker-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_DOCKER_PORT_CLI="$2"; shift ;;
+    --api-lan-address) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_ADDRESS_CLI="$2"; shift ;;
+    --api-lan-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_PORT_CLI="$2"; shift ;;
     --migrate-manifest) MIGRATE_MANIFEST=1 ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
     --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
@@ -147,6 +194,19 @@ if [[ "${RESUME}" == 1 ]]; then
     die "existing manifest belongs to a different model or revision: ${STATE_FILE}"
   IMAGE="${VLLM_IMAGE}"; SERVED_NAME="${SERVED_NAME:-${PROFILE_SERVED_NAME}}"
 fi
+
+# Schema <=3 recorded only docker0 proxy state. Preserve that meaning during migration.
+if [[ -z "${API_ACCESS_MODE}" ]]; then
+  [[ "${PROXY_ENABLED:-0}" == 1 ]] && API_ACCESS_MODE=docker || API_ACCESS_MODE=local
+fi
+API_DOCKER_PORT="${API_DOCKER_PORT:-${PROXY_PORT:-8000}}"
+API_LAN_ADDRESS="${API_LAN_ADDRESS:-}"
+API_LAN_PORT="${API_LAN_PORT:-8001}"
+[[ -z "${API_ACCESS_CLI}" ]] || API_ACCESS_MODE="${API_ACCESS_CLI}"
+[[ -z "${API_DOCKER_PORT_CLI}" ]] || API_DOCKER_PORT="${API_DOCKER_PORT_CLI}"
+[[ -z "${API_LAN_ADDRESS_CLI}" ]] || API_LAN_ADDRESS="${API_LAN_ADDRESS_CLI}"
+[[ -z "${API_LAN_PORT_CLI}" ]] || API_LAN_PORT="${API_LAN_PORT_CLI}"
+
 [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
 if [[ -z "${UI_LANG}" ]]; then
   if [[ "${YES}" == 0 && -t 0 ]]; then
@@ -181,8 +241,9 @@ SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED="${SERVICE_OWNED:-0}"
 [[ -z "${SERVICE_CLI}" ]] || SERVICE_ENABLED="${SERVICE_CLI}"
 if [[ "${MIGRATE_MANIFEST}" == 1 ]]; then
   [[ "${RESUME}" == 1 ]] || die "--migrate-manifest requires an existing installation manifest"
+  validate_api_access_settings
   write_state "${PHASE:-complete}"
-  printf 'Installation manifest migrated to schema 3: %s\n' "${STATE_FILE}"
+  printf 'Installation manifest migrated to schema 4: %s\n' "${STATE_FILE}"
   exit 0
 fi
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
@@ -222,14 +283,44 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   else
     MONITOR_PROTECT=0
   fi
-  [[ "${UI_LANG}" == ko ]] && prompt="docker0 전용 OpenWebUI proxy를 ${PROXY_PORT} 포트에 설치합니까? [y/N]: " || prompt="Install docker0-only OpenWebUI proxy on port ${PROXY_PORT}? [y/N]: "
-  read -r -p "${prompt}" answer
-  [[ "${answer}" == y || "${answer}" == Y ]] && PROXY_ENABLED=1 || PROXY_ENABLED=0
+
+  if [[ "${UI_LANG}" == ko ]]; then
+    printf '\nAPI 접근 방식\n  1) 이 PC에서만 사용 (127.0.0.1:8888)\n  2) Docker 앱에서도 사용 (예: OpenWebUI, 기본 8000)\n  3) Docker 앱 + LAN의 다른 PC에서도 사용\n'
+    read -r -p '선택 (2): ' answer
+  else
+    printf '\nAPI access\n  1) This PC only (127.0.0.1:8888)\n  2) Also available to Docker apps (for example OpenWebUI, default 8000)\n  3) Docker apps + other PCs on the LAN\n'
+    read -r -p 'Select (2): ' answer
+  fi
+  case "${answer:-2}" in
+    1|local) API_ACCESS_MODE=local ;;
+    2|docker) API_ACCESS_MODE=docker ;;
+    3|lan) API_ACCESS_MODE=lan ;;
+    *) die "invalid API access selection" ;;
+  esac
+  if [[ "${API_ACCESS_MODE}" == docker || "${API_ACCESS_MODE}" == lan ]]; then
+    [[ "${UI_LANG}" == ko ]] && prompt="Docker 앱 API 포트 [${API_DOCKER_PORT}]: " || prompt="Docker-app API port [${API_DOCKER_PORT}]: "
+    read -r -p "${prompt}" answer; API_DOCKER_PORT="${answer:-${API_DOCKER_PORT}}"
+  fi
+  if [[ "${API_ACCESS_MODE}" == lan ]]; then
+    detected_lan="$(detect_lan_ipv4)"
+    [[ "${UI_LANG}" == ko ]] && prompt="LAN에서 사용할 DGX IPv4 주소 [${detected_lan}]: " || prompt="DGX IPv4 address to expose on the LAN [${detected_lan}]: "
+    read -r -p "${prompt}" answer; API_LAN_ADDRESS="${answer:-${detected_lan}}"
+    if [[ "${UI_LANG}" == ko ]]; then
+      read -r -p "LAN API 포트 [${API_LAN_PORT}] (신규 권장 8001, 기존 URL 호환은 8000): " answer
+    else
+      read -r -p "LAN API port [${API_LAN_PORT}] (8001 recommended for new installs; use 8000 for legacy URL compatibility): " answer
+    fi
+    API_LAN_PORT="${answer:-${API_LAN_PORT}}"
+  else
+    API_LAN_ADDRESS=""
+  fi
+
   [[ "${UI_LANG}" == ko ]] && prompt='부팅 시 자동 시작되는 systemd 서비스를 등록합니까? [Y/n]: ' || prompt='Install a systemd service that starts at boot? [Y/n]: '
   read -r -p "${prompt}" answer
   [[ "${answer}" == n || "${answer}" == N ]] && SERVICE_ENABLED=0 || SERVICE_ENABLED=1
 fi
 validate_monitor_settings
+validate_api_access_settings
 MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
 MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
@@ -244,7 +335,12 @@ printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s G
   "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)" "${MONITOR_MIN_AVAILABLE_GIB}" \
   "${MONITOR_MIN_FREE_GIB}" "${MONITOR_FREE_GATE_GIB}" "${MONITOR_MIN_SWAP_FREE_GIB}" \
   "${MONITOR_CONSECUTIVE}" "${MONITOR_HEARTBEAT}"
-printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'docker0:%s -> loopback:8888' "${PROXY_PORT}" || printf disabled)"
+case "${API_ACCESS_MODE}" in
+  local) api_plan='local only: 127.0.0.1:8888' ;;
+  docker) api_plan="Docker apps: ${API_DOCKER_PORT} -> 127.0.0.1:8888" ;;
+  lan) api_plan="Docker apps: ${API_DOCKER_PORT}; LAN: ${API_LAN_ADDRESS}:${API_LAN_PORT} -> 127.0.0.1:8888" ;;
+esac
+printf '  API access  : %s\n\n' "${api_plan}"
 printf '  service     : %s\n\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service via immutable current release' || printf 'Docker container via immutable current release')"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
@@ -252,9 +348,9 @@ ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취
 
 if [[ "${DRY_RUN}" == 1 ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '\nDRY-RUN 완료: 다운로드, swap, release, proxy, service, Docker 및 manifest를 변경하지 않았습니다.\n'
+    printf '\nDRY-RUN 완료: 다운로드, swap, release, API 접근 설정, service, Docker 및 manifest를 변경하지 않았습니다.\n'
   else
-    printf '\nDRY-RUN complete: no download, swap, release, proxy, service, Docker, or manifest changes were made.\n'
+    printf '\nDRY-RUN complete: no download, swap, release, API access, service, Docker, or manifest changes were made.\n'
   fi
   exit 0
 fi
@@ -314,10 +410,14 @@ else
 fi
 write_state image_ready
 
-if [[ "${PROXY_ENABLED}" == 1 ]]; then
-  if ! "${ROOT_DIR}/scripts/manage-proxy.sh" status >/dev/null 2>&1; then
-    printf '\nInstalling docker0-only OpenWebUI proxy...\n'
-    sudo "${ROOT_DIR}/scripts/manage-proxy.sh" create --listen-port "${PROXY_PORT}" --backend-port 8888 --yes
+if [[ "${API_ACCESS_MODE}" != local ]]; then
+  if ! "${ROOT_DIR}/scripts/manage-proxy.sh" status >/dev/null 2>&1 || [[ "${PROXY_OWNED}" == 1 ]]; then
+    printf '\nConfiguring managed API access...\n'
+    proxy_args=(create --docker-port "${API_DOCKER_PORT}" --backend-port 8888 --yes)
+    if [[ "${API_ACCESS_MODE}" == lan ]]; then
+      proxy_args+=(--lan-address "${API_LAN_ADDRESS}" --lan-port "${API_LAN_PORT}")
+    fi
+    sudo "${ROOT_DIR}/scripts/manage-proxy.sh" "${proxy_args[@]}"
     PROXY_OWNED=1
   fi
   write_state proxy_ready
