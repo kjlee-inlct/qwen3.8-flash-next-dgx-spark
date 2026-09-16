@@ -7,6 +7,8 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${ROOT_DIR}/scripts/model-profiles.sh"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
+CURRENT_RELEASE_LINK="${DATA_HOME}/current"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
@@ -243,22 +245,23 @@ printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s G
   "${MONITOR_MIN_FREE_GIB}" "${MONITOR_FREE_GATE_GIB}" "${MONITOR_MIN_SWAP_FREE_GIB}" \
   "${MONITOR_CONSECUTIVE}" "${MONITOR_HEARTBEAT}"
 printf '  proxy       : %s\n\n' "$([[ "${PROXY_ENABLED}" == 1 ]] && printf 'docker0:%s -> loopback:8888' "${PROXY_PORT}" || printf disabled)"
-printf '  service     : %s\n\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service' || printf 'Docker container only')"
+printf '  service     : %s\n\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service via immutable current release' || printf 'Docker container via immutable current release')"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
 ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
 
 if [[ "${DRY_RUN}" == 1 ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '\nDRY-RUN 완료: 다운로드, swap, proxy, service, Docker 및 manifest를 변경하지 않았습니다.\n'
+    printf '\nDRY-RUN 완료: 다운로드, swap, release, proxy, service, Docker 및 manifest를 변경하지 않았습니다.\n'
   else
-    printf '\nDRY-RUN complete: no download, swap, proxy, service, Docker, or manifest changes were made.\n'
+    printf '\nDRY-RUN complete: no download, swap, release, proxy, service, Docker, or manifest changes were made.\n'
   fi
   exit 0
 fi
 
-for command in python3 curl docker sudo; do command -v "${command}" >/dev/null || die "${command} is required"; done
+for command in python3 curl docker sudo git; do command -v "${command}" >/dev/null || die "${command} is required"; done
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
+git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "installer must run from a git checkout to create an immutable release baseline"
 if [[ "${PROFILE_GATED}" == 1 ]]; then
   command -v hf >/dev/null || die "hf is required for the gated OrcaRouter profile"
   hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
@@ -320,27 +323,41 @@ if [[ "${PROXY_ENABLED}" == 1 ]]; then
   write_state proxy_ready
 fi
 
+printf '\nPreparing immutable runtime release...\n'
+release_status="$(bash "${ROOT_DIR}/scripts/release-manager.sh" status)"
+current_release="$(awk -F= '$1=="CURRENT_RELEASE" {print $2}' <<<"${release_status}")"
+if [[ -z "${current_release}" || "${current_release}" == none ]]; then
+  baseline_revision="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
+  bash "${ROOT_DIR}/scripts/bootstrap-release.sh" "${baseline_revision}"
+else
+  bash "${ROOT_DIR}/scripts/release-manager.sh" verify "${current_release}"
+fi
+[[ -L "${CURRENT_RELEASE_LINK}" ]] || die "immutable current release pointer is missing after release preparation"
+RUNTIME_ROOT="$(readlink -f -- "${CURRENT_RELEASE_LINK}")"
+[[ "${RUNTIME_ROOT}" == "${DATA_HOME}/releases/"* ]] || die "immutable current release pointer is unsafe: ${CURRENT_RELEASE_LINK}"
+write_state release_ready
+
 if [[ "${SERVICE_ENABLED}" == 1 ]]; then
   SERVICE_OWNED=1
   write_state service_ready
-  service_args=(create --yes)
+  service_args=(create --runtime-root "${CURRENT_RELEASE_LINK}" --yes)
   [[ "${START}" == 1 ]] && service_args+=(--start) || service_args+=(--no-start)
   sudo env QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
     "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
 elif [[ "${START}" == 1 ]]; then
-  printf '\nStarting service...\n'
+  printf '\nStarting runtime from immutable current release...\n'
   MODEL_PROFILE="${MODEL_PROFILE}" MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" SERVED_NAME="${SERVED_NAME}" \
     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}" MONITOR_ENABLED="${MONITOR_ENABLED}" MONITOR_PROTECT="${MONITOR_PROTECT}" \
     MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB}" MONITOR_MIN_FREE_GIB="${MONITOR_MIN_FREE_GIB}" \
     MONITOR_FREE_GATE_GIB="${MONITOR_FREE_GATE_GIB}" MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_GIB}" \
     MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE}" MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT}" \
-    "${ROOT_DIR}/scripts/serve.sh"
+    "${RUNTIME_ROOT}/scripts/serve.sh"
 fi
 write_state complete
 if [[ "${UI_LANG}" == ko ]]; then
-  printf '\n설치가 완료되었습니다.\n  manifest: %s\n' "${STATE_FILE}"
+  printf '\n설치가 완료되었습니다.\n  manifest: %s\n  runtime: %s\n' "${STATE_FILE}" "${CURRENT_RELEASE_LINK}"
   [[ "${SERVICE_ENABLED}" == 1 ]] && printf '  logs: journalctl -fu qwen38-flash-next.service\n' || printf '  logs: docker logs -f qwen38-flash-next\n'
 else
-  printf '\nInstallation completed.\n  manifest: %s\n' "${STATE_FILE}"
+  printf '\nInstallation completed.\n  manifest: %s\n  runtime: %s\n' "${STATE_FILE}" "${CURRENT_RELEASE_LINK}"
   [[ "${SERVICE_ENABLED}" == 1 ]] && printf '  logs: journalctl -fu qwen38-flash-next.service\n' || printf '  logs: docker logs -f qwen38-flash-next\n'
 fi
