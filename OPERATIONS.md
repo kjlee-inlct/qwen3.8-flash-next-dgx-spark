@@ -46,7 +46,7 @@ Before installing, a dry-run is recommended:
 
 A successful fresh install automatically:
 
-1. prepares the model, swap, image, optional proxy, and installation manifest;
+1. prepares the model, swap, image, optional managed API-access endpoints, and installation manifest;
 2. stages the current Git commit as an immutable release;
 3. runs release qualification without mutating the release payload;
 4. registers that release as `current` when no baseline exists yet;
@@ -55,10 +55,52 @@ A successful fresh install automatically:
 
 The installer must be run from a Git checkout because the immutable release ID is the Git commit SHA. Re-running `install.sh` does not silently move an existing `current` release to a newer checkout commit. Use the explicit update path below for code updates.
 
+### API access choices
+
+The runtime itself remains published on loopback only at `127.0.0.1:8888`. The installer wizard asks how that API should be made available:
+
+1. **This PC only** — no additional listener; use `http://127.0.0.1:8888/v1`.
+2. **Docker apps** — adds a docker0 listener, default port `8000`. Containers can use `http://host.docker.internal:8000/v1`. OpenWebUI is one example of a Docker app that can use this path.
+3. **Docker apps + LAN** — keeps the Docker-app listener and also adds a listener on one exact host LAN IPv4 address.
+
+For a new installation, LAN port `8001` is recommended so Docker-app access on `8000` and LAN API access have visibly different purposes. Example:
+
+```text
+Docker apps : host.docker.internal:8000 -> 127.0.0.1:8888
+LAN clients : 192.168.0.57:8001         -> 127.0.0.1:8888
+```
+
+If existing clients already use `http://<DGX-IP>:8000/v1`, choose LAN access and enter `8000` as the LAN port. The managed socket can listen on both the docker0 address and the selected LAN address on port `8000`, so existing client URLs do not need to change.
+
+Non-interactive examples:
+
+```bash
+# Local-only API
+./install.sh --yes --api-access local
+
+# Docker applications only
+./install.sh --yes --api-access docker --api-docker-port 8000
+
+# Recommended new LAN endpoint
+./install.sh --yes --api-access lan \
+  --api-docker-port 8000 \
+  --api-lan-address 192.168.0.57 \
+  --api-lan-port 8001
+
+# Preserve an existing DGX-IP:8000/v1 contract
+./install.sh --yes --api-access lan \
+  --api-docker-port 8000 \
+  --api-lan-address 192.168.0.57 \
+  --api-lan-port 8000
+```
+
+Wildcard LAN listeners (`0.0.0.0`) are not supported. The selected LAN address must be an IPv4 address currently assigned to the host. API access intent is stored in `install.env` using `API_ACCESS_MODE`, `API_DOCKER_PORT`, `API_LAN_ADDRESS`, and `API_LAN_PORT`. Legacy `PROXY_*` fields remain for compatibility with older installations and lifecycle code.
+
 ## Health and state inspection
 
 ```bash
 ./scripts/doctor.sh
+./scripts/manage-proxy.sh status
 bash ./scripts/release-manager.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
@@ -84,7 +126,8 @@ TRANSACTION_STATE=idle
 - no `update-transition.env` is left from an interrupted release cutover;
 - no stale or malformed `runtime-stop.env` marker is left behind;
 - an installed systemd unit executes from `~/.local/share/qwen38-spark/current` rather than the mutable checkout;
-- runtime image, model mount, served model name, loopback publication, and rollback-container state match the installation manifest.
+- runtime image, model mount, served model name, loopback publication, and rollback-container state match the installation manifest;
+- managed Docker-app and LAN API listeners match the API-access settings recorded in the installation manifest.
 
 A memory monitor that was intentionally disabled at install time is reported as a healthy configured state:
 
@@ -100,7 +143,7 @@ Use strict mode when maintenance automation should fail on warnings as well as h
 ./scripts/doctor.sh --strict
 ```
 
-Examples of signals that require operator attention include an incomplete update/runtime transaction, a tampered current immutable release, an unsafe/dangling release pointer, a service that no longer points at the immutable `current` root, or a stale `runtime-stop.env` marker referencing a running or replaced container.
+Examples of signals that require operator attention include an incomplete update/runtime transaction, a tampered current immutable release, an unsafe/dangling release pointer, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
 
 ## Update a checkout revision
 
@@ -169,6 +212,8 @@ A normal uninstall removes the runtime/service resources recorded by the install
 ./uninstall.sh
 ```
 
+Owned managed API-access endpoints are removed together. API access created outside the installer remains untouched unless it was explicitly adopted into the manifest.
+
 Uninstall refuses to start if either `update-transition.env` or `runtime-transition.env` exists. Recover or roll back that transaction first rather than deleting transaction state manually.
 
 Preview a full purge:
@@ -193,6 +238,7 @@ Before maintenance:
 
 ```bash
 ./scripts/doctor.sh
+./scripts/manage-proxy.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
 ```
@@ -201,6 +247,7 @@ After maintenance:
 
 ```bash
 ./scripts/doctor.sh
+./scripts/manage-proxy.sh status
 bash ./scripts/release-manager.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
