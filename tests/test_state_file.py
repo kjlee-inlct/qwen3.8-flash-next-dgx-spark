@@ -114,6 +114,39 @@ class StateFileParserTests(unittest.TestCase):
         self.assertEqual(qualification.returncode, 0, qualification.stderr.decode())
         self.assertEqual(stop.returncode, 0, stop.stderr.decode())
 
+    def test_runtime_commit_attestation_binds_root_and_container(self) -> None:
+        valid = self.run_parser(
+            "runtime-commit",
+            "\n".join(
+                [
+                    "RUNTIME_COMMIT_SCHEMA_VERSION=1",
+                    "RUNTIME_ROOT=/home/inlc/.local/share/qwen38-spark/releases/" + "a" * 40,
+                    "RUNTIME_CONTAINER_NAME=qwen38-flash-next",
+                    "RUNTIME_CONTAINER_ID=" + "b" * 64,
+                    "COMMITTED_AT=2026-09-16T01:00:00Z",
+                    "",
+                ]
+            ),
+        )
+        unsafe_root = self.run_parser(
+            "runtime-commit",
+            "\n".join(
+                [
+                    "RUNTIME_COMMIT_SCHEMA_VERSION=1",
+                    "RUNTIME_ROOT=/tmp/runtime $(touch /tmp/should-not-run)",
+                    "RUNTIME_CONTAINER_NAME=qwen38-flash-next",
+                    "RUNTIME_CONTAINER_ID=" + "b" * 64,
+                    "COMMITTED_AT=2026-09-16T01:00:00Z",
+                    "",
+                ]
+            ),
+        )
+        self.assertEqual(valid.returncode, 0, valid.stderr.decode())
+        fields = valid.stdout.split(b"\0")
+        self.assertIn(b"RUNTIME_ROOT", fields)
+        self.assertIn(b"RUNTIME_CONTAINER_ID", fields)
+        self.assertNotEqual(unsafe_root.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
