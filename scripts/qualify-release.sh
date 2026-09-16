@@ -20,12 +20,17 @@ bash "${RELEASE_MANAGER}" verify "${release_id}"
 [[ -d "${release_dir}" && ! -L "${release_dir}" ]] || die "release is unavailable: ${release_id}"
 
 # The release must be self-contained enough to pass the same syntax and unit
-# checks used by CI. No runtime/service mutation occurs during qualification.
+# checks used by CI. Keep Python bytecode out of the immutable payload. A second
+# manifest verification below rejects any other test-created artifact as well.
 bash -n "${release_dir}/install.sh" "${release_dir}/uninstall.sh" "${release_dir}"/scripts/*.sh
 (
   cd "${release_dir}"
-  python3 -m unittest discover -s tests -v
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 )
+
+# Qualification itself must be observational: the immutable payload must remain
+# byte-for-byte identical after all tests finish.
+bash "${RELEASE_MANAGER}" verify "${release_id}"
 
 mkdir -p -- "${QUALIFIED_DIR}"
 umask 077
