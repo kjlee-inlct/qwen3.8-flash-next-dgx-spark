@@ -9,7 +9,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 RELEASE_MANAGER = ROOT / "scripts" / "release-manager.sh"
-QUALIFY = ROOT / "scripts" / "qualify-release.sh"
 UPDATE = ROOT / "scripts" / "update-transition.sh"
 
 
@@ -58,7 +57,7 @@ class UpdateTransitionTests(unittest.TestCase):
         qualified = self.data / "qwen38-spark" / "qualified"
         qualified.mkdir(parents=True, exist_ok=True)
         (qualified / f"{release_id}.env").write_text(
-            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\nQUALIFIED_AT=test\n",
+            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
             encoding="utf-8",
         )
 
@@ -98,6 +97,29 @@ class UpdateTransitionTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not qualified", result.stderr)
         self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
+
+    def test_recover_rejects_executable_state_payload_without_running_it(self) -> None:
+        app_state = self.state / "qwen38-spark"
+        app_state.mkdir(parents=True, exist_ok=True)
+        executed = self.root / "executed"
+        (app_state / "update-transition.env").write_text(
+            "\n".join(
+                [
+                    "UPDATE_SCHEMA_VERSION=1",
+                    "UPDATE_STATE=staged",
+                    f"TARGET_RELEASE=$(touch {executed})",
+                    f"OLD_CURRENT_RELEASE={self.first}",
+                    "OLD_PREVIOUS_RELEASE=",
+                    "UPDATED_AT=2026-09-16T01:00:00Z",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        result = self.run_script(UPDATE, "recover", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid update transition state file", result.stderr)
+        self.assertFalse(executed.exists())
 
 
 if __name__ == "__main__":
