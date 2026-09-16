@@ -23,6 +23,49 @@ class StateFileParserTests(unittest.TestCase):
                 check=False,
             )
 
+    @staticmethod
+    def install_manifest(*extra: str) -> str:
+        lines = [
+            "SCHEMA_VERSION=4",
+            "PHASE=complete",
+            "INSTALL_ROOT=/home/inlc/qwen",
+            "MODEL_PROFILE=orcarouter",
+            "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "MODEL_REVISION=" + "a" * 40,
+            "MODEL_DIR=/home/inlc/models/qwen\\ model",
+            "MODEL_OWNED=1",
+            "SWAP_FILE=/swap-ple.img",
+            "SWAP_OWNED=1",
+            "VLLM_IMAGE=vllm/vllm-openai:qwen38-flash-next-arm64-cu130",
+            "IMAGE_OWNED=0",
+            "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "CONTAINER_NAME=qwen38-flash-next",
+            "CONFIG_OVERRIDE=/home/inlc/state/config\\ override.json",
+            "CONFIG_OWNED=1",
+            "MONITOR_PROTECT=0",
+            "MONITOR_ENABLED=0",
+            "MONITOR_MIN_AVAILABLE_GIB=6",
+            "MONITOR_MIN_FREE_GIB=2",
+            "MONITOR_FREE_GATE_GIB=10",
+            "MONITOR_MIN_SWAP_FREE_GIB=8",
+            "MONITOR_CONSECUTIVE=5",
+            "MONITOR_HEARTBEAT=60",
+            "API_ACCESS_MODE=docker",
+            "API_DOCKER_PORT=8000",
+            "API_LAN_ADDRESS=''",
+            "API_LAN_PORT=8001",
+            "PROXY_ENABLED=1",
+            "PROXY_OWNED=1",
+            "PROXY_PORT=8000",
+            "SERVICE_ENABLED=1",
+            "SERVICE_OWNED=1",
+            "SERVICE_UNIT=qwen38-flash-next.service",
+            "UI_LANG=ko",
+            *extra,
+            "",
+        ]
+        return "\n".join(lines)
+
     def test_update_state_emits_nul_delimited_values(self) -> None:
         result = self.run_parser(
             "update",
@@ -146,6 +189,35 @@ class StateFileParserTests(unittest.TestCase):
         self.assertIn(b"RUNTIME_ROOT", fields)
         self.assertIn(b"RUNTIME_CONTAINER_ID", fields)
         self.assertNotEqual(unsafe_root.returncode, 0)
+
+    def test_install_runtime_decodes_printf_q_paths_and_emits_only_runtime_fields(self) -> None:
+        result = self.run_parser("install-runtime", self.install_manifest())
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"MODEL_DIR", fields)
+        self.assertIn(b"/home/inlc/models/qwen model", fields)
+        self.assertIn(b"CONFIG_OVERRIDE", fields)
+        self.assertIn(b"/home/inlc/state/config override.json", fields)
+        self.assertNotIn(b"MODEL_REPO", fields)
+        self.assertNotIn(b"PROXY_OWNED", fields)
+
+    def test_install_runtime_rejects_unknown_or_executable_manifest_content(self) -> None:
+        unknown = self.run_parser("install-runtime", self.install_manifest("EVIL=value"))
+        executable = self.run_parser(
+            "install-runtime",
+            self.install_manifest().replace(
+                "MODEL_DIR=/home/inlc/models/qwen\\ model",
+                "MODEL_DIR=$(touch\\ /tmp/qwen38-parser-should-not-run)",
+            ),
+        )
+        self.assertNotEqual(unknown.returncode, 0)
+        self.assertNotEqual(executable.returncode, 0)
+        self.assertFalse(Path("/tmp/qwen38-parser-should-not-run").exists())
+
+    def test_install_runtime_rejects_inconsistent_monitor_protection(self) -> None:
+        manifest = self.install_manifest().replace("MONITOR_PROTECT=0", "MONITOR_PROTECT=1")
+        result = self.run_parser("install-runtime", manifest)
+        self.assertNotEqual(result.returncode, 0)
 
 
 if __name__ == "__main__":
