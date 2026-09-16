@@ -4,7 +4,11 @@ set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
-PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; YES=0; DRY_RUN=0
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
+RUNTIME_TRANSITION_FILE="${STATE_DIR}/runtime-transition.env"
+UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
+STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
+PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; PURGE_ALL=0; YES=0; DRY_RUN=0
 CLI_LANG=""
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 usage() {
@@ -15,7 +19,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --purge-model) PURGE_MODEL=1; PURGE_SELECTED=1 ;; --purge-swap) PURGE_SWAP=1; PURGE_SELECTED=1 ;; --purge-image) PURGE_IMAGE=1; PURGE_SELECTED=1 ;;
-    --purge-all) PURGE_MODEL=1; PURGE_SWAP=1; PURGE_IMAGE=1; PURGE_SELECTED=1 ;; --yes) YES=1 ;; --dry-run) DRY_RUN=1 ;;
+    --purge-all) PURGE_MODEL=1; PURGE_SWAP=1; PURGE_IMAGE=1; PURGE_SELECTED=1; PURGE_ALL=1 ;; --yes) YES=1 ;; --dry-run) DRY_RUN=1 ;;
     -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
   shift
@@ -58,21 +62,29 @@ if [[ "${UI_LANG}" == ko ]]; then
   printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf 제거 || printf 유지)"
   printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf 제거 || printf 유지)"
   printf '  service  : %s\n' "$([[ "${SERVICE_OWNED}" == 1 ]] && printf 제거 || printf 유지)"
+  printf '  releases : %s\n' "$([[ "${PURGE_ALL}" == 1 ]] && printf '전체 제거' || printf '보존')"
 else
   printf 'Qwen3.8 Flash Next uninstaller wizard\n\n  container: %s (remove)\n' "${CONTAINER_NAME}"
   printf '  model    : %s (%s)\n' "${MODEL_DIR}" "$([[ "${PURGE_MODEL}" == 1 ]] && printf remove || printf keep)"
   printf '  PLE swap : %s (%s)\n' "${SWAP_FILE}" "$([[ "${PURGE_SWAP}" == 1 ]] && printf remove || printf keep)"
   printf '  image    : %s (%s)\n' "${VLLM_IMAGE}" "$([[ "${PURGE_IMAGE}" == 1 ]] && printf remove || printf keep)"
   printf '  service  : %s\n' "$([[ "${SERVICE_OWNED}" == 1 ]] && printf remove || printf keep)"
+  printf '  releases : %s\n' "$([[ "${PURGE_ALL}" == 1 ]] && printf purge || printf keep)"
 fi
 if [[ "${DRY_RUN}" == 1 ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '\nDRY-RUN 완료: container, monitor, proxy, 모델, swap, image 및 manifest를 변경하지 않았습니다.\n'
+    printf '\nDRY-RUN 완료: container, monitor, proxy, release, 모델, swap, image 및 manifest를 변경하지 않았습니다.\n'
   else
-    printf '\nDRY-RUN complete: no container, monitor, proxy, model, swap, image, or manifest changes were made.\n'
+    printf '\nDRY-RUN complete: no container, monitor, proxy, release, model, swap, image, or manifest changes were made.\n'
   fi
   exit 0
 fi
+
+[[ ! -e "${UPDATE_TRANSITION_FILE}" && ! -L "${UPDATE_TRANSITION_FILE}" ]] || \
+  die "an update transition is active; recover or roll it back before uninstalling"
+[[ ! -e "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]] || \
+  die "a runtime transition is active; recover or roll it back before uninstalling"
+
 if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
 fi
@@ -96,6 +108,7 @@ if [[ "${PROXY_OWNED}" == 1 ]]; then
   sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes
 fi
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp"
 
 if [[ "${PURGE_MODEL}" == 1 ]]; then
   [[ "${MODEL_OWNED}" == 1 ]] || die "refusing model deletion: directory was not created by this installer"
@@ -121,17 +134,24 @@ if [[ "${PURGE_IMAGE}" == 1 ]]; then
     docker image rm "${VLLM_IMAGE}" || die "image is still in use"
   fi
 fi
-if [[ "${PURGE_MODEL}" == 1 && "${PURGE_SWAP}" == 1 && "${PURGE_IMAGE}" == 1 ]]; then
+if [[ "${PURGE_ALL}" == 1 ]]; then
+  [[ "${DATA_HOME}" == "${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark" ]] || die "refusing unsafe release-data purge path: ${DATA_HOME}"
   if [[ "${CONFIG_OWNED}" == 1 && "${CONFIG_OVERRIDE:-}" == "${STATE_DIR}/config.vllm.json" ]]; then
     rm -f -- "${CONFIG_OVERRIDE}"
   fi
-  rm -f -- "${STATE_DIR}/monitor.log"
-  rm -f -- "${STATE_FILE}"; rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
-  [[ "${UI_LANG}" == ko ]] && printf '전체 제거 완료; 설치 manifest를 삭제했습니다.\n' || printf 'Full uninstall completed; installation manifest removed.\n'
+  rm -rf --one-file-system -- "${DATA_HOME}"
+  rm -f -- "${STATE_DIR}/monitor.log" "${STATE_DIR}/monitor.pid" \
+    "${STATE_DIR}/runtime-stop.env" "${STATE_DIR}/runtime-stop.env.tmp" \
+    "${STATE_DIR}/runtime-transition.env" "${STATE_DIR}/runtime-transition.env.tmp" \
+    "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp"
+  rm -f -- "${STATE_FILE}"
+  rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
+  [[ "${UI_LANG}" == ko ]] && printf '전체 제거 완료; immutable release 데이터와 설치 manifest를 삭제했습니다.\n' || \
+    printf 'Full uninstall completed; immutable release data and installation manifest removed.\n'
 else
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '제거 완료. 유지한 리소스를 나중에 정리할 수 있도록 manifest를 보존했습니다: %s\n' "${STATE_FILE}"
+    printf '제거 완료. immutable release history와 유지한 리소스를 위해 manifest를 보존했습니다: %s\n' "${STATE_FILE}"
   else
-    printf 'Uninstall completed. Manifest retained so preserved resources can be purged later: %s\n' "${STATE_FILE}"
+    printf 'Uninstall completed. Immutable release history and manifest were retained for reinstall or later purge: %s\n' "${STATE_FILE}"
   fi
 fi
