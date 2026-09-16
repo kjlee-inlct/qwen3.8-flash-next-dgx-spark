@@ -94,9 +94,7 @@ fi
 #   SPEC=none ./serve.sh    # unspeculated baseline, 17.4 tok/s
 NSPEC="${NSPEC:-${DEFAULT_NSPEC}}"
 case "${SPEC:-mtp}" in
-  mtp)  # INDEX_SHARE maps to set_skip_topk: MTP step 0 picks the QSA sparse indices and
-        # later steps reuse them. Profiler puts QSA under 5% of decode, so the ceiling is
-        # small; it was enabled alongside k=3 and never measured on its own.
+  mtp)
         if [[ "${INDEX_SHARE:-${DEFAULT_INDEX_SHARE}}" == "1" ]]; then
           SPEC_CFG="{\"method\":\"mtp\",\"num_speculative_tokens\":${NSPEC},\"index_share_for_mtp_iteration\":true}"
         else
@@ -108,49 +106,21 @@ esac
 SPEC_ARGS=()
 [[ -n "${SPEC_CFG}" ]] && SPEC_ARGS=(--speculative-config "${SPEC_CFG}")
 
-# KV dtype is NOT tunable on the stock image: models/qwen3_8_flash_next/nvidia/qsa.py
-# declares supported_kv_cache_dtypes = ["auto", "bfloat16"] and raises
-# NotImplementedError("Qwen3.8-Flash-Next QSA requires a BF16 main KV cache").
-# It is patchable -- see the README's comparison section -- but not from here.
 KV_DTYPE="${KV_DTYPE:-}"
 KV_ARGS=()
 [[ -n "${KV_DTYPE}" ]] && KV_ARGS=(--kv-cache-dtype "${KV_DTYPE}")
 
-# Measured on this box: consumed (weights + non-torch + activation + graphs) settles at
-# ~77.5 GiB, so KV = GPU_UTIL x 121.69 - 77.5. KV costs ~28.4 KiB/token with MTP.
-# 0.78 -> ~16 GiB of KV, comfortably above the 14.2 GiB one 524288 request needs, and
-# leaves ~15 GiB of RAM as PLE page cache. Raising it starves that cache; 0.63 already
-# left KV at 0.21 GiB and refused to boot.
 GPU_UTIL="${GPU_UTIL:-${DEFAULT_GPU_UTIL}}"
 MAXSEQS="${MAXSEQS:-${DEFAULT_MAXSEQS}}"
-
-# Pin the KV pool: vLLM derives it from a runtime measurement that wobbles on unified
-# memory (three boots of one config gave 573,862 / 591,889 / 614,423 tokens). 15.0 GiB
-# leaves ~5% over the 14.3 GiB one 524288 request needs. KV_MEM= restores the old behaviour.
 KV_MEM="${KV_MEM-${DEFAULT_KV_MEM}}"
 KVMEM_ARGS=()
 [[ -n "${KV_MEM}" ]] && KVMEM_ARGS=(--kv-cache-memory "${KV_MEM}")
 
-# Prefix caching needs BOTH flags on this hybrid model: without align the GDN state is not
-# cacheable and the hit rate is 0 regardless of traffic. With align the attention block
-# size becomes 1600 tokens, so only prompts longer than that can hit. Off by default
-# because it only pays on repeated prefixes; see the README.
 PREFIX_CACHE="${PREFIX_CACHE:-0}"
 PREFIX_ARGS=(--no-enable-prefix-caching)
 [[ "${PREFIX_CACHE}" == "1" ]] && PREFIX_ARGS=(--enable-prefix-caching --mamba-cache-mode align)
 
-# NEVER enable --async-scheduling with MTP: it makes _prepare_ngram_context read the
-# optimistic -1 placeholders speculative decoding writes, so the n-gram context is wrong on
-# every decode step. Silent quality loss, no crash. See the README.
-
-# Loading 95.37 GiB into the offload process, most of it straight back out to swap, does
-# not finish inside the 600 s default.
 PLE_TIMEOUT="${PLE_TIMEOUT:-1800}"
-
-# FlashInfer autotune. The stock setting was off, with no recorded reason. On by default
-# now: the MoE backend resolves to FLASHINFER_CUTLASS and its grouped GEMM is 18.7% of
-# decode by profiler. Enabled alongside k=3 and never measured on its own. AUTOTUNE=0
-# reverts. Costs extra boot time while it sweeps.
 AUTOTUNE_ARGS=(--enable-flashinfer-autotune)
 [[ "${AUTOTUNE:-${DEFAULT_AUTOTUNE}}" == "1" ]] || AUTOTUNE_ARGS=(--no-enable-flashinfer-autotune)
 
@@ -177,7 +147,13 @@ if [[ -n "${CONFIG_OVERRIDE}" ]]; then
 fi
 mkdir -p "${HOME}/.cache/flashinfer" "${HOME}/.cache/vllm-qwen38"
 
-docker rm -f "${NAME}" >/dev/null 2>&1 || true
+# Direct/manual invocation must never destroy an existing canonical runtime. Managed
+# replacement first preserves the old container under the rollback name, leaving this
+# canonical name free before serve.sh is invoked.
+if docker inspect "${NAME}" >/dev/null 2>&1; then
+  echo "FATAL: runtime container already exists: ${NAME}; use the managed update/restart path" >&2
+  exit 1
+fi
 
 docker run -d \
   --name "${NAME}" \
