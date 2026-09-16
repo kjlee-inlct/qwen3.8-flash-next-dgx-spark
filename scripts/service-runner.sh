@@ -104,7 +104,8 @@ container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/nul
 if [[ -r "${STOP_REASON_FILE}" ]]; then
   unset RUNTIME_STOP_SCHEMA_VERSION STOP_REASON STOP_CONTAINER_NAME STOP_CONTAINER_ID UPDATED_AT
   if parse_state_into_vars runtime-stop "${STOP_REASON_FILE}" && \
-     [[ "${STOP_CONTAINER_NAME:-}" == "${CONTAINER_NAME}" && \
+     [[ "${STOP_REASON:-}" == memory-protection && \
+        "${STOP_CONTAINER_NAME:-}" == "${CONTAINER_NAME}" && \
         "${STOP_CONTAINER_ID:-}" == "${container_id}" && -n "${container_id}" ]]; then
     rm -f -- "${STOP_REASON_FILE}"
     printf 'Inference container stopped intentionally by memory protection; leaving service stopped.\n' >&2
