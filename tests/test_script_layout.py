@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 SCRIPTS = ROOT / "scripts"
+BENCH = ROOT / "bench"
 
 
 class ScriptLayoutTests(unittest.TestCase):
@@ -16,10 +17,18 @@ class ScriptLayoutTests(unittest.TestCase):
             "lib/state_file.py",
             "lib/release_manifest.py",
             "diagnostics/doctor-observability.sh",
+            "diagnostics/collect-diagnostics.sh",
             "runtime/runtime-transition.sh",
             "runtime/preflight-runtime.sh",
             "runtime/service-runner.sh",
+            "runtime/monitor-runtime.sh",
+            "runtime/validate_runtime.py",
             "lifecycle/update-transition.sh",
+            "lifecycle/bootstrap-release.sh",
+            "lifecycle/qualify-release.sh",
+            "model/model-profiles.sh",
+            "model/inspect_model.py",
+            "model/prepare_config.py",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((SCRIPTS / relative).is_file())
@@ -33,11 +42,28 @@ class ScriptLayoutTests(unittest.TestCase):
             "preflight-runtime.sh": "runtime/preflight-runtime.sh",
             "service-runner.sh": "runtime/service-runner.sh",
             "update-transition.sh": "lifecycle/update-transition.sh",
+            "bootstrap-release.sh": "lifecycle/bootstrap-release.sh",
+            "qualify-release.sh": "lifecycle/qualify-release.sh",
+            "collect-diagnostics.sh": "diagnostics/collect-diagnostics.sh",
+            "monitor-runtime.sh": "runtime/monitor-runtime.sh",
+            "validate-runtime.py": 'with_name("runtime") / "validate_runtime.py"',
+            "model-profiles.sh": "model/model-profiles.sh",
+            "inspect-model.py": 'with_name("model") / "inspect_model.py"',
+            "prepare-config.py": 'with_name("model") / "prepare_config.py"',
         }
         for name, target in expected.items():
             with self.subTest(name=name):
                 text = (SCRIPTS / name).read_text(encoding="utf-8")
                 self.assertIn(target, text)
+
+    def test_benchmark_entry_and_helpers_are_separated(self) -> None:
+        self.assertTrue((BENCH / "run.py").is_file())
+        self.assertTrue((BENCH / "lib" / "common.py").is_file())
+        compatibility = (BENCH / "common.py").read_text(encoding="utf-8")
+        self.assertIn("lib.common", compatibility)
+        readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
+        self.assertIn("bench/run.py", readme)
+        self.assertIn("scripts/bench-prefill.py", readme)
 
     def test_state_parser_compatibility_entry_point_still_works(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

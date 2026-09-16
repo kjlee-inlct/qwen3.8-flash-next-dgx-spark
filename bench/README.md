@@ -1,6 +1,15 @@
 # Benchmark baseline
 
-This directory contains read-only benchmark tooling for the managed Qwen3.8 Flash Next runtime.
+This directory contains the repository's canonical read-only benchmark harness for the managed Qwen3.8 Flash Next runtime.
+
+## Layout
+
+- `run.py`: stable benchmark CLI.
+- `lib/common.py`: canonical shared implementation helpers.
+- `common.py`: compatibility import retained for older tests/scripts.
+- `results/local/`: ignored local benchmark output.
+
+The upstream-derived `scripts/bench-prefill.py` intentionally remains at its upstream path. It is a compatibility/reference benchmark, while `bench/run.py` is the benchmark entry point maintained by this fork.
 
 The benchmark suite is intentionally separate from runtime patches and model-artifact builders. Its job is to measure a known runtime and record enough metadata to compare later changes without altering the server configuration.
 
