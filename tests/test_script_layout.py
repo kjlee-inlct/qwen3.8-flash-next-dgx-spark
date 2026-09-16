@@ -46,10 +46,10 @@ class ScriptLayoutTests(unittest.TestCase):
             "qualify-release.sh": "lifecycle/qualify-release.sh",
             "collect-diagnostics.sh": "diagnostics/collect-diagnostics.sh",
             "monitor-runtime.sh": "runtime/monitor-runtime.sh",
-            "validate-runtime.py": "runtime.validate_runtime",
+            "validate-runtime.py": 'with_name("runtime") / "validate_runtime.py"',
             "model-profiles.sh": "model/model-profiles.sh",
-            "inspect-model.py": "model.inspect_model",
-            "prepare-config.py": "model.prepare_config",
+            "inspect-model.py": 'with_name("model") / "inspect_model.py"',
+            "prepare-config.py": 'with_name("model") / "prepare_config.py"',
         }
         for name, target in expected.items():
             with self.subTest(name=name):
