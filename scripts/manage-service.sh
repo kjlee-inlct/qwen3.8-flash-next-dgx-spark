@@ -9,9 +9,10 @@ ACTION="${1:-status}"
 [[ $# -eq 0 ]] || shift
 START=1
 YES=0
+RUNTIME_ROOT_OVERRIDE=""
 
 usage() {
-  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--yes]\n'
+  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--runtime-root PATH] [--yes]\n'
   printf '       sudo ./scripts/manage-service.sh remove [--yes]\n'
   printf '       ./scripts/manage-service.sh status\n'
 }
@@ -22,6 +23,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --start) START=1 ;;
     --no-start) START=0 ;;
+    --runtime-root)
+      [[ $# -ge 2 ]] || die "--runtime-root requires a path"
+      RUNTIME_ROOT_OVERRIDE="$2"
+      shift
+      ;;
     --yes) YES=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -74,9 +80,15 @@ STATE_FILE="${CALLER_STATE_HOME}/qwen38-spark/install.env"
 # The installer writes shell-escaped values with mode 600.
 # shellcheck disable=SC1090
 source "${STATE_FILE}"
-[[ "${INSTALL_ROOT:-}" == /* && -x "${INSTALL_ROOT}/scripts/service-runner.sh" ]] || die "invalid install root in manifest"
+[[ "${INSTALL_ROOT:-}" == /* ]] || die "invalid install root in manifest"
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || die "unexpected container name in manifest"
-[[ "${INSTALL_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
+
+RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
+[[ "${RUNTIME_ROOT}" == /* ]] || die "runtime root must be an absolute path"
+[[ -x "${RUNTIME_ROOT}/scripts/service-runner.sh" ]] || die "runtime root has no service runner: ${RUNTIME_ROOT}"
+[[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || die "runtime root has no serve helper: ${RUNTIME_ROOT}"
+[[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || die "runtime root has no transition helper: ${RUNTIME_ROOT}"
+[[ "${RUNTIME_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
 
 if [[ -e "${UNIT_FILE}" ]]; then
   managed_file "${UNIT_FILE}" || die "refusing to replace unmanaged unit: ${UNIT_FILE}"
@@ -99,10 +111,10 @@ StartLimitBurst=2
 Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
-WorkingDirectory=${INSTALL_ROOT}
+WorkingDirectory=${RUNTIME_ROOT}
 Environment=HOME=${SERVICE_HOME}
 Environment=QWEN38_STATE_FILE=${STATE_FILE}
-ExecStart=/bin/bash ${INSTALL_ROOT}/scripts/service-runner.sh
+ExecStart=/bin/bash ${RUNTIME_ROOT}/scripts/service-runner.sh
 ExecStop=-/usr/bin/docker stop --timeout 30 ${CONTAINER_NAME}
 Restart=on-failure
 RestartSec=60
@@ -118,18 +130,24 @@ install -o root -g root -m 0644 "${tmp_dir}/${UNIT}" "${UNIT_FILE}"
 systemctl daemon-reload
 systemctl enable "${UNIT}"
 if [[ "${START}" == 1 ]]; then
+  previous_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
   systemctl reset-failed "${UNIT}" 2>/dev/null || true
   systemctl stop "${UNIT}" 2>/dev/null || true
   systemctl start "${UNIT}"
   ready=0
   for attempt in $(seq 1 180); do
-    if curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1; then ready=1; break; fi
     unit_state="$(systemctl show "${UNIT}" --property=ActiveState --value)"
     case "${unit_state}" in active|activating|reloading) ;; *) die "service stopped before readiness (state=${unit_state})" ;; esac
-    if (( attempt % 6 == 0 )); then printf 'Waiting for API readiness: %d/1800 seconds\n' "$((attempt * 10))"; fi
+    candidate_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+    if [[ -n "${candidate_container_id}" && "${candidate_container_id}" != "${previous_container_id}" ]] && \
+       curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    if (( attempt % 6 == 0 )); then printf 'Waiting for committed replacement runtime: %d/1800 seconds\n' "$((attempt * 10))"; fi
     sleep 10
   done
-  [[ "${ready}" == 1 ]] || die "API did not become healthy within 30 minutes"
+  [[ "${ready}" == 1 ]] || die "replacement runtime did not become healthy within 30 minutes"
   models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
   python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
     "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}" || die "served model ID validation failed"

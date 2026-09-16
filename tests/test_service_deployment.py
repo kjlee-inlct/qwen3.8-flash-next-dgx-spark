@@ -16,13 +16,22 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("docker stop --timeout 30", manager)
         self.assertIn("WantedBy=multi-user.target", manager)
         self.assertNotIn('docker rm -f "${CONTAINER_NAME}"', manager)
+        self.assertIn("--runtime-root", manager)
+        self.assertIn("previous_container_id", manager)
+        self.assertIn('"${candidate_container_id}" != "${previous_container_id}"', manager)
         self.assertIn("PUBLISH_HOST=127.0.0.1", runner)
         self.assertIn("RESTART_POLICY=no", runner)
+        self.assertIn("pwd -P", runner)
         self.assertIn("docker wait", runner)
         self.assertIn("preflight-runtime.sh", runner)
         self.assertIn("runtime-transition.sh\" recover", runner)
         server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
         self.assertIn("--init", server)
+
+    def test_release_qualification_does_not_mutate_payload(self) -> None:
+        qualifier = (ROOT / "scripts" / "qualify-release.sh").read_text(encoding="utf-8")
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1", qualifier)
+        self.assertGreaterEqual(qualifier.count('bash "${RELEASE_MANAGER}" verify "${release_id}"'), 2)
 
     def test_memory_protection_stop_is_not_restarted_as_failure(self) -> None:
         monitor = (ROOT / "scripts" / "monitor-runtime.sh").read_text(encoding="utf-8")

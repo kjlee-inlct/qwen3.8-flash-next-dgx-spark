@@ -2,6 +2,7 @@
 # Keep the Docker inference container attached to a systemd service lifecycle.
 set -Eeuo pipefail
 
+RUNTIME_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env}"
 [[ -r "${STATE_FILE}" ]] || { printf 'FATAL: installation manifest is not readable: %s\n' "${STATE_FILE}" >&2; exit 1; }
 # The installer writes shell-escaped values with mode 600.
@@ -15,8 +16,8 @@ MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
 
 [[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
-[[ -x "${INSTALL_ROOT:-}/scripts/serve.sh" ]] || { printf 'FATAL: invalid INSTALL_ROOT in manifest\n' >&2; exit 1; }
-[[ -r "${INSTALL_ROOT:-}/scripts/runtime-transition.sh" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
+[[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || { printf 'FATAL: invalid runtime release root\n' >&2; exit 1; }
+[[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || { printf 'FATAL: unexpected container name\n' >&2; exit 1; }
 
 export MODEL_PROFILE MODEL_DIR VLLM_IMAGE CONFIG_OVERRIDE MONITOR_ENABLED MONITOR_PROTECT SERVED_NAME
@@ -27,8 +28,8 @@ export CONTAINER_NAME
 export RESTART_POLICY=no
 export PUBLISH_HOST=127.0.0.1
 
-"${INSTALL_ROOT}/scripts/preflight-runtime.sh"
-bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" recover
+"${RUNTIME_ROOT}/scripts/preflight-runtime.sh"
+bash "${RUNTIME_ROOT}/scripts/runtime-transition.sh" recover
 
 transition_active=0
 rollback_transition() {
@@ -37,7 +38,7 @@ rollback_transition() {
   set +e
   if [[ "${transition_active}" == 1 ]]; then
     printf 'Candidate runtime failed validation; restoring previous container.\n' >&2
-    if ! bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" rollback; then
+    if ! bash "${RUNTIME_ROOT}/scripts/runtime-transition.sh" rollback; then
       printf 'FATAL: automatic runtime rollback failed; run doctor and inspect Docker state.\n' >&2
       exit 70
     fi
@@ -48,11 +49,11 @@ trap 'rollback_transition $?' ERR
 trap 'rollback_transition 130' INT
 trap 'rollback_transition 143' TERM
 
-bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" prepare
+bash "${RUNTIME_ROOT}/scripts/runtime-transition.sh" prepare
 transition_active=1
-"${INSTALL_ROOT}/scripts/serve.sh"
-bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" candidate-started
-bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" validating
+"${RUNTIME_ROOT}/scripts/serve.sh"
+bash "${RUNTIME_ROOT}/scripts/runtime-transition.sh" candidate-started
+bash "${RUNTIME_ROOT}/scripts/runtime-transition.sh" validating
 
 ready=0
 for attempt in $(seq 1 180); do
@@ -73,7 +74,7 @@ models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
 python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
   "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}"
 
-bash "${INSTALL_ROOT}/scripts/runtime-transition.sh" commit
+bash "${RUNTIME_ROOT}/scripts/runtime-transition.sh" commit
 transition_active=0
 trap - ERR INT TERM
 
