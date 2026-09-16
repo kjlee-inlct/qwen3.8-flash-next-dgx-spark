@@ -54,6 +54,14 @@ restore_previous() {
   fi
   printf 'Previous runtime container restored and started.\n'
 }
+accept_committed_candidate() {
+  container_exists "${CONTAINER}" || die 'committed candidate container is missing'
+  if ! container_running "${CONTAINER}"; then
+    docker start "${CONTAINER}" >/dev/null
+  fi
+  clear_state
+  printf 'Runtime transition recovery accepted committed candidate (state=idle).\n'
+}
 
 [[ $# == 1 ]] || { usage >&2; exit 2; }
 command -v docker >/dev/null 2>&1 || die 'docker is required'
@@ -92,6 +100,11 @@ case "$1" in
     container_running "${CONTAINER}" || die "candidate container is not running: ${CONTAINER}"
     if [[ "${HAD_PREVIOUS}" == 1 ]]; then
       container_exists "${ROLLBACK_CONTAINER}" || die 'rollback container disappeared before commit'
+    fi
+    # Persist the commit boundary before deleting the only rollback copy. Recovery
+    # can now distinguish a crash before deletion from one after deletion.
+    write_state committing "${HAD_PREVIOUS}"
+    if [[ "${HAD_PREVIOUS}" == 1 ]]; then
       docker rm -f "${ROLLBACK_CONTAINER}" >/dev/null
     fi
     clear_state
@@ -130,11 +143,30 @@ case "$1" in
 
     load_state
     printf 'Recovering interrupted runtime transition (state=%s, previous=%s).\n' "${TRANSACTION_STATE:-unknown}" "${HAD_PREVIOUS}"
+
+    current_exists=0
+    rollback_exists=0
+    container_exists "${CONTAINER}" && current_exists=1
+    container_exists "${ROLLBACK_CONTAINER}" && rollback_exists=1
+
+    if [[ "${TRANSACTION_STATE:-}" == committing ]]; then
+      if [[ "${HAD_PREVIOUS}" == 1 && "${rollback_exists}" == 1 ]]; then
+        # Rollback deletion did not happen yet, so preserve the previously known-good runtime.
+        restore_previous
+        clear_state
+        printf 'Runtime transition recovery complete (state=idle).\n'
+        exit 0
+      fi
+      if [[ "${rollback_exists}" == 0 && "${current_exists}" == 1 ]]; then
+        # The deletion boundary was crossed (or there was no previous runtime), so the
+        # candidate is the only recoverable committed runtime. Ensure it is running.
+        accept_committed_candidate
+        exit 0
+      fi
+      die 'cannot recover committing runtime transition safely'
+    fi
+
     if [[ "${HAD_PREVIOUS}" == 1 ]]; then
-      current_exists=0
-      rollback_exists=0
-      container_exists "${CONTAINER}" && current_exists=1
-      container_exists "${ROLLBACK_CONTAINER}" && rollback_exists=1
       if [[ "${rollback_exists}" == 1 ]]; then
         restore_previous
       elif [[ "${current_exists}" == 1 && "${TRANSACTION_STATE:-}" == preparing ]]; then
