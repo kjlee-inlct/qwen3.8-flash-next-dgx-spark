@@ -5,19 +5,35 @@ set -Eeuo pipefail
 RUNTIME_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env}"
 [[ -r "${STATE_FILE}" ]] || { printf 'FATAL: installation manifest is not readable: %s\n' "${STATE_FILE}" >&2; exit 1; }
-# The installer writes shell-escaped values with mode 600.
+# The installation manifest is still a trusted installer-owned shell file; it is
+# migrated to strict parsing in a separate compatibility-focused change.
 # shellcheck disable=SC1090
 source "${STATE_FILE}"
 
 STATE_DIR="$(dirname -- "${STATE_FILE}")"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
+STATE_PARSER="${RUNTIME_ROOT}/scripts/state_file.py"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
 
+parse_state_into_vars() {
+  local schema="$1" path="$2" parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" "${schema}" "${path}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "${key}" '%s' "${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+}
+
 [[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
 [[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || { printf 'FATAL: invalid runtime release root\n' >&2; exit 1; }
 [[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
+[[ -r "${STATE_PARSER}" ]] || { printf 'FATAL: state parser is unavailable\n' >&2; exit 1; }
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || { printf 'FATAL: unexpected container name\n' >&2; exit 1; }
 
 export MODEL_PROFILE MODEL_DIR VLLM_IMAGE CONFIG_OVERRIDE MONITOR_ENABLED MONITOR_PROTECT SERVED_NAME
@@ -86,17 +102,16 @@ container_status="$(docker wait "${CONTAINER_NAME}")"
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
 
 if [[ -r "${STOP_REASON_FILE}" ]]; then
-  STOP_REASON=""; STOP_CONTAINER_NAME=""; STOP_CONTAINER_ID=""
-  # shellcheck disable=SC1090
-  source "${STOP_REASON_FILE}"
-  if [[ "${STOP_REASON:-}" == memory-protection && \
+  unset RUNTIME_STOP_SCHEMA_VERSION STOP_REASON STOP_CONTAINER_NAME STOP_CONTAINER_ID UPDATED_AT
+  if parse_state_into_vars runtime-stop "${STOP_REASON_FILE}" && \
+     [[ "${STOP_REASON:-}" == memory-protection && \
         "${STOP_CONTAINER_NAME:-}" == "${CONTAINER_NAME}" && \
         "${STOP_CONTAINER_ID:-}" == "${container_id}" && -n "${container_id}" ]]; then
     rm -f -- "${STOP_REASON_FILE}"
     printf 'Inference container stopped intentionally by memory protection; leaving service stopped.\n' >&2
     exit 0
   fi
-  printf 'WARNING: ignoring stale runtime stop marker; container will be treated as failed.\n' >&2
+  printf 'WARNING: ignoring invalid or stale runtime stop marker; container will be treated as failed.\n' >&2
   rm -f -- "${STOP_REASON_FILE}"
 fi
 

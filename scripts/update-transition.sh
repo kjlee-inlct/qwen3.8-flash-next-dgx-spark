@@ -11,6 +11,7 @@ CURRENT_LINK="${QWEN38_CURRENT_RELEASE_LINK:-${DATA_HOME}/current}"
 PREVIOUS_LINK="${QWEN38_PREVIOUS_RELEASE_LINK:-${DATA_HOME}/previous}"
 QUALIFIED_DIR="${QWEN38_QUALIFIED_DIR:-${DATA_HOME}/qualified}"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
+STATE_PARSER="${SCRIPT_ROOT}/scripts/state_file.py"
 
 usage() {
   printf 'Usage: %s prepare RELEASE_ID|commit|rollback|recover|status\n' "$0"
@@ -34,27 +35,35 @@ atomic_link() {
   mv -Tf -- "${tmp}" "${link}"
 }
 clear_link() { [[ ! -e "$1" && ! -L "$1" ]] || rm -f -- "$1"; }
+parse_state_into_vars() {
+  local schema="$1" path="$2" parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" "${schema}" "${path}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "${key}" '%s' "${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+}
 write_state() {
   local phase="$1" target="$2" old_current="$3" old_previous="$4"
   mkdir -p -- "${STATE_HOME}"; umask 077
   {
-    printf 'UPDATE_SCHEMA_VERSION=%q\n' 1
-    printf 'UPDATE_STATE=%q\n' "${phase}"
-    printf 'TARGET_RELEASE=%q\n' "${target}"
-    printf 'OLD_CURRENT_RELEASE=%q\n' "${old_current}"
-    printf 'OLD_PREVIOUS_RELEASE=%q\n' "${old_previous}"
-    printf 'UPDATED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf 'UPDATE_SCHEMA_VERSION=%s\n' 1
+    printf 'UPDATE_STATE=%s\n' "${phase}"
+    printf 'TARGET_RELEASE=%s\n' "${target}"
+    printf 'OLD_CURRENT_RELEASE=%s\n' "${old_current}"
+    printf 'OLD_PREVIOUS_RELEASE=%s\n' "${old_previous}"
+    printf 'UPDATED_AT=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   } >"${STATE_FILE}.tmp"
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 load_state() {
   [[ -r "${STATE_FILE}" ]] || die 'no update transition is active'
-  # shellcheck disable=SC1090
-  source "${STATE_FILE}"
-  [[ "${UPDATE_SCHEMA_VERSION:-}" == 1 ]] || die 'unsupported update transition schema'
-  validate_release_id "${TARGET_RELEASE:-}"
-  [[ -z "${OLD_CURRENT_RELEASE:-}" || "${OLD_CURRENT_RELEASE}" =~ ^[0-9a-f]{12,40}$ ]] || die 'invalid old current release'
-  [[ -z "${OLD_PREVIOUS_RELEASE:-}" || "${OLD_PREVIOUS_RELEASE}" =~ ^[0-9a-f]{12,40}$ ]] || die 'invalid old previous release'
+  unset UPDATE_SCHEMA_VERSION UPDATE_STATE TARGET_RELEASE OLD_CURRENT_RELEASE OLD_PREVIOUS_RELEASE UPDATED_AT
+  parse_state_into_vars update "${STATE_FILE}" || die 'invalid update transition state file'
 }
 verify_qualified() {
   local release_id marker
@@ -62,12 +71,9 @@ verify_qualified() {
   marker="${QUALIFIED_DIR}/${release_id}.env"
   bash "${RELEASE_MANAGER}" verify "${release_id}"
   [[ -f "${marker}" && ! -L "${marker}" ]] || die "release is not qualified: ${release_id}"
-  (
-    unset QUALIFICATION_SCHEMA_VERSION QUALIFIED_RELEASE QUALIFIED_AT
-    # shellcheck disable=SC1090
-    source "${marker}"
-    [[ "${QUALIFICATION_SCHEMA_VERSION:-}" == 1 && "${QUALIFIED_RELEASE:-}" == "${release_id}" ]]
-  ) || die "qualification marker mismatch: ${release_id}"
+  unset QUALIFICATION_SCHEMA_VERSION QUALIFIED_RELEASE QUALIFIED_AT
+  parse_state_into_vars qualification "${marker}" || die "invalid qualification marker: ${release_id}"
+  [[ "${QUALIFIED_RELEASE}" == "${release_id}" ]] || die "qualification marker mismatch: ${release_id}"
 }
 restore_pointer() {
   local link="$1" release_id="$2"

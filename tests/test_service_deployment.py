@@ -48,7 +48,7 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn('"${STOP_CONTAINER_ID:-}" == "${container_id}"', runner)
         self.assertIn("leaving service stopped", runner)
         self.assertIn("exit 0", runner)
-        self.assertIn("ignoring stale runtime stop marker", runner)
+        self.assertIn("stale runtime stop marker", runner)
 
     def test_doctor_checks_runtime_lifecycle_drift(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
