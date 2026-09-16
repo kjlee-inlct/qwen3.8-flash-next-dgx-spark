@@ -4,21 +4,9 @@ set -Eeuo pipefail
 
 RUNTIME_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env}"
-[[ -r "${STATE_FILE}" ]] || { printf 'FATAL: installation manifest is not readable: %s\n' "${STATE_FILE}" >&2; exit 1; }
-# The installation manifest is still a trusted installer-owned shell file; it is
-# migrated to strict parsing in a separate compatibility-focused change.
-# shellcheck disable=SC1090
-source "${STATE_FILE}"
-
-STATE_DIR="$(dirname -- "${STATE_FILE}")"
-STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
-RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
 STATE_PARSER="${RUNTIME_ROOT}/scripts/lib/state_file.py"
-RUNTIME_TRANSITION="${RUNTIME_ROOT}/scripts/runtime/runtime-transition.sh"
-RUNTIME_PREFLIGHT="${RUNTIME_ROOT}/scripts/runtime/preflight-runtime.sh"
-CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
-MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
-MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
+[[ -r "${STATE_FILE}" ]] || { printf 'FATAL: installation manifest is not readable: %s\n' "${STATE_FILE}" >&2; exit 1; }
+[[ -r "${STATE_PARSER}" ]] || { printf 'FATAL: state parser is unavailable: %s\n' "${STATE_PARSER}" >&2; exit 1; }
 
 parse_state_into_vars() {
   local schema="$1" path="$2" parsed key value
@@ -32,6 +20,22 @@ parse_state_into_vars() {
   done <"${parsed}"
   rm -f -- "${parsed}"
 }
+
+# install.env is data, not executable shell input. The strict parser validates
+# the closed installer key set and emits only runtime-required fields.
+parse_state_into_vars install-runtime "${STATE_FILE}" || {
+  printf 'FATAL: installation manifest failed strict runtime parsing: %s\n' "${STATE_FILE}" >&2
+  exit 1
+}
+
+STATE_DIR="$(dirname -- "${STATE_FILE}")"
+STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
+RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+RUNTIME_TRANSITION="${RUNTIME_ROOT}/scripts/runtime/runtime-transition.sh"
+RUNTIME_PREFLIGHT="${RUNTIME_ROOT}/scripts/runtime/preflight-runtime.sh"
+CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
+MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
+MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
 
 write_runtime_commit_attestation() {
   local container_id="$1" temporary="${RUNTIME_COMMIT_FILE}.tmp"
@@ -54,7 +58,6 @@ write_runtime_commit_attestation() {
 [[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || { printf 'FATAL: invalid runtime release root\n' >&2; exit 1; }
 [[ -r "${RUNTIME_TRANSITION}" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
 [[ -r "${RUNTIME_PREFLIGHT}" ]] || { printf 'FATAL: runtime preflight helper is unavailable\n' >&2; exit 1; }
-[[ -r "${STATE_PARSER}" ]] || { printf 'FATAL: state parser is unavailable\n' >&2; exit 1; }
 [[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || { printf 'FATAL: unexpected container name\n' >&2; exit 1; }
 
 export MODEL_PROFILE MODEL_DIR VLLM_IMAGE CONFIG_OVERRIDE MONITOR_ENABLED MONITOR_PROTECT SERVED_NAME
