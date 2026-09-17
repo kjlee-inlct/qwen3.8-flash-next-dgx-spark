@@ -13,6 +13,15 @@ UPDATE_TRANSITION = ROOT / "scripts" / "update-transition.sh"
 
 
 class OperationLockTests(unittest.TestCase):
+    @staticmethod
+    def stop_holder(holder: subprocess.Popen[str]) -> None:
+        holder.terminate()
+        holder.wait(timeout=5)
+        if holder.stdout is not None:
+            holder.stdout.close()
+        if holder.stderr is not None:
+            holder.stderr.close()
+
     def test_second_mutator_is_rejected_while_lock_is_held(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state" / "qwen38-spark"
@@ -46,8 +55,7 @@ class OperationLockTests(unittest.TestCase):
                 self.assertNotEqual(contender.returncode, 0)
                 self.assertIn("another Qwen3.8 lifecycle operation is active", contender.stderr)
             finally:
-                holder.terminate()
-                holder.wait(timeout=5)
+                self.stop_holder(holder)
 
     def test_update_transition_entry_point_rejects_concurrent_recover(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -78,8 +86,7 @@ class OperationLockTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("another Qwen3.8 lifecycle operation is active", result.stderr)
             finally:
-                holder.terminate()
-                holder.wait(timeout=5)
+                self.stop_holder(holder)
 
     def test_descendant_can_reuse_real_outer_lock(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
