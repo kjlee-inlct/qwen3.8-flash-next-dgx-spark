@@ -35,7 +35,12 @@ bash "${RELEASE_MANAGER}" verify "${release_id}"
 bash -n "${release_dir}/install.sh" "${release_dir}/uninstall.sh" "${release_dir}"/scripts/*.sh
 (
   cd "${release_dir}"
-  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+  env \
+    -u QWEN38_OPERATION_LOCK_HELD \
+    -u QWEN38_OPERATION_LOCK_FILE \
+    -u QWEN38_OPERATION_LOCK_OWNER_PID \
+    PYTHONDONTWRITEBYTECODE=1 \
+    python3 -m unittest discover -s tests -v
 )
 
 bash "${RELEASE_MANAGER}" verify "${release_id}"
