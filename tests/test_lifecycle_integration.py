@@ -24,6 +24,16 @@ class LifecycleIntegrationTests(unittest.TestCase):
             installer.index('service_args=(create --runtime-root'),
         )
 
+    def test_installer_strictly_parses_resume_and_migration_manifest(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+        self.assertIn('install-maintenance "${STATE_FILE}"', installer)
+        self.assertIn("installation manifest failed strict maintenance parsing", installer)
+        self.assertIn("STATE_PARSER", installer)
+        self.assertNotIn('source "${STATE_FILE}"', installer)
+        self.assertNotIn("shellcheck disable=SC1090", installer)
+        self.assertIn("would be migrated to schema 4", installer)
+
     def test_install_records_api_access_modes_and_legacy_fields(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
 
