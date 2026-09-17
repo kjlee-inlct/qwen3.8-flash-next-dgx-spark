@@ -10,6 +10,7 @@ OBS_PREVIOUS_LINK="${DATA_HOME}/previous"
 OBS_RELEASES_DIR="${DATA_HOME}/releases"
 OBS_QUALIFIED_DIR="${DATA_HOME}/qualified"
 OBS_RELEASE_MANAGER="${SCRIPT_DIR}/release-manager.sh"
+OBS_QUALIFICATION_PARSER="${SCRIPT_DIR}/lib/qualification_marker.py"
 OBS_API_SOCKET_UNIT="qwen38-openwebui-proxy.socket"
 
 obs_read_release_id() {
@@ -21,6 +22,62 @@ obs_read_release_id() {
   release_id="$(basename -- "${target}")"
   [[ "${release_id}" =~ ^[0-9a-f]{12,40}$ ]] || return 2
   printf '%s\n' "${release_id}"
+}
+
+obs_manifest_digest() {
+  python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"
+}
+
+obs_parse_qualification() {
+  local marker="$1" parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${OBS_QUALIFICATION_PARSER}" "${marker}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  unset OBS_QUALIFICATION_SCHEMA_VERSION OBS_QUALIFIED_RELEASE OBS_RELEASE_MANIFEST_SHA256 OBS_QUALIFIED_AT
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      QUALIFICATION_SCHEMA_VERSION) OBS_QUALIFICATION_SCHEMA_VERSION="${value}" ;;
+      QUALIFIED_RELEASE) OBS_QUALIFIED_RELEASE="${value}" ;;
+      RELEASE_MANIFEST_SHA256) OBS_RELEASE_MANIFEST_SHA256="${value}" ;;
+      QUALIFIED_AT) OBS_QUALIFIED_AT="${value}" ;;
+      *) rm -f -- "${parsed}"; return 1 ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+}
+
+obs_check_qualification() {
+  local release_id="$1" marker manifest_path observed_digest
+  marker="${OBS_QUALIFIED_DIR}/${release_id}.env"
+  manifest_path="${OBS_RELEASES_DIR}/${release_id}/.release-manifest.json"
+  if [[ ! -f "${marker}" || -L "${marker}" ]]; then
+    fail "current immutable release is missing its qualification marker (${release_id})"
+    return
+  fi
+  if [[ ! -r "${OBS_QUALIFICATION_PARSER}" ]] || ! obs_parse_qualification "${marker}"; then
+    fail "current immutable release qualification marker is invalid (${release_id})"
+    return
+  fi
+  if [[ "${OBS_QUALIFIED_RELEASE:-}" != "${release_id}" ]]; then
+    fail "current immutable release qualification marker mismatches release (${release_id})"
+    return
+  fi
+  if [[ "${OBS_QUALIFICATION_SCHEMA_VERSION:-}" == 1 ]]; then
+    warn "current immutable release has legacy unbound qualification; re-qualify before a future cutover (${release_id})"
+    return
+  fi
+  [[ -f "${manifest_path}" && ! -L "${manifest_path}" ]] || {
+    fail "current immutable release manifest is unavailable for qualification verification (${release_id})"
+    return
+  }
+  observed_digest="$(obs_manifest_digest "${manifest_path}")"
+  if [[ "${OBS_RELEASE_MANIFEST_SHA256:-}" == "${observed_digest}" ]]; then
+    pass "current immutable release qualification matches release manifest digest"
+  else
+    fail "current immutable release qualification manifest digest mismatch (${release_id})"
+  fi
 }
 
 if [[ -e "${OBS_UPDATE_STATE_FILE}" || -L "${OBS_UPDATE_STATE_FILE}" ]]; then
@@ -37,11 +94,7 @@ if current_release="$(obs_read_release_id "${OBS_CURRENT_LINK}")"; then
   else
     fail "current immutable release failed manifest verification (${current_release})"
   fi
-  if [[ -r "${OBS_QUALIFIED_DIR}/${current_release}.env" ]]; then
-    pass "current immutable release is qualified"
-  else
-    fail "current immutable release is missing its qualification marker (${current_release})"
-  fi
+  obs_check_qualification "${current_release}"
 else
   rc=$?
   if [[ "${rc}" == 2 ]]; then
