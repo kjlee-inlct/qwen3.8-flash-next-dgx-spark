@@ -21,12 +21,13 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 `~/.local/state/qwen38-spark/install.env` is written by `install.sh` using Bash `printf %q` encoding and mode 600. Migration away from shell evaluation is incremental because this manifest has a broader compatibility surface than transient lifecycle state.
 
-Two service-critical consumers now use strict views from `scripts/state_file.py`:
+Three operational consumers now use strict views from `scripts/state_file.py`:
 
 - `service-runner.sh` uses `install-runtime`, validating and emitting only runtime configuration fields;
-- `manage-service.sh` uses `install-service`, validating and emitting only `SCHEMA_VERSION`, `PHASE`, `INSTALL_ROOT`, `SERVED_NAME`, and `CONTAINER_NAME`.
+- `manage-service.sh` uses `install-service`, validating and emitting only service installation/readiness fields;
+- `doctor.sh` uses `install-doctor`, validating and emitting only model pinning, runtime drift, monitor, swap, and API-access diagnostic fields.
 
-Both install-manifest views:
+All install-manifest views:
 
 - accept only the closed schema 3/4 installer key set;
 - decode ordinary `printf %q` backslash quoting without invoking a shell, including paths containing whitespace;
@@ -34,9 +35,11 @@ Both install-manifest views:
 - reject ANSI-C/control-character quoting;
 - validate consumer-required fields before emitting them over the NUL-delimited interface.
 
+`install-doctor` preserves diagnostic compatibility with older schema-3 manifests: when the newer `API_*` fields are absent, it derives the read-only API view from legacy `PROXY_ENABLED` and `PROXY_PORT` fields. It does not require `PHASE=complete`; doctor still reports incomplete installation phase as a diagnostic condition instead of failing parsing solely for that reason.
+
 `manage-service.sh` uses the parser from the invoking source checkout to validate the installer manifest, then uses the parser from the resolved immutable runtime release for runtime-commit attestation validation. This keeps source/maintenance policy separate from the release being attested.
 
-The remaining installer/maintenance consumers (`install.sh`, `doctor.sh`, and `uninstall.sh`) still source the mode-600 installer-owned manifest for compatibility. They should be migrated independently so each operational path can be tested against existing schema-3 and schema-4 manifests.
+The remaining installer/maintenance consumers (`install.sh` and `uninstall.sh`) still source the mode-600 installer-owned manifest for compatibility. They should be migrated independently so each operational path can be tested against existing schema-3 and schema-4 manifests.
 
 ## Operator rule
 
