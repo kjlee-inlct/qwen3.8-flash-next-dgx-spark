@@ -50,7 +50,7 @@ if [[ "${ACTION}" == status ]]; then
 fi
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || die "create/remove requires sudo"
-for command in systemctl install grep getent cut stat mktemp realpath docker curl python3 seq flock awk; do command -v "${command}" >/dev/null 2>&1 || die "${command} is required"; done
+for command in systemctl journalctl install grep getent cut stat mktemp realpath docker curl python3 seq flock awk tail; do command -v "${command}" >/dev/null 2>&1 || die "${command} is required"; done
 
 SERVICE_USER="${SUDO_USER:-${QWEN38_SERVICE_USER:-$(id -un)}}"
 [[ "${SERVICE_USER}" != root ]] || die "run through sudo from the user who owns the installation, or set QWEN38_SERVICE_USER"
