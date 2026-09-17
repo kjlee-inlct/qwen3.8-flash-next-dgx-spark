@@ -53,13 +53,18 @@ class UpdateTransitionTests(unittest.TestCase):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check,
         )
 
+    def qualification_marker(self, release_id: str) -> Path:
+        return self.data / "qwen38-spark" / "qualified" / f"{release_id}.env"
+
+    def release_manifest(self, release_id: str) -> Path:
+        return self.data / "qwen38-spark" / "releases" / release_id / ".release-manifest.json"
+
     def stage_and_mark_qualified(self, release_id: str) -> None:
         self.run_script(RELEASE_MANAGER, "stage", release_id)
         qualified = self.data / "qwen38-spark" / "qualified"
         qualified.mkdir(parents=True, exist_ok=True)
-        manifest = self.data / "qwen38-spark" / "releases" / release_id / ".release-manifest.json"
-        digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
-        (qualified / f"{release_id}.env").write_text(
+        digest = hashlib.sha256(self.release_manifest(release_id).read_bytes()).hexdigest()
+        self.qualification_marker(release_id).write_text(
             "\n".join([
                 "QUALIFICATION_SCHEMA_VERSION=2",
                 f"QUALIFIED_RELEASE={release_id}",
@@ -100,16 +105,14 @@ class UpdateTransitionTests(unittest.TestCase):
         self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
 
     def test_prepare_rejects_unqualified_release(self) -> None:
-        marker = self.data / "qwen38-spark" / "qualified" / f"{self.second}.env"
-        marker.unlink()
+        self.qualification_marker(self.second).unlink()
         result = self.run_script(UPDATE, "prepare", self.second, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not qualified", result.stderr)
         self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
 
     def test_prepare_rejects_legacy_unbound_qualification(self) -> None:
-        marker = self.data / "qwen38-spark" / "qualified" / f"{self.second}.env"
-        marker.write_text(
+        self.qualification_marker(self.second).write_text(
             f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={self.second}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
             encoding="utf-8",
         )
@@ -119,14 +122,38 @@ class UpdateTransitionTests(unittest.TestCase):
         self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
 
     def test_prepare_rejects_qualification_manifest_digest_mismatch(self) -> None:
-        marker = self.data / "qwen38-spark" / "qualified" / f"{self.second}.env"
-        text = marker.read_text(encoding="utf-8")
-        text = text.replace("RELEASE_MANIFEST_SHA256=", "RELEASE_MANIFEST_SHA256=" + "0" * 64 + "#")
-        marker.write_text(text, encoding="utf-8")
+        marker = self.qualification_marker(self.second)
+        lines = marker.read_text(encoding="utf-8").splitlines()
+        marker.write_text(
+            "\n".join(
+                "RELEASE_MANIFEST_SHA256=" + "0" * 64
+                if line.startswith("RELEASE_MANIFEST_SHA256=") else line
+                for line in lines
+            ) + "\n",
+            encoding="utf-8",
+        )
         result = self.run_script(UPDATE, "prepare", self.second, check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("invalid or not manifest-bound", result.stderr)
+        self.assertIn("qualification manifest digest mismatch", result.stderr)
         self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
+
+    def test_commit_rechecks_qualification_manifest_digest(self) -> None:
+        self.run_script(RELEASE_MANAGER, "activate", self.first)
+        self.run_script(UPDATE, "prepare", self.second)
+        marker = self.qualification_marker(self.second)
+        lines = marker.read_text(encoding="utf-8").splitlines()
+        marker.write_text(
+            "\n".join(
+                "RELEASE_MANIFEST_SHA256=" + "f" * 64
+                if line.startswith("RELEASE_MANIFEST_SHA256=") else line
+                for line in lines
+            ) + "\n",
+            encoding="utf-8",
+        )
+        result = self.run_script(UPDATE, "commit", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("qualification manifest digest mismatch", result.stderr)
+        self.assertIn("UPDATE_STATE=staged", self.run_script(UPDATE, "status").stdout)
 
     def test_recover_rejects_executable_state_payload_without_running_it(self) -> None:
         app_state = self.state / "qwen38-spark"
