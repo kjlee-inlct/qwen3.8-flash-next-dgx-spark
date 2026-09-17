@@ -19,19 +19,19 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 ## Installation manifest boundary
 
-`~/.local/state/qwen38-spark/install.env` is written by `install.sh` using Bash `printf %q` encoding and mode 600. Migration away from shell evaluation is incremental because this manifest has a broader compatibility surface than transient lifecycle state.
-
-Four operational consumers now use strict views from `scripts/state_file.py`:
+`~/.local/state/qwen38-spark/install.env` is written by `install.sh` using Bash `printf %q` encoding and mode 600. All supported consumers now treat it as data and use strict views from `scripts/state_file.py` rather than evaluating it as shell code:
 
 - `service-runner.sh` uses `install-runtime`, validating and emitting only runtime configuration fields;
 - `manage-service.sh` uses `install-service`, validating and emitting only service installation/readiness fields;
 - `doctor.sh` uses `install-doctor`, validating and emitting only model pinning, runtime drift, monitor, swap, and API-access diagnostic fields;
-- `uninstall.sh` uses `install-uninstall`, validating and emitting only resource paths, ownership flags, container name, configuration path, and UI language needed to decide cleanup actions.
+- `uninstall.sh` uses `install-uninstall`, validating and emitting only resource paths, ownership flags, container name, configuration path, and UI language needed to decide cleanup actions;
+- `install.sh` resume/migration uses `install-maintenance`, validating the closed installer field set while preserving schema-2/3/4 compatibility and emitting only keys actually present in the existing manifest.
 
 All install-manifest views:
 
-- accept only the closed schema 3/4 installer key set;
+- accept only the closed installer key set;
 - decode ordinary `printf %q` backslash quoting without invoking a shell, including paths containing whitespace;
+- accept the historical empty `KEY=` representation used by older manifests;
 - reject unknown and duplicate keys;
 - reject ANSI-C/control-character quoting;
 - validate consumer-required fields before emitting them over the NUL-delimited interface.
@@ -40,9 +40,9 @@ All install-manifest views:
 
 `install-uninstall` intentionally exposes only values that can affect cleanup scope. Ownership flags are constrained to `0`/`1`, destructive paths must be absolute, and the managed container name is fixed to `qwen38-flash-next`. The uninstaller retains its existing deletion guards in addition to strict parsing. Full purge also removes `runtime-commit.env` and its temporary file together with the other transient lifecycle state.
 
-`manage-service.sh` uses the parser from the invoking source checkout to validate the installer manifest, then uses the parser from the resolved immutable runtime release for runtime-commit attestation validation. This keeps source/maintenance policy separate from the release being attested.
+`install-maintenance` supports schema 2, 3, and 4. It validates every field that is present, requires the fields expected for the declared schema generation, and leaves newer fields absent on older schemas so the installer's existing migration defaults remain authoritative. `--migrate-manifest --dry-run` validates and previews migration without rewriting the manifest.
 
-The remaining installer consumer (`install.sh` resume/migration) still sources the mode-600 installer-owned manifest for compatibility. It should be migrated separately because it both reads and rewrites older schemas and therefore has the broadest compatibility surface.
+`manage-service.sh` uses the parser from the invoking source checkout to validate the installer manifest, then uses the parser from the resolved immutable runtime release for runtime-commit attestation validation. This keeps source/maintenance policy separate from the release being attested.
 
 ## Operator rule
 
@@ -56,4 +56,4 @@ bash ./scripts/runtime-transition.sh status
 bash ./scripts/runtime-transition.sh recover
 ```
 
-Malformed lifecycle state is treated as an error rather than executed or silently ignored.
+Malformed lifecycle or installation state is treated as an error rather than executed or silently ignored.
