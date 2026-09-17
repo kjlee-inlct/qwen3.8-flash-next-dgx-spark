@@ -8,6 +8,7 @@ source "${ROOT_DIR}/scripts/model-profiles.sh"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
+OPERATION_LOCK_LIB="${ROOT_DIR}/scripts/lib/operation-lock.sh"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 CURRENT_RELEASE_LINK="${DATA_HOME}/current"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
@@ -37,6 +38,22 @@ MONITOR_MIN_FREE_CLI=""; MONITOR_FREE_GATE_CLI=""; MONITOR_MIN_SWAP_FREE_CLI=""
 MONITOR_CONSECUTIVE_CLI=""; MONITOR_HEARTBEAT_CLI=""
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+ensure_operation_lock() {
+  [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+  if ! declare -F acquire_operation_lock >/dev/null 2>&1; then
+    # shellcheck source=scripts/lib/operation-lock.sh
+    source "${OPERATION_LOCK_LIB}"
+  fi
+  acquire_operation_lock "${STATE_DIR}" "install" || exit $?
+}
+sudo_with_operation_lock() {
+  sudo env \
+    QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
+    QWEN38_OPERATION_LOCK_HELD="${QWEN38_OPERATION_LOCK_HELD}" \
+    QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
+    QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
+    "$@"
+}
 parse_install_manifest() {
   local parsed key value
   parsed="$(mktemp)"
@@ -181,6 +198,10 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+if [[ "${DRY_RUN}" != 1 ]]; then
+  ensure_operation_lock
+fi
 
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
@@ -467,8 +488,7 @@ if [[ "${SERVICE_ENABLED}" == 1 ]]; then
   write_state service_ready
   service_args=(create --runtime-root "${CURRENT_RELEASE_LINK}" --yes)
   [[ "${START}" == 1 ]] && service_args+=(--start) || service_args+=(--no-start)
-  sudo env QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
-    "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
+  sudo_with_operation_lock "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
 elif [[ "${START}" == 1 ]]; then
   printf '\nStarting runtime from immutable current release...\n'
   MODEL_PROFILE="${MODEL_PROFILE}" MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" SERVED_NAME="${SERVED_NAME}" \

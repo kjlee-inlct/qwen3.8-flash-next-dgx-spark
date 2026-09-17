@@ -175,11 +175,27 @@ class OperationLockTests(unittest.TestCase):
         self.assertIn('install -d -o "${owner_uid}" -g "${owner_gid}" -m 0700 "${state_dir}"', lock_helper)
         self.assertIn('current_gid="$(stat -c %g "${lock_file}")"', lock_helper)
 
+    def test_installer_holds_outer_lock_before_manifest_read(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        lock_block = 'if [[ "${DRY_RUN}" != 1 ]]; then\n  ensure_operation_lock\nfi'
+
+        self.assertIn('acquire_operation_lock "${STATE_DIR}" "install"', installer)
+        self.assertIn(lock_block, installer)
+        self.assertLess(installer.index(lock_block), installer.index("RESUME=0"))
+        self.assertIn('sudo_with_operation_lock "${ROOT_DIR}/scripts/manage-service.sh"', installer)
+        for marker in (
+            'QWEN38_OPERATION_LOCK_HELD="${QWEN38_OPERATION_LOCK_HELD}"',
+            'QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}"',
+            'QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}"',
+        ):
+            self.assertIn(marker, installer)
+
     def test_dry_run_and_status_paths_remain_unlocked(self) -> None:
         release_manager = (ROOT / "scripts" / "release-manager.sh").read_text(encoding="utf-8")
         update_transition = (ROOT / "scripts" / "lifecycle" / "update-transition.sh").read_text(encoding="utf-8")
         manage_service = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         uninstall = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
 
         self.assertIn('status)\n    [[ $# -eq 0 ]]', release_manager)
         self.assertIn('status)\n    [[ $# -eq 0 ]]', update_transition)
@@ -193,6 +209,7 @@ class OperationLockTests(unittest.TestCase):
             uninstall.index('if [[ "${DRY_RUN}" == 1 ]]'),
             uninstall.index('acquire_operation_lock "${STATE_DIR}" "uninstall"'),
         )
+        self.assertIn('if [[ "${DRY_RUN}" != 1 ]]; then\n  ensure_operation_lock\nfi', installer)
 
 
 if __name__ == "__main__":

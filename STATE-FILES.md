@@ -19,10 +19,11 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 ## Lifecycle operation lock
 
-Mutating maintenance operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so release pointers, update-transition state, managed-service mutation, and uninstall cleanup cannot overlap with another covered mutation.
+Mutating maintenance operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so installer state, release pointers, update-transition state, managed-service mutation, and uninstall cleanup cannot overlap with another covered mutation.
 
 The locking scope covers:
 
+- non-dry-run `install.sh`, including manifest migration and the complete interactive/download/swap/API/release/service flow;
 - `scripts/update-release.sh` for non-dry-run cutover;
 - `scripts/lifecycle/update-transition.sh` actions `prepare`, `commit`, `rollback`, and `recover`;
 - `scripts/release-manager.sh` actions `stage`, `activate`, `discard`, and `rollback`;
@@ -34,7 +35,7 @@ Nested lifecycle helpers reuse an inherited lock only when the advertised lock f
 
 When root must create the lifecycle state directory or lock file, it creates them with the resolved service user's UID/GID rather than leaving root-owned state behind. The lock file is intentionally persistent metadata; a full uninstall may leave only `operation.lock` so future reinstall/maintenance commands continue to share the same synchronization point safely.
 
-Read-only `status`/`verify` paths, update dry-runs, and uninstall dry-runs remain unlocked. `install.sh` is the remaining outer mutation entry point to connect in a separate change because it has the broadest interactive/download/swap/API/service mutation surface.
+Read-only `status`/`verify` paths and all supported dry-runs remain unlocked. Non-dry-run `install.sh` acquires the lock immediately after CLI parsing and before reading an existing manifest so another update/uninstall/service mutation cannot change lifecycle state between resume inspection and the eventual write. Child release helpers inherit that lock, while managed-service calls receive the authenticated lock context explicitly across `sudo`.
 
 ## Installation manifest boundary
 
