@@ -9,7 +9,7 @@ A normal installation has two kinds of persistent application state:
 ```text
 ~/.local/share/qwen38-spark/
 ├── releases/<git-commit>/        # immutable code payloads
-├── qualified/<git-commit>.env    # qualification markers
+├── qualified/<git-commit>.env    # qualification markers bound to release manifests
 ├── current -> releases/<commit>  # code used for the managed runtime
 └── previous -> releases/<commit> # rollback code, when available
 
@@ -121,7 +121,9 @@ TRANSACTION_STATE=idle
 
 - the `current` immutable release pointer resolves inside the managed release store;
 - the current release still matches its cryptographic manifest;
-- the current release has a qualification marker;
+- the current release has a strictly parsed qualification marker;
+- schema-2 qualification is bound to the SHA-256 digest of that exact `.release-manifest.json`;
+- historical schema-1 qualification is reported as a legacy unbound warning and must be re-qualified before a future cutover;
 - an optional `previous` release pointer is safe and its manifest remains verifiable;
 - no `update-transition.env` is left from an interrupted release cutover;
 - no stale or malformed `runtime-stop.env` marker is left behind;
@@ -143,7 +145,7 @@ Use strict mode when maintenance automation should fail on warnings as well as h
 ./scripts/doctor.sh --strict
 ```
 
-Examples of signals that require operator attention include an incomplete update/runtime transaction, a tampered current immutable release, an unsafe/dangling release pointer, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
+Examples of signals that require operator attention include an incomplete update/runtime transaction, a tampered current immutable release, an unsafe/dangling release pointer, a legacy or digest-mismatched qualification marker, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
 
 ## Update a checkout revision
 
@@ -155,6 +157,8 @@ bash ./scripts/release-manager.sh stage "${TARGET}"
 bash ./scripts/qualify-release.sh "${TARGET}"
 bash ./scripts/release-manager.sh verify "${TARGET}"
 ```
+
+Qualification writes a schema-2 marker containing `RELEASE_MANIFEST_SHA256`, the SHA-256 of the staged release's `.release-manifest.json`. `update-transition.sh prepare` and `commit` both verify the release manifest again and require the marker digest to match. A legacy schema-1 marker is not sufficient for a new cutover; re-run `qualify-release.sh` for that release first.
 
 Preview the cutover without changing the runtime:
 

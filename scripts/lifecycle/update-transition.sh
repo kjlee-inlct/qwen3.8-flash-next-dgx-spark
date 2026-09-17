@@ -12,6 +12,7 @@ PREVIOUS_LINK="${QWEN38_PREVIOUS_RELEASE_LINK:-${DATA_HOME}/previous}"
 QUALIFIED_DIR="${QWEN38_QUALIFIED_DIR:-${DATA_HOME}/qualified}"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
 STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
+QUALIFICATION_PARSER="${SCRIPT_ROOT}/scripts/lib/qualification_marker.py"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 
 usage() {
@@ -48,6 +49,21 @@ parse_state_into_vars() {
   done <"${parsed}"
   rm -f -- "${parsed}"
 }
+parse_qualification_into_vars() {
+  local path="$1" parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${QUALIFICATION_PARSER}" "${path}" --require-bound >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "${key}" '%s' "${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+}
+manifest_digest() {
+  python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"
+}
 write_state() {
   local phase="$1" target="$2" old_current="$3" old_previous="$4"
   mkdir -p -- "${STATE_HOME}"; umask 077
@@ -67,14 +83,18 @@ load_state() {
   parse_state_into_vars update "${STATE_FILE}" || die 'invalid update transition state file'
 }
 verify_qualified() {
-  local release_id marker
+  local release_id marker manifest_path observed_digest
   release_id="$1"
   marker="${QUALIFIED_DIR}/${release_id}.env"
+  manifest_path="${RELEASES_DIR}/${release_id}/.release-manifest.json"
   bash "${RELEASE_MANAGER}" verify "${release_id}"
   [[ -f "${marker}" && ! -L "${marker}" ]] || die "release is not qualified: ${release_id}"
-  unset QUALIFICATION_SCHEMA_VERSION QUALIFIED_RELEASE QUALIFIED_AT
-  parse_state_into_vars qualification "${marker}" || die "invalid qualification marker: ${release_id}"
+  [[ -f "${manifest_path}" && ! -L "${manifest_path}" ]] || die "release manifest is unavailable or unsafe: ${release_id}"
+  unset QUALIFICATION_SCHEMA_VERSION QUALIFIED_RELEASE RELEASE_MANIFEST_SHA256 QUALIFIED_AT
+  parse_qualification_into_vars "${marker}" || die "qualification marker is invalid or not manifest-bound: ${release_id}"
   [[ "${QUALIFIED_RELEASE}" == "${release_id}" ]] || die "qualification marker mismatch: ${release_id}"
+  observed_digest="$(manifest_digest "${manifest_path}")"
+  [[ "${RELEASE_MANIFEST_SHA256}" == "${observed_digest}" ]] || die "qualification manifest digest mismatch: ${release_id}"
 }
 restore_pointer() {
   local link="$1" release_id="$2"
