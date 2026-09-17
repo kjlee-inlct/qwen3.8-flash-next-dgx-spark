@@ -2,6 +2,7 @@
 # Install, inspect, or remove the managed systemd runtime service.
 set -Eeuo pipefail
 
+SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 UNIT="qwen38-flash-next.service"
 UNIT_FILE="/etc/systemd/system/${UNIT}"
 MARKER="Managed qwen38-spark runtime service"
@@ -77,13 +78,33 @@ CALLER_STATE_HOME="${QWEN38_STATE_HOME:-${SERVICE_HOME}/.local/state}"
 STATE_DIR="${CALLER_STATE_HOME}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+INSTALL_STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
 [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "installation manifest is missing or unsafe: ${STATE_FILE}"
 [[ "$(stat -c %u "${STATE_FILE}")" == "${SERVICE_UID}" ]] || die "installation manifest is not owned by ${SERVICE_USER}"
-# The installer writes shell-escaped values with mode 600.
-# shellcheck disable=SC1090
-source "${STATE_FILE}"
-[[ "${INSTALL_ROOT:-}" == /* ]] || die "invalid install root in manifest"
-[[ "${CONTAINER_NAME:-}" == qwen38-flash-next ]] || die "unexpected container name in manifest"
+[[ -r "${INSTALL_STATE_PARSER}" ]] || die "install state parser is unavailable: ${INSTALL_STATE_PARSER}"
+
+parse_install_service() {
+  local parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${INSTALL_STATE_PARSER}" install-service "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  INSTALL_ROOT=""; SERVED_NAME=""; CONTAINER_NAME=""
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      SCHEMA_VERSION) [[ "${value}" == 3 || "${value}" == 4 ]] || { rm -f -- "${parsed}"; return 1; } ;;
+      PHASE) [[ "${value}" == complete ]] || { rm -f -- "${parsed}"; return 1; } ;;
+      INSTALL_ROOT) INSTALL_ROOT="${value}" ;;
+      SERVED_NAME) SERVED_NAME="${value}" ;;
+      CONTAINER_NAME) CONTAINER_NAME="${value}" ;;
+      *) rm -f -- "${parsed}"; return 1 ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ -n "${INSTALL_ROOT}" && -n "${SERVED_NAME}" && "${CONTAINER_NAME}" == qwen38-flash-next ]]
+}
+parse_install_service || die "installation manifest failed strict service parsing: ${STATE_FILE}"
 
 RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
 [[ "${RUNTIME_ROOT}" == /* ]] || die "runtime root must be an absolute path"
@@ -92,20 +113,17 @@ RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
 [[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || die "runtime root has no transition helper: ${RUNTIME_ROOT}"
 [[ "${RUNTIME_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
 EXPECTED_RUNTIME_ROOT="$(realpath -e -- "${RUNTIME_ROOT}")"
-STATE_PARSER="${EXPECTED_RUNTIME_ROOT}/scripts/lib/state_file.py"
-[[ -r "${STATE_PARSER}" ]] || die "runtime root has no state parser: ${EXPECTED_RUNTIME_ROOT}"
+RUNTIME_STATE_PARSER="${EXPECTED_RUNTIME_ROOT}/scripts/lib/state_file.py"
+[[ -r "${RUNTIME_STATE_PARSER}" ]] || die "runtime root has no state parser: ${EXPECTED_RUNTIME_ROOT}"
 
 parse_runtime_commit() {
   local parsed key value
   parsed="$(mktemp)"
-  if ! python3 "${STATE_PARSER}" runtime-commit "${RUNTIME_COMMIT_FILE}" >"${parsed}"; then
+  if ! python3 "${RUNTIME_STATE_PARSER}" runtime-commit "${RUNTIME_COMMIT_FILE}" >"${parsed}"; then
     rm -f -- "${parsed}"
     return 1
   fi
-  ATTESTED_RUNTIME_ROOT=""
-  ATTESTED_CONTAINER_NAME=""
-  ATTESTED_CONTAINER_ID=""
-  ATTESTED_COMMITTED_AT=""
+  ATTESTED_RUNTIME_ROOT=""; ATTESTED_CONTAINER_NAME=""; ATTESTED_CONTAINER_ID=""; ATTESTED_COMMITTED_AT=""
   while IFS= read -r -d '' key && IFS= read -r -d '' value; do
     case "${key}" in
       RUNTIME_COMMIT_SCHEMA_VERSION) [[ "${value}" == 1 ]] || { rm -f -- "${parsed}"; return 1; } ;;
@@ -170,7 +188,6 @@ systemctl daemon-reload
 systemctl enable "${UNIT}"
 if [[ "${START}" == 1 ]]; then
   previous_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  # Never accept an attestation from a previous service process.
   rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
   systemctl reset-failed "${UNIT}" 2>/dev/null || true
   systemctl stop "${UNIT}" 2>/dev/null || true
@@ -192,7 +209,7 @@ if [[ "${START}" == 1 ]]; then
   [[ "${ready}" == 1 ]] || die "replacement runtime did not commit and attest within 30 minutes"
   models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
   python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
-    "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}" || die "served model ID validation failed"
+    "${SERVED_NAME}" <<<"${models}" || die "served model ID validation failed"
   runtime_commit_matches "${candidate_container_id}" || die "runtime commit attestation changed after model validation"
   systemctl is-active --quiet "${UNIT}" || die "service became inactive after committed readiness"
   printf 'Runtime service is enabled, committed, and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
