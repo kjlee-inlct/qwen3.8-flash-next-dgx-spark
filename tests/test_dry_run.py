@@ -94,7 +94,7 @@ class DryRunTests(unittest.TestCase):
                     "SWAP_OWNED=1",
                     "VLLM_IMAGE=test-image",
                     "IMAGE_OWNED=1",
-                    "CONFIG_OVERRIDE='',",
+                    "CONFIG_OVERRIDE=''",
                     "CONFIG_OWNED=0",
                     "PROXY_OWNED=0",
                     "SERVICE_OWNED=0",
