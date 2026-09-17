@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -56,8 +57,16 @@ class UpdateTransitionTests(unittest.TestCase):
         self.run_script(RELEASE_MANAGER, "stage", release_id)
         qualified = self.data / "qwen38-spark" / "qualified"
         qualified.mkdir(parents=True, exist_ok=True)
+        manifest = self.data / "qwen38-spark" / "releases" / release_id / ".release-manifest.json"
+        digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
         (qualified / f"{release_id}.env").write_text(
-            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
+            "\n".join([
+                "QUALIFICATION_SCHEMA_VERSION=2",
+                f"QUALIFIED_RELEASE={release_id}",
+                f"RELEASE_MANIFEST_SHA256={digest}",
+                "QUALIFIED_AT=2026-09-16T01:00:00Z",
+                "",
+            ]),
             encoding="utf-8",
         )
 
@@ -96,6 +105,27 @@ class UpdateTransitionTests(unittest.TestCase):
         result = self.run_script(UPDATE, "prepare", self.second, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not qualified", result.stderr)
+        self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
+
+    def test_prepare_rejects_legacy_unbound_qualification(self) -> None:
+        marker = self.data / "qwen38-spark" / "qualified" / f"{self.second}.env"
+        marker.write_text(
+            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={self.second}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
+            encoding="utf-8",
+        )
+        result = self.run_script(UPDATE, "prepare", self.second, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not manifest-bound", result.stderr)
+        self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
+
+    def test_prepare_rejects_qualification_manifest_digest_mismatch(self) -> None:
+        marker = self.data / "qwen38-spark" / "qualified" / f"{self.second}.env"
+        text = marker.read_text(encoding="utf-8")
+        text = text.replace("RELEASE_MANIFEST_SHA256=", "RELEASE_MANIFEST_SHA256=" + "0" * 64 + "#")
+        marker.write_text(text, encoding="utf-8")
+        result = self.run_script(UPDATE, "prepare", self.second, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid or not manifest-bound", result.stderr)
         self.assertIn("UPDATE_STATE=idle", self.run_script(UPDATE, "status").stdout)
 
     def test_recover_rejects_executable_state_payload_without_running_it(self) -> None:
