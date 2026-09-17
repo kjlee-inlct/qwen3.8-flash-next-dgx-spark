@@ -36,6 +36,18 @@ class StateFileParserTests(unittest.TestCase):
         ]
         return "\n".join(lines)
 
+    @staticmethod
+    def schema2_manifest() -> str:
+        return "\n".join([
+            "SCHEMA_VERSION=2", "PHASE=complete", "INSTALL_ROOT=/home/inlc/qwen\\ install",
+            "MODEL_PROFILE=orcarouter", "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "MODEL_REVISION=" + "a" * 40, "MODEL_DIR=/home/inlc/models/qwen\\ model", "MODEL_OWNED=0",
+            "SWAP_FILE=/swap-ple.img", "SWAP_OWNED=1", "VLLM_IMAGE=test-image", "IMAGE_OWNED=0",
+            "CONTAINER_NAME=qwen38-flash-next", "CONFIG_OVERRIDE=", "CONFIG_OWNED=0", "MONITOR_PROTECT=0",
+            "PROXY_ENABLED=1", "PROXY_OWNED=1", "PROXY_PORT=8000", "SERVICE_ENABLED=1", "SERVICE_OWNED=1",
+            "UI_LANG=en", "",
+        ])
+
     def test_update_state_emits_nul_delimited_values(self) -> None:
         result = self.run_parser("update", "\n".join([
             "UPDATE_SCHEMA_VERSION=1", "UPDATE_STATE=staged", "TARGET_RELEASE=" + "2" * 40,
@@ -132,6 +144,21 @@ class StateFileParserTests(unittest.TestCase):
         self.assertNotIn(b"MODEL_REPO", fields)
         self.assertNotIn(b"MONITOR_ENABLED", fields)
         self.assertNotIn(b"API_ACCESS_MODE", fields)
+
+    def test_install_maintenance_accepts_schema2_and_preserves_present_fields(self) -> None:
+        result = self.run_parser("install-maintenance", self.schema2_manifest())
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"SCHEMA_VERSION", fields); self.assertIn(b"2", fields)
+        self.assertIn(b"CONFIG_OVERRIDE", fields); self.assertIn(b"", fields)
+        self.assertNotIn(b"API_ACCESS_MODE", fields); self.assertNotIn(b"MONITOR_ENABLED", fields)
+
+    def test_install_maintenance_rejects_executable_or_invalid_ownership_values(self) -> None:
+        executable = self.schema2_manifest().replace("MODEL_DIR=/home/inlc/models/qwen\\ model", "MODEL_DIR=$(touch\\ /tmp/qwen38-maintenance-should-not-run)")
+        invalid_owned = self.schema2_manifest().replace("MODEL_OWNED=0", "MODEL_OWNED=2")
+        self.assertNotEqual(self.run_parser("install-maintenance", executable).returncode, 0)
+        self.assertNotEqual(self.run_parser("install-maintenance", invalid_owned).returncode, 0)
+        self.assertFalse(Path("/tmp/qwen38-maintenance-should-not-run").exists())
 
     def test_install_runtime_rejects_unknown_or_executable_manifest_content(self) -> None:
         unknown = self.run_parser("install-runtime", self.install_manifest("EVIL=value"))
