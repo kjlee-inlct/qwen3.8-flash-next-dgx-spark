@@ -82,8 +82,6 @@ SCHEMAS: dict[str, dict[str, Validator]] = {
     },
 }
 
-# install.sh schema 3/4 fields. Keeping a closed set means an injected shell
-# assignment cannot silently become part of any consumer environment.
 INSTALL_KEYS = {
     "SCHEMA_VERSION", "PHASE", "INSTALL_ROOT", "MODEL_PROFILE", "MODEL_REPO", "MODEL_REVISION",
     "MODEL_DIR", "MODEL_OWNED", "SWAP_FILE", "SWAP_OWNED", "VLLM_IMAGE", "IMAGE_OWNED",
@@ -95,48 +93,56 @@ INSTALL_KEYS = {
 }
 
 INSTALL_RUNTIME_SCHEMA: dict[str, Validator] = {
-    "SCHEMA_VERSION": one_of("3", "4"),
-    "PHASE": exact("complete"),
-    "MODEL_PROFILE": one_of("orcarouter", "nvidia"),
-    "MODEL_DIR": absolute_path,
-    "VLLM_IMAGE": nonempty_text,
-    "SERVED_NAME": nonempty_text,
-    "CONTAINER_NAME": exact("qwen38-flash-next"),
-    "CONFIG_OVERRIDE": optional(absolute_path),
-    "MONITOR_PROTECT": one_of("0", "1"),
-    "MONITOR_ENABLED": one_of("0", "1"),
-    "MONITOR_MIN_AVAILABLE_GIB": matches(POSITIVE_INTEGER),
-    "MONITOR_MIN_FREE_GIB": matches(POSITIVE_INTEGER),
-    "MONITOR_FREE_GATE_GIB": matches(POSITIVE_INTEGER),
-    "MONITOR_MIN_SWAP_FREE_GIB": matches(POSITIVE_INTEGER),
-    "MONITOR_CONSECUTIVE": matches(POSITIVE_INTEGER),
-    "MONITOR_HEARTBEAT": matches(NONNEGATIVE_INTEGER),
+    "SCHEMA_VERSION": one_of("3", "4"), "PHASE": exact("complete"),
+    "MODEL_PROFILE": one_of("orcarouter", "nvidia"), "MODEL_DIR": absolute_path,
+    "VLLM_IMAGE": nonempty_text, "SERVED_NAME": nonempty_text,
+    "CONTAINER_NAME": exact("qwen38-flash-next"), "CONFIG_OVERRIDE": optional(absolute_path),
+    "MONITOR_PROTECT": one_of("0", "1"), "MONITOR_ENABLED": one_of("0", "1"),
+    "MONITOR_MIN_AVAILABLE_GIB": matches(POSITIVE_INTEGER), "MONITOR_MIN_FREE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_FREE_GATE_GIB": matches(POSITIVE_INTEGER), "MONITOR_MIN_SWAP_FREE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_CONSECUTIVE": matches(POSITIVE_INTEGER), "MONITOR_HEARTBEAT": matches(NONNEGATIVE_INTEGER),
 }
 
 INSTALL_SERVICE_SCHEMA: dict[str, Validator] = {
-    "SCHEMA_VERSION": one_of("3", "4"),
-    "PHASE": exact("complete"),
-    "INSTALL_ROOT": absolute_path,
-    "SERVED_NAME": nonempty_text,
-    "CONTAINER_NAME": exact("qwen38-flash-next"),
+    "SCHEMA_VERSION": one_of("3", "4"), "PHASE": exact("complete"), "INSTALL_ROOT": absolute_path,
+    "SERVED_NAME": nonempty_text, "CONTAINER_NAME": exact("qwen38-flash-next"),
+}
+
+INSTALL_DOCTOR_SCHEMA: dict[str, Validator] = {
+    "SCHEMA_VERSION": one_of("3", "4"), "PHASE": nonempty_text,
+    "MODEL_PROFILE": one_of("orcarouter", "nvidia"), "MODEL_REPO": nonempty_text,
+    "MODEL_REVISION": nonempty_text, "MODEL_DIR": absolute_path, "SWAP_FILE": absolute_path,
+    "VLLM_IMAGE": nonempty_text, "SERVED_NAME": nonempty_text, "CONTAINER_NAME": exact("qwen38-flash-next"),
+    "CONFIG_OVERRIDE": optional(absolute_path), "MONITOR_PROTECT": one_of("0", "1"),
+    "MONITOR_ENABLED": one_of("0", "1"), "MONITOR_MIN_AVAILABLE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_MIN_FREE_GIB": matches(POSITIVE_INTEGER), "MONITOR_FREE_GATE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_MIN_SWAP_FREE_GIB": matches(POSITIVE_INTEGER), "MONITOR_CONSECUTIVE": matches(POSITIVE_INTEGER),
+    "MONITOR_HEARTBEAT": matches(NONNEGATIVE_INTEGER), "PROXY_ENABLED": one_of("0", "1"),
+    "PROXY_PORT": matches(POSITIVE_INTEGER),
 }
 
 INSTALL_SCHEMAS = {
     "install-runtime": INSTALL_RUNTIME_SCHEMA,
     "install-service": INSTALL_SERVICE_SCHEMA,
+    "install-doctor": INSTALL_DOCTOR_SCHEMA,
+}
+
+DOCTOR_API_VALIDATORS: dict[str, Validator] = {
+    "API_ACCESS_MODE": one_of("local", "docker", "lan"),
+    "API_DOCKER_PORT": matches(POSITIVE_INTEGER),
+    "API_LAN_ADDRESS": optional(nonempty_text),
+    "API_LAN_PORT": matches(POSITIVE_INTEGER),
 }
 
 
 def decode_legacy_value(raw: str) -> str:
-    if raw == "''":
-        return ""
+    if raw == "''": return ""
     if any(ch in raw for ch in ("'", '"', "`", "\\", "$", ";")):
         raise ValueError("shell syntax is not allowed in state values")
     return raw
 
 
 def decode_bash_printf_q(raw: str) -> str:
-    """Decode non-executable ``printf %q`` output used by install.sh."""
     if raw.startswith("$'"):
         raise ValueError("ANSI-C shell quoting is not allowed in install manifest values")
     try:
@@ -144,8 +150,7 @@ def decode_bash_printf_q(raw: str) -> str:
     except ValueError as exc:
         raise ValueError(f"invalid shell-escaped install value: {exc}") from exc
     if len(words) != 1:
-        if raw == "''":
-            return ""
+        if raw == "''": return ""
         raise ValueError("install manifest value must decode to exactly one word")
     value = words[0]
     if any(ch in value for ch in ("\x00", "\n", "\r")):
@@ -160,13 +165,10 @@ def read_assignments(path: Path) -> list[tuple[int, str, str]]:
         raise ValueError(f"cannot read state file: {exc}") from exc
     assignments: list[tuple[int, str, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        if not line:
-            continue
-        if "=" not in line:
-            raise ValueError(f"line {lineno}: expected KEY=value")
+        if not line: continue
+        if "=" not in line: raise ValueError(f"line {lineno}: expected KEY=value")
         key, raw = line.split("=", 1)
-        if not SAFE_NAME.fullmatch(key):
-            raise ValueError(f"line {lineno}: invalid key")
+        if not SAFE_NAME.fullmatch(key): raise ValueError(f"line {lineno}: invalid key")
         assignments.append((lineno, key, raw))
     return assignments
 
@@ -175,17 +177,13 @@ def parse_state(path: Path, schema_name: str) -> dict[str, str]:
     schema = SCHEMAS[schema_name]
     values: dict[str, str] = {}
     for lineno, key, raw in read_assignments(path):
-        if key not in schema:
-            raise ValueError(f"line {lineno}: unknown key: {key}")
-        if key in values:
-            raise ValueError(f"line {lineno}: duplicate key: {key}")
+        if key not in schema: raise ValueError(f"line {lineno}: unknown key: {key}")
+        if key in values: raise ValueError(f"line {lineno}: duplicate key: {key}")
         value = decode_legacy_value(raw)
-        if not schema[key](value):
-            raise ValueError(f"line {lineno}: invalid value for {key}")
+        if not schema[key](value): raise ValueError(f"line {lineno}: invalid value for {key}")
         values[key] = value
     missing = [key for key in schema if key not in values]
-    if missing:
-        raise ValueError(f"missing required key(s): {', '.join(missing)}")
+    if missing: raise ValueError(f"missing required key(s): {', '.join(missing)}")
     return values
 
 
@@ -193,20 +191,28 @@ def parse_install(path: Path, schema_name: str) -> dict[str, str]:
     schema = INSTALL_SCHEMAS[schema_name]
     values: dict[str, str] = {}
     for lineno, key, raw in read_assignments(path):
-        if key not in INSTALL_KEYS:
-            raise ValueError(f"line {lineno}: unknown install manifest key: {key}")
-        if key in values:
-            raise ValueError(f"line {lineno}: duplicate key: {key}")
+        if key not in INSTALL_KEYS: raise ValueError(f"line {lineno}: unknown install manifest key: {key}")
+        if key in values: raise ValueError(f"line {lineno}: duplicate key: {key}")
         values[key] = decode_bash_printf_q(raw)
     missing = [key for key in schema if key not in values]
-    if missing:
-        raise ValueError(f"missing required {schema_name} manifest key(s): {', '.join(missing)}")
+    if missing: raise ValueError(f"missing required {schema_name} manifest key(s): {', '.join(missing)}")
     for key, validator in schema.items():
-        if not validator(values[key]):
-            raise ValueError(f"invalid {schema_name} manifest value for {key}")
+        if not validator(values[key]): raise ValueError(f"invalid {schema_name} manifest value for {key}")
     if schema_name == "install-runtime" and values["MONITOR_PROTECT"] == "1" and values["MONITOR_ENABLED"] != "1":
         raise ValueError("runtime manifest protection requires monitor enabled")
-    return {key: values[key] for key in schema}
+    result = {key: values[key] for key in schema}
+    if schema_name == "install-doctor":
+        api_values = {key: values.get(key, "") for key in DOCTOR_API_VALIDATORS}
+        if not api_values["API_ACCESS_MODE"]:
+            api_values["API_ACCESS_MODE"] = "docker" if values["PROXY_ENABLED"] == "1" else "local"
+        if not api_values["API_DOCKER_PORT"]:
+            api_values["API_DOCKER_PORT"] = values["PROXY_PORT"]
+        if not api_values["API_LAN_PORT"]:
+            api_values["API_LAN_PORT"] = "8001"
+        for key, validator in DOCTOR_API_VALIDATORS.items():
+            if not validator(api_values[key]): raise ValueError(f"invalid install-doctor manifest value for {key}")
+        result.update(api_values)
+    return result
 
 
 def emit_nul(values: dict[str, str], keys: list[str]) -> None:
@@ -226,6 +232,7 @@ def main() -> int:
         if args.schema in INSTALL_SCHEMAS:
             values = parse_install(args.path, args.schema)
             keys = list(INSTALL_SCHEMAS[args.schema])
+            if args.schema == "install-doctor": keys += list(DOCTOR_API_VALIDATORS)
         else:
             values = parse_state(args.path, args.schema)
             keys = list(SCHEMAS[args.schema])
