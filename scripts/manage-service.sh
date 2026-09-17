@@ -153,6 +153,50 @@ runtime_commit_matches() {
   [[ "${ATTESTED_CONTAINER_ID}" == "${expected_container_id}" ]] || return 1
 }
 
+print_readiness_progress() {
+  local elapsed="$1" candidate_container_id="$2"
+  local active_state sub_state container_state health_state attestation_state log_line
+
+  active_state="$(systemctl show "${UNIT}" --property=ActiveState --value 2>/dev/null || printf unknown)"
+  sub_state="$(systemctl show "${UNIT}" --property=SubState --value 2>/dev/null || printf unknown)"
+
+  container_state=missing
+  if [[ -n "${candidate_container_id}" ]]; then
+    container_state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER_NAME}" 2>/dev/null || printf unknown)"
+  fi
+
+  health_state=waiting
+  if curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1; then
+    health_state=ready
+  fi
+
+  attestation_state=missing
+  if [[ -f "${RUNTIME_COMMIT_FILE}" && ! -L "${RUNTIME_COMMIT_FILE}" ]]; then
+    if parse_runtime_commit; then
+      if [[ -n "${candidate_container_id}" &&
+            "${ATTESTED_RUNTIME_ROOT}" == "${EXPECTED_RUNTIME_ROOT}" &&
+            "${ATTESTED_CONTAINER_NAME}" == "${CONTAINER_NAME}" &&
+            "${ATTESTED_CONTAINER_ID}" == "${candidate_container_id}" ]]; then
+        attestation_state=matching
+      else
+        attestation_state=present-mismatch
+      fi
+    else
+      attestation_state=invalid
+    fi
+  fi
+
+  log_line="$(journalctl -u "${UNIT}" -n 1 --no-pager -o cat 2>/dev/null | tail -n 1 || true)"
+  [[ -n "${log_line}" ]] || log_line="(no service log yet)"
+
+  printf 'Waiting for committed replacement runtime attestation: %d/1800 seconds\n' "${elapsed}"
+  printf '  service     : %s/%s\n' "${active_state}" "${sub_state}"
+  printf '  container   : %s%s\n' "${container_state}" "${candidate_container_id:+ (${candidate_container_id})}"
+  printf '  health      : %s\n' "${health_state}"
+  printf '  attestation : %s\n' "${attestation_state}"
+  printf '  latest log  : %s\n' "${log_line}"
+}
+
 if [[ -e "${UNIT_FILE}" ]]; then
   managed_file "${UNIT_FILE}" || die "refusing to replace unmanaged unit: ${UNIT_FILE}"
 fi
