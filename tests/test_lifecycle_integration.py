@@ -75,6 +75,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
             (state_dir / "install.env").write_text(
                 "\n".join(
                     [
+                        "SCHEMA_VERSION=3",
                         f"INSTALL_ROOT={ROOT}",
                         "CONTAINER_NAME=qwen38-flash-next",
                         f"MODEL_DIR={home / 'model'}",
@@ -83,6 +84,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
                         "SWAP_OWNED=0",
                         "VLLM_IMAGE=test-image",
                         "IMAGE_OWNED=0",
+                        "CONFIG_OVERRIDE=''",
                         "CONFIG_OWNED=0",
                         "PROXY_OWNED=0",
                         "SERVICE_OWNED=0",
@@ -115,12 +117,22 @@ class LifecycleIntegrationTests(unittest.TestCase):
             self.assertTrue((state_dir / "install.env").is_file())
             self.assertTrue((state_dir / "update-transition.env").is_file())
 
+    def test_uninstaller_strictly_parses_install_manifest(self) -> None:
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+
+        self.assertIn('install-uninstall "${STATE_FILE}"', uninstaller)
+        self.assertIn("installation manifest failed strict uninstall parsing", uninstaller)
+        self.assertIn("STATE_PARSER", uninstaller)
+        self.assertNotIn('source "${STATE_FILE}"', uninstaller)
+        self.assertNotIn("shellcheck disable=SC1090", uninstaller)
+
     def test_uninstall_full_purge_covers_release_and_transient_state(self) -> None:
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
         self.assertIn('PURGE_ALL=1', uninstaller)
         self.assertIn('rm -rf --one-file-system -- "${DATA_HOME}"', uninstaller)
         self.assertIn('"${STATE_DIR}/runtime-stop.env"', uninstaller)
+        self.assertIn('"${STATE_DIR}/runtime-commit.env"', uninstaller)
         self.assertIn('"${STATE_DIR}/runtime-transition.env"', uninstaller)
         self.assertIn('"${STATE_DIR}/update-transition.env"', uninstaller)
         self.assertIn("Immutable release history and manifest were retained", uninstaller)

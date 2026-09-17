@@ -85,6 +85,7 @@ class DryRunTests(unittest.TestCase):
             manifest = state / "install.env"
             manifest.write_text(
                 "\n".join([
+                    "SCHEMA_VERSION=3",
                     f"INSTALL_ROOT={ROOT}",
                     "CONTAINER_NAME=qwen38-flash-next",
                     f"MODEL_DIR={home / 'model'}",
@@ -93,8 +94,10 @@ class DryRunTests(unittest.TestCase):
                     "SWAP_OWNED=1",
                     "VLLM_IMAGE=test-image",
                     "IMAGE_OWNED=1",
+                    "CONFIG_OVERRIDE=''",
                     "CONFIG_OWNED=0",
                     "PROXY_OWNED=0",
+                    "SERVICE_OWNED=0",
                     "UI_LANG=en",
                     "",
                 ]),

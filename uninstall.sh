@@ -2,12 +2,15 @@
 # Remove only resources recorded by install.sh.
 set -euo pipefail
 
+SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 RUNTIME_TRANSITION_FILE="${STATE_DIR}/runtime-transition.env"
 UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
+RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
 PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; PURGE_ALL=0; YES=0; DRY_RUN=0
 CLI_LANG=""
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -15,6 +18,20 @@ usage() {
   printf 'Usage: ./uninstall.sh [--lang en|ko] [--purge-model] [--purge-swap] [--purge-image] [--purge-all] [--yes] [--dry-run]\n'
   printf '       ./uninstall.sh  # interactive English/Korean wizard (default)\n'
 }
+
+parse_install_manifest() {
+  local parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" install-uninstall "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "${key}" '%s' "${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
@@ -25,9 +42,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 [[ -r "${STATE_FILE}" ]] || die "installation manifest not found: ${STATE_FILE}"
-# Created by install.sh with shell-escaped values and mode 600.
-# shellcheck disable=SC1090
-source "${STATE_FILE}"
+[[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
+parse_install_manifest || die "installation manifest failed strict uninstall parsing: ${STATE_FILE}"
 [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
 if [[ -z "${UI_LANG:-}" ]]; then
   if [[ "${YES}" == 0 && -t 0 ]]; then
@@ -38,10 +54,6 @@ fi
 [[ "${UI_LANG}" == en || "${UI_LANG}" == ko ]] || die "--lang must be en or ko"
 [[ -n "${INSTALL_ROOT:-}" && -d "${INSTALL_ROOT}" ]] || die "invalid INSTALL_ROOT in manifest"
 [[ -n "${CONTAINER_NAME:-}" && "${CONTAINER_NAME}" != */* ]] || die "invalid container name"
-MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
-CONFIG_OWNED="${CONFIG_OWNED:-0}"
-PROXY_OWNED="${PROXY_OWNED:-0}"
-SERVICE_OWNED="${SERVICE_OWNED:-0}"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 
 if [[ "${YES}" == 0 && "${PURGE_SELECTED}" == 0 ]]; then
@@ -108,7 +120,7 @@ if [[ "${PROXY_OWNED}" == 1 ]]; then
   sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes
 fi
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
-rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp"
+rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp" "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
 
 if [[ "${PURGE_MODEL}" == 1 ]]; then
   [[ "${MODEL_OWNED}" == 1 ]] || die "refusing model deletion: directory was not created by this installer"
@@ -142,6 +154,7 @@ if [[ "${PURGE_ALL}" == 1 ]]; then
   rm -rf --one-file-system -- "${DATA_HOME}"
   rm -f -- "${STATE_DIR}/monitor.log" "${STATE_DIR}/monitor.pid" \
     "${STATE_DIR}/runtime-stop.env" "${STATE_DIR}/runtime-stop.env.tmp" \
+    "${STATE_DIR}/runtime-commit.env" "${STATE_DIR}/runtime-commit.env.tmp" \
     "${STATE_DIR}/runtime-transition.env" "${STATE_DIR}/runtime-transition.env.tmp" \
     "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp"
   rm -f -- "${STATE_FILE}"
