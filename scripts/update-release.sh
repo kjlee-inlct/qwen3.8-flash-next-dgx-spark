@@ -9,6 +9,7 @@ CURRENT_LINK="${QWEN38_CURRENT_RELEASE_LINK:-${DATA_HOME}/current}"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
 UPDATE_TRANSITION="${SCRIPT_ROOT}/scripts/update-transition.sh"
 MANAGE_SERVICE="${SCRIPT_ROOT}/scripts/manage-service.sh"
+QUALIFICATION_PARSER="${SCRIPT_ROOT}/scripts/lib/qualification_marker.py"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 DRY_RUN=0
 
@@ -23,6 +24,34 @@ sudo_with_operation_lock() {
     QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
     QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
     "$@"
+}
+manifest_digest() {
+  python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"
+}
+verify_bound_qualification() {
+  local release_id="$1" marker manifest_path parsed key value schema qualified digest observed
+  marker="${DATA_HOME}/qualified/${release_id}.env"
+  manifest_path="${DATA_HOME}/releases/${release_id}/.release-manifest.json"
+  [[ -f "${marker}" && ! -L "${marker}" ]] || die "release is not qualified: ${release_id}"
+  [[ -f "${manifest_path}" && ! -L "${manifest_path}" ]] || die "release manifest is unavailable or unsafe: ${release_id}"
+  [[ -r "${QUALIFICATION_PARSER}" ]] || die "qualification parser is unavailable: ${QUALIFICATION_PARSER}"
+  parsed="$(mktemp)"
+  if ! python3 "${QUALIFICATION_PARSER}" "${marker}" --require-bound >"${parsed}"; then
+    rm -f -- "${parsed}"
+    die "qualification marker is invalid or not manifest-bound: ${release_id}"
+  fi
+  schema=""; qualified=""; digest=""
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      QUALIFICATION_SCHEMA_VERSION) schema="${value}" ;;
+      QUALIFIED_RELEASE) qualified="${value}" ;;
+      RELEASE_MANIFEST_SHA256) digest="${value}" ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ "${schema}" == 2 && "${qualified}" == "${release_id}" ]] || die "qualification marker mismatch: ${release_id}"
+  observed="$(manifest_digest "${manifest_path}")"
+  [[ "${digest}" == "${observed}" ]] || die "qualification manifest digest mismatch: ${release_id}"
 }
 
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
@@ -53,10 +82,10 @@ grep -qx 'UPDATE_STATE=idle' <<<"${update_status}" || die "an update transition 
 
 # Verification is read-only and catches missing/tampered releases before any pointer mutation.
 bash "${RELEASE_MANAGER}" verify "${target}"
-qualified="${DATA_HOME}/qualified/${target}.env"
-[[ -f "${qualified}" && ! -L "${qualified}" ]] || die "release is not qualified: ${target}"
+verify_bound_qualification "${target}"
 
 if [[ "${DRY_RUN}" == 1 ]]; then
+  printf 'DRY-RUN: verified manifest-bound qualification for %s\n' "${target}"
   printf 'DRY-RUN: would prepare update transition to %s\n' "${target}"
   printf 'DRY-RUN: would reinstall/restart managed service with runtime root %s\n' "${CURRENT_LINK}"
   printf 'DRY-RUN: would commit update transition after replacement runtime validation\n'
