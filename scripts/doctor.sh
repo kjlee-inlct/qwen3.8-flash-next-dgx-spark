@@ -143,7 +143,7 @@ if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   if [[ -r "${STATE_DIR}/monitor.pid" ]]; then monitor_pid="$(<"${STATE_DIR}/monitor.pid")"; if [[ "${monitor_pid}" =~ ^[0-9]+$ && -r "/proc/${monitor_pid}/cmdline" ]] && tr '\0' ' ' <"/proc/${monitor_pid}/cmdline" | grep -Fq monitor-runtime.sh; then pass "memory monitor is running (protect=${MONITOR_PROTECT:-0}, heartbeat=${MONITOR_HEARTBEAT}s)"; else fail "memory protection monitor PID is stale"; fi; else fail "memory protection monitor PID file is missing"; fi
 else pass "runtime memory monitor is disabled by configuration"; fi
 
-if [[ "${PROXY_ENABLED:-0}" == 1 ]]; then if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet qwen38-openwebui-proxy.socket; then pass "OpenWebUI proxy socket is active"; else fail "OpenWebUI proxy was selected but is not active"; fi; fi
+if [[ "${PROXY_ENABLED:-0}" == 1 ]]; then if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet qwen38-openwebui-proxy.socket; then pass "managed API access socket is active"; else fail "managed API access was selected but its socket is not active"; fi; fi
 if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 5 http://127.0.0.1:8888/health >/dev/null 2>&1; then pass "health endpoint responds"; else fail "health endpoint does not respond"; fi
 
 printf '\nSummary: %d failure(s), %d warning(s)\n' "${ERRORS}" "${WARNINGS}"
