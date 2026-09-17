@@ -145,6 +145,7 @@ class OperationLockTests(unittest.TestCase):
         update_transition = (ROOT / "scripts" / "lifecycle" / "update-transition.sh").read_text(encoding="utf-8")
         update_release = (ROOT / "scripts" / "update-release.sh").read_text(encoding="utf-8")
         bootstrap = (ROOT / "scripts" / "lifecycle" / "bootstrap-release.sh").read_text(encoding="utf-8")
+        qualifier = (ROOT / "scripts" / "lifecycle" / "qualify-release.sh").read_text(encoding="utf-8")
 
         for action in ("stage", "activate", "discard", "rollback"):
             self.assertIn(f'acquire_release_lock "release {action}"', release_manager)
@@ -153,6 +154,7 @@ class OperationLockTests(unittest.TestCase):
         self.assertIn('acquire_operation_lock "${STATE_HOME}" "release update to ${target}"', update_release)
         self.assertIn('if [[ "${DRY_RUN}" != 1 ]]', update_release)
         self.assertIn('acquire_operation_lock "${STATE_HOME}" "release bootstrap"', bootstrap)
+        self.assertIn('acquire_operation_lock "${STATE_HOME}" "release qualification ${release_id}"', qualifier)
 
     def test_service_and_uninstall_mutators_use_shared_lock(self) -> None:
         manage_service = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
