@@ -16,6 +16,14 @@ usage() {
   printf 'Usage: %s RELEASE_ID [--dry-run]\n' "$0"
 }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+sudo_with_operation_lock() {
+  sudo env \
+    QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
+    QWEN38_OPERATION_LOCK_HELD="${QWEN38_OPERATION_LOCK_HELD}" \
+    QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
+    QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
+    "$@"
+}
 
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
 target="$1"; shift
@@ -67,7 +75,7 @@ rollback_cutover() {
       printf 'FATAL: release pointer rollback failed; manual recovery is required.\n' >&2
       exit 70
     fi
-    if ! sudo bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes; then
+    if ! sudo_with_operation_lock bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes; then
       printf 'FATAL: previous release pointer was restored but service restart failed.\n' >&2
       exit 71
     fi
@@ -80,7 +88,7 @@ trap 'rollback_cutover 143' TERM
 
 bash "${UPDATE_TRANSITION}" prepare "${target}"
 cutover_active=1
-sudo bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes
+sudo_with_operation_lock bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes
 bash "${UPDATE_TRANSITION}" commit
 cutover_active=0
 trap - ERR INT TERM
