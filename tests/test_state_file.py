@@ -16,207 +16,101 @@ class StateFileParserTests(unittest.TestCase):
             path = Path(directory) / "state.env"
             path.write_text(text, encoding="utf-8")
             return subprocess.run(
-                ["python3", str(PARSER), schema, str(path)],
-                cwd=ROOT,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
+                ["python3", str(PARSER), schema, str(path)], cwd=ROOT,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
             )
 
     @staticmethod
     def install_manifest(*extra: str) -> str:
         lines = [
-            "SCHEMA_VERSION=4",
-            "PHASE=complete",
-            "INSTALL_ROOT=/home/inlc/qwen",
-            "MODEL_PROFILE=orcarouter",
-            "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
-            "MODEL_REVISION=" + "a" * 40,
-            "MODEL_DIR=/home/inlc/models/qwen\\ model",
-            "MODEL_OWNED=1",
-            "SWAP_FILE=/swap-ple.img",
-            "SWAP_OWNED=1",
-            "VLLM_IMAGE=vllm/vllm-openai:qwen38-flash-next-arm64-cu130",
-            "IMAGE_OWNED=0",
-            "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
-            "CONTAINER_NAME=qwen38-flash-next",
-            "CONFIG_OVERRIDE=/home/inlc/state/config\\ override.json",
-            "CONFIG_OWNED=1",
-            "MONITOR_PROTECT=0",
-            "MONITOR_ENABLED=0",
-            "MONITOR_MIN_AVAILABLE_GIB=6",
-            "MONITOR_MIN_FREE_GIB=2",
-            "MONITOR_FREE_GATE_GIB=10",
-            "MONITOR_MIN_SWAP_FREE_GIB=8",
-            "MONITOR_CONSECUTIVE=5",
-            "MONITOR_HEARTBEAT=60",
-            "API_ACCESS_MODE=docker",
-            "API_DOCKER_PORT=8000",
-            "API_LAN_ADDRESS=''",
-            "API_LAN_PORT=8001",
-            "PROXY_ENABLED=1",
-            "PROXY_OWNED=1",
-            "PROXY_PORT=8000",
-            "SERVICE_ENABLED=1",
-            "SERVICE_OWNED=1",
-            "SERVICE_UNIT=qwen38-flash-next.service",
-            "UI_LANG=ko",
-            *extra,
-            "",
+            "SCHEMA_VERSION=4", "PHASE=complete", "INSTALL_ROOT=/home/inlc/qwen\\ install",
+            "MODEL_PROFILE=orcarouter", "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "MODEL_REVISION=" + "a" * 40, "MODEL_DIR=/home/inlc/models/qwen\\ model", "MODEL_OWNED=1",
+            "SWAP_FILE=/swap-ple.img", "SWAP_OWNED=1", "VLLM_IMAGE=vllm/vllm-openai:qwen38-flash-next-arm64-cu130",
+            "IMAGE_OWNED=0", "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "CONTAINER_NAME=qwen38-flash-next", "CONFIG_OVERRIDE=/home/inlc/state/config\\ override.json",
+            "CONFIG_OWNED=1", "MONITOR_PROTECT=0", "MONITOR_ENABLED=0", "MONITOR_MIN_AVAILABLE_GIB=6",
+            "MONITOR_MIN_FREE_GIB=2", "MONITOR_FREE_GATE_GIB=10", "MONITOR_MIN_SWAP_FREE_GIB=8",
+            "MONITOR_CONSECUTIVE=5", "MONITOR_HEARTBEAT=60", "API_ACCESS_MODE=docker", "API_DOCKER_PORT=8000",
+            "API_LAN_ADDRESS=''", "API_LAN_PORT=8001", "PROXY_ENABLED=1", "PROXY_OWNED=1", "PROXY_PORT=8000",
+            "SERVICE_ENABLED=1", "SERVICE_OWNED=1", "SERVICE_UNIT=qwen38-flash-next.service", "UI_LANG=ko",
+            *extra, "",
         ]
         return "\n".join(lines)
 
     def test_update_state_emits_nul_delimited_values(self) -> None:
-        result = self.run_parser(
-            "update",
-            "\n".join(
-                [
-                    "UPDATE_SCHEMA_VERSION=1",
-                    "UPDATE_STATE=staged",
-                    "TARGET_RELEASE=" + "2" * 40,
-                    "OLD_CURRENT_RELEASE=" + "1" * 40,
-                    "OLD_PREVIOUS_RELEASE='',",
-                    "UPDATED_AT=2026-09-16T01:00:00Z",
-                    "",
-                ]
-            ).replace("OLD_PREVIOUS_RELEASE='',", "OLD_PREVIOUS_RELEASE=''"),
-        )
+        result = self.run_parser("update", "\n".join([
+            "UPDATE_SCHEMA_VERSION=1", "UPDATE_STATE=staged", "TARGET_RELEASE=" + "2" * 40,
+            "OLD_CURRENT_RELEASE=" + "1" * 40, "OLD_PREVIOUS_RELEASE=''", "UPDATED_AT=2026-09-16T01:00:00Z", "",
+        ]))
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         fields = result.stdout.split(b"\0")
-        self.assertIn(b"UPDATE_STATE", fields)
-        self.assertIn(b"staged", fields)
-        self.assertIn(b"OLD_PREVIOUS_RELEASE", fields)
+        self.assertIn(b"UPDATE_STATE", fields); self.assertIn(b"staged", fields); self.assertIn(b"OLD_PREVIOUS_RELEASE", fields)
 
     def test_shell_command_substitution_is_rejected_without_execution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            marker = root / "executed"
-            state = root / "state.env"
-            state.write_text(
-                "\n".join(
-                    [
-                        "UPDATE_SCHEMA_VERSION=1",
-                        "UPDATE_STATE=staged",
-                        "TARGET_RELEASE=$(touch " + str(marker) + ")",
-                        "OLD_CURRENT_RELEASE=",
-                        "OLD_PREVIOUS_RELEASE=",
-                        "UPDATED_AT=2026-09-16T01:00:00Z",
-                        "",
-                    ]
-                ),
-                encoding="utf-8",
-            )
-            result = subprocess.run(
-                ["python3", str(PARSER), "update", str(state)],
-                cwd=ROOT,
-                capture_output=True,
-                check=False,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertFalse(marker.exists())
+            root = Path(directory); marker = root / "executed"; state = root / "state.env"
+            state.write_text("\n".join([
+                "UPDATE_SCHEMA_VERSION=1", "UPDATE_STATE=staged", "TARGET_RELEASE=$(touch " + str(marker) + ")",
+                "OLD_CURRENT_RELEASE=", "OLD_PREVIOUS_RELEASE=", "UPDATED_AT=2026-09-16T01:00:00Z", "",
+            ]), encoding="utf-8")
+            result = subprocess.run(["python3", str(PARSER), "update", str(state)], cwd=ROOT, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0); self.assertFalse(marker.exists())
 
     def test_duplicate_and_unknown_keys_are_rejected(self) -> None:
-        base = [
-            "UPDATE_SCHEMA_VERSION=1",
-            "UPDATE_STATE=staged",
-            "TARGET_RELEASE=" + "2" * 40,
-            "OLD_CURRENT_RELEASE=",
-            "OLD_PREVIOUS_RELEASE=",
-            "UPDATED_AT=2026-09-16T01:00:00Z",
-        ]
-        duplicate = self.run_parser("update", "\n".join(base + ["UPDATE_STATE=staged", ""]))
-        unknown = self.run_parser("update", "\n".join(base + ["EVIL=value", ""]))
-        self.assertNotEqual(duplicate.returncode, 0)
-        self.assertNotEqual(unknown.returncode, 0)
+        base = ["UPDATE_SCHEMA_VERSION=1", "UPDATE_STATE=staged", "TARGET_RELEASE=" + "2" * 40,
+                "OLD_CURRENT_RELEASE=", "OLD_PREVIOUS_RELEASE=", "UPDATED_AT=2026-09-16T01:00:00Z"]
+        self.assertNotEqual(self.run_parser("update", "\n".join(base + ["UPDATE_STATE=staged", ""])).returncode, 0)
+        self.assertNotEqual(self.run_parser("update", "\n".join(base + ["EVIL=value", ""])).returncode, 0)
 
     def test_qualification_and_runtime_stop_schemas_are_strict(self) -> None:
-        qualification = self.run_parser(
-            "qualification",
-            "\n".join(
-                [
-                    "QUALIFICATION_SCHEMA_VERSION=1",
-                    "QUALIFIED_RELEASE=" + "a" * 40,
-                    "QUALIFIED_AT=2026-09-16T01:00:00Z",
-                    "",
-                ]
-            ),
-        )
-        stop = self.run_parser(
-            "runtime-stop",
-            "\n".join(
-                [
-                    "RUNTIME_STOP_SCHEMA_VERSION=1",
-                    "STOP_REASON=memory-protection",
-                    "STOP_CONTAINER_NAME=qwen38-flash-next",
-                    "STOP_CONTAINER_ID=" + "b" * 64,
-                    "UPDATED_AT=2026-09-16T01:00:00Z",
-                    "",
-                ]
-            ),
-        )
-        self.assertEqual(qualification.returncode, 0, qualification.stderr.decode())
-        self.assertEqual(stop.returncode, 0, stop.stderr.decode())
+        qualification = self.run_parser("qualification", "\n".join([
+            "QUALIFICATION_SCHEMA_VERSION=1", "QUALIFIED_RELEASE=" + "a" * 40,
+            "QUALIFIED_AT=2026-09-16T01:00:00Z", "",
+        ]))
+        stop = self.run_parser("runtime-stop", "\n".join([
+            "RUNTIME_STOP_SCHEMA_VERSION=1", "STOP_REASON=memory-protection", "STOP_CONTAINER_NAME=qwen38-flash-next",
+            "STOP_CONTAINER_ID=" + "b" * 64, "UPDATED_AT=2026-09-16T01:00:00Z", "",
+        ]))
+        self.assertEqual(qualification.returncode, 0, qualification.stderr.decode()); self.assertEqual(stop.returncode, 0, stop.stderr.decode())
 
     def test_runtime_commit_attestation_binds_root_and_container(self) -> None:
-        valid = self.run_parser(
-            "runtime-commit",
-            "\n".join(
-                [
-                    "RUNTIME_COMMIT_SCHEMA_VERSION=1",
-                    "RUNTIME_ROOT=/home/inlc/.local/share/qwen38-spark/releases/" + "a" * 40,
-                    "RUNTIME_CONTAINER_NAME=qwen38-flash-next",
-                    "RUNTIME_CONTAINER_ID=" + "b" * 64,
-                    "COMMITTED_AT=2026-09-16T01:00:00Z",
-                    "",
-                ]
-            ),
-        )
-        unsafe_root = self.run_parser(
-            "runtime-commit",
-            "\n".join(
-                [
-                    "RUNTIME_COMMIT_SCHEMA_VERSION=1",
-                    "RUNTIME_ROOT=/tmp/runtime $(touch /tmp/should-not-run)",
-                    "RUNTIME_CONTAINER_NAME=qwen38-flash-next",
-                    "RUNTIME_CONTAINER_ID=" + "b" * 64,
-                    "COMMITTED_AT=2026-09-16T01:00:00Z",
-                    "",
-                ]
-            ),
-        )
-        self.assertEqual(valid.returncode, 0, valid.stderr.decode())
-        fields = valid.stdout.split(b"\0")
-        self.assertIn(b"RUNTIME_ROOT", fields)
-        self.assertIn(b"RUNTIME_CONTAINER_ID", fields)
-        self.assertNotEqual(unsafe_root.returncode, 0)
+        valid = self.run_parser("runtime-commit", "\n".join([
+            "RUNTIME_COMMIT_SCHEMA_VERSION=1", "RUNTIME_ROOT=/home/inlc/.local/share/qwen38-spark/releases/" + "a" * 40,
+            "RUNTIME_CONTAINER_NAME=qwen38-flash-next", "RUNTIME_CONTAINER_ID=" + "b" * 64,
+            "COMMITTED_AT=2026-09-16T01:00:00Z", "",
+        ]))
+        unsafe_root = self.run_parser("runtime-commit", "\n".join([
+            "RUNTIME_COMMIT_SCHEMA_VERSION=1", "RUNTIME_ROOT=/tmp/runtime $(touch /tmp/should-not-run)",
+            "RUNTIME_CONTAINER_NAME=qwen38-flash-next", "RUNTIME_CONTAINER_ID=" + "b" * 64,
+            "COMMITTED_AT=2026-09-16T01:00:00Z", "",
+        ]))
+        self.assertEqual(valid.returncode, 0, valid.stderr.decode()); self.assertNotEqual(unsafe_root.returncode, 0)
 
     def test_install_runtime_decodes_printf_q_paths_and_emits_only_runtime_fields(self) -> None:
         result = self.run_parser("install-runtime", self.install_manifest())
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         fields = result.stdout.split(b"\0")
-        self.assertIn(b"MODEL_DIR", fields)
-        self.assertIn(b"/home/inlc/models/qwen model", fields)
-        self.assertIn(b"CONFIG_OVERRIDE", fields)
-        self.assertIn(b"/home/inlc/state/config override.json", fields)
-        self.assertNotIn(b"MODEL_REPO", fields)
-        self.assertNotIn(b"PROXY_OWNED", fields)
+        self.assertIn(b"/home/inlc/models/qwen model", fields); self.assertIn(b"/home/inlc/state/config override.json", fields)
+        self.assertNotIn(b"INSTALL_ROOT", fields); self.assertNotIn(b"MODEL_REPO", fields); self.assertNotIn(b"PROXY_OWNED", fields)
+
+    def test_install_service_emits_only_service_fields_and_decodes_install_root(self) -> None:
+        result = self.run_parser("install-service", self.install_manifest())
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"INSTALL_ROOT", fields); self.assertIn(b"/home/inlc/qwen install", fields)
+        self.assertIn(b"SERVED_NAME", fields); self.assertIn(b"CONTAINER_NAME", fields)
+        self.assertNotIn(b"MODEL_DIR", fields); self.assertNotIn(b"SERVICE_OWNED", fields)
 
     def test_install_runtime_rejects_unknown_or_executable_manifest_content(self) -> None:
         unknown = self.run_parser("install-runtime", self.install_manifest("EVIL=value"))
-        executable = self.run_parser(
-            "install-runtime",
-            self.install_manifest().replace(
-                "MODEL_DIR=/home/inlc/models/qwen\\ model",
-                "MODEL_DIR=$(touch\\ /tmp/qwen38-parser-should-not-run)",
-            ),
-        )
-        self.assertNotEqual(unknown.returncode, 0)
-        self.assertNotEqual(executable.returncode, 0)
+        executable = self.run_parser("install-runtime", self.install_manifest().replace(
+            "MODEL_DIR=/home/inlc/models/qwen\\ model", "MODEL_DIR=$(touch\\ /tmp/qwen38-parser-should-not-run)"))
+        self.assertNotEqual(unknown.returncode, 0); self.assertNotEqual(executable.returncode, 0)
         self.assertFalse(Path("/tmp/qwen38-parser-should-not-run").exists())
 
     def test_install_runtime_rejects_inconsistent_monitor_protection(self) -> None:
-        manifest = self.install_manifest().replace("MONITOR_PROTECT=0", "MONITOR_PROTECT=1")
-        result = self.run_parser("install-runtime", manifest)
+        result = self.run_parser("install-runtime", self.install_manifest().replace("MONITOR_PROTECT=0", "MONITOR_PROTECT=1"))
         self.assertNotEqual(result.returncode, 0)
 
 
