@@ -25,21 +25,12 @@ class DoctorObservabilityTests(unittest.TestCase):
         self.app_state.mkdir(parents=True)
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir()
-
-        systemctl = self.bin_dir / "systemctl"
-        systemctl.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-        systemctl.chmod(0o755)
-        docker = self.bin_dir / "docker"
-        docker.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-        docker.chmod(0o755)
-
-        self.env = {
-            **os.environ,
-            "HOME": str(self.root / "home"),
-            "XDG_DATA_HOME": str(self.data_home),
-            "XDG_STATE_HOME": str(self.state_home),
-            "PATH": f"{self.bin_dir}:{os.environ['PATH']}",
-        }
+        for name in ("systemctl", "docker"):
+            tool = self.bin_dir / name
+            tool.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            tool.chmod(0o755)
+        self.env = {**os.environ, "HOME": str(self.root / "home"), "XDG_DATA_HOME": str(self.data_home),
+                    "XDG_STATE_HOME": str(self.state_home), "PATH": f"{self.bin_dir}:{os.environ['PATH']}"}
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -47,20 +38,13 @@ class DoctorObservabilityTests(unittest.TestCase):
     def stage_release(self, release_id: str) -> None:
         release_dir = self.app_data / "releases" / release_id
         release_dir.mkdir(parents=True)
-        payload = release_dir / "payload.txt"
-        payload.write_text("known-good\n", encoding="utf-8")
-        subprocess.run(
-            ["python3", str(MANIFEST_TOOL), "build", str(release_dir), release_id],
-            check=True,
-            text=True,
-            capture_output=True,
-        )
+        (release_dir / "payload.txt").write_text("known-good\n", encoding="utf-8")
+        subprocess.run(["python3", str(MANIFEST_TOOL), "build", str(release_dir), release_id],
+                       check=True, text=True, capture_output=True)
         qualified = self.app_data / "qualified"
         qualified.mkdir()
         (qualified / f"{release_id}.env").write_text(
-            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\n",
-            encoding="utf-8",
-        )
+            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\n", encoding="utf-8")
         (self.app_data / "current").symlink_to(release_dir)
 
     def run_helper(self) -> subprocess.CompletedProcess[str]:
@@ -75,21 +59,13 @@ warn() {{ printf '[WARN] %s\\n' "$*"; }}
 fail() {{ printf '[FAIL] %s\\n' "$*"; }}
 source {HELPER!s}
 '''
-        return subprocess.run(
-            ["bash", "-c", script],
-            env=self.env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
+        return subprocess.run(["bash", "-c", script], env=self.env, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
 
     def test_verified_current_release_and_idle_update_are_reported_healthy(self) -> None:
         release_id = "a" * 40
         self.stage_release(release_id)
-
         result = self.run_helper()
-
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("[PASS] no incomplete update transition exists", result.stdout)
         self.assertIn(f"[PASS] current immutable release is verified ({release_id})", result.stdout)
@@ -102,14 +78,16 @@ source {HELPER!s}
         release_id = "b" * 40
         self.stage_release(release_id)
         (self.app_state / "update-transition.env").write_text(
-            "UPDATE_SCHEMA_VERSION=1\nUPDATE_STATE=staged\n",
-            encoding="utf-8",
-        )
-
+            "UPDATE_SCHEMA_VERSION=1\nUPDATE_STATE=staged\n", encoding="utf-8")
         result = self.run_helper()
-
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("[FAIL] update transition is incomplete (staged)", result.stdout)
+
+    def test_doctor_strictly_parses_install_manifest(self) -> None:
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        self.assertIn('install-doctor "${STATE_FILE}"', doctor)
+        self.assertIn("installation manifest failed strict parsing", doctor)
+        self.assertNotIn('source "${STATE_FILE}"', doctor)
 
     def test_doctor_treats_disabled_monitor_as_configured_state(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
