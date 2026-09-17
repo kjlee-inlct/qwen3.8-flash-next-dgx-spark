@@ -121,10 +121,28 @@ INSTALL_DOCTOR_SCHEMA: dict[str, Validator] = {
     "PROXY_PORT": matches(POSITIVE_INTEGER),
 }
 
+INSTALL_UNINSTALL_SCHEMA: dict[str, Validator] = {
+    "SCHEMA_VERSION": one_of("3", "4"),
+    "INSTALL_ROOT": absolute_path,
+    "MODEL_DIR": absolute_path,
+    "MODEL_OWNED": one_of("0", "1"),
+    "SWAP_FILE": absolute_path,
+    "SWAP_OWNED": one_of("0", "1"),
+    "VLLM_IMAGE": nonempty_text,
+    "IMAGE_OWNED": one_of("0", "1"),
+    "CONTAINER_NAME": exact("qwen38-flash-next"),
+    "CONFIG_OVERRIDE": optional(absolute_path),
+    "CONFIG_OWNED": one_of("0", "1"),
+    "PROXY_OWNED": one_of("0", "1"),
+    "SERVICE_OWNED": one_of("0", "1"),
+    "UI_LANG": optional(one_of("en", "ko")),
+}
+
 INSTALL_SCHEMAS = {
     "install-runtime": INSTALL_RUNTIME_SCHEMA,
     "install-service": INSTALL_SERVICE_SCHEMA,
     "install-doctor": INSTALL_DOCTOR_SCHEMA,
+    "install-uninstall": INSTALL_UNINSTALL_SCHEMA,
 }
 
 DOCTOR_API_VALIDATORS: dict[str, Validator] = {
