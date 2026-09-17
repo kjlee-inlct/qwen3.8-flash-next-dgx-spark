@@ -154,13 +154,45 @@ class OperationLockTests(unittest.TestCase):
         self.assertIn('if [[ "${DRY_RUN}" != 1 ]]', update_release)
         self.assertIn('acquire_operation_lock "${STATE_HOME}" "release bootstrap"', bootstrap)
 
-    def test_read_only_actions_remain_unlocked(self) -> None:
+    def test_service_and_uninstall_mutators_use_shared_lock(self) -> None:
+        manage_service = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        uninstall = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        update_release = (ROOT / "scripts" / "update-release.sh").read_text(encoding="utf-8")
+        lock_helper = LOCK_LIB.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'acquire_operation_lock "${STATE_DIR}" "managed service ${ACTION}" "${SERVICE_UID}" "${SERVICE_GID}"',
+            manage_service,
+        )
+        self.assertIn('SERVICE_USER="${SUDO_USER:-${QWEN38_SERVICE_USER:-$(id -un)}}"', manage_service)
+        self.assertIn('acquire_operation_lock "${STATE_DIR}" "uninstall"', uninstall)
+        self.assertIn('sudo_with_operation_lock "${INSTALL_ROOT}/scripts/manage-service.sh" remove --yes', uninstall)
+        self.assertIn('sudo_with_operation_lock bash "${MANAGE_SERVICE}" create', update_release)
+        for text in (uninstall, update_release):
+            self.assertIn('QWEN38_OPERATION_LOCK_HELD="${QWEN38_OPERATION_LOCK_HELD}"', text)
+            self.assertIn('QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}"', text)
+            self.assertIn('QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}"', text)
+        self.assertIn('install -d -o "${owner_uid}" -g "${owner_gid}" -m 0700 "${state_dir}"', lock_helper)
+        self.assertIn('current_gid="$(stat -c %g "${lock_file}")"', lock_helper)
+
+    def test_dry_run_and_status_paths_remain_unlocked(self) -> None:
         release_manager = (ROOT / "scripts" / "release-manager.sh").read_text(encoding="utf-8")
         update_transition = (ROOT / "scripts" / "lifecycle" / "update-transition.sh").read_text(encoding="utf-8")
+        manage_service = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        uninstall = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+
         self.assertIn('status)\n    [[ $# -eq 0 ]]', release_manager)
         self.assertIn('status)\n    [[ $# -eq 0 ]]', update_transition)
         self.assertNotIn('status)\n    acquire_', release_manager)
         self.assertNotIn('status)\n    acquire_', update_transition)
+        self.assertLess(
+            manage_service.index('if [[ "${ACTION}" == status ]]'),
+            manage_service.index('acquire_operation_lock "${STATE_DIR}" "managed service ${ACTION}"'),
+        )
+        self.assertLess(
+            uninstall.index('if [[ "${DRY_RUN}" == 1 ]]'),
+            uninstall.index('acquire_operation_lock "${STATE_DIR}" "uninstall"'),
+        )
 
 
 if __name__ == "__main__":
