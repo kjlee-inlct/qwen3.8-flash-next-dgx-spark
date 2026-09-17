@@ -7,6 +7,7 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${ROOT_DIR}/scripts/model-profiles.sh"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 CURRENT_RELEASE_LINK="${DATA_HOME}/current"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
@@ -36,6 +37,31 @@ MONITOR_MIN_FREE_CLI=""; MONITOR_FREE_GATE_CLI=""; MONITOR_MIN_SWAP_FREE_CLI=""
 MONITOR_CONSECUTIVE_CLI=""; MONITOR_HEARTBEAT_CLI=""
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+parse_install_manifest() {
+  local parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" install-maintenance "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "${key}" '%s' "${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+}
+read_manifest_profile() {
+  local parsed key value profile=""
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" install-maintenance "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    [[ "${key}" == MODEL_PROFILE ]] && profile="${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  printf '%s' "${profile}"
+}
 expand_user_path() {
   case "$1" in
     "~") printf '%s\n' "${HOME}" ;;
@@ -158,18 +184,13 @@ done
 
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
-  manifest_profile="$({
-    # Created by write_state with shell-escaped values and mode 600.
-    # shellcheck disable=SC1090
-    source "${STATE_FILE}"
-    printf '%s' "${MODEL_PROFILE:-}"
-  })"
+  [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
+  manifest_profile="$(read_manifest_profile)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
   if [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
     [[ "${DRY_RUN}" == 1 ]] || \
       die "installed profile is ${manifest_profile}; uninstall it before selecting ${MODEL_CLI}"
   else
-    # shellcheck disable=SC1090
-    source "${STATE_FILE}"
+    parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
     RESUME=1
   fi
 fi
@@ -242,6 +263,10 @@ SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED="${SERVICE_OWNED:-0}"
 if [[ "${MIGRATE_MANIFEST}" == 1 ]]; then
   [[ "${RESUME}" == 1 ]] || die "--migrate-manifest requires an existing installation manifest"
   validate_api_access_settings
+  if [[ "${DRY_RUN}" == 1 ]]; then
+    printf 'DRY-RUN: installation manifest is valid and would be migrated to schema 4: %s\n' "${STATE_FILE}"
+    exit 0
+  fi
   write_state "${PHASE:-complete}"
   printf 'Installation manifest migrated to schema 4: %s\n' "${STATE_FILE}"
   exit 0

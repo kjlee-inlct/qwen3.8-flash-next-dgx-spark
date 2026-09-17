@@ -143,6 +143,7 @@ INSTALL_SCHEMAS = {
     "install-service": INSTALL_SERVICE_SCHEMA,
     "install-doctor": INSTALL_DOCTOR_SCHEMA,
     "install-uninstall": INSTALL_UNINSTALL_SCHEMA,
+    "install-maintenance": {},
 }
 
 DOCTOR_API_VALIDATORS: dict[str, Validator] = {
@@ -150,6 +151,60 @@ DOCTOR_API_VALIDATORS: dict[str, Validator] = {
     "API_DOCKER_PORT": matches(POSITIVE_INTEGER),
     "API_LAN_ADDRESS": optional(nonempty_text),
     "API_LAN_PORT": matches(POSITIVE_INTEGER),
+}
+
+INSTALL_MAINTENANCE_REQUIRED = {
+    "SCHEMA_VERSION", "PHASE", "INSTALL_ROOT", "MODEL_PROFILE", "MODEL_REPO", "MODEL_REVISION",
+    "MODEL_DIR", "MODEL_OWNED", "SWAP_FILE", "SWAP_OWNED", "VLLM_IMAGE", "IMAGE_OWNED",
+    "CONTAINER_NAME", "CONFIG_OVERRIDE", "CONFIG_OWNED", "MONITOR_PROTECT", "PROXY_ENABLED",
+    "PROXY_OWNED", "PROXY_PORT", "SERVICE_ENABLED", "SERVICE_OWNED", "UI_LANG",
+}
+
+INSTALL_MAINTENANCE_V3_REQUIRED = {
+    "MONITOR_ENABLED", "MONITOR_MIN_AVAILABLE_GIB", "MONITOR_MIN_FREE_GIB", "MONITOR_FREE_GATE_GIB",
+    "MONITOR_MIN_SWAP_FREE_GIB", "MONITOR_CONSECUTIVE", "MONITOR_HEARTBEAT",
+}
+
+INSTALL_MAINTENANCE_V4_REQUIRED = {
+    "SERVED_NAME", "API_ACCESS_MODE", "API_DOCKER_PORT", "API_LAN_ADDRESS", "API_LAN_PORT", "SERVICE_UNIT",
+}
+
+INSTALL_FIELD_VALIDATORS: dict[str, Validator] = {
+    "SCHEMA_VERSION": one_of("2", "3", "4"),
+    "PHASE": nonempty_text,
+    "INSTALL_ROOT": absolute_path,
+    "MODEL_PROFILE": one_of("orcarouter", "nvidia"),
+    "MODEL_REPO": nonempty_text,
+    "MODEL_REVISION": nonempty_text,
+    "MODEL_DIR": absolute_path,
+    "MODEL_OWNED": one_of("0", "1"),
+    "SWAP_FILE": absolute_path,
+    "SWAP_OWNED": one_of("0", "1"),
+    "VLLM_IMAGE": nonempty_text,
+    "IMAGE_OWNED": one_of("0", "1"),
+    "SERVED_NAME": nonempty_text,
+    "CONTAINER_NAME": exact("qwen38-flash-next"),
+    "CONFIG_OVERRIDE": optional(absolute_path),
+    "CONFIG_OWNED": one_of("0", "1"),
+    "MONITOR_PROTECT": one_of("0", "1"),
+    "MONITOR_ENABLED": one_of("0", "1"),
+    "MONITOR_MIN_AVAILABLE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_MIN_FREE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_FREE_GATE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_MIN_SWAP_FREE_GIB": matches(POSITIVE_INTEGER),
+    "MONITOR_CONSECUTIVE": matches(POSITIVE_INTEGER),
+    "MONITOR_HEARTBEAT": matches(NONNEGATIVE_INTEGER),
+    "API_ACCESS_MODE": one_of("local", "docker", "lan"),
+    "API_DOCKER_PORT": matches(POSITIVE_INTEGER),
+    "API_LAN_ADDRESS": optional(nonempty_text),
+    "API_LAN_PORT": matches(POSITIVE_INTEGER),
+    "PROXY_ENABLED": one_of("0", "1"),
+    "PROXY_OWNED": one_of("0", "1"),
+    "PROXY_PORT": matches(POSITIVE_INTEGER),
+    "SERVICE_ENABLED": one_of("0", "1"),
+    "SERVICE_OWNED": one_of("0", "1"),
+    "SERVICE_UNIT": exact("qwen38-flash-next.service"),
+    "UI_LANG": optional(one_of("en", "ko")),
 }
 
 
@@ -161,6 +216,8 @@ def decode_legacy_value(raw: str) -> str:
 
 
 def decode_bash_printf_q(raw: str) -> str:
+    if raw in {"", "''"}:
+        return ""
     if raw.startswith("$'"):
         raise ValueError("ANSI-C shell quoting is not allowed in install manifest values")
     try:
@@ -168,7 +225,6 @@ def decode_bash_printf_q(raw: str) -> str:
     except ValueError as exc:
         raise ValueError(f"invalid shell-escaped install value: {exc}") from exc
     if len(words) != 1:
-        if raw == "''": return ""
         raise ValueError("install manifest value must decode to exactly one word")
     value = words[0]
     if any(ch in value for ch in ("\x00", "\n", "\r")):
@@ -205,6 +261,27 @@ def parse_state(path: Path, schema_name: str) -> dict[str, str]:
     return values
 
 
+def validate_install_maintenance(values: dict[str, str]) -> None:
+    missing = sorted(INSTALL_MAINTENANCE_REQUIRED - values.keys())
+    if missing:
+        raise ValueError(f"missing required install-maintenance manifest key(s): {', '.join(missing)}")
+    for key, value in values.items():
+        validator = INSTALL_FIELD_VALIDATORS[key]
+        if not validator(value):
+            raise ValueError(f"invalid install-maintenance manifest value for {key}")
+    version = values["SCHEMA_VERSION"]
+    if version in {"3", "4"}:
+        missing = sorted(INSTALL_MAINTENANCE_V3_REQUIRED - values.keys())
+        if missing:
+            raise ValueError(f"missing schema-{version} maintenance key(s): {', '.join(missing)}")
+    if version == "4":
+        missing = sorted(INSTALL_MAINTENANCE_V4_REQUIRED - values.keys())
+        if missing:
+            raise ValueError(f"missing schema-4 maintenance key(s): {', '.join(missing)}")
+    if values["MONITOR_PROTECT"] == "1" and values.get("MONITOR_ENABLED", values["MONITOR_PROTECT"]) != "1":
+        raise ValueError("maintenance manifest protection requires monitor enabled")
+
+
 def parse_install(path: Path, schema_name: str) -> dict[str, str]:
     schema = INSTALL_SCHEMAS[schema_name]
     values: dict[str, str] = {}
@@ -212,6 +289,9 @@ def parse_install(path: Path, schema_name: str) -> dict[str, str]:
         if key not in INSTALL_KEYS: raise ValueError(f"line {lineno}: unknown install manifest key: {key}")
         if key in values: raise ValueError(f"line {lineno}: duplicate key: {key}")
         values[key] = decode_bash_printf_q(raw)
+    if schema_name == "install-maintenance":
+        validate_install_maintenance(values)
+        return values
     missing = [key for key in schema if key not in values]
     if missing: raise ValueError(f"missing required {schema_name} manifest key(s): {', '.join(missing)}")
     for key, validator in schema.items():
@@ -249,8 +329,11 @@ def main() -> int:
     try:
         if args.schema in INSTALL_SCHEMAS:
             values = parse_install(args.path, args.schema)
-            keys = list(INSTALL_SCHEMAS[args.schema])
-            if args.schema == "install-doctor": keys += list(DOCTOR_API_VALIDATORS)
+            if args.schema == "install-maintenance":
+                keys = list(values)
+            else:
+                keys = list(INSTALL_SCHEMAS[args.schema])
+                if args.schema == "install-doctor": keys += list(DOCTOR_API_VALIDATORS)
         else:
             values = parse_state(args.path, args.schema)
             keys = list(SCHEMAS[args.schema])
