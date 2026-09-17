@@ -119,6 +119,20 @@ class StateFileParserTests(unittest.TestCase):
         self.assertEqual(fields[mode_index + 1], b"docker")
         self.assertEqual(fields[port_index + 1], b"8000")
 
+    def test_install_uninstall_emits_only_deletion_fields(self) -> None:
+        result = self.run_parser("install-uninstall", self.install_manifest())
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"INSTALL_ROOT", fields)
+        self.assertIn(b"/home/inlc/qwen install", fields)
+        self.assertIn(b"MODEL_OWNED", fields)
+        self.assertIn(b"PROXY_OWNED", fields)
+        self.assertIn(b"SERVICE_OWNED", fields)
+        self.assertIn(b"UI_LANG", fields)
+        self.assertNotIn(b"MODEL_REPO", fields)
+        self.assertNotIn(b"MONITOR_ENABLED", fields)
+        self.assertNotIn(b"API_ACCESS_MODE", fields)
+
     def test_install_runtime_rejects_unknown_or_executable_manifest_content(self) -> None:
         unknown = self.run_parser("install-runtime", self.install_manifest("EVIL=value"))
         executable = self.run_parser("install-runtime", self.install_manifest().replace(
