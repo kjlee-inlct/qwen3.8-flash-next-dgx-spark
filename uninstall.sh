@@ -11,12 +11,21 @@ RUNTIME_TRANSITION_FILE="${STATE_DIR}/runtime-transition.env"
 UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; PURGE_ALL=0; YES=0; DRY_RUN=0
 CLI_LANG=""
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 usage() {
   printf 'Usage: ./uninstall.sh [--lang en|ko] [--purge-model] [--purge-swap] [--purge-image] [--purge-all] [--yes] [--dry-run]\n'
   printf '       ./uninstall.sh  # interactive English/Korean wizard (default)\n'
+}
+sudo_with_operation_lock() {
+  sudo env \
+    QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
+    QWEN38_OPERATION_LOCK_HELD="${QWEN38_OPERATION_LOCK_HELD}" \
+    QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
+    QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
+    "$@"
 }
 
 parse_install_manifest() {
@@ -92,6 +101,11 @@ if [[ "${DRY_RUN}" == 1 ]]; then
   exit 0
 fi
 
+[[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+# shellcheck source=scripts/lib/operation-lock.sh
+source "${OPERATION_LOCK_LIB}"
+acquire_operation_lock "${STATE_DIR}" "uninstall" || exit $?
+
 [[ ! -e "${UPDATE_TRANSITION_FILE}" && ! -L "${UPDATE_TRANSITION_FILE}" ]] || \
   die "an update transition is active; recover or roll it back before uninstalling"
 [[ ! -e "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]] || \
@@ -114,7 +128,7 @@ if [[ -r "${MONITOR_PID_FILE}" ]]; then
   rm -f -- "${MONITOR_PID_FILE}"
 fi
 if [[ "${SERVICE_OWNED}" == 1 ]]; then
-  sudo "${INSTALL_ROOT}/scripts/manage-service.sh" remove --yes
+  sudo_with_operation_lock "${INSTALL_ROOT}/scripts/manage-service.sh" remove --yes
 fi
 if [[ "${PROXY_OWNED}" == 1 ]]; then
   sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes
