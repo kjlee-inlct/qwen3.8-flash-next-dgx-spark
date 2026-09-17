@@ -6,6 +6,19 @@ operation_lock_die() {
   return 1
 }
 
+operation_lock_owner_is_ancestor() {
+  local owner_pid="$1" cursor="${PPID:-0}" parent
+  [[ "${owner_pid}" =~ ^[1-9][0-9]*$ ]] || return 1
+  while [[ "${cursor}" =~ ^[1-9][0-9]*$ && "${cursor}" != 1 ]]; do
+    [[ "${cursor}" == "${owner_pid}" ]] && return 0
+    [[ -r "/proc/${cursor}/status" ]] || return 1
+    parent="$(awk '/^PPid:/ {print $2}' "/proc/${cursor}/status")"
+    [[ -n "${parent}" && "${parent}" != "${cursor}" ]] || return 1
+    cursor="${parent}"
+  done
+  [[ "${cursor}" == "${owner_pid}" ]]
+}
+
 acquire_operation_lock() {
   local state_dir="$1" label="${2:-lifecycle operation}" owner_uid="${3:-$(id -u)}" owner_gid="${4:-$(id -g)}"
   local lock_file probe_fd current_uid
@@ -32,6 +45,8 @@ acquire_operation_lock() {
 
   if [[ "${QWEN38_OPERATION_LOCK_HELD:-0}" == 1 ]]; then
     [[ "${QWEN38_OPERATION_LOCK_FILE:-}" == "${lock_file}" ]] || operation_lock_die "inherited lifecycle lock path mismatch" || return 1
+    operation_lock_owner_is_ancestor "${QWEN38_OPERATION_LOCK_OWNER_PID:-}" || \
+      operation_lock_die "inherited lifecycle lock owner is not an ancestor of this process" || return 1
     exec {probe_fd}<>"${lock_file}" || return 1
     if flock -n "${probe_fd}"; then
       flock -u "${probe_fd}" || true
@@ -48,6 +63,7 @@ acquire_operation_lock() {
   fi
   QWEN38_OPERATION_LOCK_HELD=1
   QWEN38_OPERATION_LOCK_FILE="${lock_file}"
-  export QWEN38_OPERATION_LOCK_HELD QWEN38_OPERATION_LOCK_FILE
+  QWEN38_OPERATION_LOCK_OWNER_PID="$$"
+  export QWEN38_OPERATION_LOCK_HELD QWEN38_OPERATION_LOCK_FILE QWEN38_OPERATION_LOCK_OWNER_PID
   printf 'Lifecycle operation lock acquired: %s (%s)\n' "${label}" "${lock_file}" >&2
 }
