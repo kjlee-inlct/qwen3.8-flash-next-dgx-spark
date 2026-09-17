@@ -17,6 +17,21 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 `runtime-commit.env` proves that the managed service runner finished the runtime transition commit for the running replacement container. It binds the physical immutable runtime root, container name, exact Docker container ID, and UTC commit timestamp. `manage-service.sh create --start` requires a matching attestation in addition to health before it reports readiness.
 
+## Lifecycle operation lock
+
+Mutating release/update operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so release pointer and update-transition mutations cannot overlap with another release/update mutation.
+
+The first locking scope covers:
+
+- `scripts/update-release.sh` for non-dry-run cutover;
+- `scripts/lifecycle/update-transition.sh` actions `prepare`, `commit`, `rollback`, and `recover`;
+- `scripts/release-manager.sh` actions `stage`, `activate`, `discard`, and `rollback`;
+- `scripts/lifecycle/bootstrap-release.sh`.
+
+Nested lifecycle helpers reuse an inherited lock only when the advertised lock file is actually locked and the recorded outer owner PID is an ancestor of the current process. A forged inherited marker therefore does not bypass serialization. Read-only `status`/`verify` paths and update dry-runs remain unlocked.
+
+This first scope intentionally does not yet cover installer, managed-service, or uninstaller mutation entry points; those cross the sudo/service boundary and are connected in a follow-up change after the release/update locking layer is validated independently.
+
 ## Installation manifest boundary
 
 `~/.local/state/qwen38-spark/install.env` is written by `install.sh` using Bash `printf %q` encoding and mode 600. All supported consumers now treat it as data and use strict views from `scripts/state_file.py` rather than evaluating it as shell code:
