@@ -15,10 +15,8 @@ class StateFileParserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.env"
             path.write_text(text, encoding="utf-8")
-            return subprocess.run(
-                ["python3", str(PARSER), schema, str(path)], cwd=ROOT,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-            )
+            return subprocess.run(["python3", str(PARSER), schema, str(path)], cwd=ROOT,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
 
     @staticmethod
     def install_manifest(*extra: str) -> str:
@@ -72,7 +70,8 @@ class StateFileParserTests(unittest.TestCase):
             "RUNTIME_STOP_SCHEMA_VERSION=1", "STOP_REASON=memory-protection", "STOP_CONTAINER_NAME=qwen38-flash-next",
             "STOP_CONTAINER_ID=" + "b" * 64, "UPDATED_AT=2026-09-16T01:00:00Z", "",
         ]))
-        self.assertEqual(qualification.returncode, 0, qualification.stderr.decode()); self.assertEqual(stop.returncode, 0, stop.stderr.decode())
+        self.assertEqual(qualification.returncode, 0, qualification.stderr.decode())
+        self.assertEqual(stop.returncode, 0, stop.stderr.decode())
 
     def test_runtime_commit_attestation_binds_root_and_container(self) -> None:
         valid = self.run_parser("runtime-commit", "\n".join([
@@ -101,6 +100,24 @@ class StateFileParserTests(unittest.TestCase):
         self.assertIn(b"INSTALL_ROOT", fields); self.assertIn(b"/home/inlc/qwen install", fields)
         self.assertIn(b"SERVED_NAME", fields); self.assertIn(b"CONTAINER_NAME", fields)
         self.assertNotIn(b"MODEL_DIR", fields); self.assertNotIn(b"SERVICE_OWNED", fields)
+
+    def test_install_doctor_emits_diagnostic_fields_and_api_values(self) -> None:
+        result = self.run_parser("install-doctor", self.install_manifest())
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"MODEL_REPO", fields); self.assertIn(b"SWAP_FILE", fields); self.assertIn(b"API_ACCESS_MODE", fields)
+        self.assertIn(b"docker", fields); self.assertIn(b"API_DOCKER_PORT", fields); self.assertNotIn(b"SERVICE_OWNED", fields)
+
+    def test_install_doctor_schema3_falls_back_to_legacy_proxy_fields(self) -> None:
+        manifest = self.install_manifest().replace("SCHEMA_VERSION=4", "SCHEMA_VERSION=3")
+        manifest = "\n".join(line for line in manifest.splitlines() if not line.startswith("API_")) + "\n"
+        result = self.run_parser("install-doctor", manifest)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        mode_index = fields.index(b"API_ACCESS_MODE")
+        port_index = fields.index(b"API_DOCKER_PORT")
+        self.assertEqual(fields[mode_index + 1], b"docker")
+        self.assertEqual(fields[port_index + 1], b"8000")
 
     def test_install_runtime_rejects_unknown_or_executable_manifest_content(self) -> None:
         unknown = self.run_parser("install-runtime", self.install_manifest("EVIL=value"))
