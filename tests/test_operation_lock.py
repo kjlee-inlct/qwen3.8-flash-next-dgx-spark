@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 LOCK_LIB = ROOT / "scripts" / "lib" / "operation-lock.sh"
+UPDATE_TRANSITION = ROOT / "scripts" / "update-transition.sh"
 
 
 class OperationLockTests(unittest.TestCase):
@@ -44,6 +45,38 @@ class OperationLockTests(unittest.TestCase):
                 )
                 self.assertNotEqual(contender.returncode, 0)
                 self.assertIn("another Qwen3.8 lifecycle operation is active", contender.stderr)
+            finally:
+                holder.terminate()
+                holder.wait(timeout=5)
+
+    def test_update_transition_entry_point_rejects_concurrent_recover(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            xdg_state = Path(directory) / "state"
+            state = xdg_state / "qwen38-spark"
+            holder = subprocess.Popen(
+                [
+                    "bash",
+                    "-c",
+                    f'source "{LOCK_LIB}"; acquire_operation_lock "$1" holder; echo READY; sleep 30',
+                    "bash",
+                    str(state),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                assert holder.stdout is not None
+                self.assertEqual(holder.stdout.readline().strip(), "READY")
+                result = subprocess.run(
+                    ["bash", str(UPDATE_TRANSITION), "recover"],
+                    env={**os.environ, "XDG_STATE_HOME": str(xdg_state)},
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("another Qwen3.8 lifecycle operation is active", result.stderr)
             finally:
                 holder.terminate()
                 holder.wait(timeout=5)
@@ -99,6 +132,20 @@ class OperationLockTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("owner is not an ancestor", result.stderr)
+
+    def test_release_and_update_mutators_use_shared_lock(self) -> None:
+        release_manager = (ROOT / "scripts" / "release-manager.sh").read_text(encoding="utf-8")
+        update_transition = (ROOT / "scripts" / "lifecycle" / "update-transition.sh").read_text(encoding="utf-8")
+        update_release = (ROOT / "scripts" / "update-release.sh").read_text(encoding="utf-8")
+        bootstrap = (ROOT / "scripts" / "lifecycle" / "bootstrap-release.sh").read_text(encoding="utf-8")
+
+        for action in ("stage", "activate", "discard", "rollback"):
+            self.assertIn(f'acquire_release_lock "release {action}"', release_manager)
+        for action in ("prepare", "commit", "rollback", "recover"):
+            self.assertIn(f'acquire_transition_lock "update transition {action}"', update_transition)
+        self.assertIn('acquire_operation_lock "${STATE_HOME}" "release update to ${target}"', update_release)
+        self.assertIn('if [[ "${DRY_RUN}" != 1 ]]', update_release)
+        self.assertIn('acquire_operation_lock "${STATE_HOME}" "release bootstrap"', bootstrap)
 
     def test_read_only_actions_remain_unlocked(self) -> None:
         release_manager = (ROOT / "scripts" / "release-manager.sh").read_text(encoding="utf-8")
