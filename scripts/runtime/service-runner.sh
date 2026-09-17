@@ -36,6 +36,12 @@ RUNTIME_PREFLIGHT="${RUNTIME_ROOT}/scripts/runtime/preflight-runtime.sh"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT}}"
+RUNTIME_PHASE_START_SECONDS="${SECONDS}"
+
+log_runtime_phase() {
+  local phase="$1"
+  printf 'Runtime phase: %s (elapsed=%ss)\n' "${phase}" "$((SECONDS - RUNTIME_PHASE_START_SECONDS))"
+}
 
 write_runtime_commit_attestation() {
   local container_id="$1" temporary="${RUNTIME_COMMIT_FILE}.tmp"
@@ -70,8 +76,11 @@ export PUBLISH_HOST=127.0.0.1
 
 # A previous attestation never proves this process has completed a new commit.
 rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
+log_runtime_phase "preflight-start"
 bash "${RUNTIME_PREFLIGHT}"
+log_runtime_phase "preflight-complete"
 bash "${RUNTIME_TRANSITION}" recover
+log_runtime_phase "transition-recovery-complete"
 
 transition_active=0
 rollback_transition() {
@@ -94,9 +103,12 @@ trap 'rollback_transition 143' TERM
 
 bash "${RUNTIME_TRANSITION}" prepare
 transition_active=1
+log_runtime_phase "transition-prepared"
 "${RUNTIME_ROOT}/scripts/serve.sh"
+log_runtime_phase "container-start-command-complete"
 bash "${RUNTIME_TRANSITION}" candidate-started
 bash "${RUNTIME_TRANSITION}" validating
+log_runtime_phase "candidate-validating"
 
 ready=0
 for attempt in $(seq 1 180); do
@@ -112,17 +124,21 @@ for attempt in $(seq 1 180); do
   sleep 10
 done
 [[ "${ready}" == 1 ]] || { printf 'FATAL: candidate API did not become healthy within 30 minutes\n' >&2; false; }
+log_runtime_phase "health-ready"
 
 models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
 python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
   "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}"
+log_runtime_phase "model-list-validated"
 
 bash "${RUNTIME_TRANSITION}" commit
+log_runtime_phase "transition-committed"
 # The runtime transaction is now final. Any attestation failure must fail the
 # service/update path, not attempt to roll back an already-committed transaction.
 transition_active=0
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}")"
 write_runtime_commit_attestation "${container_id}"
+log_runtime_phase "runtime-attestation-written"
 trap - ERR INT TERM
 
 printf 'Qwen API is ready; runtime transition committed and attested; following container logs.\n'
