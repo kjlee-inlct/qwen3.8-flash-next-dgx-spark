@@ -216,6 +216,8 @@ def decode_legacy_value(raw: str) -> str:
 
 
 def decode_bash_printf_q(raw: str) -> str:
+    if raw in {"", "''"}:
+        return ""
     if raw.startswith("$'"):
         raise ValueError("ANSI-C shell quoting is not allowed in install manifest values")
     try:
@@ -223,7 +225,6 @@ def decode_bash_printf_q(raw: str) -> str:
     except ValueError as exc:
         raise ValueError(f"invalid shell-escaped install value: {exc}") from exc
     if len(words) != 1:
-        if raw == "''": return ""
         raise ValueError("install manifest value must decode to exactly one word")
     value = words[0]
     if any(ch in value for ch in ("\x00", "\n", "\r")):
