@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -35,10 +36,7 @@ class UpdateReleaseTests(unittest.TestCase):
         self.make_release(self.baseline, "baseline\n")
         self.make_release(self.target, "target\n")
         (self.data / "current").symlink_to(self.releases / self.baseline)
-        (self.qualified / f"{self.target}.env").write_text(
-            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={self.target}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
-            encoding="utf-8",
-        )
+        self.write_bound_marker(self.target)
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -53,6 +51,22 @@ class UpdateReleaseTests(unittest.TestCase):
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+        )
+
+    def write_bound_marker(self, release_id: str) -> None:
+        manifest = self.releases / release_id / ".release-manifest.json"
+        digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
+        (self.qualified / f"{release_id}.env").write_text(
+            "\n".join(
+                [
+                    "QUALIFICATION_SCHEMA_VERSION=2",
+                    f"QUALIFIED_RELEASE={release_id}",
+                    f"RELEASE_MANIFEST_SHA256={digest}",
+                    "QUALIFIED_AT=2026-09-16T01:00:00Z",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
         )
 
     def run_update(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -70,9 +84,33 @@ class UpdateReleaseTests(unittest.TestCase):
 
         result = self.run_update(self.target, "--dry-run")
 
+        self.assertIn("verified manifest-bound qualification", result.stdout)
         self.assertIn("DRY-RUN", result.stdout)
         self.assertEqual(os.readlink(self.data / "current"), before)
         self.assertFalse((self.state / "qwen38-spark" / "update-transition.env").exists())
+
+    def test_dry_run_rejects_legacy_unbound_qualification(self) -> None:
+        (self.qualified / f"{self.target}.env").write_text(
+            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={self.target}\nQUALIFIED_AT=2026-09-16T01:00:00Z\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_update(self.target, "--dry-run", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid or not manifest-bound", result.stderr)
+
+    def test_dry_run_rejects_qualification_digest_mismatch(self) -> None:
+        marker = self.qualified / f"{self.target}.env"
+        text = marker.read_text(encoding="utf-8")
+        digest = hashlib.sha256((self.releases / self.target / ".release-manifest.json").read_bytes()).hexdigest()
+        wrong = ("0" if digest[0] != "0" else "1") + digest[1:]
+        marker.write_text(text.replace(digest, wrong), encoding="utf-8")
+
+        result = self.run_update(self.target, "--dry-run", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("qualification manifest digest mismatch", result.stderr)
 
     def test_cutover_refuses_missing_baseline(self) -> None:
         (self.data / "current").unlink()
