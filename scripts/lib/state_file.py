@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict parsers for qwen38 state and runtime manifest files.
+"""Strict parsers for qwen38 state and install manifest files.
 
 No parser evaluates shell syntax. Lifecycle files use a small KEY=value format.
 The installer manifest parser additionally decodes the subset of Bash ``printf
@@ -83,43 +83,15 @@ SCHEMAS: dict[str, dict[str, Validator]] = {
 }
 
 # install.sh schema 3/4 fields. Keeping a closed set means an injected shell
-# assignment cannot silently become part of the runtime environment.
+# assignment cannot silently become part of any consumer environment.
 INSTALL_KEYS = {
-    "SCHEMA_VERSION",
-    "PHASE",
-    "INSTALL_ROOT",
-    "MODEL_PROFILE",
-    "MODEL_REPO",
-    "MODEL_REVISION",
-    "MODEL_DIR",
-    "MODEL_OWNED",
-    "SWAP_FILE",
-    "SWAP_OWNED",
-    "VLLM_IMAGE",
-    "IMAGE_OWNED",
-    "SERVED_NAME",
-    "CONTAINER_NAME",
-    "CONFIG_OVERRIDE",
-    "CONFIG_OWNED",
-    "MONITOR_PROTECT",
-    "MONITOR_ENABLED",
-    "MONITOR_MIN_AVAILABLE_GIB",
-    "MONITOR_MIN_FREE_GIB",
-    "MONITOR_FREE_GATE_GIB",
-    "MONITOR_MIN_SWAP_FREE_GIB",
-    "MONITOR_CONSECUTIVE",
-    "MONITOR_HEARTBEAT",
-    "API_ACCESS_MODE",
-    "API_DOCKER_PORT",
-    "API_LAN_ADDRESS",
-    "API_LAN_PORT",
-    "PROXY_ENABLED",
-    "PROXY_OWNED",
-    "PROXY_PORT",
-    "SERVICE_ENABLED",
-    "SERVICE_OWNED",
-    "SERVICE_UNIT",
-    "UI_LANG",
+    "SCHEMA_VERSION", "PHASE", "INSTALL_ROOT", "MODEL_PROFILE", "MODEL_REPO", "MODEL_REVISION",
+    "MODEL_DIR", "MODEL_OWNED", "SWAP_FILE", "SWAP_OWNED", "VLLM_IMAGE", "IMAGE_OWNED",
+    "SERVED_NAME", "CONTAINER_NAME", "CONFIG_OVERRIDE", "CONFIG_OWNED", "MONITOR_PROTECT",
+    "MONITOR_ENABLED", "MONITOR_MIN_AVAILABLE_GIB", "MONITOR_MIN_FREE_GIB", "MONITOR_FREE_GATE_GIB",
+    "MONITOR_MIN_SWAP_FREE_GIB", "MONITOR_CONSECUTIVE", "MONITOR_HEARTBEAT", "API_ACCESS_MODE",
+    "API_DOCKER_PORT", "API_LAN_ADDRESS", "API_LAN_PORT", "PROXY_ENABLED", "PROXY_OWNED",
+    "PROXY_PORT", "SERVICE_ENABLED", "SERVICE_OWNED", "SERVICE_UNIT", "UI_LANG",
 }
 
 INSTALL_RUNTIME_SCHEMA: dict[str, Validator] = {
@@ -141,10 +113,21 @@ INSTALL_RUNTIME_SCHEMA: dict[str, Validator] = {
     "MONITOR_HEARTBEAT": matches(NONNEGATIVE_INTEGER),
 }
 
+INSTALL_SERVICE_SCHEMA: dict[str, Validator] = {
+    "SCHEMA_VERSION": one_of("3", "4"),
+    "PHASE": exact("complete"),
+    "INSTALL_ROOT": absolute_path,
+    "SERVED_NAME": nonempty_text,
+    "CONTAINER_NAME": exact("qwen38-flash-next"),
+}
+
+INSTALL_SCHEMAS = {
+    "install-runtime": INSTALL_RUNTIME_SCHEMA,
+    "install-service": INSTALL_SERVICE_SCHEMA,
+}
+
 
 def decode_legacy_value(raw: str) -> str:
-    """Decode lifecycle values, accepting only the legacy empty ``''`` form."""
-
     if raw == "''":
         return ""
     if any(ch in raw for ch in ("'", '"', "`", "\\", "$", ";")):
@@ -153,13 +136,7 @@ def decode_legacy_value(raw: str) -> str:
 
 
 def decode_bash_printf_q(raw: str) -> str:
-    """Decode non-executable ``printf %q`` output used by install.sh.
-
-    ``shlex`` understands the ordinary backslash/single-quote forms emitted for
-    paths containing whitespace. ANSI-C ``$'...'`` output is intentionally
-    rejected because installer fields must not contain control characters.
-    """
-
+    """Decode non-executable ``printf %q`` output used by install.sh."""
     if raw.startswith("$'"):
         raise ValueError("ANSI-C shell quoting is not allowed in install manifest values")
     try:
@@ -181,7 +158,6 @@ def read_assignments(path: Path) -> list[tuple[int, str, str]]:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise ValueError(f"cannot read state file: {exc}") from exc
-
     assignments: list[tuple[int, str, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         if not line:
@@ -207,14 +183,14 @@ def parse_state(path: Path, schema_name: str) -> dict[str, str]:
         if not schema[key](value):
             raise ValueError(f"line {lineno}: invalid value for {key}")
         values[key] = value
-
     missing = [key for key in schema if key not in values]
     if missing:
         raise ValueError(f"missing required key(s): {', '.join(missing)}")
     return values
 
 
-def parse_install_runtime(path: Path) -> dict[str, str]:
+def parse_install(path: Path, schema_name: str) -> dict[str, str]:
+    schema = INSTALL_SCHEMAS[schema_name]
     values: dict[str, str] = {}
     for lineno, key, raw in read_assignments(path):
         if key not in INSTALL_KEYS:
@@ -222,16 +198,15 @@ def parse_install_runtime(path: Path) -> dict[str, str]:
         if key in values:
             raise ValueError(f"line {lineno}: duplicate key: {key}")
         values[key] = decode_bash_printf_q(raw)
-
-    missing = [key for key in INSTALL_RUNTIME_SCHEMA if key not in values]
+    missing = [key for key in schema if key not in values]
     if missing:
-        raise ValueError(f"missing required runtime manifest key(s): {', '.join(missing)}")
-    for key, validator in INSTALL_RUNTIME_SCHEMA.items():
+        raise ValueError(f"missing required {schema_name} manifest key(s): {', '.join(missing)}")
+    for key, validator in schema.items():
         if not validator(values[key]):
-            raise ValueError(f"invalid runtime manifest value for {key}")
-    if values["MONITOR_PROTECT"] == "1" and values["MONITOR_ENABLED"] != "1":
+            raise ValueError(f"invalid {schema_name} manifest value for {key}")
+    if schema_name == "install-runtime" and values["MONITOR_PROTECT"] == "1" and values["MONITOR_ENABLED"] != "1":
         raise ValueError("runtime manifest protection requires monitor enabled")
-    return {key: values[key] for key in INSTALL_RUNTIME_SCHEMA}
+    return {key: values[key] for key in schema}
 
 
 def emit_nul(values: dict[str, str], keys: list[str]) -> None:
@@ -242,15 +217,15 @@ def emit_nul(values: dict[str, str], keys: list[str]) -> None:
 
 
 def main() -> int:
-    choices = sorted([*SCHEMAS, "install-runtime"])
+    choices = sorted([*SCHEMAS, *INSTALL_SCHEMAS])
     parser = argparse.ArgumentParser()
     parser.add_argument("schema", choices=choices)
     parser.add_argument("path", type=Path)
     args = parser.parse_args()
     try:
-        if args.schema == "install-runtime":
-            values = parse_install_runtime(args.path)
-            keys = list(INSTALL_RUNTIME_SCHEMA)
+        if args.schema in INSTALL_SCHEMAS:
+            values = parse_install(args.path, args.schema)
+            keys = list(INSTALL_SCHEMAS[args.schema])
         else:
             values = parse_state(args.path, args.schema)
             keys = list(SCHEMAS[args.schema])
