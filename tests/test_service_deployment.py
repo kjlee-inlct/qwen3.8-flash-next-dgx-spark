@@ -76,6 +76,27 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn('print_readiness_progress "$((attempt * 10))" "${candidate_container_id}"', manager)
         self.assertIn("1800 seconds", manager)
 
+    def test_service_runner_reports_runtime_phase_timing(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        self.assertIn('RUNTIME_PHASE_START_SECONDS="${SECONDS}"', runner)
+        self.assertIn("log_runtime_phase()", runner)
+        for phase in (
+            "preflight-start",
+            "preflight-complete",
+            "transition-recovery-complete",
+            "transition-prepared",
+            "container-start-command-complete",
+            "candidate-validating",
+            "health-ready",
+            "model-list-validated",
+            "transition-committed",
+            "runtime-attestation-written",
+        ):
+            self.assertIn(f'log_runtime_phase "{phase}"', runner)
+        self.assertIn("elapsed=%ss", runner)
+        self.assertLess(runner.index('log_runtime_phase "health-ready"'), runner.index('log_runtime_phase "model-list-validated"'))
+        self.assertLess(runner.index('log_runtime_phase "transition-committed"'), runner.index('log_runtime_phase "runtime-attestation-written"'))
+
     def test_release_qualification_does_not_mutate_payload(self) -> None:
         qualifier = (ROOT / "scripts" / "lifecycle" / "qualify-release.sh").read_text(encoding="utf-8")
         self.assertIn("PYTHONDONTWRITEBYTECODE=1", qualifier)
