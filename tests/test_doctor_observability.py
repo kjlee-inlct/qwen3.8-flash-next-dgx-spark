@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -35,16 +36,33 @@ class DoctorObservabilityTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def stage_release(self, release_id: str) -> None:
+    def stage_release(self, release_id: str, *, legacy: bool = False) -> None:
         release_dir = self.app_data / "releases" / release_id
         release_dir.mkdir(parents=True)
         (release_dir / "payload.txt").write_text("known-good\n", encoding="utf-8")
         subprocess.run(["python3", str(MANIFEST_TOOL), "build", str(release_dir), release_id],
                        check=True, text=True, capture_output=True)
         qualified = self.app_data / "qualified"
-        qualified.mkdir()
-        (qualified / f"{release_id}.env").write_text(
-            f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\n", encoding="utf-8")
+        qualified.mkdir(exist_ok=True)
+        marker = qualified / f"{release_id}.env"
+        if legacy:
+            marker.write_text(
+                f"QUALIFICATION_SCHEMA_VERSION=1\nQUALIFIED_RELEASE={release_id}\n"
+                "QUALIFIED_AT=2026-09-16T01:00:00Z\n",
+                encoding="utf-8",
+            )
+        else:
+            digest = hashlib.sha256((release_dir / ".release-manifest.json").read_bytes()).hexdigest()
+            marker.write_text(
+                "\n".join([
+                    "QUALIFICATION_SCHEMA_VERSION=2",
+                    f"QUALIFIED_RELEASE={release_id}",
+                    f"RELEASE_MANIFEST_SHA256={digest}",
+                    "QUALIFIED_AT=2026-09-16T01:00:00Z",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
         (self.app_data / "current").symlink_to(release_dir)
 
     def run_helper(self) -> subprocess.CompletedProcess[str]:
@@ -69,10 +87,35 @@ source {HELPER!s}
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("[PASS] no incomplete update transition exists", result.stdout)
         self.assertIn(f"[PASS] current immutable release is verified ({release_id})", result.stdout)
-        self.assertIn("[PASS] current immutable release is qualified", result.stdout)
+        self.assertIn("[PASS] current immutable release qualification matches release manifest digest", result.stdout)
         self.assertIn("[PASS] no previous immutable release is registered", result.stdout)
         self.assertIn("[PASS] no stale runtime stop marker exists", result.stdout)
         self.assertIn("[PASS] API access mode is local-only", result.stdout)
+
+    def test_legacy_qualification_is_reported_as_warning(self) -> None:
+        release_id = "c" * 40
+        self.stage_release(release_id, legacy=True)
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("[WARN] current immutable release has legacy unbound qualification", result.stdout)
+        self.assertNotIn("qualification matches release manifest digest", result.stdout)
+
+    def test_qualification_digest_drift_is_reported_as_failure(self) -> None:
+        release_id = "d" * 40
+        self.stage_release(release_id)
+        marker = self.app_data / "qualified" / f"{release_id}.env"
+        lines = marker.read_text(encoding="utf-8").splitlines()
+        marker.write_text(
+            "\n".join(
+                "RELEASE_MANIFEST_SHA256=" + "0" * 64
+                if line.startswith("RELEASE_MANIFEST_SHA256=") else line
+                for line in lines
+            ) + "\n",
+            encoding="utf-8",
+        )
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("[FAIL] current immutable release qualification manifest digest mismatch", result.stdout)
 
     def test_active_update_transaction_is_reported_as_failure(self) -> None:
         release_id = "b" * 40
