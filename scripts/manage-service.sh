@@ -11,6 +11,7 @@ ACTION="${1:-status}"
 START=1
 YES=0
 RUNTIME_ROOT_OVERRIDE=""
+OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 
 usage() {
   printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--runtime-root PATH] [--yes]\n'
@@ -49,7 +50,24 @@ if [[ "${ACTION}" == status ]]; then
 fi
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || die "create/remove requires sudo"
-for command in systemctl install grep getent cut stat mktemp realpath docker curl python3 seq; do command -v "${command}" >/dev/null 2>&1 || die "${command} is required"; done
+for command in systemctl install grep getent cut stat mktemp realpath docker curl python3 seq flock awk; do command -v "${command}" >/dev/null 2>&1 || die "${command} is required"; done
+
+SERVICE_USER="${SUDO_USER:-${QWEN38_SERVICE_USER:-$(id -un)}}"
+[[ "${SERVICE_USER}" != root ]] || die "run through sudo from the user who owns the installation, or set QWEN38_SERVICE_USER"
+USER_ENTRY="$(getent passwd "${SERVICE_USER}")"
+[[ -n "${USER_ENTRY}" ]] || die "cannot resolve service user: ${SERVICE_USER}"
+SERVICE_UID="$(cut -d: -f3 <<<"${USER_ENTRY}")"
+SERVICE_GID="$(cut -d: -f4 <<<"${USER_ENTRY}")"
+SERVICE_HOME="$(cut -d: -f6 <<<"${USER_ENTRY}")"
+SERVICE_GROUP="$(getent group "${SERVICE_GID}" | cut -d: -f1)"
+[[ -n "${SERVICE_GROUP}" && -d "${SERVICE_HOME}" ]] || die "cannot resolve service home/group"
+
+CALLER_STATE_HOME="${QWEN38_STATE_HOME:-${SERVICE_HOME}/.local/state}"
+STATE_DIR="${CALLER_STATE_HOME}/qwen38-spark"
+[[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+# shellcheck source=scripts/lib/operation-lock.sh
+source "${OPERATION_LOCK_LIB}"
+acquire_operation_lock "${STATE_DIR}" "managed service ${ACTION}" "${SERVICE_UID}" "${SERVICE_GID}" || exit $?
 
 if [[ "${ACTION}" == remove ]]; then
   if [[ ! -e "${UNIT_FILE}" ]]; then printf 'Managed runtime service is not installed.\n'; exit 0; fi
@@ -64,18 +82,6 @@ if [[ "${ACTION}" == remove ]]; then
 fi
 [[ "${ACTION}" == create ]] || { usage >&2; exit 2; }
 
-SERVICE_USER="${SUDO_USER:-$(id -un)}"
-[[ "${SERVICE_USER}" != root ]] || die "run through sudo from the user who owns the installation"
-USER_ENTRY="$(getent passwd "${SERVICE_USER}")"
-[[ -n "${USER_ENTRY}" ]] || die "cannot resolve service user: ${SERVICE_USER}"
-SERVICE_UID="$(cut -d: -f3 <<<"${USER_ENTRY}")"
-SERVICE_GID="$(cut -d: -f4 <<<"${USER_ENTRY}")"
-SERVICE_HOME="$(cut -d: -f6 <<<"${USER_ENTRY}")"
-SERVICE_GROUP="$(getent group "${SERVICE_GID}" | cut -d: -f1)"
-[[ -n "${SERVICE_GROUP}" && -d "${SERVICE_HOME}" ]] || die "cannot resolve service home/group"
-
-CALLER_STATE_HOME="${QWEN38_STATE_HOME:-${SERVICE_HOME}/.local/state}"
-STATE_DIR="${CALLER_STATE_HOME}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
 INSTALL_STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"

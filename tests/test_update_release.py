@@ -92,11 +92,12 @@ class UpdateReleaseTests(unittest.TestCase):
 
     def test_update_commits_only_after_managed_service_returns(self) -> None:
         script = UPDATE_RELEASE.read_text(encoding="utf-8")
-        service_call = 'sudo bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes'
+        service_call = 'sudo_with_operation_lock bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes'
         update_commit = 'bash "${UPDATE_TRANSITION}" commit'
         self.assertIn(service_call, script)
         self.assertIn(update_commit, script)
         self.assertLess(script.index(service_call), script.index(update_commit))
+        self.assertIn('QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}"', script)
 
 
 if __name__ == "__main__":

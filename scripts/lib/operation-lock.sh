@@ -21,12 +21,21 @@ operation_lock_owner_is_ancestor() {
 
 acquire_operation_lock() {
   local state_dir="$1" label="${2:-lifecycle operation}" owner_uid="${3:-$(id -u)}" owner_gid="${4:-$(id -g)}"
-  local lock_file probe_fd current_uid
+  local lock_file probe_fd current_uid current_gid
 
   command -v flock >/dev/null 2>&1 || operation_lock_die "flock is required for lifecycle locking" || return 1
   command -v stat >/dev/null 2>&1 || operation_lock_die "stat is required for lifecycle locking" || return 1
 
-  mkdir -p -- "${state_dir}" || return 1
+  if [[ ! -d "${state_dir}" ]]; then
+    if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+      command -v install >/dev/null 2>&1 || operation_lock_die "install is required to create the lifecycle state directory" || return 1
+      install -d -o "${owner_uid}" -g "${owner_gid}" -m 0700 "${state_dir}" || return 1
+    else
+      (umask 077; mkdir -p -- "${state_dir}") || return 1
+    fi
+  fi
+  [[ -d "${state_dir}" && ! -L "${state_dir}" ]] || operation_lock_die "operation state directory is unsafe: ${state_dir}" || return 1
+
   lock_file="${QWEN38_OPERATION_LOCK_FILE:-${state_dir}/operation.lock}"
   [[ "${lock_file}" == /* ]] || operation_lock_die "operation lock path must be absolute: ${lock_file}" || return 1
   [[ ! -L "${lock_file}" ]] || operation_lock_die "refusing symlinked operation lock: ${lock_file}" || return 1
@@ -41,7 +50,9 @@ acquire_operation_lock() {
   fi
   [[ -f "${lock_file}" && ! -L "${lock_file}" ]] || operation_lock_die "operation lock is not a regular file: ${lock_file}" || return 1
   current_uid="$(stat -c %u "${lock_file}")"
+  current_gid="$(stat -c %g "${lock_file}")"
   [[ "${current_uid}" == "${owner_uid}" ]] || operation_lock_die "operation lock is not owned by expected uid ${owner_uid}: ${lock_file}" || return 1
+  [[ "${current_gid}" == "${owner_gid}" ]] || operation_lock_die "operation lock is not owned by expected gid ${owner_gid}: ${lock_file}" || return 1
 
   if [[ "${QWEN38_OPERATION_LOCK_HELD:-0}" == 1 ]]; then
     [[ "${QWEN38_OPERATION_LOCK_FILE:-}" == "${lock_file}" ]] || operation_lock_die "inherited lifecycle lock path mismatch" || return 1

@@ -19,18 +19,22 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 ## Lifecycle operation lock
 
-Mutating release/update operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so release pointer and update-transition mutations cannot overlap with another release/update mutation.
+Mutating maintenance operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so release pointers, update-transition state, managed-service mutation, and uninstall cleanup cannot overlap with another covered mutation.
 
-The first locking scope covers:
+The locking scope covers:
 
 - `scripts/update-release.sh` for non-dry-run cutover;
 - `scripts/lifecycle/update-transition.sh` actions `prepare`, `commit`, `rollback`, and `recover`;
 - `scripts/release-manager.sh` actions `stage`, `activate`, `discard`, and `rollback`;
-- `scripts/lifecycle/bootstrap-release.sh`.
+- `scripts/lifecycle/bootstrap-release.sh`;
+- `scripts/manage-service.sh` actions `create` and `remove`;
+- non-dry-run `uninstall.sh`.
 
-Nested lifecycle helpers reuse an inherited lock only when the advertised lock file is actually locked and the recorded outer owner PID is an ancestor of the current process. A forged inherited marker therefore does not bypass serialization. Read-only `status`/`verify` paths and update dry-runs remain unlocked.
+Nested lifecycle helpers reuse an inherited lock only when the advertised lock file is actually locked and the recorded outer owner PID is an ancestor of the current process. The user-owned lock context is passed explicitly across the `sudo` boundary for managed-service calls; root validates the service-user UID/GID before reusing the same lock. A forged inherited marker therefore does not bypass serialization.
 
-This first scope intentionally does not yet cover installer, managed-service, or uninstaller mutation entry points; those cross the sudo/service boundary and are connected in a follow-up change after the release/update locking layer is validated independently.
+When root must create the lifecycle state directory or lock file, it creates them with the resolved service user's UID/GID rather than leaving root-owned state behind. The lock file is intentionally persistent metadata; a full uninstall may leave only `operation.lock` so future reinstall/maintenance commands continue to share the same synchronization point safely.
+
+Read-only `status`/`verify` paths, update dry-runs, and uninstall dry-runs remain unlocked. `install.sh` is the remaining outer mutation entry point to connect in a separate change because it has the broadest interactive/download/swap/API/service mutation surface.
 
 ## Installation manifest boundary
 
