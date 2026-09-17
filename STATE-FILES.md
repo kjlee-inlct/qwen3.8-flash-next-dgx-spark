@@ -21,11 +21,12 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 `~/.local/state/qwen38-spark/install.env` is written by `install.sh` using Bash `printf %q` encoding and mode 600. Migration away from shell evaluation is incremental because this manifest has a broader compatibility surface than transient lifecycle state.
 
-Three operational consumers now use strict views from `scripts/state_file.py`:
+Four operational consumers now use strict views from `scripts/state_file.py`:
 
 - `service-runner.sh` uses `install-runtime`, validating and emitting only runtime configuration fields;
 - `manage-service.sh` uses `install-service`, validating and emitting only service installation/readiness fields;
-- `doctor.sh` uses `install-doctor`, validating and emitting only model pinning, runtime drift, monitor, swap, and API-access diagnostic fields.
+- `doctor.sh` uses `install-doctor`, validating and emitting only model pinning, runtime drift, monitor, swap, and API-access diagnostic fields;
+- `uninstall.sh` uses `install-uninstall`, validating and emitting only resource paths, ownership flags, container name, configuration path, and UI language needed to decide cleanup actions.
 
 All install-manifest views:
 
@@ -37,9 +38,11 @@ All install-manifest views:
 
 `install-doctor` preserves diagnostic compatibility with older schema-3 manifests: when the newer `API_*` fields are absent, it derives the read-only API view from legacy `PROXY_ENABLED` and `PROXY_PORT` fields. It does not require `PHASE=complete`; doctor still reports incomplete installation phase as a diagnostic condition instead of failing parsing solely for that reason.
 
+`install-uninstall` intentionally exposes only values that can affect cleanup scope. Ownership flags are constrained to `0`/`1`, destructive paths must be absolute, and the managed container name is fixed to `qwen38-flash-next`. The uninstaller retains its existing deletion guards in addition to strict parsing. Full purge also removes `runtime-commit.env` and its temporary file together with the other transient lifecycle state.
+
 `manage-service.sh` uses the parser from the invoking source checkout to validate the installer manifest, then uses the parser from the resolved immutable runtime release for runtime-commit attestation validation. This keeps source/maintenance policy separate from the release being attested.
 
-The remaining installer/maintenance consumers (`install.sh` and `uninstall.sh`) still source the mode-600 installer-owned manifest for compatibility. They should be migrated independently so each operational path can be tested against existing schema-3 and schema-4 manifests.
+The remaining installer consumer (`install.sh` resume/migration) still sources the mode-600 installer-owned manifest for compatibility. It should be migrated separately because it both reads and rewrites older schemas and therefore has the broadest compatibility surface.
 
 ## Operator rule
 
