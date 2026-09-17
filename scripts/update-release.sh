@@ -4,10 +4,12 @@ set -Eeuo pipefail
 
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 CURRENT_LINK="${QWEN38_CURRENT_RELEASE_LINK:-${DATA_HOME}/current}"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
 UPDATE_TRANSITION="${SCRIPT_ROOT}/scripts/update-transition.sh"
 MANAGE_SERVICE="${SCRIPT_ROOT}/scripts/manage-service.sh"
+OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 DRY_RUN=0
 
 usage() {
@@ -26,6 +28,13 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 [[ "${target}" =~ ^[0-9a-f]{12,40}$ ]] || die "invalid release id: ${target}"
+
+if [[ "${DRY_RUN}" != 1 ]]; then
+  [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+  # shellcheck source=scripts/lib/operation-lock.sh
+  source "${OPERATION_LOCK_LIB}"
+  acquire_operation_lock "${STATE_HOME}" "release update to ${target}" || exit $?
+fi
 
 status="$(bash "${RELEASE_MANAGER}" status)"
 current="$(awk -F= '$1=="CURRENT_RELEASE" {print $2}' <<<"${status}")"

@@ -12,6 +12,7 @@ PREVIOUS_LINK="${QWEN38_PREVIOUS_RELEASE_LINK:-${DATA_HOME}/previous}"
 QUALIFIED_DIR="${QWEN38_QUALIFIED_DIR:-${DATA_HOME}/qualified}"
 UPDATE_STATE_FILE="${QWEN38_UPDATE_STATE_FILE:-${STATE_HOME}/update-transition.env}"
 MANIFEST_TOOL="${SCRIPT_ROOT}/scripts/release_manifest.py"
+OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 
 usage() {
   cat <<'EOF'
@@ -57,6 +58,13 @@ atomic_link() {
   ln -s -- "${target}" "${tmp}"
   mv -Tf -- "${tmp}" "${link}"
 }
+acquire_release_lock() {
+  local label="$1"
+  [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+  # shellcheck source=scripts/lib/operation-lock.sh
+  source "${OPERATION_LOCK_LIB}"
+  acquire_operation_lock "${STATE_HOME}" "${label}" || exit $?
+}
 
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
 action="$1"; shift
@@ -66,6 +74,7 @@ require_command python3
 case "${action}" in
   stage)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    acquire_release_lock "release stage"
     require_command git
     require_command tar
     git -C "${SOURCE_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "source root is not a git checkout: ${SOURCE_ROOT}"
@@ -96,6 +105,7 @@ case "${action}" in
     ;;
   activate)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    acquire_release_lock "release activate"
     release_id="$1"
     verify_release "${release_id}"
     mkdir -p -- "${DATA_HOME}"
@@ -113,6 +123,7 @@ case "${action}" in
     ;;
   discard)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    acquire_release_lock "release discard"
     release_id="$1"
     validate_release_id "${release_id}"
     [[ ! -e "${UPDATE_STATE_FILE}" ]] || die "cannot discard releases while an update transition is active"
@@ -133,6 +144,7 @@ case "${action}" in
     ;;
   rollback)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
+    acquire_release_lock "release rollback"
     current_id="$(read_link_release_id "${CURRENT_LINK}")" || die "no current release is recorded"
     previous_id="$(read_link_release_id "${PREVIOUS_LINK}")" || die "no previous release is recorded"
     verify_release "${current_id}"

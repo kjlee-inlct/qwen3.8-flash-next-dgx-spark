@@ -12,6 +12,7 @@ PREVIOUS_LINK="${QWEN38_PREVIOUS_RELEASE_LINK:-${DATA_HOME}/previous}"
 QUALIFIED_DIR="${QWEN38_QUALIFIED_DIR:-${DATA_HOME}/qualified}"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
 STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
+OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 
 usage() {
   printf 'Usage: %s prepare RELEASE_ID|commit|rollback|recover|status\n' "$0"
@@ -88,6 +89,13 @@ restore_old_pointers() {
   restore_pointer "${CURRENT_LINK}" "${OLD_CURRENT_RELEASE:-}"
   restore_pointer "${PREVIOUS_LINK}" "${OLD_PREVIOUS_RELEASE:-}"
 }
+acquire_transition_lock() {
+  local label="$1"
+  [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+  # shellcheck source=scripts/lib/operation-lock.sh
+  source "${OPERATION_LOCK_LIB}"
+  acquire_operation_lock "${STATE_HOME}" "${label}" || exit $?
+}
 
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
 action="$1"; shift
@@ -95,6 +103,7 @@ action="$1"; shift
 case "${action}" in
   prepare)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    acquire_transition_lock "update transition prepare"
     [[ ! -e "${STATE_FILE}" ]] || die 'an update transition is already active'
     target="$1"; validate_release_id "${target}"; verify_qualified "${target}"
     old_current="$(read_link_id "${CURRENT_LINK}" 2>/dev/null || true)"
@@ -106,6 +115,7 @@ case "${action}" in
     ;;
   commit)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
+    acquire_transition_lock "update transition commit"
     load_state
     [[ "${UPDATE_STATE:-}" == staged ]] || die "cannot commit update state: ${UPDATE_STATE:-unknown}"
     current="$(read_link_id "${CURRENT_LINK}" 2>/dev/null || true)"
@@ -116,6 +126,7 @@ case "${action}" in
     ;;
   rollback)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
+    acquire_transition_lock "update transition rollback"
     load_state
     restore_old_pointers
     rm -f -- "${STATE_FILE}" "${STATE_FILE}.tmp"
@@ -123,6 +134,7 @@ case "${action}" in
     ;;
   recover)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
+    acquire_transition_lock "update transition recover"
     if [[ ! -e "${STATE_FILE}" ]]; then
       printf 'UPDATE_STATE=idle\n'
       exit 0
