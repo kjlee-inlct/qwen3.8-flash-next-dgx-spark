@@ -155,7 +155,7 @@ runtime_commit_matches() {
 
 print_readiness_progress() {
   local elapsed="$1" candidate_container_id="$2"
-  local active_state sub_state container_state health_state attestation_state log_line
+  local active_state sub_state container_state health_state attestation_state log_line container_log ple_worker_state
 
   active_state="$(systemctl show "${UNIT}" --property=ActiveState --value 2>/dev/null || printf unknown)"
   sub_state="$(systemctl show "${UNIT}" --property=SubState --value 2>/dev/null || printf unknown)"
@@ -189,12 +189,26 @@ print_readiness_progress() {
   log_line="$(journalctl -u "${UNIT}" -n 1 --no-pager -o cat 2>/dev/null | tail -n 1 || true)"
   [[ -n "${log_line}" ]] || log_line="(no service log yet)"
 
+  container_log="(no container log yet)"
+  ple_worker_state=unknown
+  if [[ -n "${candidate_container_id}" ]]; then
+    container_log="$(docker logs --timestamps --tail 1 "${CONTAINER_NAME}" 2>&1 | tail -n 1 | cut -c1-240 || true)"
+    [[ -n "${container_log}" ]] || container_log="(no container log yet)"
+    if docker top "${CONTAINER_NAME}" -eo comm 2>/dev/null | grep -Fxq PleOffloadWorker; then
+      ple_worker_state=present
+    else
+      ple_worker_state=missing
+    fi
+  fi
+
   printf 'Waiting for committed replacement runtime attestation: %d/1800 seconds\n' "${elapsed}"
   printf '  service     : %s/%s\n' "${active_state}" "${sub_state}"
   printf '  container   : %s%s\n' "${container_state}" "${candidate_container_id:+ (${candidate_container_id})}"
   printf '  health      : %s\n' "${health_state}"
   printf '  attestation : %s\n' "${attestation_state}"
-  printf '  latest log  : %s\n' "${log_line}"
+  printf '  service log : %s\n' "${log_line}"
+  printf '  vLLM log    : %s\n' "${container_log}"
+  printf '  PLE worker  : %s\n' "${ple_worker_state}"
 }
 
 if [[ -e "${UNIT_FILE}" ]]; then
