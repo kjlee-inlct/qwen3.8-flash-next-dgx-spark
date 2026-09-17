@@ -253,7 +253,7 @@ if [[ "${START}" == 1 ]]; then
       ready=1
       break
     fi
-    if (( attempt % 6 == 0 )); then printf 'Waiting for committed replacement runtime attestation: %d/1800 seconds\n' "$((attempt * 10))"; fi
+    if (( attempt % 6 == 0 )); then print_readiness_progress "$((attempt * 10))" "${candidate_container_id}"; fi
     sleep 10
   done
   [[ "${ready}" == 1 ]] || die "replacement runtime did not commit and attest within 30 minutes"
