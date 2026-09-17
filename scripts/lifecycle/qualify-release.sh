@@ -4,9 +4,11 @@ set -Eeuo pipefail
 
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 RELEASES_DIR="${QWEN38_RELEASES_DIR:-${DATA_HOME}/releases}"
 QUALIFIED_DIR="${DATA_HOME}/qualified"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
+OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 MANIFEST_NAME=".release-manifest.json"
 
 usage() { printf 'Usage: %s RELEASE_ID\n' "$0"; }
@@ -18,6 +20,11 @@ manifest_digest() {
 [[ $# -eq 1 ]] || { usage >&2; exit 2; }
 release_id="$1"
 [[ "${release_id}" =~ ^[0-9a-f]{12,40}$ ]] || die "invalid release id: ${release_id}"
+[[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+# shellcheck source=scripts/lib/operation-lock.sh
+source "${OPERATION_LOCK_LIB}"
+acquire_operation_lock "${STATE_HOME}" "release qualification ${release_id}" || exit $?
+
 release_dir="${RELEASES_DIR}/${release_id}"
 manifest_path="${release_dir}/${MANIFEST_NAME}"
 
