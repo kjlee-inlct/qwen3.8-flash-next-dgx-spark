@@ -40,6 +40,15 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertNotIn('source "${STATE_FILE}"', runner)
         self.assertNotIn("shellcheck disable=SC1090", runner)
 
+    def test_service_manager_strictly_parses_install_manifest(self) -> None:
+        manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        self.assertIn('install-service "${STATE_FILE}"', manager)
+        self.assertIn("installation manifest failed strict service parsing", manager)
+        self.assertIn("INSTALL_STATE_PARSER", manager)
+        self.assertIn("RUNTIME_STATE_PARSER", manager)
+        self.assertNotIn('source "${STATE_FILE}"', manager)
+        self.assertNotIn("shellcheck disable=SC1090", manager)
+
     def test_service_readiness_requires_runtime_commit_attestation(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
@@ -49,10 +58,7 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn('curl -fsS --max-time 3 http://127.0.0.1:8888/health', manager)
         self.assertIn('bash "${RUNTIME_TRANSITION}" commit', runner)
         self.assertIn('write_runtime_commit_attestation "${container_id}"', runner)
-        self.assertLess(
-            runner.index('bash "${RUNTIME_TRANSITION}" commit'),
-            runner.index('write_runtime_commit_attestation "${container_id}"'),
-        )
+        self.assertLess(runner.index('bash "${RUNTIME_TRANSITION}" commit'), runner.index('write_runtime_commit_attestation "${container_id}"'))
         self.assertIn("EXPECTED_RUNTIME_ROOT", manager)
         self.assertIn("ATTESTED_RUNTIME_ROOT", manager)
         self.assertIn("ATTESTED_CONTAINER_ID", manager)
