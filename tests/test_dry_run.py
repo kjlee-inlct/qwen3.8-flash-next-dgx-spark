@@ -166,6 +166,37 @@ class DryRunTests(unittest.TestCase):
             self.assertIn("API_DOCKER_PORT=8000", migrated)
             self.assertIn("API_LAN_PORT=8001", migrated)
 
+    def test_manifest_migration_dry_run_preserves_schema2_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state" / "qwen38-spark"
+            state.mkdir(parents=True)
+            manifest = state / "install.env"
+            manifest.write_text(
+                "\n".join([
+                    "SCHEMA_VERSION=2", "PHASE=complete", f"INSTALL_ROOT={ROOT}",
+                    "MODEL_PROFILE=orcarouter", "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                    "MODEL_REVISION=c1209bda15a6bbc4c68b585e93d40c0d85f50306", f"MODEL_DIR={home / 'model'}",
+                    "MODEL_OWNED=0", "SWAP_FILE=/swap-ple.img", "SWAP_OWNED=0", "VLLM_IMAGE=test-image",
+                    "IMAGE_OWNED=0", "CONTAINER_NAME=qwen38-flash-next", "CONFIG_OVERRIDE=", "CONFIG_OWNED=0",
+                    "MONITOR_PROTECT=0", "PROXY_ENABLED=0", "PROXY_OWNED=0", "PROXY_PORT=8000",
+                    "SERVICE_ENABLED=1", "SERVICE_OWNED=1", "UI_LANG=en", "",
+                ]),
+                encoding="utf-8",
+            )
+            before = manifest.read_bytes()
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--migrate-manifest", "--lang", "en", "--dry-run"],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("would be migrated to schema 4", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+
     def test_schema3_proxy_migrates_to_docker_api_access(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
