@@ -12,6 +12,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ./scripts/runtime/nvidia-2x2.sh plan
+  ./scripts/runtime/nvidia-2x2.sh preflight
   ./scripts/runtime/nvidia-2x2.sh start A|B|C|D
   ./scripts/runtime/nvidia-2x2.sh stop [A|B|C|D]
   ./scripts/runtime/nvidia-2x2.sh status
@@ -60,6 +61,54 @@ service_active() {
     systemctl is-active --quiet "${SERVICE}" 2>/dev/null
 }
 
+preflight() {
+  local failures=0
+  local model_dir="${HOME}/models/qwen3.8-flash-next-nvidia"
+
+  printf 'NVIDIA 2x2 preflight\n'
+
+  if [[ -f "${model_dir}/model.safetensors.index.json" ]]; then
+    printf '  weights        : ready (%s)\n' "${model_dir}"
+  else
+    printf '  weights        : missing (%s)\n' "${model_dir}"
+    printf '    prepare with : MODEL_PROFILE=nvidia ./scripts/download-weights.sh --check\n'
+    printf '                   MODEL_PROFILE=nvidia ./scripts/download-weights.sh\n'
+    failures=1
+  fi
+
+  if docker image inspect vllm-nv-mixed:v2 >/dev/null 2>&1; then
+    printf '  runtime image  : ready (vllm-nv-mixed:v2)\n'
+  else
+    printf '  runtime image  : missing (vllm-nv-mixed:v2)\n'
+    printf '    prepare with : docker pull vllm/vllm-openai:qwen38-flash-next-arm64-cu130\n'
+    printf '                   docker build -t vllm-skinny-tp1:v1 -f scripts/Dockerfile.skinny-gemm scripts/\n'
+    printf '                   docker build -t vllm-nv-mixed:v2 -f scripts/Dockerfile.nv-mixed scripts/\n'
+    failures=1
+  fi
+
+  if swapon --show=NAME --noheadings 2>/dev/null | grep -Fxq /swap-ple.img; then
+    printf '  PLE swap       : ready (/swap-ple.img)\n'
+  else
+    printf '  PLE swap       : missing (/swap-ple.img)\n'
+    printf '    prepare with : sudo ./scripts/manage-swap.sh create --size-gib 128 --persist --yes\n'
+    failures=1
+  fi
+
+  if service_active; then
+    printf '  managed service: active (must be stopped before start A/B/C/D)\n'
+  else
+    printf '  managed service: inactive\n'
+  fi
+
+  if container_running qwen38-flash-next; then
+    printf '  canonical      : running (must be stopped before start A/B/C/D)\n'
+  else
+    printf '  canonical      : not running\n'
+  fi
+
+  return "${failures}"
+}
+
 container_running() {
   local name="$1"
   [[ "$(docker inspect --format '{{.State.Running}}' "${name}" 2>/dev/null || true)" == true ]]
@@ -80,6 +129,10 @@ case "${ACTION}" in
   plan)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     print_plan
+    ;;
+  preflight)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    preflight
     ;;
   status)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }

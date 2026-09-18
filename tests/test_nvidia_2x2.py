@@ -41,6 +41,19 @@ class Nvidia2x2ExperimentTests(unittest.TestCase):
         self.assertIn("only controls temporary experiment containers", result.stdout)
         self.assertIn("benchmark harness separately", result.stdout)
 
+    def test_preflight_documents_missing_asset_commands(self) -> None:
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "preflight"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={"HOME": "/tmp/qwen38-empty-home", "PATH": "/usr/bin:/bin"},
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("MODEL_PROFILE=nvidia ./scripts/download-weights.sh --check", result.stdout)
+        self.assertIn("docker build -t vllm-nv-mixed:v2", result.stdout)
+
     def test_invalid_case_is_rejected_without_starting_runtime(self) -> None:
         result = subprocess.run(
             ["bash", str(SCRIPT), "start", "Z"],
