@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 SCRIPTS = ROOT / "scripts"
-BENCH = ROOT / "bench"
+BENCH = ROOT / "scripts" / "benchmark"
 
 
 class ScriptLayoutTests(unittest.TestCase):
@@ -62,8 +62,10 @@ class ScriptLayoutTests(unittest.TestCase):
         compatibility = (BENCH / "common.py").read_text(encoding="utf-8")
         self.assertIn("lib.common", compatibility)
         readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
-        self.assertIn("bench/run.py", readme)
+        self.assertIn("scripts/benchmark/run.py", readme)
         self.assertIn("scripts/bench-prefill.py", readme)
+        compatibility = (ROOT / "bench" / "run.py").read_text(encoding="utf-8")
+        self.assertIn('scripts" / "benchmark"', compatibility)
 
     def test_state_parser_compatibility_entry_point_still_works(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

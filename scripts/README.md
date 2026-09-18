@@ -70,6 +70,7 @@ Repository-specific implementations are organized as follows:
 - `runtime/`: runtime transition, preflight, service runner, monitor, and runtime validation.
 - `lifecycle/`: immutable-release bootstrap, qualification, and update transaction logic.
 - `model/`: model profile, checkpoint inspection, and config preparation helpers.
+- `benchmark/`: canonical read-only benchmark runner and benchmark helpers.
 
 Canonical implementations include:
 
@@ -91,13 +92,13 @@ Canonical implementations include:
 
 ## Benchmark layout
 
-The repository benchmark harness lives under top-level `bench/`:
+The canonical repository benchmark harness lives under `scripts/benchmark/`:
 
-- `bench/run.py` is the stable benchmark CLI.
-- `bench/lib/` contains implementation helpers used by the CLI.
-- `bench/common.py` is a compatibility import for older code/tests.
-- `scripts/bench-prefill.py` stays in `scripts/` because it is upstream-derived;
-  it is not the canonical benchmark harness for this fork.
+- `scripts/benchmark/run.py` is the canonical benchmark CLI.
+- `scripts/benchmark/lib/` contains implementation helpers used by the CLI.
+- `scripts/benchmark/common.py` is a local compatibility import used by the runner.
+- top-level `bench/run.py` and `bench/common.py` are compatibility shims for older callers.
+- `scripts/bench-prefill.py` stays at its upstream-derived path and is not the canonical benchmark harness for this fork.
 
 ## Layout rules
 
@@ -111,5 +112,4 @@ The repository benchmark harness lives under top-level `bench/`:
 
 ## CI rule
 
-Shell syntax and ShellCheck must recurse into script subdirectories. Python
-compilation must recurse through `scripts/`, `bench/`, and `tests/`.
+Shell syntax and ShellCheck must recurse into script subdirectories. Python compilation must recurse through `scripts/` and `tests/`; canonical benchmark code is included under `scripts/benchmark/`.

@@ -5,4 +5,4 @@ __pycache__/
 /config.vllm.json
 /model/
 /qwen38-diagnostics-*.tar.gz
-/bench/results/local/
+/scripts/benchmark/results/local/
