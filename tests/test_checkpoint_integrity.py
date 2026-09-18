@@ -95,6 +95,11 @@ class CheckpointIntegrityTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid shard path", result.stderr)
 
+    def test_doctor_invokes_checkpoint_integrity_checker(self) -> None:
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        self.assertIn('model/checkpoint_integrity.py', doctor)
+        self.assertIn('python3 "${CHECKPOINT_INTEGRITY}" "${MODEL_DIR}"', doctor)
+
     def test_rejects_malformed_index(self) -> None:
         (self.model / "model.safetensors.index.json").write_text("{", encoding="utf-8")
 
