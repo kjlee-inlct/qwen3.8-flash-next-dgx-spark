@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
 import unittest
@@ -149,6 +150,41 @@ class ScriptLayoutTests(unittest.TestCase):
         lib_readme = (SCRIPTS / "lib" / "README.md").read_text(encoding="utf-8")
         self.assertIn("lowest-level", lib_readme)
         self.assertIn("Higher-level categories may depend on `lib/`", lib_readme)
+
+    def test_canonical_category_dependencies_follow_allowed_directions(self) -> None:
+        categories = {"benchmark", "diagnostics", "lifecycle", "lib", "model", "runtime"}
+        allowed = {
+            "benchmark": set(),
+            "diagnostics": {"lib", "lifecycle", "runtime"},
+            "lifecycle": {"lib", "runtime"},
+            "lib": set(),
+            "model": {"lib"},
+            "runtime": {"lib", "model"},
+        }
+        path_patterns = (
+            re.compile(r"scripts/(benchmark|diagnostics|lifecycle|lib|model|runtime)/"),
+            re.compile(r"\$\{(?:SCRIPT_DIR|SCRIPT_ROOT|RUNTIME_ROOT)\}/(?:scripts/)?"
+                       r"(benchmark|diagnostics|lifecycle|lib|model|runtime)/"),
+            re.compile(r"\.\./(benchmark|diagnostics|lifecycle|lib|model|runtime)/"),
+        )
+
+        for category in sorted(categories):
+            for path in sorted((SCRIPTS / category).rglob("*")):
+                if not path.is_file() or path.name == "README.md":
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+                referenced: set[str] = set()
+                for pattern in path_patterns:
+                    referenced.update(pattern.findall(text))
+                referenced.discard(category)
+                unexpected = referenced - allowed[category]
+                with self.subTest(category=category, path=path.relative_to(ROOT)):
+                    self.assertEqual(
+                        unexpected,
+                        set(),
+                        f"{path.relative_to(ROOT)} has forbidden category dependencies: "
+                        f"{sorted(unexpected)}; allowed={sorted(allowed[category])}",
+                    )
 
     def test_layout_policy_preserves_stable_entry_points(self) -> None:
         readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
