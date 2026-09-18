@@ -79,8 +79,7 @@ source "${SCRIPT_DIR}/doctor-observability.sh"
 if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then
   pass "model index is present"
   if [[ -r "${CHECKPOINT_INTEGRITY}" ]]; then
-    checkpoint_integrity_detail="$(python3 "${CHECKPOINT_INTEGRITY}" "${MODEL_DIR}" 2>&1)"
-    if [[ $? -eq 0 ]]; then
+    if checkpoint_integrity_detail="$(python3 "${CHECKPOINT_INTEGRITY}" "${MODEL_DIR}" 2>&1)"; then
       pass "${checkpoint_integrity_detail}"
     else
       fail "${checkpoint_integrity_detail}"
