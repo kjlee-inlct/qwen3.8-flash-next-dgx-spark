@@ -44,6 +44,9 @@ The top-level `bench/run.py` path is retained only as a compatibility shim. New 
 `qualification`
 : Verifies health, served-model identity, and a deterministic chat response before performance measurements.
 
+`determinism`
+: Repeats the same long greedy request and requires byte-identical output. Reports only SHA-256 digests, token counts, and timings; generated text is not persisted. This is the correctness gate for evaluating prefix-cache, Mamba, QSA, and speculative-decoding changes.
+
 `decode`
 : Repeats a single-stream technical-prose workload and records TTFT, completion-token rate, and stream event-gap statistics.
 
@@ -54,12 +57,13 @@ The top-level `bench/run.py` path is retained only as a compatibility shim. New 
 : Starts synchronized requests at concurrency levels 1, 2, 4, and 8 and records aggregate token rate, per-stream rate, median TTFT, and minimum `MemAvailable`.
 
 `all`
-: Runs all workloads in the order above.
+: Runs qualification, determinism, decode, prefill, and concurrency in that order. A determinism mismatch makes the overall report fail.
 
 ## Usage
 
 ```bash
 python3 scripts/benchmark/run.py qualification
+python3 scripts/benchmark/run.py determinism
 
 mkdir -p scripts/benchmark/results/local
 python3 scripts/benchmark/run.py all \
@@ -71,6 +75,12 @@ The served model is auto-detected when `/v1/models` exposes exactly one entry. A
 Useful overrides:
 
 ```bash
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 32768 \
+  --determinism-output-tokens 256 \
+  --determinism-repeats 3 \
+  --output scripts/benchmark/results/local/determinism.json
+
 python3 scripts/benchmark/run.py decode \
   --decode-tokens 512 \
   --decode-repeats 5 \
