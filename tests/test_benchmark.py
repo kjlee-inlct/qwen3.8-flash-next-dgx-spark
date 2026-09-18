@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-BENCH = ROOT / "bench"
+BENCH = ROOT / "scripts" / "benchmark"
 if str(BENCH) not in sys.path:
     sys.path.insert(0, str(BENCH))
 

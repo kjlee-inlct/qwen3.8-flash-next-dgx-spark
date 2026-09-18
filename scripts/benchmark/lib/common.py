@@ -17,7 +17,7 @@ import urllib.request
 from typing import Any, Iterable
 
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_BASE_URL = "http://127.0.0.1:8888"
 
 
