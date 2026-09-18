@@ -1,3 +1,32 @@
 # Runtime helpers
 
-Repository-specific runtime transition, validation, monitoring, and service helpers live here.
+This directory contains canonical managed-runtime transition, preflight, service-runner, monitoring, and runtime-validation implementation.
+
+## Responsibilities
+
+- Validate runtime prerequisites before start.
+- Preserve/replace/rollback the managed container transactionally.
+- Run the managed service lifecycle and commit runtime attestation only after validation.
+- Monitor runtime resource safety and perform explicit runtime validation.
+
+## Dependencies
+
+- May use strict state parsing and shared helpers from `../lib/`.
+- May consume model/profile/config state prepared by installation and `../model/`.
+- May expose state for lifecycle and diagnostics layers to inspect.
+
+## Non-responsibilities
+
+- Do not decide which immutable release is qualified/current; that belongs to `../lifecycle/` and release management.
+- Do not implement model-download or checkpoint-rewrite workflows.
+- Do not own benchmark policy or support-bundle presentation.
+
+## Canonical files
+
+- `preflight-runtime.sh`
+- `runtime-transition.sh`
+- `service-runner.sh`
+- `monitor-runtime.sh`
+- `validate_runtime.py`
+
+Top-level runtime helper paths in `scripts/` are stable operator or compatibility entry points and should remain thin where a canonical implementation exists.
