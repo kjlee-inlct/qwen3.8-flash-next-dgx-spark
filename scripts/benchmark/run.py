@@ -137,12 +137,18 @@ def run_determinism(
 
 
 def speculative_metrics(
-    before: dict[str, float] | None,
-    after: dict[str, float] | None,
-    wall_s: float,
-) -> dict[str, Any] | None:
-    """Derive speculative-decoding counters from a benchmark-local metric delta."""
+    before: common.PrometheusSamples | None,
+    after: common.PrometheusSamples | None,
+    model: str,
+    completion_tokens: int,
+    elapsed_s: float,
+) -> dict[str, Any]:
+    """Derive one request's engine/speculative metrics and validate isolation."""
 
+    if before is None or after is None:
+        return {"available": False, "clean_interval": False, "reason": "metrics_unavailable"}
+
+    labels = {"model_name": model}
     names = {
         "drafts": "vllm:spec_decode_num_drafts_total",
         "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
@@ -152,84 +158,127 @@ def speculative_metrics(
         "iteration_tokens": "vllm:iteration_tokens_total_sum",
     }
     values = {
-        key: common.metric_delta(before, after, metric)
+        key: common.metric_delta(before, after, metric, labels)
         for key, metric in names.items()
     }
     positions = common.metric_position_delta(
         before,
         after,
         "vllm:spec_decode_num_accepted_tokens_per_pos_total",
+        labels,
     )
 
-    if all(value is None for value in values.values()) and positions is None:
-        return None
+    required = ("generation_tokens", "engine_steps", "iteration_tokens")
+    if any(values[key] is None for key in required):
+        return {
+            "available": False,
+            "clean_interval": False,
+            "reason": "required_counter_missing_or_reset",
+            **values,
+            "accepted_tokens_per_position": positions,
+        }
 
-    result: dict[str, Any] = dict(values)
-    result["accepted_tokens_per_position"] = positions
+    generation = int(round(float(values["generation_tokens"])))
+    clean = generation == completion_tokens
+    reason = None if clean else "generation_token_delta_mismatch"
 
+    drafts = values["drafts"]
     draft_tokens = values["draft_tokens"]
     accepted = values["accepted_tokens"]
-    drafts = values["drafts"]
-    generation = values["generation_tokens"]
     steps = values["engine_steps"]
+    iteration_tokens = values["iteration_tokens"]
 
-    result["draft_acceptance_rate"] = (
-        round(accepted / draft_tokens, 6)
-        if accepted is not None and draft_tokens
-        else None
-    )
-    result["accepted_per_draft"] = (
-        round(accepted / drafts, 6)
-        if accepted is not None and drafts
-        else None
-    )
-    result["generation_per_step"] = (
-        round(generation / steps, 6)
-        if generation is not None and steps
-        else None
-    )
-    result["iteration_tokens_per_step"] = (
-        round(values["iteration_tokens"] / steps, 6)
-        if values["iteration_tokens"] is not None and steps
-        else None
-    )
-    result["steps_s"] = (
-        round(steps / wall_s, 6)
-        if steps is not None and steps and wall_s > 0
-        else None
-    )
-    return result
+    return {
+        "available": True,
+        "clean_interval": clean,
+        "reason": reason,
+        **values,
+        "accepted_tokens_per_position": positions,
+        "speculative_active": bool(drafts),
+        "draft_token_acceptance_rate": (
+            round(float(accepted) / float(draft_tokens), 6)
+            if accepted is not None and draft_tokens
+            else None
+        ),
+        "accepted_draft_tokens_per_speculative_step": (
+            round(float(accepted) / float(drafts), 6)
+            if accepted is not None and drafts
+            else None
+        ),
+        "effective_generation_tokens_per_engine_step": (
+            round(float(values["generation_tokens"]) / float(steps), 6)
+            if steps
+            else None
+        ),
+        "iteration_tokens_per_engine_step": (
+            round(float(iteration_tokens) / float(steps), 6)
+            if steps
+            else None
+        ),
+        "engine_steps_per_request_s": (
+            round(float(steps) / elapsed_s, 6)
+            if steps and elapsed_s > 0
+            else None
+        ),
+    }
 
 
 def run_decode(base_url: str, model: str, max_tokens: int, repeats: int) -> dict[str, Any]:
-    """Measure repeated single-stream decode performance."""
+    """Measure repeated single-stream decode performance with isolated engine deltas."""
 
-    before = common.metrics_snapshot(base_url)
-    started = time.monotonic()
-    runs = [
-        common.stream_chat(base_url, model, DECODE_PROMPT, max_tokens)
-        for _ in range(repeats)
+    runs: list[dict[str, Any]] = []
+    for _ in range(repeats):
+        before = common.metrics_snapshot(base_url)
+        result = common.stream_chat(base_url, model, DECODE_PROMPT, max_tokens)
+        after = common.metrics_snapshot(base_url)
+        result["engine_metrics"] = speculative_metrics(
+            before,
+            after,
+            model,
+            int(result["completion_tokens"]),
+            float(result["elapsed_s"]),
+        )
+        runs.append(result)
+
+    tps = [float(item["decode_tokens_s"]) for item in runs]
+    ttft = [float(item["ttft_s"]) for item in runs]
+    clean_metrics = [
+        item["engine_metrics"]
+        for item in runs
+        if item["engine_metrics"].get("available")
+        and item["engine_metrics"].get("clean_interval")
     ]
-    wall_s = time.monotonic() - started
-    after = common.metrics_snapshot(base_url)
 
-    tps = [item["decode_tokens_s"] for item in runs]
-    ttft = [item["ttft_s"] for item in runs]
-    result = {
+    def clean_values(name: str) -> list[float]:
+        return [
+            float(item[name])
+            for item in clean_metrics
+            if item.get(name) is not None
+        ]
+
+    return {
         "max_tokens": max_tokens,
         "repeats": repeats,
-        "wall_s": round(wall_s, 6),
         "decode_tokens_s": common.summarize(tps),
         "ttft_s": common.summarize(ttft),
+        "engine_metrics_summary": {
+            "clean_runs": len(clean_metrics),
+            "excluded_runs": len(runs) - len(clean_metrics),
+            "engine_steps_per_request_s": common.summarize(
+                clean_values("engine_steps_per_request_s")
+            ),
+            "effective_generation_tokens_per_engine_step": common.summarize(
+                clean_values("effective_generation_tokens_per_engine_step")
+            ),
+            "draft_token_acceptance_rate": common.summarize(
+                clean_values("draft_token_acceptance_rate")
+            ),
+            "accepted_draft_tokens_per_speculative_step": common.summarize(
+                clean_values("accepted_draft_tokens_per_speculative_step")
+            ),
+        },
         "runs": runs,
     }
-
-    metrics = speculative_metrics(before, after, wall_s)
-    if metrics is not None:
-        result["engine_metrics"] = metrics
-
-    return result
-
 
 def run_prefill(
     base_url: str,
