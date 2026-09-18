@@ -29,6 +29,8 @@ class ScriptLayoutTests(unittest.TestCase):
             "model/model-profiles.sh",
             "model/inspect_model.py",
             "model/prepare_config.py",
+            "benchmark/run.py",
+            "benchmark/lib/common.py",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((SCRIPTS / relative).is_file())
@@ -109,6 +111,29 @@ class ScriptLayoutTests(unittest.TestCase):
         self.assertIn("TRANSACTION_STATE=idle", runtime.stdout)
         self.assertEqual(update.returncode, 0, update.stderr)
         self.assertIn("UPDATE_STATE=idle", update.stdout)
+
+    def test_scripts_readme_documents_root_role_categories(self) -> None:
+        readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
+        for heading in (
+            "## Top-level role map",
+            "## Upstream provenance",
+            "## Stable operator entry points",
+            "## Compatibility entry points",
+            "## Canonical internal categories",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, readme)
+        for category in (
+            "benchmark/",
+            "diagnostics/",
+            "lifecycle/",
+            "lib/",
+            "model/",
+            "runtime/",
+        ):
+            with self.subTest(category=category):
+                self.assertIn(category, readme)
+        self.assertIn("the goal is not an empty `scripts/` root", readme)
 
     def test_layout_policy_preserves_stable_entry_points(self) -> None:
         readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
