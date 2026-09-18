@@ -50,19 +50,8 @@ print_plan() {
   usage
   cat <<'EOF'
 
-Recommended measurement for each case after /health is ready:
-
-  python3 scripts/benchmark/run.py tuning \
-    --determinism-prompt-tokens 32768 \
-    --determinism-output-tokens 256 \
-    --determinism-repeats 3 \
-    --decode-tokens 600 \
-    --decode-repeats 5 \
-    --output scripts/benchmark/results/local/nvidia-2x2-CASE.json
-
-The benchmark report auto-records the running container's vLLM command,
-including MTP speculative config, FlashInfer autotune, KV, max length,
-max sequences, prefix caching, async scheduling, image, and container name.
+This runtime helper only controls temporary experiment containers.
+Use the benchmark harness separately after /health reports ready.
 EOF
 }
 
