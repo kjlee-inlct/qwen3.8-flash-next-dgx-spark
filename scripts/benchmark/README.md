@@ -106,3 +106,43 @@ Before publishing a baseline:
 3. Record the current immutable release and Git revision in the benchmark report.
 4. Run the same workload parameters for later comparisons.
 5. Treat changes in model revision, image, context settings, cache policy, MTP settings, or host memory policy as a new baseline rather than silently comparing unlike configurations.
+
+
+## Decode engine metrics
+
+When the local vLLM `/metrics` endpoint exposes speculative-decoding
+counters, the `decode` workload records counter deltas for the measured
+decode interval under `engine_metrics`.
+
+Recorded raw deltas include:
+
+- `engine_steps`: vLLM engine-step count from
+  `vllm:iteration_tokens_total_count`.
+- `iteration_tokens`: token count reported by
+  `vllm:iteration_tokens_total_sum`.
+- `generation_tokens`: generated-token counter delta.
+- `drafts`: speculative draft iterations.
+- `draft_tokens`: speculative tokens proposed by the draft model.
+- `accepted_tokens`: accepted speculative tokens.
+- `accepted_tokens_per_position`: accepted speculative tokens at each
+  draft position.
+
+Derived values include:
+
+- `steps_s = engine_steps / measured decode wall time`.
+- `draft_acceptance_rate = accepted_tokens / draft_tokens`.
+- `accepted_per_draft = accepted_tokens / drafts`.
+- `generation_per_step = generation_tokens / engine_steps`.
+- `iteration_tokens_per_step = iteration_tokens / engine_steps`.
+
+These names are intentionally explicit. Do not treat
+`draft_acceptance_rate`, `accepted_per_draft`, or
+`generation_per_step` as interchangeable meanings of "mean acceptance".
+
+The Prometheus counters are process-global. Decode engine metrics are
+therefore valid only when no unrelated inference requests overlap the
+benchmark interval. The benchmark remains usable when `/metrics` is
+unavailable; in that case `engine_metrics` is omitted.
+
+A Prometheus counter reset during the measured interval makes the
+affected delta unavailable rather than producing a negative result.
