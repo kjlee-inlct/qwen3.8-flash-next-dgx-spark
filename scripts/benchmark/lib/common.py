@@ -86,6 +86,124 @@ def request_json(
     return decoded
 
 
+def request_text(
+    base_url: str,
+    path: str,
+    timeout: float = 30.0,
+) -> str:
+    """Perform one text GET request against the local backend."""
+
+    request = urllib.request.Request(base_url + path, method="GET")
+    try:
+        with opener().open(request, timeout=timeout) as response:
+            return response.read().decode("utf-8", "replace")
+    except OSError as exc:
+        raise BenchmarkError(f"request failed: {path}: {exc}") from exc
+
+
+def prometheus_samples(text: str) -> dict[str, float]:
+    """Parse numeric Prometheus samples while preserving their label set."""
+
+    result: dict[str, float] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            metric, raw_value = line.rsplit(None, 1)
+            value = float(raw_value)
+        except (ValueError, TypeError):
+            continue
+        if math.isfinite(value):
+            result[metric] = value
+    return result
+
+
+def metrics_snapshot(base_url: str) -> dict[str, float] | None:
+    """Return a local /metrics snapshot, or None when metrics are unavailable."""
+
+    try:
+        return prometheus_samples(request_text(base_url, "/metrics"))
+    except BenchmarkError:
+        return None
+
+
+def metric_total(samples: dict[str, float], name: str) -> float | None:
+    """Sum all label variants for one exact Prometheus metric name."""
+
+    prefix = name + "{"
+    values = [
+        value
+        for metric, value in samples.items()
+        if metric == name or metric.startswith(prefix)
+    ]
+    return sum(values) if values else None
+
+
+def metric_position_totals(
+    samples: dict[str, float],
+    name: str,
+) -> dict[str, float]:
+    """Return position-labelled totals for a Prometheus metric."""
+
+    prefix = name + "{"
+    result: dict[str, float] = {}
+    for metric, value in samples.items():
+        if not metric.startswith(prefix):
+            continue
+        marker = 'position="'
+        start = metric.find(marker)
+        if start < 0:
+            continue
+        start += len(marker)
+        end = metric.find('"', start)
+        if end < 0:
+            continue
+        position = metric[start:end]
+        result[position] = result.get(position, 0.0) + value
+    return result
+
+
+def metric_delta(
+    before: dict[str, float] | None,
+    after: dict[str, float] | None,
+    name: str,
+) -> float | None:
+    """Return a monotonic metric delta, or None if unavailable/reset."""
+
+    if before is None or after is None:
+        return None
+    first = metric_total(before, name)
+    second = metric_total(after, name)
+    if first is None or second is None or second < first:
+        return None
+    return second - first
+
+
+def metric_position_delta(
+    before: dict[str, float] | None,
+    after: dict[str, float] | None,
+    name: str,
+) -> dict[str, float] | None:
+    """Return monotonic per-position deltas, or None if unavailable/reset."""
+
+    if before is None or after is None:
+        return None
+    first = metric_position_totals(before, name)
+    second = metric_position_totals(after, name)
+    if not first and not second:
+        return None
+
+    result: dict[str, float] = {}
+    for position in sorted(set(first) | set(second), key=lambda value: int(value)):
+        old = first.get(position, 0.0)
+        new = second.get(position, 0.0)
+        if new < old:
+            return None
+        result[position] = new - old
+    return result
+
+
 def iter_sse(lines: Iterable[bytes]) -> Iterable[dict[str, Any]]:
     """Yield JSON objects from SSE data fields and stop at [DONE]."""
 
