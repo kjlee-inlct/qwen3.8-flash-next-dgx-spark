@@ -237,9 +237,29 @@ def print_report(report: Report) -> None:
         print(f"[{finding.level:5}] {finding.code:20} {finding.message}")
 
 
+def local_manifest_identity(model_dir: Path | None) -> tuple[str | None, str | None]:
+    """Return repository/revision recorded by download-weights.sh when available."""
+
+    if model_dir is None:
+        return None, None
+    manifest = model_dir / ".qwen38-model-manifest.json"
+    if not manifest.is_file():
+        return None, None
+    try:
+        data = read_json(manifest)
+    except ValueError:
+        return None, None
+    repository = data.get("repository")
+    revision = data.get("revision")
+    return (
+        repository if isinstance(repository, str) and repository else None,
+        revision if isinstance(revision, str) and revision else None,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", default=DEFAULT_REPO, help="Hugging Face repository id")
+    parser.add_argument("--repo", help="Hugging Face repository id; inferred from local download manifest when omitted")
     parser.add_argument("--model-dir", type=Path, help="downloaded checkpoint directory")
     parser.add_argument("--config-override", type=Path, help="config.json mounted over the checkpoint at runtime")
     parser.add_argument("--offline", action="store_true", help="skip the Hugging Face metadata request")
@@ -249,11 +269,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    report = Report(repository=args.repo)
+    model_dir = args.model_dir.resolve() if args.model_dir else None
+    manifest_repo, manifest_revision = local_manifest_identity(model_dir)
+    repository = args.repo or manifest_repo or DEFAULT_REPO
+    report = Report(repository=repository, revision=manifest_revision)
     if not args.offline:
         inspect_remote(report, os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"))
-    if args.model_dir:
-        inspect_local(report, args.model_dir.resolve(), args.config_override)
+    if model_dir:
+        inspect_local(report, model_dir, args.config_override)
     else:
         report.add("WARN", "LOCAL_REQUIRED", "Pass --model-dir for definitive PLE/MTP tensor compatibility checks.")
 
