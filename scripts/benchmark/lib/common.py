@@ -7,6 +7,7 @@ import json
 import math
 import os
 import pathlib
+import re
 import statistics
 import subprocess
 import sys
@@ -101,25 +102,78 @@ def request_text(
         raise BenchmarkError(f"request failed: {path}: {exc}") from exc
 
 
-def prometheus_samples(text: str) -> dict[str, float]:
-    """Parse numeric Prometheus samples while preserving their label set."""
+_PROM_SAMPLE_RE = re.compile(
+    r'^([A-Za-z_:][A-Za-z0-9_:]*)(?:\\{(.*)\\})?\\s+([^\\s]+)(?:\\s+\\d+)?$'
+)
+_PROM_LABEL_RE = re.compile(
+    r'([A-Za-z_][A-Za-z0-9_]*)="((?:\\\\.|[^"\\\\])*)"(?:,|$)'
+)
+PrometheusKey = tuple[str, tuple[tuple[str, str], ...]]
+PrometheusSamples = dict[PrometheusKey, float]
 
-    result: dict[str, float] = {}
+
+def _decode_prometheus_label(value: str) -> str:
+    """Decode the escape sequences allowed inside Prometheus label values."""
+
+    result: list[str] = []
+    index = 0
+    while index < len(value):
+        if value[index] != "\\":
+            result.append(value[index])
+            index += 1
+            continue
+        index += 1
+        if index >= len(value):
+            result.append("\\")
+            break
+        escaped = value[index]
+        result.append("\n" if escaped == "n" else escaped)
+        index += 1
+    return "".join(result)
+
+
+def _parse_prometheus_labels(raw: str | None) -> tuple[tuple[str, str], ...] | None:
+    if raw is None or raw == "":
+        return ()
+    labels: dict[str, str] = {}
+    offset = 0
+    while offset < len(raw):
+        match = _PROM_LABEL_RE.match(raw, offset)
+        if match is None:
+            return None
+        key, value = match.groups()
+        if key in labels:
+            return None
+        labels[key] = _decode_prometheus_label(value)
+        offset = match.end()
+    return tuple(sorted(labels.items()))
+
+
+def prometheus_samples(text: str) -> PrometheusSamples:
+    """Parse Prometheus text exposition into structured metric/label keys."""
+
+    result: PrometheusSamples = {}
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
+        match = _PROM_SAMPLE_RE.match(line)
+        if match is None:
+            continue
+        name, raw_labels, raw_value = match.groups()
+        labels = _parse_prometheus_labels(raw_labels)
+        if labels is None:
+            continue
         try:
-            metric, raw_value = line.rsplit(None, 1)
             value = float(raw_value)
-        except (ValueError, TypeError):
+        except ValueError:
             continue
         if math.isfinite(value):
-            result[metric] = value
+            result[(name, labels)] = value
     return result
 
 
-def metrics_snapshot(base_url: str) -> dict[str, float] | None:
+def metrics_snapshot(base_url: str) -> PrometheusSamples | None:
     """Return a local /metrics snapshot, or None when metrics are unavailable."""
 
     try:
@@ -128,81 +182,90 @@ def metrics_snapshot(base_url: str) -> dict[str, float] | None:
         return None
 
 
-def metric_total(samples: dict[str, float], name: str) -> float | None:
-    """Sum all label variants for one exact Prometheus metric name."""
+def _label_subset(
+    sample_labels: tuple[tuple[str, str], ...],
+    required: dict[str, str] | None,
+) -> bool:
+    if not required:
+        return True
+    labels = dict(sample_labels)
+    return all(labels.get(key) == value for key, value in required.items())
 
-    prefix = name + "{"
+
+def metric_total(
+    samples: PrometheusSamples,
+    name: str,
+    labels: dict[str, str] | None = None,
+) -> float | None:
+    """Sum one metric across series matching an optional label subset."""
+
     values = [
         value
-        for metric, value in samples.items()
-        if metric == name or metric.startswith(prefix)
+        for (metric_name, sample_labels), value in samples.items()
+        if metric_name == name and _label_subset(sample_labels, labels)
     ]
     return sum(values) if values else None
 
 
 def metric_position_totals(
-    samples: dict[str, float],
+    samples: PrometheusSamples,
     name: str,
+    labels: dict[str, str] | None = None,
 ) -> dict[str, float]:
-    """Return position-labelled totals for a Prometheus metric."""
+    """Return position-labelled totals matching an optional label subset."""
 
-    prefix = name + "{"
     result: dict[str, float] = {}
-    for metric, value in samples.items():
-        if not metric.startswith(prefix):
+    for (metric_name, sample_labels), value in samples.items():
+        if metric_name != name or not _label_subset(sample_labels, labels):
             continue
-        marker = 'position="'
-        start = metric.find(marker)
-        if start < 0:
+        position = dict(sample_labels).get("position")
+        if position is None:
             continue
-        start += len(marker)
-        end = metric.find('"', start)
-        if end < 0:
-            continue
-        position = metric[start:end]
         result[position] = result.get(position, 0.0) + value
     return result
 
 
 def metric_delta(
-    before: dict[str, float] | None,
-    after: dict[str, float] | None,
+    before: PrometheusSamples | None,
+    after: PrometheusSamples | None,
     name: str,
+    labels: dict[str, str] | None = None,
 ) -> float | None:
     """Return a monotonic metric delta, or None if unavailable/reset."""
 
     if before is None or after is None:
         return None
-    first = metric_total(before, name)
-    second = metric_total(after, name)
+    first = metric_total(before, name, labels)
+    second = metric_total(after, name, labels)
     if first is None or second is None or second < first:
         return None
     return second - first
 
 
 def metric_position_delta(
-    before: dict[str, float] | None,
-    after: dict[str, float] | None,
+    before: PrometheusSamples | None,
+    after: PrometheusSamples | None,
     name: str,
+    labels: dict[str, str] | None = None,
 ) -> dict[str, float] | None:
     """Return monotonic per-position deltas, or None if unavailable/reset."""
 
     if before is None or after is None:
         return None
-    first = metric_position_totals(before, name)
-    second = metric_position_totals(after, name)
+    first = metric_position_totals(before, name, labels)
+    second = metric_position_totals(after, name, labels)
     if not first and not second:
         return None
 
     result: dict[str, float] = {}
-    for position in sorted(set(first) | set(second), key=lambda value: int(value)):
+    positions = set(first) | set(second)
+    for position in sorted(positions, key=lambda value: int(value) if value.isdigit() else value):
         old = first.get(position, 0.0)
         new = second.get(position, 0.0)
         if new < old:
             return None
         result[position] = new - old
     return result
-
 
 def iter_sse(lines: Iterable[bytes]) -> Iterable[dict[str, Any]]:
     """Yield JSON objects from SSE data fields and stop at [DONE]."""
@@ -422,6 +485,96 @@ def current_release_id() -> str | None:
         return None
 
 
+def _command_option(command: list[str], option: str) -> str | None:
+    try:
+        index = command.index(option)
+    except ValueError:
+        return None
+    return command[index + 1] if index + 1 < len(command) else None
+
+
+def _int_option(command: list[str], option: str) -> int | None:
+    value = _command_option(command, option)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def runtime_launch_snapshot(container_name: str = "qwen38-flash-next") -> dict[str, Any] | None:
+    """Read an allowlisted subset of the running container launch configuration."""
+
+    try:
+        completed = subprocess.run(
+            ["docker", "inspect", "--format", "{{json .Config}}", container_name],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        config = json.loads(completed.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    command = config.get("Cmd")
+    if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
+        return None
+
+    speculative: dict[str, Any] | None = None
+    raw_speculative = _command_option(command, "--speculative-config")
+    if raw_speculative:
+        try:
+            decoded = json.loads(raw_speculative)
+            if isinstance(decoded, dict):
+                speculative = {
+                    key: decoded.get(key)
+                    for key in (
+                        "method",
+                        "num_speculative_tokens",
+                        "index_share_for_mtp_iteration",
+                    )
+                    if key in decoded
+                }
+        except json.JSONDecodeError:
+            speculative = {"parse_error": True}
+
+    autotune: bool | None = None
+    if "--enable-flashinfer-autotune" in command:
+        autotune = True
+    elif "--no-enable-flashinfer-autotune" in command:
+        autotune = False
+
+    prefix_cache: bool | None = None
+    if "--enable-prefix-caching" in command:
+        prefix_cache = True
+    elif "--no-enable-prefix-caching" in command:
+        prefix_cache = False
+
+    async_scheduling: bool | None = None
+    if "--async-scheduling" in command:
+        async_scheduling = True
+    elif "--no-async-scheduling" in command:
+        async_scheduling = False
+
+    return {
+        "image": config.get("Image"),
+        "max_model_len": _int_option(command, "--max-model-len"),
+        "max_num_seqs": _int_option(command, "--max-num-seqs"),
+        "max_num_batched_tokens": _int_option(command, "--max-num-batched-tokens"),
+        "kv_cache_memory": _int_option(command, "--kv-cache-memory"),
+        "distributed_executor_backend": _command_option(
+            command, "--distributed-executor-backend"
+        ),
+        "flashinfer_autotune": autotune,
+        "prefix_caching": prefix_cache,
+        "async_scheduling": async_scheduling,
+        "speculative_config": speculative,
+    }
+
+
 def environment_snapshot(base_url: str, model: str) -> dict[str, Any]:
     """Capture reproducibility metadata without credentials, hostname, or serials."""
 
@@ -435,6 +588,7 @@ def environment_snapshot(base_url: str, model: str) -> dict[str, Any]:
         "release_id": current_release_id(),
         "model": model,
         "max_model_len": selected.get("max_model_len"),
+        "runtime_launch": runtime_launch_snapshot(),
         "memory_gib": meminfo_gib(),
         "python": {
             "major": sys.version_info.major,
