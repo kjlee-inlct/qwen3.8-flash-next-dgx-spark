@@ -124,6 +124,23 @@ The canonical repository benchmark harness lives under `scripts/benchmark/`:
 - top-level `bench/run.py` and `bench/common.py` are compatibility shims for older callers.
 - `scripts/bench-prefill.py` stays at its upstream-derived path and is not the canonical benchmark harness for this fork.
 
+## Dependency boundary policy
+
+Canonical category code follows an explicit dependency direction:
+
+| Category | May directly depend on |
+|---|---|
+| `lib/` | no other canonical category |
+| `model/` | `lib/` |
+| `runtime/` | `lib/`, `model/` |
+| `lifecycle/` | `lib/`, `runtime/` |
+| `diagnostics/` | `lib/`, `lifecycle/`, `runtime/` |
+| `benchmark/` | no other canonical category; it measures the exposed runtime/API rather than importing orchestration |
+
+Self-references inside a category are allowed. Stable top-level operator entry points are not treated as canonical-category dependencies because they are part of the public compatibility surface.
+
+The layout tests scan canonical implementation files for explicit cross-category path references and fail when a reference points outside this allowlist. This is a guardrail rather than a full language-level import graph, so new dependency styles should extend the test instead of bypassing it.
+
 ## Layout rules
 
 1. Do not relocate upstream-derived paths from `dolf3131/qwen3.8-flash-next-dgx-spark`.
