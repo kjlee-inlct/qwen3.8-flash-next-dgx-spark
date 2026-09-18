@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import pathlib
+from unittest import mock
 import sys
 import tempfile
 import unittest
@@ -102,10 +103,52 @@ class BenchmarkRunnerTests(unittest.TestCase):
     def test_decode_prompt_disables_thinking(self) -> None:
         self.assertIn("/no_think", runner.DECODE_PROMPT)
 
+    def test_determinism_hash_is_stable_without_retaining_text(self) -> None:
+        first = runner.sha256_text("same output")
+        second = runner.sha256_text("same output")
+        other = runner.sha256_text("different output")
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, other)
+        self.assertEqual(len(first), 64)
+
+    def test_determinism_workload_passes_only_for_identical_outputs(self) -> None:
+        same = {
+            "choices": [{"message": {"content": "stable"}}],
+            "usage": {"prompt_tokens": 8192, "completion_tokens": 3},
+        }
+        with mock.patch.object(common, "prompt_for_tokens", return_value=("prompt", 8192)), \
+             mock.patch.object(common, "request_json", side_effect=[same, same, same]):
+            result = runner.run_determinism(
+                "http://127.0.0.1:8888", "model", ROOT / "README.md", 8192, 128, 3
+            )
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["all_equal"])
+        self.assertEqual(result["unique_hashes"], 1)
+        self.assertNotIn("stable", json.dumps(result))
+
+        changed = {
+            "choices": [{"message": {"content": "changed"}}],
+            "usage": {"prompt_tokens": 8192, "completion_tokens": 3},
+        }
+        with mock.patch.object(common, "prompt_for_tokens", return_value=("prompt", 8192)), \
+             mock.patch.object(common, "request_json", side_effect=[same, changed]):
+            result = runner.run_determinism(
+                "http://127.0.0.1:8888", "model", ROOT / "README.md", 8192, 128, 2
+            )
+        self.assertEqual(result["status"], "fail")
+        self.assertFalse(result["all_equal"])
+        self.assertEqual(result["unique_hashes"], 2)
+
     def test_default_prefill_sizes_cover_existing_benchmark(self) -> None:
         args = runner.parser().parse_args(["prefill"])
         self.assertEqual(args.prefill_sizes, [8192, 16384, 32768])
         self.assertEqual(args.concurrency_levels, [1, 2, 4, 8])
+
+    def test_determinism_parser_defaults(self) -> None:
+        args = runner.parser().parse_args(["determinism"])
+        self.assertEqual(args.determinism_prompt_tokens, 8192)
+        self.assertEqual(args.determinism_output_tokens, 128)
+        self.assertEqual(args.determinism_repeats, 3)
 
 
 if __name__ == "__main__":
