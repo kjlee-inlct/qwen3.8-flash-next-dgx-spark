@@ -2,6 +2,24 @@
 
 This directory contains the repository's canonical read-only benchmark harness for the managed Qwen3.8 Flash Next runtime.
 
+## Responsibilities
+
+- Run read-only qualification and performance workloads against the already-running loopback API.
+- Record reproducible environment/runtime metadata with benchmark results.
+- Keep generated model text out of persisted reports.
+
+## Dependencies
+
+- May read repository/runtime state needed to label a benchmark result.
+- May call the local serving API and standard host telemetry.
+- Must not own runtime startup, lifecycle mutation, model preparation, or diagnostics policy.
+
+## Non-responsibilities
+
+- Do not restart or reconfigure the managed runtime.
+- Do not change model files, swap, system settings, or lifecycle state.
+- Do not become a second runtime validator; operational validation remains under `runtime/`.
+
 ## Layout
 
 - `run.py`: canonical benchmark CLI.

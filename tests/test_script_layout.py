@@ -135,6 +135,21 @@ class ScriptLayoutTests(unittest.TestCase):
                 self.assertIn(category, readme)
         self.assertIn("the goal is not an empty `scripts/` root", readme)
 
+    def test_category_readmes_define_responsibility_boundaries(self) -> None:
+        categories = ("benchmark", "diagnostics", "lifecycle", "lib", "model", "runtime")
+        for category in categories:
+            with self.subTest(category=category):
+                path = SCRIPTS / category / "README.md"
+                self.assertTrue(path.is_file())
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("## Responsibilities", text)
+                self.assertIn("## Non-responsibilities", text)
+                self.assertTrue("## Dependencies" in text or "## Dependency direction" in text)
+
+        lib_readme = (SCRIPTS / "lib" / "README.md").read_text(encoding="utf-8")
+        self.assertIn("lowest-level", lib_readme)
+        self.assertIn("Higher-level categories may depend on `lib/`", lib_readme)
+
     def test_layout_policy_preserves_stable_entry_points(self) -> None:
         readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
         for name in (
