@@ -161,11 +161,12 @@ def prompt_for_tokens(
     model: str,
     corpus: pathlib.Path,
     target_tokens: int,
+    *,
+    suffix: str = "\n\nReply with exactly one word: ok",
 ) -> tuple[str, int]:
     """Binary-search real text into a prompt close to target_tokens."""
 
     text = corpus_text(corpus, max(50_000, target_tokens * 8))
-    suffix = "\n\nReply with exactly one word: ok"
     low, high = 1, len(text)
     best = suffix
     best_count = tokenize_count(base_url, model, best)
