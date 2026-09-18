@@ -8,6 +8,7 @@ STATE_FILE="${STATE_DIR}/install.env"
 TRANSITION_STATE_FILE="${STATE_DIR}/runtime-transition.env"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
+CHECKPOINT_INTEGRITY="${SCRIPT_DIR}/model/checkpoint_integrity.py"
 # shellcheck source=model-profiles.sh
 source "${SCRIPT_DIR}/model-profiles.sh"
 SERVICE_UNIT="qwen38-flash-next.service"
@@ -75,7 +76,21 @@ ROLLBACK_CONTAINER="${RUNTIME_CONTAINER}.rollback"
 # shellcheck source=doctor-observability.sh
 source "${SCRIPT_DIR}/doctor-observability.sh"
 
-if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then pass "model index is present"; else fail "model index is missing under ${MODEL_DIR:-unset}"; fi
+if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then
+  pass "model index is present"
+  if [[ -r "${CHECKPOINT_INTEGRITY}" ]]; then
+    checkpoint_integrity_detail="$(python3 "${CHECKPOINT_INTEGRITY}" "${MODEL_DIR}" 2>&1)"
+    if [[ $? -eq 0 ]]; then
+      pass "${checkpoint_integrity_detail}"
+    else
+      fail "${checkpoint_integrity_detail}"
+    fi
+  else
+    fail "checkpoint integrity checker is unavailable: ${CHECKPOINT_INTEGRITY}"
+  fi
+else
+  fail "model index is missing under ${MODEL_DIR:-unset}"
+fi
 if [[ -r "${MODEL_DIR:-}/.qwen38-model-manifest.json" ]]; then
   if python3 - "${MODEL_DIR}/.qwen38-model-manifest.json" "${EXPECTED_REPO}" "${EXPECTED_REVISION}" <<'PY'
 import json, sys
