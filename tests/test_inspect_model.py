@@ -34,6 +34,25 @@ class InspectorTests(unittest.TestCase):
             write_safetensors(path, tensors)
             self.assertEqual(MODULE.read_safetensors_header(path), tensors)
 
+    def test_local_manifest_identity_is_inferred(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            model_dir = Path(directory)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "status": "complete",
+                        "repository": "nvidia/Qwen3.8-Flash-Next-NVFP4",
+                        "revision": "fc694b54fb0174e0913e6adf86691ef85a4ead47",
+                        "files": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            repository, revision = MODULE.local_manifest_identity(model_dir)
+            self.assertEqual(repository, "nvidia/Qwen3.8-Flash-Next-NVFP4")
+            self.assertEqual(revision, "fc694b54fb0174e0913e6adf86691ef85a4ead47")
+
     def test_detects_ple_and_mtp_layout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             model_dir = Path(directory)
