@@ -194,8 +194,10 @@ print_readiness_progress() {
   if [[ -n "${candidate_container_id}" ]]; then
     container_log="$(docker logs --timestamps --tail 1 "${CONTAINER_NAME}" 2>&1 | tail -n 1 | cut -c1-240 || true)"
     [[ -n "${container_log}" ]] || container_log="(no container log yet)"
-    if docker top "${CONTAINER_NAME}" -eo comm 2>/dev/null | grep -Fxq PleOffloadWorker; then
+    if docker top "${CONTAINER_NAME}" -eo pid,args 2>/dev/null | grep -Fq PleOffloadWorker; then
       ple_worker_state=present
+    elif docker logs --tail 200 "${CONTAINER_NAME}" 2>&1 | grep -Fq "(PleOffloadWorker pid="; then
+      ple_worker_state=seen-in-log
     else
       ple_worker_state=missing
     fi
