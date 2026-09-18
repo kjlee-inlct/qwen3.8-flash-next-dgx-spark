@@ -97,6 +97,41 @@ vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 4
             )
         )
 
+    def test_runtime_config_extracts_tuning_controls(self) -> None:
+        config = {
+            "Image": "vllm-nv-mixed:v2",
+            "Cmd": [
+                "/model",
+                "--served-model-name", "qwen3.8-flash-next",
+                "--distributed-executor-backend", "mp",
+                "--kv-cache-memory", "16106127360",
+                "--max-model-len", "524288",
+                "--max-num-seqs", "8",
+                "--max-num-batched-tokens", "8192",
+                "--no-async-scheduling",
+                "--no-enable-prefix-caching",
+                "--enable-flashinfer-autotune",
+                "--speculative-config",
+                '{"method":"mtp","num_speculative_tokens":3,"index_share_for_mtp_iteration":true}',
+            ],
+        }
+        result = common.runtime_config_from_docker_config("qwen38-bench-d", config)
+        self.assertEqual(result["container_name"], "qwen38-bench-d")
+        self.assertEqual(result["image"], "vllm-nv-mixed:v2")
+        self.assertEqual(result["max_model_len"], "524288")
+        self.assertEqual(result["kv_cache_memory"], "16106127360")
+        self.assertTrue(result["flashinfer_autotune"])
+        self.assertFalse(result["prefix_caching"])
+        self.assertFalse(result["async_scheduling"])
+        self.assertEqual(
+            result["speculative_config"],
+            {
+                "method": "mtp",
+                "num_speculative_tokens": 3,
+                "index_share_for_mtp_iteration": True,
+            },
+        )
+
     def test_metrics_snapshot_is_optional(self) -> None:
         with mock.patch(
             "urllib.request.OpenerDirector.open",
@@ -241,6 +276,10 @@ class BenchmarkRunnerTests(unittest.TestCase):
         args = runner.parser().parse_args(["prefill"])
         self.assertEqual(args.prefill_sizes, [8192, 16384, 32768])
         self.assertEqual(args.concurrency_levels, [1, 2, 4, 8])
+
+    def test_tuning_mode_is_available(self) -> None:
+        args = runner.parser().parse_args(["tuning"])
+        self.assertEqual(args.mode, "tuning")
 
     def test_determinism_parser_defaults(self) -> None:
         args = runner.parser().parse_args(["determinism"])

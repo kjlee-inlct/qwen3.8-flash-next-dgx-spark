@@ -28,5 +28,19 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `service-runner.sh`
 - `monitor-runtime.sh`
 - `validate_runtime.py`
+- `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
 
 Top-level runtime helper paths in `scripts/` are stable operator or compatibility entry points and should remain thin where a canonical implementation exists.
+
+
+## Temporary NVIDIA tuning runtimes
+
+`nvidia-2x2.sh` launches a temporary, separately named container for one
+controlled benchmark case. It does not modify installation state, runtime
+attestation, or the managed service unit. It refuses to start if the
+managed service or canonical container is still running.
+
+Use `bash scripts/runtime/nvidia-2x2.sh plan` for the fixed controls and
+A/B/C/D matrix. Operators must stop the managed service before a case and
+restart it after the experiment series. Benchmark policy and result
+interpretation remain documented under `../benchmark/README.md`.

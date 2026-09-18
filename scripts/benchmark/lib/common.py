@@ -422,6 +422,119 @@ def current_release_id() -> str | None:
         return None
 
 
+def runtime_config_from_docker_config(
+    container_name: str,
+    config: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Extract benchmark-relevant vLLM settings from Docker config data."""
+
+    command = config.get("Cmd")
+    if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
+        return None
+
+    def option(name: str) -> str | None:
+        try:
+            index = command.index(name)
+        except ValueError:
+            return None
+        return command[index + 1] if index + 1 < len(command) else None
+
+    result: dict[str, Any] = {
+        "container_name": container_name,
+        "image": config.get("Image"),
+        "served_model_name": option("--served-model-name"),
+        "max_model_len": option("--max-model-len"),
+        "max_num_seqs": option("--max-num-seqs"),
+        "max_num_batched_tokens": option("--max-num-batched-tokens"),
+        "kv_cache_memory": option("--kv-cache-memory"),
+        "kv_cache_dtype": option("--kv-cache-dtype"),
+        "distributed_executor_backend": option("--distributed-executor-backend"),
+        "flashinfer_autotune": (
+            True
+            if "--enable-flashinfer-autotune" in command
+            else False
+            if "--no-enable-flashinfer-autotune" in command
+            else None
+        ),
+        "prefix_caching": (
+            True
+            if "--enable-prefix-caching" in command
+            else False
+            if "--no-enable-prefix-caching" in command
+            else None
+        ),
+        "async_scheduling": (
+            False if "--no-async-scheduling" in command else None
+        ),
+    }
+
+    raw_spec = option("--speculative-config")
+    if raw_spec is None:
+        result["speculative_config"] = None
+    else:
+        try:
+            parsed = json.loads(raw_spec)
+        except json.JSONDecodeError:
+            parsed = raw_spec
+        result["speculative_config"] = parsed
+
+    return result
+
+
+def runtime_config_snapshot(base_url: str) -> dict[str, Any] | None:
+    """Read the running Docker config serving the benchmark's loopback port."""
+
+    try:
+        port = urllib.parse.urlsplit(base_url).port
+    except ValueError:
+        return None
+    if port is None:
+        return None
+
+    try:
+        names = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"publish={port}",
+                "--format",
+                "{{.Names}}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    names = [name.strip() for name in names if name.strip()]
+    if len(names) != 1:
+        return None
+
+    try:
+        raw = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{json .Config}}",
+                names[0],
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+        config = json.loads(raw)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    return runtime_config_from_docker_config(names[0], config)
+
+
 def environment_snapshot(base_url: str, model: str) -> dict[str, Any]:
     """Capture reproducibility metadata without credentials, hostname, or serials."""
 
@@ -435,6 +548,7 @@ def environment_snapshot(base_url: str, model: str) -> dict[str, Any]:
         "release_id": current_release_id(),
         "model": model,
         "max_model_len": selected.get("max_model_len"),
+        "runtime_config": runtime_config_snapshot(base_url),
         "memory_gib": meminfo_gib(),
         "python": {
             "major": sys.version_info.major,
