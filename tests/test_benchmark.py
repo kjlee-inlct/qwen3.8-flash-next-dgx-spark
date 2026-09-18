@@ -4,10 +4,10 @@ import importlib.util
 import io
 import json
 import pathlib
-from unittest import mock
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -116,8 +116,8 @@ class BenchmarkRunnerTests(unittest.TestCase):
             "choices": [{"message": {"content": "stable"}}],
             "usage": {"prompt_tokens": 8192, "completion_tokens": 3},
         }
-        with mock.patch.object(common, "prompt_for_tokens", return_value=("prompt", 8192)), \
-             mock.patch.object(common, "request_json", side_effect=[same, same, same]):
+        with mock.patch.object(runner.common, "prompt_for_tokens", return_value=("prompt", 8192)), \
+             mock.patch.object(runner.common, "request_json", side_effect=[same, same, same]):
             result = runner.run_determinism(
                 "http://127.0.0.1:8888", "model", ROOT / "README.md", 8192, 128, 3
             )
@@ -130,8 +130,8 @@ class BenchmarkRunnerTests(unittest.TestCase):
             "choices": [{"message": {"content": "changed"}}],
             "usage": {"prompt_tokens": 8192, "completion_tokens": 3},
         }
-        with mock.patch.object(common, "prompt_for_tokens", return_value=("prompt", 8192)), \
-             mock.patch.object(common, "request_json", side_effect=[same, changed]):
+        with mock.patch.object(runner.common, "prompt_for_tokens", return_value=("prompt", 8192)), \
+             mock.patch.object(runner.common, "request_json", side_effect=[same, changed]):
             result = runner.run_determinism(
                 "http://127.0.0.1:8888", "model", ROOT / "README.md", 8192, 128, 2
             )
