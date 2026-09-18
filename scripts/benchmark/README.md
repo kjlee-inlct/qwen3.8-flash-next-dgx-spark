@@ -48,7 +48,10 @@ The top-level `bench/run.py` path is retained only as a compatibility shim. New 
 : Repeats the same long greedy request and requires byte-identical output. Reports only SHA-256 digests, token counts, and timings; generated text is not persisted. This is the correctness gate for evaluating prefix-cache, Mamba, QSA, and speculative-decoding changes.
 
 `decode`
-: Repeats a single-stream technical-prose workload and records TTFT, completion-token rate, and stream event-gap statistics.
+: Repeats a single-stream technical-prose workload and records TTFT, completion-token rate, stream event-gap statistics, and optional vLLM engine/speculative-decoding counter deltas.
+
+`tuning`
+: Runs qualification, determinism, and decode only. Use this focused mode when comparing runtime knobs so correctness and decode performance are captured without adding prefill/concurrency noise.
 
 `prefill`
 : Builds real-text prompts at approximately 8K, 16K, and 32K tokens using the live `/tokenize` endpoint, then measures TTFT and derived prompt-token throughput.
@@ -146,3 +149,77 @@ unavailable; in that case `engine_metrics` is omitted.
 
 A Prometheus counter reset during the measured interval makes the
 affected delta unavailable rather than producing a negative result.
+
+
+## NVIDIA INDEX_SHARE x AUTOTUNE 2x2 experiment
+
+The NVIDIA profile currently enables `NSPEC=3`, `INDEX_SHARE=1`, and
+`AUTOTUNE=1` together. The MTP `k=3` choice has separate measurements,
+but `INDEX_SHARE` and FlashInfer autotune have not been isolated. Use this
+matrix while keeping every other runtime control fixed:
+
+| Case | INDEX_SHARE | AUTOTUNE |
+|---|---:|---:|
+| A | 0 | 0 |
+| B | 1 | 0 |
+| C | 0 | 1 |
+| D | 1 | 1 |
+
+Fixed controls are the NVIDIA profile, `NSPEC=3`, `MAXLEN=524288`,
+`KV_MEM=16106127360`, `MAXSEQS=8`, `PREFIX_CACHE=0`,
+`--no-async-scheduling`, the same image/model revision, and the same host
+memory/swap policy.
+
+The runtime helper never stops the managed service for you. Stop it
+explicitly first so the canonical container remains preserved:
+
+```bash
+sudo systemctl stop qwen38-flash-next.service
+bash scripts/runtime/nvidia-2x2.sh status
+bash scripts/runtime/nvidia-2x2.sh plan
+```
+
+Start one case at a time. The helper refuses to start while the managed
+service or canonical runtime is still running:
+
+```bash
+bash scripts/runtime/nvidia-2x2.sh start A
+# wait until http://127.0.0.1:8888/health is ready
+
+python3 scripts/benchmark/run.py tuning \
+  --determinism-prompt-tokens 32768 \
+  --determinism-output-tokens 256 \
+  --determinism-repeats 3 \
+  --decode-tokens 600 \
+  --decode-repeats 5 \
+  --output scripts/benchmark/results/local/nvidia-2x2-A.json
+
+bash scripts/runtime/nvidia-2x2.sh stop A
+```
+
+Repeat for B, C, and D. Benchmark reports automatically inspect the Docker
+container serving the benchmark port and record the effective image,
+context length, KV memory, sequence/batch limits, speculative config,
+FlashInfer autotune, prefix-caching state, async-scheduling state, and
+executor backend under `environment.runtime_config`. This makes each
+result self-describing instead of relying on its filename.
+
+Compare `engine_metrics.steps_s` first. Use
+`generation_per_step`, `draft_acceptance_rate`, decode tok/s, TTFT, and
+the determinism result as supporting evidence. The Prometheus counters are
+process-global, so do not send unrelated inference traffic during a
+measurement.
+
+After all four cases are complete, remove any experiment container and
+restore the managed runtime:
+
+```bash
+bash scripts/runtime/nvidia-2x2.sh stop
+sudo systemctl start qwen38-flash-next.service
+./scripts/doctor.sh
+```
+
+Because identical configurations have previously produced different
+sequences across boots, a single A/B/C/D pass is exploratory. Repeat the
+matrix across fresh boots before treating small step-rate differences as
+stable.
