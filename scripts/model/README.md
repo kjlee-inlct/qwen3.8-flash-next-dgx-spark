@@ -6,6 +6,7 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 
 - Define supported model profiles and their static defaults.
 - Inspect checkpoint metadata/layout without loading the full model.
+- Validate that every shard referenced by a safetensors index is present and non-empty.
 - Prepare validated model-specific configuration overrides.
 
 ## Dependencies
@@ -24,6 +25,7 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 
 - `model-profiles.sh`
 - `inspect_model.py`
+- `checkpoint_integrity.py`
 - `prepare_config.py`
 
 Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/prepare-config.py` are compatibility entry points.
