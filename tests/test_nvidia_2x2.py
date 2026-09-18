@@ -38,8 +38,8 @@ class Nvidia2x2ExperimentTests(unittest.TestCase):
         ):
             self.assertIn(fixed, result.stdout)
 
-        self.assertIn("scripts/benchmark/run.py tuning", result.stdout)
-        self.assertIn("nvidia-2x2-CASE.json", result.stdout)
+        self.assertIn("only controls temporary experiment containers", result.stdout)
+        self.assertIn("benchmark harness separately", result.stdout)
 
     def test_invalid_case_is_rejected_without_starting_runtime(self) -> None:
         result = subprocess.run(
