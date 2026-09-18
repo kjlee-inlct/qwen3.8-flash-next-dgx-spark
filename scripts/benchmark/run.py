@@ -327,7 +327,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument(
         "mode",
-        choices=("qualification", "determinism", "decode", "prefill", "concurrency", "all"),
+        choices=("qualification", "determinism", "decode", "prefill", "concurrency", "tuning", "all"),
     )
     result.add_argument("--base-url", default=common.DEFAULT_BASE_URL)
     result.add_argument("--model", default=None)
@@ -380,11 +380,12 @@ def main() -> int:
             "environment": common.environment_snapshot(args.base_url, model),
             "workloads": {},
         }
-        modes = (
-            ("qualification", "determinism", "decode", "prefill", "concurrency")
-            if args.mode == "all"
-            else (args.mode,)
-        )
+        if args.mode == "all":
+            modes = ("qualification", "determinism", "decode", "prefill", "concurrency")
+        elif args.mode == "tuning":
+            modes = ("qualification", "determinism", "decode")
+        else:
+            modes = (args.mode,)
         for mode in modes:
             if mode == "qualification":
                 report["workloads"][mode] = run_qualification(args.base_url, model)
