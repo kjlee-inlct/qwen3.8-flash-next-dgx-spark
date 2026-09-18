@@ -48,6 +48,64 @@ class BenchmarkCommonTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 common.validate_base_url(invalid)
 
+    def test_prometheus_metric_parsing_and_delta(self) -> None:
+        raw = """
+# HELP vllm:spec_decode_num_drafts_total Number of drafts.
+vllm:spec_decode_num_drafts_total{engine="0",model_name="model"} 10
+vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="0"} 7
+vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 4
+"""
+        samples = common.prometheus_samples(raw)
+        self.assertEqual(
+            common.metric_total(samples, "vllm:spec_decode_num_drafts_total"),
+            10.0,
+        )
+        self.assertEqual(
+            common.metric_position_totals(
+                samples,
+                "vllm:spec_decode_num_accepted_tokens_per_pos_total",
+            ),
+            {"0": 7.0, "1": 4.0},
+        )
+
+        later = common.prometheus_samples(raw.replace(" 10", " 13").replace(" 7", " 9"))
+        self.assertEqual(
+            common.metric_delta(
+                samples,
+                later,
+                "vllm:spec_decode_num_drafts_total",
+            ),
+            3.0,
+        )
+        self.assertEqual(
+            common.metric_position_delta(
+                samples,
+                later,
+                "vllm:spec_decode_num_accepted_tokens_per_pos_total",
+            ),
+            {"0": 2.0, "1": 0.0},
+        )
+
+    def test_prometheus_counter_reset_is_unavailable(self) -> None:
+        before = {"vllm:generation_tokens_total": 100.0}
+        after = {"vllm:generation_tokens_total": 10.0}
+        self.assertIsNone(
+            common.metric_delta(
+                before,
+                after,
+                "vllm:generation_tokens_total",
+            )
+        )
+
+    def test_metrics_snapshot_is_optional(self) -> None:
+        with mock.patch(
+            "urllib.request.OpenerDirector.open",
+            side_effect=OSError("metrics unavailable"),
+        ):
+            self.assertIsNone(
+                common.metrics_snapshot("http://127.0.0.1:8888")
+            )
+
     def test_sse_parser_ignores_non_data_and_stops_at_done(self) -> None:
         stream = io.BytesIO(
             b': keepalive\n\ndata: {"choices": []}\n\nevent: ignored\n\ndata: [DONE]\n\n'
@@ -138,6 +196,46 @@ class BenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertFalse(result["all_equal"])
         self.assertEqual(result["unique_hashes"], 2)
+
+    def test_speculative_metrics_are_derived_from_counter_delta(self) -> None:
+        before = {
+            "vllm:spec_decode_num_drafts_total": 10.0,
+            "vllm:spec_decode_num_draft_tokens_total": 20.0,
+            "vllm:spec_decode_num_accepted_tokens_total": 11.0,
+            'vllm:spec_decode_num_accepted_tokens_per_pos_total{position="0"}': 7.0,
+            'vllm:spec_decode_num_accepted_tokens_per_pos_total{position="1"}': 4.0,
+            "vllm:generation_tokens_total": 20.0,
+            "vllm:iteration_tokens_total_count": 10.0,
+            "vllm:iteration_tokens_total_sum": 25.0,
+        }
+        after = {
+            "vllm:spec_decode_num_drafts_total": 191.0,
+            "vllm:spec_decode_num_draft_tokens_total": 382.0,
+            "vllm:spec_decode_num_accepted_tokens_total": 213.0,
+            'vllm:spec_decode_num_accepted_tokens_per_pos_total{position="0"}': 126.0,
+            'vllm:spec_decode_num_accepted_tokens_per_pos_total{position="1"}': 87.0,
+            "vllm:generation_tokens_total": 404.0,
+            "vllm:iteration_tokens_total_count": 192.0,
+            "vllm:iteration_tokens_total_sum": 454.0,
+        }
+
+        result = runner.speculative_metrics(before, after, 12.0)
+
+        self.assertEqual(result["drafts"], 181.0)
+        self.assertEqual(result["draft_tokens"], 362.0)
+        self.assertEqual(result["accepted_tokens"], 202.0)
+        self.assertEqual(result["generation_tokens"], 384.0)
+        self.assertEqual(result["engine_steps"], 182.0)
+        self.assertEqual(result["iteration_tokens"], 429.0)
+        self.assertEqual(result["accepted_tokens_per_position"], {"0": 119.0, "1": 83.0})
+        self.assertEqual(result["draft_acceptance_rate"], 0.558011)
+        self.assertEqual(result["accepted_per_draft"], 1.116022)
+        self.assertEqual(result["generation_per_step"], 2.10989)
+        self.assertEqual(result["iteration_tokens_per_step"], 2.357143)
+        self.assertEqual(result["steps_s"], 15.166667)
+
+    def test_speculative_metrics_are_optional(self) -> None:
+        self.assertIsNone(runner.speculative_metrics(None, None, 1.0))
 
     def test_default_prefill_sizes_cover_existing_benchmark(self) -> None:
         args = runner.parser().parse_args(["prefill"])
