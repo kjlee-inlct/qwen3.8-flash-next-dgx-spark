@@ -66,6 +66,14 @@ non-default mamba_block_size is only legal with prefix caching. The draft does n
 target Mamba cache, so B3 copies CacheConfig and clears only the derived mamba_block_size
 before constructing the draft VllmConfig. The target cache config is left unchanged.
 
+B4 handles a preview-build KV-cache grouping limitation exposed by the MTP draft layer.
+The target's 48 CSA+linear layers satisfy the model-specific packed geometry, but the
+extra standalone draft layer (index 48) can legitimately use a different CSA page
+geometry. The old fast-path raises before the generic grouping logic can handle that
+mixed layout. B4 keeps strict validation for target layers, but when only an extra
+speculative layer violates the CSA fast-path it returns None so the existing generic
+grouping path can take over for the whole cache-spec set.
+
 Usage:  python3 patch_nv_mixed.py
 """
 
@@ -239,4 +247,55 @@ s = sub(
 )
 open(mtp_path, "w").write(s)
 print(f"patch_nv_mixed: B2+B3 patched {mtp_path}")
+
+# --------------------------------------------------------------------------- #
+# B4. Preview KV-cache grouping: let irregular speculative CSA draft fall back
+# --------------------------------------------------------------------------- #
+kv_path = one(f"{BASE}/v1/core/kv_cache_utils.py")
+s = open(kv_path).read()
+s = sub(
+    s,
+    """        if not (
+            main_kv.block_size == compressed.block_size
+            and compressor_state.unpadded_page_size_bytes <= compressed.page_size_bytes
+            and all(
+                spec.page_size_padded is None
+                for spec in (main_kv, compressed, compressor_state)
+            )
+        ):
+            raise ValueError(
+                f"CSA+linear layer {cache.layer_index} cache specs violate CSA "
+                "geometry."
+            )
+""",
+    """        if not (
+            main_kv.block_size == compressed.block_size
+            and compressor_state.unpadded_page_size_bytes <= compressed.page_size_bytes
+            and all(
+                spec.page_size_padded is None
+                for spec in (main_kv, compressed, compressor_state)
+            )
+        ):
+            # The preview build's CSA fast-path predates mixed-geometry
+            # speculative drafters. Qwen3.8's target owns layers 0..47 while
+            # the standalone MTP layer is appended at index 48. Keep strict
+            # validation for target layers; if only an appended speculative
+            # layer violates the specialized packing assumptions, decline this
+            # fast-path and let get_kv_cache_groups() use its generic grouping
+            # implementation for the full cache-spec set.
+            target_layers = vllm_config.model_config.get_total_num_hidden_layers()
+            if (
+                vllm_config.speculative_config is not None
+                and cache.layer_index >= target_layers
+            ):
+                return None
+            raise ValueError(
+                f"CSA+linear layer {cache.layer_index} cache specs violate CSA "
+                "geometry."
+            )
+""",
+    "B4: speculative CSA draft generic-grouping fallback",
+)
+open(kv_path, "w").write(s)
+print(f"patch_nv_mixed: B4 patched {kv_path}")
 print("patch_nv_mixed: OK")
