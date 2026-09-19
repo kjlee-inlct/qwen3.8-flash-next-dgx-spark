@@ -234,7 +234,7 @@ NoNewPrivileges=true
 EOF
 systemctl stop "${PROXY_SOCKET_UNIT}" "${PROXY_SERVICE_UNIT}" 2>/dev/null || true
 install -o root -g root -m 0644 "${staged_socket}" "${PROXY_SOCKET_FILE}"
-install -o root -g root -m 0644 "${temporary}/${PROXY_SERVICE_FILE}" "${PROXY_SERVICE_FILE}"
+install -o root -g root -m 0644 "${staged_service}" "${PROXY_SERVICE_FILE}"
 systemctl daemon-reload
 systemctl enable --now "${PROXY_SOCKET_UNIT}"
 printf 'Docker-app API ready: http://host.docker.internal:%s/v1 (%s:%s -> 127.0.0.1:%s)\n' \
