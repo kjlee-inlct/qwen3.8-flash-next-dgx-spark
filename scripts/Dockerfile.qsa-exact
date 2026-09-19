@@ -1,0 +1,23 @@
+# OrcaRouter experimental image: skinny-GEMM + exact QSA top-k fallback.
+#
+# Build:
+#   docker build -t vllm-skinny-qsa-exact:v1 -f scripts/Dockerfile.qsa-exact scripts/
+#
+# This image deliberately adds only the exact torch.topk QSA selection path.
+FROM vllm-skinny-tp1:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+COPY patch-qsa-exact-topk.py /tmp/patch-qsa-exact-topk.py
+
+RUN python3 /tmp/patch-qsa-exact-topk.py \
+      ${SP}/vllm/models/qwen3_8_flash_next/nvidia/ops/qsa.py \
+ && rm /tmp/patch-qsa-exact-topk.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ops/qsa.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+assert "VLLM_QSA_EXACT_TOPK" in s
+assert "_qsa_exact_topk" in s
+print("exact QSA top-k wired")
+PY
