@@ -100,7 +100,7 @@ parse_install_service() {
   while IFS= read -r -d '' key && IFS= read -r -d '' value; do
     case "${key}" in
       SCHEMA_VERSION) [[ "${value}" == 3 || "${value}" == 4 ]] || { rm -f -- "${parsed}"; return 1; } ;;
-      PHASE) [[ "${value}" == complete ]] || { rm -f -- "${parsed}"; return 1; } ;;
+      PHASE) [[ "${value}" == service_ready || "${value}" == complete ]] || { rm -f -- "${parsed}"; return 1; } ;;
       INSTALL_ROOT) INSTALL_ROOT="${value}" ;;
       SERVED_NAME) SERVED_NAME="${value}" ;;
       CONTAINER_NAME) CONTAINER_NAME="${value}" ;;

@@ -113,6 +113,17 @@ class StateFileParserTests(unittest.TestCase):
         self.assertIn(b"SERVED_NAME", fields); self.assertIn(b"CONTAINER_NAME", fields)
         self.assertNotIn(b"MODEL_DIR", fields); self.assertNotIn(b"SERVICE_OWNED", fields)
 
+
+    def test_install_service_accepts_service_ready_phase(self) -> None:
+        manifest = self.install_manifest().replace("PHASE=complete", "PHASE=service_ready")
+        result = self.run_parser("install-service", manifest)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+    def test_install_runtime_still_requires_complete_phase(self) -> None:
+        manifest = self.install_manifest().replace("PHASE=complete", "PHASE=service_ready")
+        result = self.run_parser("install-runtime", manifest)
+        self.assertNotEqual(result.returncode, 0)
+
     def test_install_doctor_emits_diagnostic_fields_and_api_values(self) -> None:
         result = self.run_parser("install-doctor", self.install_manifest())
         self.assertEqual(result.returncode, 0, result.stderr.decode())

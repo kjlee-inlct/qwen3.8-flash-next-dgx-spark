@@ -104,7 +104,7 @@ INSTALL_RUNTIME_SCHEMA: dict[str, Validator] = {
 }
 
 INSTALL_SERVICE_SCHEMA: dict[str, Validator] = {
-    "SCHEMA_VERSION": one_of("3", "4"), "PHASE": exact("complete"), "INSTALL_ROOT": absolute_path,
+    "SCHEMA_VERSION": one_of("3", "4"), "PHASE": one_of("service_ready", "complete"), "INSTALL_ROOT": absolute_path,
     "SERVED_NAME": nonempty_text, "CONTAINER_NAME": exact("qwen38-flash-next"),
 }
 
