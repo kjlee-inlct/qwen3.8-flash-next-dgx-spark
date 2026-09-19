@@ -201,6 +201,47 @@ def speculative_metrics(
     return result
 
 
+def run_qsa_determinism(
+    base_url: str,
+    model: str,
+    corpus: pathlib.Path,
+    sizes: list[int],
+    output_tokens: int,
+    repeats: int,
+) -> dict[str, Any]:
+    """Sweep greedy determinism across prompt sizes around the QSA indexer boundary."""
+
+    rows = []
+    for size in sizes:
+        result = run_determinism(
+            base_url,
+            model,
+            corpus,
+            size,
+            output_tokens,
+            repeats,
+        )
+        rows.append(
+            {
+                "requested_prompt_tokens": size,
+                "actual_prompt_tokens": result["actual_prompt_tokens"],
+                "status": result["status"],
+                "all_equal": result["all_equal"],
+                "unique_hashes": result["unique_hashes"],
+                "repeats": result["repeats"],
+            }
+        )
+    first_failure = next(
+        (row["actual_prompt_tokens"] for row in rows if row["status"] == "fail"),
+        None,
+    )
+    return {
+        "status": "pass" if all(row["status"] == "pass" for row in rows) else "fail",
+        "sizes": rows,
+        "first_failure_tokens": first_failure,
+    }
+
+
 def run_decode(base_url: str, model: str, max_tokens: int, repeats: int) -> dict[str, Any]:
     """Measure repeated single-stream decode performance."""
 
@@ -327,7 +368,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument(
         "mode",
-        choices=("qualification", "determinism", "decode", "prefill", "concurrency", "tuning", "all"),
+        choices=("qualification", "determinism", "qsa-determinism", "decode", "prefill", "concurrency", "tuning", "all"),
     )
     result.add_argument("--base-url", default=common.DEFAULT_BASE_URL)
     result.add_argument("--model", default=None)
@@ -337,6 +378,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--determinism-prompt-tokens", type=int, default=8192)
     result.add_argument("--determinism-output-tokens", type=int, default=128)
     result.add_argument("--determinism-repeats", type=int, default=3)
+    result.add_argument(
+        "--qsa-determinism-sizes",
+        type=lambda value: parse_int_list(value, minimum=512, maximum=250000),
+        default=parse_int_list("1024,2048,4096,8192,32768", minimum=512, maximum=250000),
+    )
     result.add_argument(
         "--prefill-sizes",
         type=lambda value: parse_int_list(value, minimum=512, maximum=250000),
@@ -395,6 +441,15 @@ def main() -> int:
                     model,
                     args.corpus,
                     args.determinism_prompt_tokens,
+                    args.determinism_output_tokens,
+                    args.determinism_repeats,
+                )
+            elif mode == "qsa-determinism":
+                report["workloads"][mode] = run_qsa_determinism(
+                    args.base_url,
+                    model,
+                    args.corpus,
+                    args.qsa_determinism_sizes,
                     args.determinism_output_tokens,
                     args.determinism_repeats,
                 )
