@@ -259,7 +259,7 @@ Run the stock control first:
 
 ```bash
 bash scripts/runtime/orcarouter-stock-skinny.sh start STOCK
-# wait for http://127.0.0.1:8888/health
+./scripts/wait-ready.sh --container qwen38-orca-stock --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
 
 python3 scripts/benchmark/run.py determinism \
   --determinism-prompt-tokens 1024 \
@@ -337,7 +337,7 @@ After stopping the managed service, start only the deterministic-QSA case:
 
 ```bash
 bash scripts/runtime/orcarouter-stock-skinny.sh start SKINNY-DET
-# wait for http://127.0.0.1:8888/health
+./scripts/wait-ready.sh --container qwen38-orca-stock --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
 
 python3 scripts/benchmark/run.py determinism \
   --determinism-prompt-tokens 1024 \
@@ -385,6 +385,7 @@ Run the isolated case after stopping the managed service:
 
 ```bash
 bash scripts/runtime/orcarouter-stock-skinny.sh start SKINNY-EXACT
+./scripts/wait-ready.sh --container qwen38-orca-skinny-exact --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
 
 python3 scripts/benchmark/run.py determinism \
   --determinism-prompt-tokens 1024 \
@@ -438,3 +439,7 @@ treated as a validated production configuration.
 Runtime metadata also records `mtp_index_share` explicitly. A false value is
 recorded as `false` rather than inferred from an absent speculative-config
 field, so A/B/C/D results remain self-describing.
+
+## Reusable operator helpers
+
+Long model boots should use `./scripts/wait-ready.sh` rather than copied polling loops. Model inventory and stale checkpoint cleanup should use `./scripts/manage-models.sh`; the command refuses to delete the active installation model.

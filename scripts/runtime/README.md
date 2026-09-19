@@ -8,6 +8,7 @@ This directory contains canonical managed-runtime transition, preflight, service
 - Preserve/replace/rollback the managed container transactionally.
 - Run the managed service lifecycle and commit runtime attestation only after validation.
 - Monitor runtime resource safety and perform explicit runtime validation.
+- Provide a reusable readiness wait that checks container state, health, and served-model identity.
 
 ## Dependencies
 
@@ -27,6 +28,7 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `runtime-transition.sh`
 - `service-runner.sh`
 - `monitor-runtime.sh`
+- `wait-ready.sh`
 - `validate_runtime.py`
 - `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
 
@@ -44,3 +46,15 @@ Use `bash scripts/runtime/nvidia-2x2.sh plan` for the fixed controls and
 A/B/C/D matrix. Operators must stop the managed service before a case and
 restart it after the experiment series. Benchmark policy and result
 interpretation remain documented under `../benchmark/README.md`.
+
+## Readiness waiting
+
+Use the stable operator entry point instead of hand-written polling loops:
+
+```bash
+./scripts/wait-ready.sh \
+  --container qwen38-flash-next \
+  --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Experimental containers can use the same helper by changing `--container`. The waiter exits early if the container stops and prints recent logs; otherwise it waits for both `/health` and the expected `/v1/models` entry.
