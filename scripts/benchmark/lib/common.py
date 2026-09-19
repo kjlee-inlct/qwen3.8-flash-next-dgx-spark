@@ -471,12 +471,18 @@ def runtime_config_from_docker_config(
     raw_spec = option("--speculative-config")
     if raw_spec is None:
         result["speculative_config"] = None
+        result["mtp_index_share"] = None
     else:
         try:
             parsed = json.loads(raw_spec)
         except json.JSONDecodeError:
             parsed = raw_spec
         result["speculative_config"] = parsed
+        result["mtp_index_share"] = (
+            parsed.get("index_share_for_mtp_iteration")
+            if isinstance(parsed, dict)
+            else None
+        )
 
     return result
 
