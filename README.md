@@ -496,6 +496,21 @@ manager: installation, activation, service ownership and removal remain transact
 `install.sh` and `uninstall.sh`. To change the active profile, uninstall while preserving
 the downloaded model, then run the installer for the other profile.
 
+When defaults for the *same* installed profile change (for example OrcaRouter moving from
+the stock image to the GB10 TP=1 skinny-GEMM image), existing manifests deliberately keep
+their recorded runtime. Preview and apply the new profile defaults explicitly instead of
+deleting the model or swap:
+
+```bash
+./install.sh --model orcarouter --refresh-profile-defaults --no-start --dry-run
+./install.sh --model orcarouter --refresh-profile-defaults --no-start
+```
+
+This refresh preserves the checkpoint, swap, config, API/service policy and ownership
+metadata; it only adopts current profile runtime defaults. The optimized image is treated
+as shared during migration, so uninstall will not later delete an image that may also be
+used by another profile.
+
 The installer checks Docker and Hugging
 Face authentication, creates only the dedicated PLE swap when needed, downloads and
 verifies every checkpoint file, inspects tensor headers, records an installation manifest,
