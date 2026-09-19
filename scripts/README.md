@@ -57,6 +57,8 @@ entry points and remain directly available:
 - `manage-service.sh`
 - `manage-proxy.sh`
 - `manage-swap.sh`
+- `manage-models.sh`
+- `wait-ready.sh`
 - `release-manager.sh`
 - `update-release.sh`
 - `runtime-transition.sh`
@@ -106,6 +108,7 @@ Canonical implementations include:
 - `runtime/preflight-runtime.sh`
 - `runtime/service-runner.sh`
 - `runtime/monitor-runtime.sh`
+- `runtime/wait-ready.sh`
 - `runtime/validate_runtime.py`
 - `lifecycle/update-transition.sh`
 - `lifecycle/bootstrap-release.sh`
@@ -149,7 +152,8 @@ The layout tests scan canonical implementation files for explicit cross-category
 4. Preserve older helper paths with small compatibility shims when removing them
    would break existing releases, tests, or automation.
 5. Update internal references, tests, documentation, and CI in the same change.
-6. Do not combine layout refactors with unrelated runtime behavior changes.
+6. When an operational workflow starts needing repeated ad-hoc commands, promote it to a reusable operator helper and document it in the same PR.
+7. Do not combine layout refactors with unrelated runtime behavior changes.
 
 ## CI rule
 
