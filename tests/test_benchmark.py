@@ -281,6 +281,23 @@ class BenchmarkRunnerTests(unittest.TestCase):
         args = runner.parser().parse_args(["tuning"])
         self.assertEqual(args.mode, "tuning")
 
+    def test_qsa_determinism_mode_is_available(self) -> None:
+        args = runner.parser().parse_args(["qsa-determinism"])
+        self.assertEqual(args.mode, "qsa-determinism")
+        self.assertEqual(args.qsa_determinism_sizes, [1024, 2048, 4096, 8192, 32768])
+
+    def test_runtime_config_records_mtp_index_share(self) -> None:
+        config = {
+            "Image": "vllm-nv-mixed:v2",
+            "Cmd": [
+                "/model",
+                "--speculative-config",
+                '{"method":"mtp","num_speculative_tokens":3,"index_share_for_mtp_iteration":false}',
+            ],
+        }
+        result = common.runtime_config_from_docker_config("qwen38-bench-a", config)
+        self.assertIs(result["mtp_index_share"], False)
+
     def test_determinism_parser_defaults(self) -> None:
         args = runner.parser().parse_args(["determinism"])
         self.assertEqual(args.determinism_prompt_tokens, 8192)
