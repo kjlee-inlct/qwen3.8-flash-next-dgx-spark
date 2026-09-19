@@ -235,13 +235,16 @@ difference is the image.
 
 | Case | Image |
 |---|---|
-| `STOCK` | `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` |
-| `SKINNY` | `vllm-skinny-tp1:v1` |
+| `STOCK` | `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` + MTP k=2 |
+| `STOCK-NOSPEC` | stock image + no speculative decoding |
+| `SKINNY` | `vllm-skinny-tp1:v1` + MTP k=2 |
+| `SKINNY-NOSPEC` | skinny image + no speculative decoding |
 
-Both cases fix `NSPEC=2`, `MAXLEN=262144`, `KV_MEM=25769803776`,
-`MAXSEQS=3`, `PREFIX_CACHE=0`, `INDEX_SHARE=0`, `AUTOTUNE=0`,
-MTP speculation, loopback port 8888, no runtime monitor, and no container
-restart policy.
+All cases fix `MAXLEN=262144`, `KV_MEM=25769803776`, `MAXSEQS=3`,
+`PREFIX_CACHE=0`, `INDEX_SHARE=0`, `AUTOTUNE=0`, loopback port 8888,
+no runtime monitor, and no container restart policy. The regular cases use
+MTP `k=2`; the `*-NOSPEC` cases set `SPEC=none` to isolate whether
+speculative decoding contributes to greedy-output non-determinism.
 
 The helper never stops the managed service or edits lifecycle state. Stop the
 canonical managed service explicitly before the experiment, then preflight:
@@ -287,14 +290,26 @@ managed service:
 
 ```bash
 bash scripts/runtime/orcarouter-stock-skinny.sh stop
-sudo systemctl start qwen38-flash-next.service
+sudo ./scripts/manage-service.sh create \
+  --runtime-root "$HOME/.local/share/qwen38-spark/current" \
+  --start \
+  --yes
 ./scripts/doctor.sh
 ```
 
 Interpret determinism before performance. If stock is deterministic and skinny
 is not, treat the skinny patch as a correctness regression candidate. If both
-are non-deterministic at the same prompt sizes, investigate the OrcaRouter/QSA/MTP
-runtime path instead of blaming skinny-GEMM.
+are non-deterministic at the same prompt sizes, do not blame skinny-GEMM yet.
+Run `STOCK-NOSPEC` next with the 1024-token determinism workload. If
+`STOCK-NOSPEC` passes while `STOCK` fails, MTP/speculative decoding becomes
+the primary regression candidate. If both fail, continue into the shared
+OrcaRouter/QSA/runtime path.
+
+Use `manage-service.sh create --start` when restoring the canonical runtime.
+A raw `systemctl start` returns before the replacement runtime is committed,
+so an immediate doctor run may correctly observe a temporary `validating`
+transition, rollback container, missing attestation, and unavailable health
+endpoint.
 
 
 

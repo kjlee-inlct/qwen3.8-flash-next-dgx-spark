@@ -19,13 +19,15 @@ usage() {
 Usage:
   ./scripts/runtime/orcarouter-stock-skinny.sh plan
   ./scripts/runtime/orcarouter-stock-skinny.sh preflight
-  ./scripts/runtime/orcarouter-stock-skinny.sh start STOCK|SKINNY
-  ./scripts/runtime/orcarouter-stock-skinny.sh stop [STOCK|SKINNY]
+  ./scripts/runtime/orcarouter-stock-skinny.sh start STOCK|STOCK-NOSPEC|SKINNY|SKINNY-NOSPEC
+  ./scripts/runtime/orcarouter-stock-skinny.sh stop [STOCK|STOCK-NOSPEC|SKINNY|SKINNY-NOSPEC]
   ./scripts/runtime/orcarouter-stock-skinny.sh status
 
 Cases:
-  STOCK   stock Qwen3.8 vLLM image
-  SKINNY  stock image + GB10/TP=1 skinny-GEMM patch
+  STOCK          stock Qwen3.8 vLLM image + MTP k=2
+  STOCK-NOSPEC   stock Qwen3.8 vLLM image + no speculative decoding
+  SKINNY         skinny-GEMM image + MTP k=2
+  SKINNY-NOSPEC  skinny-GEMM image + no speculative decoding
 
 Fixed controls:
   MODEL_PROFILE=orcarouter
@@ -36,7 +38,7 @@ Fixed controls:
   PREFIX_CACHE=0
   INDEX_SHARE=0
   AUTOTUNE=0
-  SPEC=mtp
+  SPEC=mtp except *-NOSPEC cases
   RESTART_POLICY=no
   MONITOR_ENABLED=0
   loopback port 8888
@@ -75,9 +77,18 @@ load_manifest() {
 
 case_values() {
   case "$1" in
-    STOCK) IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock" ;;
-    SKINNY) IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny" ;;
-    *) printf 'ERROR: case must be STOCK or SKINNY\n' >&2; return 2 ;;
+    STOCK)
+      IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock"; SPEC_VALUE=mtp ;;
+    STOCK-NOSPEC)
+      IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock-nospec"; SPEC_VALUE=none ;;
+    SKINNY)
+      IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny"; SPEC_VALUE=mtp ;;
+    SKINNY-NOSPEC)
+      IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny-nospec"; SPEC_VALUE=none ;;
+    *)
+      printf 'ERROR: case must be STOCK, STOCK-NOSPEC, SKINNY, or SKINNY-NOSPEC\n' >&2
+      return 2
+      ;;
   esac
 }
 
@@ -164,7 +175,7 @@ case "${ACTION}" in
     if service_active; then printf 'yes\n'; else printf 'no\n'; fi
     printf 'Canonical runtime: '
     docker inspect --format '{{.Name}} running={{.State.Running}} status={{.State.Status}} image={{.Config.Image}}' qwen38-flash-next 2>/dev/null || printf 'absent\n'
-    for id in STOCK SKINNY; do
+    for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC; do
       case_values "${id}"
       docker inspect --format '{{.Name}} running={{.State.Running}} status={{.State.Status}} image={{.Config.Image}}' "${CONTAINER_NAME}" 2>/dev/null || true
     done
@@ -184,7 +195,7 @@ case "${ACTION}" in
       printf 'ERROR: canonical runtime qwen38-flash-next is still running.\n' >&2
       exit 1
     fi
-    for id in STOCK SKINNY; do
+    for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC; do
       case_values "${id}"
       if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
         printf 'ERROR: experimental container already exists: %s; stop it first.\n' "${CONTAINER_NAME}" >&2
@@ -197,15 +208,15 @@ case "${ACTION}" in
       exit 1
     }
 
-    printf 'Starting OrcaRouter case %s with image=%s\n' "${CASE_ID}" "${IMAGE}"
-    MODEL_PROFILE=orcarouter     MODEL_DIR="${MODEL_DIR}"     VLLM_IMAGE="${IMAGE}"     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}"     SERVED_NAME="${SERVED_NAME}"     NSPEC=2     MAXLEN=262144     KV_MEM=25769803776     MAXSEQS=3     PREFIX_CACHE=0     INDEX_SHARE=0     AUTOTUNE=0     SPEC=mtp     NAME="${CONTAINER_NAME}"     PORT=8888     PUBLISH_HOST=127.0.0.1     RESTART_POLICY=no     MONITOR_ENABLED=0     MONITOR_PROTECT=0       "${SERVE}"
+    printf 'Starting OrcaRouter case %s with image=%s spec=%s\n' "${CASE_ID}" "${IMAGE}" "${SPEC_VALUE}"
+    MODEL_PROFILE=orcarouter     MODEL_DIR="${MODEL_DIR}"     VLLM_IMAGE="${IMAGE}"     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}"     SERVED_NAME="${SERVED_NAME}"     NSPEC=2     MAXLEN=262144     KV_MEM=25769803776     MAXSEQS=3     PREFIX_CACHE=0     INDEX_SHARE=0     AUTOTUNE=0     SPEC="${SPEC_VALUE}"     NAME="${CONTAINER_NAME}"     PORT=8888     PUBLISH_HOST=127.0.0.1     RESTART_POLICY=no     MONITOR_ENABLED=0     MONITOR_PROTECT=0       "${SERVE}"
     ;;
   stop)
     [[ $# -le 2 ]] || { usage >&2; exit 2; }
     if [[ -n "${CASE_ID}" ]]; then
       stop_one "${CASE_ID}"
     else
-      for id in STOCK SKINNY; do stop_one "${id}"; done
+      for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC; do stop_one "${id}"; done
     fi
     ;;
   -h|--help|help)

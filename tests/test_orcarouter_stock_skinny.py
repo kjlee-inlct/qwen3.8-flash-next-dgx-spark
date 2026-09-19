@@ -20,8 +20,10 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         for text in (
-            "STOCK   stock Qwen3.8 vLLM image",
-            "SKINNY  stock image + GB10/TP=1 skinny-GEMM patch",
+            "STOCK          stock Qwen3.8 vLLM image + MTP k=2",
+            "STOCK-NOSPEC   stock Qwen3.8 vLLM image + no speculative decoding",
+            "SKINNY         skinny-GEMM image + MTP k=2",
+            "SKINNY-NOSPEC  skinny-GEMM image + no speculative decoding",
             "MODEL_PROFILE=orcarouter",
             "NSPEC=2",
             "MAXLEN=262144",
@@ -30,7 +32,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "PREFIX_CACHE=0",
             "INDEX_SHARE=0",
             "AUTOTUNE=0",
-            "SPEC=mtp",
+            "SPEC=mtp except *-NOSPEC cases",
         ):
             self.assertIn(text, result.stdout)
 
@@ -50,6 +52,13 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
         self.assertNotIn("release-manager.sh", script)
         self.assertIn("stop the managed service before an experiment", script)
 
+    def test_nospec_cases_disable_speculation_without_changing_image(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('STOCK-NOSPEC)', script)
+        self.assertIn('SKINNY-NOSPEC)', script)
+        self.assertIn('SPEC_VALUE=none', script)
+        self.assertIn('SPEC="${SPEC_VALUE}"', script)
+
     def test_invalid_case_is_rejected(self) -> None:
         result = subprocess.run(
             ["bash", str(SCRIPT), "start", "INVALID"],
@@ -59,7 +68,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 2)
-        self.assertIn("case must be STOCK or SKINNY", result.stderr)
+        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, or SKINNY-NOSPEC", result.stderr)
 
 
 if __name__ == "__main__":
