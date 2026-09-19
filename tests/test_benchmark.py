@@ -298,6 +298,18 @@ class BenchmarkRunnerTests(unittest.TestCase):
         result = common.runtime_config_from_docker_config("qwen38-bench-a", config)
         self.assertIs(result["mtp_index_share"], False)
 
+    def test_runtime_config_infers_omitted_mtp_index_share_as_false(self) -> None:
+        config = {
+            "Image": "vllm-nv-mixed:v2",
+            "Cmd": [
+                "/model",
+                "--speculative-config",
+                '{"method":"mtp","num_speculative_tokens":3}',
+            ],
+        }
+        result = common.runtime_config_from_docker_config("qwen38-bench-a", config)
+        self.assertIs(result["mtp_index_share"], False)
+
     def test_determinism_parser_defaults(self) -> None:
         args = runner.parser().parse_args(["determinism"])
         self.assertEqual(args.determinism_prompt_tokens, 8192)
