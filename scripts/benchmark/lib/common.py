@@ -479,8 +479,8 @@ def runtime_config_from_docker_config(
             parsed = raw_spec
         result["speculative_config"] = parsed
         result["mtp_index_share"] = (
-            parsed.get("index_share_for_mtp_iteration")
-            if isinstance(parsed, dict)
+            bool(parsed.get("index_share_for_mtp_iteration", False))
+            if isinstance(parsed, dict) and parsed.get("method") == "mtp"
             else None
         )
 
