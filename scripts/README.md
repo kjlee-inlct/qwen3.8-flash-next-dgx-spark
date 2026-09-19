@@ -58,6 +58,7 @@ entry points and remain directly available:
 - `manage-proxy.sh`
 - `manage-swap.sh`
 - `manage-models.sh`
+- `manage-storage.sh`
 - `wait-ready.sh`
 - `release-manager.sh`
 - `update-release.sh`
@@ -116,6 +117,35 @@ Canonical implementations include:
 - `model/model-profiles.sh`
 - `model/inspect_model.py`
 - `model/prepare_config.py`
+
+## Storage management
+
+`scripts/manage-storage.sh` is the project-wide disk usage and cleanup entry point.
+It inventories managed checkpoints, Docker usage, immutable releases, local benchmark
+results, the Hugging Face cache, and the dedicated PLE swap file.
+
+The default prune policy is deliberately conservative:
+
+- never delete the active checkpoint or any managed model directory;
+- never delete the manifest's active runtime image;
+- retain both current and previous immutable releases;
+- retain the PLE swap and Hugging Face cache;
+- remove only stopped experiment containers, dangling images, stale build cache,
+  inactive releases, and aged local benchmark results;
+- remove known QSA experiment image tags only with `--experiments`.
+
+Examples:
+
+```bash
+./scripts/manage-storage.sh status
+./scripts/manage-storage.sh plan
+./scripts/manage-storage.sh plan --experiments
+./scripts/manage-storage.sh prune --dry-run --experiments
+./scripts/manage-storage.sh prune --yes
+```
+
+Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
+should be removed.
 
 ## Benchmark layout
 
