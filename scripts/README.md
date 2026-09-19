@@ -144,6 +144,15 @@ Examples:
 ./scripts/manage-storage.sh prune --yes
 ```
 
+Docker image policy is defined centrally in `scripts/storage/assets.sh`. Images are
+classified as `stable`, `baseline`, `optional`, or `experiment`; only registry
+entries marked disposable are eligible for `--experiments`. This keeps future model
+profiles and serving backends from scattering cleanup rules across scripts.
+
+The status/plan output reports Docker image logical sizes. Because Docker layers are
+shared, logical size is an upper-bound-style inventory value rather than an exact
+prediction of bytes reclaimed.
+
 Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
 should be removed.
 
