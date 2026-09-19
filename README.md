@@ -907,3 +907,24 @@ loudly rather than silently double-apply.
 
 The model weights are covered by `qwen-community-1.0`; nothing here redistributes them.
 The scripts in this repository are yours to use.
+
+## Operator utilities
+
+Two stable helpers cover recurring operations that should not require ad-hoc shell loops:
+
+```bash
+# List managed checkpoints and show which one is active.
+./scripts/manage-models.sh list
+
+# Preview removal of an inactive managed checkpoint.
+./scripts/manage-models.sh remove "$HOME/models/old-qwen38" --dry-run
+
+# Wait for the canonical runtime and exact served-model identity.
+./scripts/wait-ready.sh \
+  --container qwen38-flash-next \
+  --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+`manage-models.sh` only considers directories with a local Qwen model manifest and refuses to delete the active installation model; use `uninstall.sh --purge-model` for that lifecycle operation. `wait-ready.sh` checks container state, `/health`, and `/v1/models`, and prints recent logs if a container exits before becoming ready.
+
+Repository maintenance policy: when a workflow repeatedly needs manual commands, add or extend a reusable operator helper and update its tests and documentation in the same change.
