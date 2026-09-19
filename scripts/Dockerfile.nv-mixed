@@ -27,6 +27,9 @@ t = open(n + '/mtp.py').read(); ast.parse(t); \
 assert '_remap_ignored_layers([name]' in t; \
 assert 'draft_cache_config.mamba_block_size is not None' in t; \
 assert 'cache_config=draft_cache_config' in t; \
+k = open(b + '/v1/core/kv_cache_utils.py').read(); ast.parse(k); \
+assert 'cache.layer_index >= target_layers' in k; \
+assert 'speculative_config is not None' in k; \
 g = open(n + '/low_latency_gemm.py').read(); \
 assert '(248320, 2560)' in g and '(12, 1)' in g, 'skinny-GEMM plans lost'; \
 print('patched: PLE mixed-precision route, PR55513 B1+B2, skinny-GEMM intact')" \

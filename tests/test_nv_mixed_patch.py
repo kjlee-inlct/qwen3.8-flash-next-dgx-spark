@@ -33,6 +33,17 @@ class NvidiaMixedPatchTests(unittest.TestCase):
             "cache_config=draft_cache_config",
             text,
         )
+        self.assertIn(
+            "cache.layer_index >= target_layers",
+            text,
+        )
+
+    def test_speculative_csa_fallback_is_targeted_to_appended_draft_layers(self) -> None:
+        text = PATCH.read_text(encoding="utf-8")
+        self.assertIn("target_layers = vllm_config.model_config.get_total_num_hidden_layers()", text)
+        self.assertIn("vllm_config.speculative_config is not None", text)
+        self.assertIn("cache.layer_index >= target_layers", text)
+        self.assertIn("return None", text)
 
     def test_image_build_asserts_draft_cache_patch(self) -> None:
         text = DOCKERFILE.read_text(encoding="utf-8")
