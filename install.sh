@@ -15,7 +15,7 @@ SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
-YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; CONFIG_OWNED=0
+YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
 MONITOR_ENABLED="${MONITOR_ENABLED:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
@@ -153,7 +153,7 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--model PROFILE] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model PROFILE] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -193,6 +193,7 @@ while [[ $# -gt 0 ]]; do
     --api-lan-address) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_ADDRESS_CLI="$2"; shift ;;
     --api-lan-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_PORT_CLI="$2"; shift ;;
     --migrate-manifest) MIGRATE_MANIFEST=1 ;;
+    --refresh-profile-defaults) REFRESH_PROFILE_DEFAULTS=1 ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
     --dry-run) DRY_RUN=1 ;; -h|--help) usage; exit 0 ;; *) die "unknown argument: $1" ;;
   esac
@@ -235,6 +236,13 @@ if [[ "${RESUME}" == 1 ]]; then
   [[ "${MODEL_REPO:-}" == "${REPO}" && "${MODEL_REVISION:-}" == "${REVISION}" ]] || \
     die "existing manifest belongs to a different model or revision: ${STATE_FILE}"
   IMAGE="${VLLM_IMAGE}"; SERVED_NAME="${SERVED_NAME:-${PROFILE_SERVED_NAME}}"
+  if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
+    OLD_PROFILE_IMAGE="${IMAGE}"
+    IMAGE="${PROFILE_IMAGE}"
+    IMAGE_OWNED=0
+  fi
+elif [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
+  die "--refresh-profile-defaults requires an existing installation manifest"
 fi
 
 # Schema <=3 recorded only docker0 proxy state. Preserve that meaning during migration.
@@ -281,6 +289,9 @@ CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED="${SERVICE_OWNED:-0}"
 [[ -z "${SERVICE_CLI}" ]] || SERVICE_ENABLED="${SERVICE_CLI}"
+if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${MIGRATE_MANIFEST}" == 1 ]]; then
+  die "--refresh-profile-defaults cannot be combined with --migrate-manifest"
+fi
 if [[ "${MIGRATE_MANIFEST}" == 1 ]]; then
   [[ "${RESUME}" == 1 ]] || die "--migrate-manifest requires an existing installation manifest"
   validate_api_access_settings
@@ -374,7 +385,11 @@ MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
 printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  profile     : %s\n' "${MODEL_PROFILE}"
-printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n\n' "${SWAP_FILE}" "${IMAGE}"
+printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n' "${SWAP_FILE}" "${IMAGE}"
+if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${OLD_PROFILE_IMAGE:-${IMAGE}}" != "${IMAGE}" ]]; then
+  printf '  image change: %s -> %s\n' "${OLD_PROFILE_IMAGE}" "${IMAGE}"
+fi
+printf '\n'
 printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s GiB, %s samples, heartbeat=%ss)\n\n' \
@@ -412,6 +427,10 @@ fi
 if [[ "${RESUME}" != 1 ]]; then
   [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1
   docker image inspect "${IMAGE}" >/dev/null 2>&1 || IMAGE_OWNED=1
+elif [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
+  # Profile-default refresh is intentionally conservative about image ownership:
+  # the shared skinny image may already belong to another profile/install.
+  IMAGE_OWNED=0
 fi
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
