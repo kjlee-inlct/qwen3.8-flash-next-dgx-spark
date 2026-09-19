@@ -23,6 +23,43 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
 
+    def test_model_registry_marks_orcarouter_as_only_stable_default(self) -> None:
+        result = subprocess.run(
+            [str(ROOT / "install.sh"), "--list-models"],
+            cwd=ROOT,
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("orcarouter   stable", result.stdout)
+        self.assertIn("nvidia       experimental", result.stdout)
+        self.assertIn("mazinb       candidate", result.stdout)
+        self.assertIn("lychee888    candidate", result.stdout)
+
+    def test_candidate_profiles_are_not_installable(self) -> None:
+        for profile in ("mazinb", "lychee888"):
+            with self.subTest(profile=profile):
+                result = self.run_install(profile)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("is a candidate profile and is not installable yet", result.stderr)
+
+    def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
+        result = subprocess.run(
+            [str(ROOT / "install.sh"), "--list-backends"],
+            cwd=ROOT,
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("vllm", result.stdout)
+        self.assertIn("stable", result.stdout)
+        self.assertIn("sglang", result.stdout)
+        self.assertIn("planned", result.stdout)
+
     def test_orcarouter_profile(self) -> None:
         result = self.run_install("orcarouter")
         self.assertEqual(result.returncode, 0, result.stderr)

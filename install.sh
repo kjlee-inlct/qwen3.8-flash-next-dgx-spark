@@ -5,6 +5,9 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/model-profiles.sh
 source "${ROOT_DIR}/scripts/model-profiles.sh"
+BACKEND_REGISTRY="${ROOT_DIR}/scripts/backend/backends.sh"
+# shellcheck source=scripts/backend/backends.sh
+source "${BACKEND_REGISTRY}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
@@ -16,6 +19,7 @@ CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
+LIST_MODELS=0; LIST_BACKENDS=0
 MONITOR_ENABLED="${MONITOR_ENABLED:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
@@ -153,7 +157,7 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--model PROFILE] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model PROFILE] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -178,7 +182,9 @@ validate_monitor_settings() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
-    --model) [[ $# -ge 2 ]] || die "--model requires orcarouter or nvidia"; MODEL_CLI="$2"; shift ;;
+    --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
+    --list-models) LIST_MODELS=1 ;;
+    --list-backends) LIST_BACKENDS=1 ;;
     --monitor) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=0 ;;
     --no-monitor) MONITOR_ENABLED_CLI=0; MONITOR_PROTECT_CLI=0 ;;
     --protect) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=1 ;;
@@ -199,6 +205,19 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
+  if [[ "${LIST_MODELS}" == 1 ]]; then
+    print_model_profiles
+  fi
+  if [[ "${LIST_MODELS}" == 1 && "${LIST_BACKENDS}" == 1 ]]; then
+    printf '\n'
+  fi
+  if [[ "${LIST_BACKENDS}" == 1 ]]; then
+    print_serving_backends
+  fi
+  exit 0
+fi
 
 if [[ "${DRY_RUN}" != 1 ]]; then
   ensure_operation_lock
