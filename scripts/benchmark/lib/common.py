@@ -439,6 +439,14 @@ def runtime_config_from_docker_config(
             return None
         return command[index + 1] if index + 1 < len(command) else None
 
+    raw_env = config.get("Env")
+    env: dict[str, str] = {}
+    if isinstance(raw_env, list):
+        for item in raw_env:
+            if isinstance(item, str) and "=" in item:
+                key, value = item.split("=", 1)
+                env[key] = value
+
     result: dict[str, Any] = {
         "container_name": container_name,
         "image": config.get("Image"),
@@ -466,6 +474,8 @@ def runtime_config_from_docker_config(
         "async_scheduling": (
             False if "--no-async-scheduling" in command else None
         ),
+        "qsa_det_topk": env.get("VLLM_QSA_DET_TOPK"),
+        "qsa_exact_topk": env.get("VLLM_QSA_EXACT_TOPK"),
     }
 
     raw_spec = option("--speculative-config")
