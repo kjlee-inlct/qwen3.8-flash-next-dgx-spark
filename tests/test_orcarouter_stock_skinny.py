@@ -70,6 +70,15 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
         self.assertIn('SPEC_VALUE=none', script)
         self.assertIn('SPEC="${SPEC_VALUE}"', script)
 
+    def test_deterministic_qsa_image_is_pinned_and_opt_in(self) -> None:
+        dockerfile = (ROOT / "scripts" / "Dockerfile.qsa-det").read_text(encoding="utf-8")
+        serve = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        self.assertIn("e0ef69d4f5575dad00d34e05479eaf4c6547bace", dockerfile)
+        self.assertIn("ADD --checksum=sha256:", dockerfile)
+        self.assertIn("VLLM_QSA_DET_TOPK", dockerfile)
+        self.assertIn('QSA_DET_TOPK="${QSA_DET_TOPK:-0}"', serve)
+        self.assertIn("VLLM_QSA_DET_LIB=/opt/qwen38/kernel-det/_C_det.so", serve)
+
     def test_invalid_case_is_rejected(self) -> None:
         result = subprocess.run(
             ["bash", str(SCRIPT), "start", "INVALID"],
