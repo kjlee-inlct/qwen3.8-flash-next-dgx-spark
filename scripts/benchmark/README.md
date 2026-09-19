@@ -313,6 +313,55 @@ endpoint.
 
 
 
+## OrcaRouter deterministic QSA top-k experiment
+
+The stock and skinny OrcaRouter images both reproduced 1024-token greedy-output
+non-determinism, and the stock image still failed with speculative decoding disabled.
+This rules out skinny-GEMM and makes MTP unlikely as the root cause. The next isolated
+variable is the GB10/sm121 QSA `persistent_topk` kernel.
+
+The experimental image layers only the deterministic QSA kernel wiring on top of the
+existing skinny-GEMM image:
+
+```bash
+docker build -t vllm-skinny-qsa-det:v1 \
+  -f scripts/Dockerfile.qsa-det scripts/
+```
+
+The external kernel sources are pinned to commit
+`e0ef69d4f5575dad00d34e05479eaf4c6547bace` and individually sha256-checked at build
+time. No hybrid quantization, KV-cache, prefix-cache, MTP-vocabulary, or NVIDIA
+mixed-precision patches are included.
+
+After stopping the managed service, start only the deterministic-QSA case:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh start SKINNY-DET
+# wait for http://127.0.0.1:8888/health
+
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-skinny-detqsa-det-1024.json
+```
+
+If the 1024 gate passes, run the QSA sweep and decode benchmark using the same
+parameters as the stock/skinny comparison. Treat this image as experimental until both
+correctness and performance are measured locally.
+
+Restore the canonical runtime through the managed commit-waiting path, not raw
+`systemctl start`:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh stop SKINNY-DET
+sudo ./scripts/manage-service.sh create \
+  --runtime-root "$HOME/.local/share/qwen38-spark/current" \
+  --start --yes
+./scripts/doctor.sh
+```
+
+
 ## QSA determinism diagnostic
 
 Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
