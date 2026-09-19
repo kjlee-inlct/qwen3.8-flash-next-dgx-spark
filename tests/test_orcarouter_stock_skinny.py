@@ -24,6 +24,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "STOCK-NOSPEC   stock Qwen3.8 vLLM image + no speculative decoding",
             "SKINNY         skinny-GEMM image + MTP k=2",
             "SKINNY-NOSPEC  skinny-GEMM image + no speculative decoding",
+            "SKINNY-DET     skinny-GEMM image + deterministic QSA top-k + MTP k=2",
             "MODEL_PROFILE=orcarouter",
             "NSPEC=2",
             "MAXLEN=262144",
@@ -33,6 +34,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "INDEX_SHARE=0",
             "AUTOTUNE=0",
             "SPEC=mtp except *-NOSPEC cases",
+            "QSA_DET_TOPK=1 only for SKINNY-DET",
         ):
             self.assertIn(text, result.stdout)
 
@@ -52,12 +54,30 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
         self.assertNotIn("release-manager.sh", script)
         self.assertIn("stop the managed service before an experiment", script)
 
+    def test_skinny_det_changes_only_image_and_qsa_kernel_toggle(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('SKINNY-DET)', script)
+        self.assertIn('IMAGE="${SKINNY_DET_IMAGE}"', script)
+        self.assertIn('SPEC_VALUE=mtp', script)
+        self.assertIn('QSA_DET_VALUE=1', script)
+        self.assertIn('QSA_DET_TOPK="${QSA_DET_VALUE}"', script)
+        self.assertIn('vllm-skinny-qsa-det:v1', script)
+
     def test_nospec_cases_disable_speculation_without_changing_image(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('STOCK-NOSPEC)', script)
         self.assertIn('SKINNY-NOSPEC)', script)
         self.assertIn('SPEC_VALUE=none', script)
         self.assertIn('SPEC="${SPEC_VALUE}"', script)
+
+    def test_deterministic_qsa_image_is_pinned_and_opt_in(self) -> None:
+        dockerfile = (ROOT / "scripts" / "Dockerfile.qsa-det").read_text(encoding="utf-8")
+        serve = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        self.assertIn("e0ef69d4f5575dad00d34e05479eaf4c6547bace", dockerfile)
+        self.assertIn("ADD --checksum=sha256:", dockerfile)
+        self.assertIn("VLLM_QSA_DET_TOPK", dockerfile)
+        self.assertIn('QSA_DET_TOPK="${QSA_DET_TOPK:-0}"', serve)
+        self.assertIn("VLLM_QSA_DET_LIB=/opt/qwen38/kernel-det/_C_det.so", serve)
 
     def test_invalid_case_is_rejected(self) -> None:
         result = subprocess.run(
@@ -68,7 +88,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 2)
-        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, or SKINNY-NOSPEC", result.stderr)
+        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, or SKINNY-DET", result.stderr)
 
 
 if __name__ == "__main__":

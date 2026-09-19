@@ -154,6 +154,15 @@ PLE_TIMEOUT="${PLE_TIMEOUT:-1800}"
 AUTOTUNE_ARGS=(--enable-flashinfer-autotune)
 [[ "${AUTOTUNE:-${DEFAULT_AUTOTUNE}}" == "1" ]] || AUTOTUNE_ARGS=(--no-enable-flashinfer-autotune)
 
+# Deterministic QSA top-k experiment. The stock image has no deterministic kernel
+# extension, so this is opt-in and only valid with an image that contains
+# /opt/qwen38/kernel-det/_C_det.so and the qsa.py wiring.
+QSA_DET_TOPK="${QSA_DET_TOPK:-0}"
+QSA_DET_ENV=(-e VLLM_QSA_DET_TOPK=0)
+if [[ "${QSA_DET_TOPK}" == "1" ]]; then
+  QSA_DET_ENV=(-e VLLM_QSA_DET_TOPK=1 -e VLLM_QSA_DET_LIB=/opt/qwen38/kernel-det/_C_det.so)
+fi
+
 [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || {
   echo "FATAL: weights missing at ${MODEL_DIR} -- run ./download-weights.sh first" >&2; exit 1; }
 swapon --show=NAME --noheadings | grep -q . || {
@@ -204,6 +213,7 @@ docker run -d \
   -e VLLM_PLE_CPU_OFFLOAD=1 \
   -e VLLM_PLE_OFFLOAD_READY_TIMEOUT="${PLE_TIMEOUT}" \
   -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
+  "${QSA_DET_ENV[@]}" \
   "${LONG_ENV[@]}" \
   -v "${MODEL_DIR}:/model:ro" \
   "${CONFIG_MOUNT[@]}" \
@@ -255,7 +265,7 @@ if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   echo "memory monitor started (protect=${MONITOR_PROTECT}, pid=${monitor_pid}, log=${MONITOR_LOG})"
 fi
 
-echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
+echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, qsa_det_topk=${QSA_DET_TOPK}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
 echo "follow with:  docker logs -f ${NAME}"
 echo "watch memory: watch -n5 'free -g; swapon --show'"
 echo
