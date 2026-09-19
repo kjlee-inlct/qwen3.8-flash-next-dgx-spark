@@ -1,16 +1,27 @@
 # Qwen3.8-Flash-Next on a single DGX Spark
 
-Serving a **123.6 GiB** checkpoint on a box with **121 GiB** of memory, by paging its
-51B-parameter n-gram embedding table to SSD swap.
+The primary supported path is the pinned
+`orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` checkpoint on one DGX Spark.
+**OrcaRouter stability and correctness take priority over headline throughput.**
 
-Updated **2026-09-06** for NVIDIA's official NVFP4 build, which replaced the community
-conversion this repo started with. Still a snapshot against unmerged vLLM work — one of
-the two patches here is a port of an open PR — see [Versions](#versions) before assuming
-any of it still holds.
+Model checkpoint and serving backend are intentionally separate axes:
+
+- `orcarouter` — **stable/default**
+- `nvidia` — experimental optional profile
+- `mazinb`, `lychee888` — tracked candidates, not installable until locally qualified
+- `vllm` — stable implemented backend
+- `sglang` — planned optional backend
+
+Use `./install.sh --list-models` and `./install.sh --list-backends` for the registry,
+and see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for promotion/qualification rules.
+
+The repository still keeps detailed NVIDIA and earlier checkpoint measurements below as
+engineering history and comparison data. Those numbers are not the current default
+OrcaRouter qualification result.
 
 ---
 
-## TL;DR
+## Historical NVIDIA benchmark snapshot
 
 | | |
 |---|---|
