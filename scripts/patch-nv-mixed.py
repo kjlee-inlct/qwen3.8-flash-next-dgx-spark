@@ -59,6 +59,13 @@ Two independent causes, and the PR fixes both:
 `has_blocked_weights` from the PR is skipped: this image's mixed config has no such
 method, so there is nothing to widen.
 
+B3 fixes a preview-build config interaction exposed by MTP with prefix caching off. The
+hybrid target resolves a mamba_block_size during model verification, then the standalone
+MTP draft inherits that cache_config. VllmConfig rejects that combination because a
+non-default mamba_block_size is only legal with prefix caching. The draft does not use the
+target Mamba cache, so B3 copies CacheConfig and clears only the derived mamba_block_size
+before constructing the draft VllmConfig. The target cache config is left unchanged.
+
 Usage:  python3 patch_nv_mixed.py
 """
 
@@ -205,6 +212,31 @@ s = sub(
         if exclude_modules:""",
     "B2: remap quantized_layers",
 )
+s = sub(
+    s,
+    """    draft_vllm_config = replace(
+        vllm_config,
+        model_config=speculative_config.draft_model_config,
+    )
+""",
+    """    draft_cache_config = vllm_config.cache_config
+    if (
+        not draft_cache_config.enable_prefix_caching
+        and draft_cache_config.mamba_block_size is not None
+    ):
+        draft_cache_config = replace(
+            draft_cache_config,
+            mamba_block_size=None,
+        )
+
+    draft_vllm_config = replace(
+        vllm_config,
+        model_config=speculative_config.draft_model_config,
+        cache_config=draft_cache_config,
+    )
+""",
+    "B3: clear derived target mamba_block_size for non-prefix MTP draft",
+)
 open(mtp_path, "w").write(s)
-print(f"patch_nv_mixed: B2 patched {mtp_path}")
+print(f"patch_nv_mixed: B2+B3 patched {mtp_path}")
 print("patch_nv_mixed: OK")
