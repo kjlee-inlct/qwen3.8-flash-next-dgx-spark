@@ -65,7 +65,7 @@ print_model_profiles() {
 load_model_profile() {
   describe_model_profile "$1" || return
   if [[ "${PROFILE_INSTALLABLE}" != 1 ]]; then
-    printf 'ERROR: model profile %s is a %s candidate and is not installable yet\n' "$1" "${PROFILE_STATUS}" >&2
+    printf 'ERROR: model profile %s is a %s profile and is not installable yet\n' "$1" "${PROFILE_STATUS}" >&2
     return 2
   fi
 
