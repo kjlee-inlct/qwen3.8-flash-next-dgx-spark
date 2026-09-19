@@ -14,6 +14,9 @@ RUNTIME_TRANSITION="${STATE_DIR}/runtime-transition.env"
 UPDATE_TRANSITION="${STATE_DIR}/update-transition.env"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
+STORAGE_ASSETS="${SCRIPT_ROOT}/scripts/storage/assets.sh"
+# shellcheck source=scripts/storage/assets.sh
+source "${STORAGE_ASSETS}"
 BENCH_DIR="${SCRIPT_ROOT}/scripts/benchmark/results/local"
 HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
 ACTION="${1:-status}"
@@ -166,8 +169,14 @@ benchmark_candidates() {
   find "${BENCH_DIR}" -type f -mtime "+${BENCHMARK_DAYS}" -print 2>/dev/null | sort
 }
 
-experiment_images() {
-  printf '%s\n' vllm-skinny-qsa-det:v1 vllm-skinny-qsa-exact:v1
+docker_image_logical_size() {
+  local image="$1" bytes
+  bytes="$(docker image inspect --format '{{.Size}}' "${image}" 2>/dev/null || true)"
+  if [[ "${bytes}" =~ ^[0-9]+$ ]]; then
+    numfmt --to=iec-i --suffix=B "${bytes}" 2>/dev/null || printf '%sB' "${bytes}"
+  else
+    printf '%s' '-'
+  fi
 }
 
 print_status() {
@@ -215,9 +224,17 @@ print_status() {
   printf '\n[Docker]\n'
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     docker system df || true
-    printf '\nQwen/vLLM images:\n'
-    docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}' 2>/dev/null |
-      awk '$1 ~ /^(vllm-skinny-|vllm-nv-mixed:|vllm\/vllm-openai:qwen38)/ {print}'
+    printf '\nRegistered Qwen/vLLM images:\n'
+    printf '%-12s %-9s %-12s %s\n' CLASS PRESENT LOGICAL_SIZE IMAGE
+    while IFS= read -r image; do
+      [[ -n "${image}" ]] || continue
+      describe_storage_image "${image}" || continue
+      if docker image inspect "${image}" >/dev/null 2>&1; then
+        printf '%-12s %-9s %-12s %s\n' "${STORAGE_IMAGE_CLASS}" yes "$(docker_image_logical_size "${image}")" "${image}"
+      else
+        printf '%-12s %-9s %-12s %s\n' "${STORAGE_IMAGE_CLASS}" no - "${image}"
+      fi
+    done < <(list_storage_images)
     printf '\nQwen containers:\n'
     docker ps -a --filter 'name=qwen38' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
   else
@@ -272,11 +289,11 @@ print_plan() {
       if [[ "${image}" == "${ACTIVE_IMAGE}" ]]; then
         printf '  PROTECTED active image: %s\n' "${image}"
       elif docker image inspect "${image}" >/dev/null 2>&1; then
-        printf '  remove %s\n' "${image}"
+        printf '  remove %s (logical=%s)\n' "${image}" "$(docker_image_logical_size "${image}")"
       else
         printf '  absent %s\n' "${image}"
       fi
-    done < <(experiment_images)
+    done < <(list_disposable_storage_images)
   fi
 
   printf '\n[Always protected]\n'
@@ -285,6 +302,7 @@ print_plan() {
   printf '  current release  : %s\n' "${current_release:-none}"
   printf '  previous release : %s\n' "${previous_release:-none}"
   printf '  PLE swap and Hugging Face cache are report-only.\n'
+  printf '  Docker image sizes are logical sizes; shared layers mean actual reclaimed bytes may be smaller.\n'
 }
 
 run_or_echo() {
@@ -355,7 +373,7 @@ prune_storage() {
         elif ! docker image rm "${image}"; then
           printf 'SKIP: Docker refused experiment image removal (likely still referenced): %s\n' "${image}" >&2
         fi
-      done < <(experiment_images)
+      done < <(list_disposable_storage_images)
     fi
   fi
 
