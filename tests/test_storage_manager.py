@@ -58,6 +58,23 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn('if [[ "${image}" == "${ACTIVE_IMAGE}" ]]', script)
         self.assertIn("PROTECTED active image", script)
 
+    def test_storage_asset_registry_classifies_images(self) -> None:
+        assets = (ROOT / "scripts" / "storage" / "assets.sh").read_text(encoding="utf-8")
+        self.assertIn('STORAGE_IMAGE_CLASS="stable"', assets)
+        self.assertIn('STORAGE_IMAGE_CLASS="baseline"', assets)
+        self.assertIn('STORAGE_IMAGE_CLASS="optional"', assets)
+        self.assertIn('STORAGE_IMAGE_CLASS="experiment"', assets)
+        self.assertIn("vllm-skinny-tp1:v1", assets)
+        self.assertIn("vllm-skinny-qsa-det:v1", assets)
+        self.assertIn("vllm-skinny-qsa-exact:v1", assets)
+
+    def test_manager_uses_disposable_registry_instead_of_hardcoded_function(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('source "${STORAGE_ASSETS}"', script)
+        self.assertIn("list_disposable_storage_images", script)
+        self.assertNotIn("experiment_images()", script)
+        self.assertIn("logical sizes", script)
+
     def test_mutating_prune_checks_transition_state_and_operation_lock(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("runtime transition is active", script)
