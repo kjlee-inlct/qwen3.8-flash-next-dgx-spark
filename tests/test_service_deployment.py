@@ -49,6 +49,11 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertNotIn('source "${STATE_FILE}"', manager)
         self.assertNotIn("shellcheck disable=SC1090", manager)
 
+
+    def test_service_manager_accepts_service_ready_phase(self) -> None:
+        manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        self.assertIn('"${value}" == service_ready || "${value}" == complete', manager)
+
     def test_service_readiness_requires_runtime_commit_attestation(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
