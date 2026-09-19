@@ -25,6 +25,8 @@ m = open(b + '/model_executor/layers/quantization/modelopt.py').read(); ast.pars
 assert 'FP8_BLOCK_SCALES' in m and '_NativeFp8MoEMethod' in m; \
 t = open(n + '/mtp.py').read(); ast.parse(t); \
 assert '_remap_ignored_layers([name]' in t; \
+assert 'draft_cache_config.mamba_block_size is not None' in t; \
+assert 'cache_config=draft_cache_config' in t; \
 g = open(n + '/low_latency_gemm.py').read(); \
 assert '(248320, 2560)' in g and '(12, 1)' in g, 'skinny-GEMM plans lost'; \
 print('patched: PLE mixed-precision route, PR55513 B1+B2, skinny-GEMM intact')" \
