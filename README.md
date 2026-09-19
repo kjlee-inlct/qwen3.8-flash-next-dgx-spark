@@ -482,7 +482,7 @@ checkpoint files are never mixed in one directory.
 
 | Profile | Checkpoint | Runtime image |
 |---|---|---|
-| `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | stock Qwen3.8 vLLM image |
+| `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-skinny-tp1:v1` (stock image + GB10 TP=1 skinny-GEMM patch) |
 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | locally built `vllm-nv-mixed:v2` with the required patches |
 
 ```bash
@@ -557,12 +557,15 @@ warning means the layout needs review but does not prove incompatibility. In par
 do not apply `patch-nv-mixed.py` merely because a checkpoint is named NVFP4: that patch is
 specific to NVIDIA's `MIXED_PRECISION` PLE and block-FP8 MTP layout.
 
-The known OrcaRouter TP=1 starting point uses the stock
-`vllm/vllm-openai:qwen38-flash-next-arm64-cu130` image, PLE CPU offload, the `mp`
-executor, native 262144 context, 24 GiB of pinned KV, MTP `k=2`, disabled prefix cache,
-disabled FlashInfer autotune, and disabled async scheduling. Treat that as a compatibility
-baseline; re-enable optimizations one at a time after recording output quality, step rate,
-MTP acceptance, memory and swap use.
+The OrcaRouter TP=1 default keeps the conservative runtime settings but now builds
+`vllm-skinny-tp1:v1`: the published Qwen3.8 image plus only the GB10/TP=1 skinny-GEMM
+enablement patch. It does **not** include `patch-nv-mixed.py`; NVIDIA's mixed-precision
+PLE/MTP compatibility changes remain isolated to the NVIDIA profile. The OrcaRouter runtime
+keeps PLE CPU offload, the `mp` executor, native 262144 context, 24 GiB of pinned KV, MTP
+`k=2`, disabled prefix cache, disabled FlashInfer autotune, and disabled async scheduling.
+The same skinny-GEMM path improved step rate on the earlier compatible Flash-Next
+checkpoint, but the exact OrcaRouter checkpoint must still be benchmarked after install;
+do not treat the historical percentage as an OrcaRouter measurement.
 
 ### Manage the dedicated PLE swap
 
