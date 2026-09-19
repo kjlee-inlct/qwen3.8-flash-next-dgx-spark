@@ -225,6 +225,79 @@ matrix across fresh boots before treating small step-rate differences as
 stable.
 
 
+## OrcaRouter stock vs skinny-GEMM A/B experiment
+
+Use this experiment to isolate whether the GB10/TP=1 skinny-GEMM image changes
+correctness or performance on the pinned OrcaRouter checkpoint. The helper reads
+the installed OrcaRouter model directory, config override, served-model name, and
+revision from the strict installation manifest; the only intended runtime
+difference is the image.
+
+| Case | Image |
+|---|---|
+| `STOCK` | `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` |
+| `SKINNY` | `vllm-skinny-tp1:v1` |
+
+Both cases fix `NSPEC=2`, `MAXLEN=262144`, `KV_MEM=25769803776`,
+`MAXSEQS=3`, `PREFIX_CACHE=0`, `INDEX_SHARE=0`, `AUTOTUNE=0`,
+MTP speculation, loopback port 8888, no runtime monitor, and no container
+restart policy.
+
+The helper never stops the managed service or edits lifecycle state. Stop the
+canonical managed service explicitly before the experiment, then preflight:
+
+```bash
+sudo systemctl stop qwen38-flash-next.service
+bash scripts/runtime/orcarouter-stock-skinny.sh status
+bash scripts/runtime/orcarouter-stock-skinny.sh preflight
+```
+
+Run the stock control first:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh start STOCK
+# wait for http://127.0.0.1:8888/health
+
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 3 \
+  --output scripts/benchmark/results/local/orcarouter-stock-det-1024.json
+
+python3 scripts/benchmark/run.py qsa-determinism \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 3 \
+  --output scripts/benchmark/results/local/orcarouter-stock-qsa.json
+
+python3 scripts/benchmark/run.py decode \
+  --decode-tokens 600 \
+  --decode-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-stock-decode.json
+
+bash scripts/runtime/orcarouter-stock-skinny.sh stop STOCK
+```
+
+Repeat with `SKINNY` only when a fresh same-boot comparison is needed. Existing
+managed skinny results may be used as exploratory context, but a same-boot A/B
+is preferred before attributing a small difference to the image.
+
+After the experiment, remove experiment containers and restore the canonical
+managed service:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh stop
+sudo systemctl start qwen38-flash-next.service
+./scripts/doctor.sh
+```
+
+Interpret determinism before performance. If stock is deterministic and skinny
+is not, treat the skinny patch as a correctness regression candidate. If both
+are non-deterministic at the same prompt sizes, investigate the OrcaRouter/QSA/MTP
+runtime path instead of blaming skinny-GEMM.
+
+
+
 ## QSA determinism diagnostic
 
 Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
