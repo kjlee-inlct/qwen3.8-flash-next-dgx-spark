@@ -446,9 +446,15 @@ inspect_args=(--offline --repo "${REPO}" --model-dir "${MODEL_DIR}")
 python3 "${ROOT_DIR}/scripts/inspect-model.py" "${inspect_args[@]}"
 write_state inspected
 printf '\nPreparing vLLM image...\n'
-if [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
+if [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+    docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.skinny-gemm" "${ROOT_DIR}/scripts"
+  fi
+elif [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
+  if ! docker image inspect vllm-skinny-tp1:v1 >/dev/null 2>&1; then
     docker build -t vllm-skinny-tp1:v1 -f "${ROOT_DIR}/scripts/Dockerfile.skinny-gemm" "${ROOT_DIR}/scripts"
+  fi
+  if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.nv-mixed" "${ROOT_DIR}/scripts"
   fi
 else
