@@ -223,3 +223,31 @@ Because identical configurations have previously produced different
 sequences across boots, a single A/B/C/D pass is exploratory. Repeat the
 matrix across fresh boots before treating small step-rate differences as
 stable.
+
+
+## QSA determinism diagnostic
+
+Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
+this project, the model config currently reports `indexer_budget=2048` and
+`indexer_compress_ratio=4`. A correctness sweep should therefore include
+prompt sizes on both sides of the sparse-selection boundary.
+
+Run:
+
+```bash
+python3 scripts/benchmark/run.py qsa-determinism \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 3 \
+  --output scripts/benchmark/results/local/qsa-determinism.json
+```
+
+The mode reports the first observed failing prompt size and the number of unique
+greedy-output hashes at each size. This diagnostic is intentionally separate
+from the `tuning` performance mode: a tuning run may produce useful engine
+metrics even when the correctness gate fails, but such numbers must not be
+treated as a validated production configuration.
+
+Runtime metadata also records `mtp_index_share` explicitly. A false value is
+recorded as `false` rather than inferred from an absent speculative-config
+field, so A/B/C/D results remain self-describing.
