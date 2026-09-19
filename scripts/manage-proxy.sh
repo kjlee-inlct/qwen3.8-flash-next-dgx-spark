@@ -9,10 +9,10 @@ LAN_ADDRESS=""
 LAN_PORT=8001
 BACKEND_PORT=8888
 YES=0
-SOCKET_UNIT="qwen38-openwebui-proxy.socket"
-SERVICE_UNIT="qwen38-openwebui-proxy.service"
-SOCKET_FILE="/etc/systemd/system/${SOCKET_UNIT}"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_UNIT}"
+PROXY_SOCKET_UNIT="qwen38-openwebui-proxy.socket"
+PROXY_SERVICE_UNIT="qwen38-openwebui-proxy.service"
+PROXY_SOCKET_FILE="/etc/systemd/system/${PROXY_SOCKET_UNIT}"
+PROXY_SERVICE_FILE="/etc/systemd/system/${PROXY_SERVICE_UNIT}"
 # Keep the legacy marker/unit names so existing managed installations can be adopted/updated safely.
 MARKER="Managed qwen38-spark OpenWebUI proxy"
 
@@ -62,12 +62,12 @@ done
 
 if [[ "${ACTION}" == status ]]; then
   installed=no; active=no
-  if managed_file "${SOCKET_FILE}" && managed_file "${SERVICE_FILE}"; then installed=yes; fi
+  if managed_file "${PROXY_SOCKET_FILE}" && managed_file "${PROXY_SERVICE_FILE}"; then installed=yes; fi
   if [[ "${installed}" == yes ]] && command -v systemctl >/dev/null && \
-     systemctl is-active --quiet "${SOCKET_UNIT}" 2>/dev/null; then active=yes; fi
+     systemctl is-active --quiet "${PROXY_SOCKET_UNIT}" 2>/dev/null; then active=yes; fi
   printf 'Qwen API access status\n  installed : %s\n  active    : %s\n' "${installed}" "${active}"
   if [[ "${installed}" == yes ]]; then
-    awk -F= '$1=="ListenStream" {printf "  listener  : %s\n", $2}' "${SOCKET_FILE}"
+    awk -F= '$1=="ListenStream" {printf "  listener  : %s\n", $2}' "${PROXY_SOCKET_FILE}"
   fi
   [[ "${installed}" == yes ]]
   exit
@@ -81,8 +81,8 @@ if [[ "${ACTION}" == adopt ]]; then
   [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "installation manifest not found or unsafe: ${STATE_FILE}"
   [[ "$(stat -c %u "${STATE_FILE}")" == "$(id -u)" ]] || die "installation manifest is not owned by the current user"
   [[ "$(stat -c %a "${STATE_FILE}")" == 600 ]] || die "installation manifest must have mode 600"
-  managed_file "${SOCKET_FILE}" && managed_file "${SERVICE_FILE}" || die "managed API access units are not installed"
-  [[ "$(stat -c %u "${SOCKET_FILE}")" == 0 && "$(stat -c %u "${SERVICE_FILE}")" == 0 ]] || die "API access units are not root-owned"
+  managed_file "${PROXY_SOCKET_FILE}" && managed_file "${PROXY_SERVICE_FILE}" || die "managed API access units are not installed"
+  [[ "$(stat -c %u "${PROXY_SOCKET_FILE}")" == 0 && "$(stat -c %u "${PROXY_SERVICE_FILE}")" == 0 ]] || die "API access units are not root-owned"
 
   docker_host="$(ip -4 -o addr show dev docker0 scope global 2>/dev/null | awk 'NR==1 {split($4,a,"/"); print a[1]}')"
   [[ -n "${docker_host}" ]] || die "docker0 has no IPv4 address"
@@ -101,7 +101,7 @@ if [[ "${ACTION}" == adopt ]]; then
       recorded_lan_address="${address}"
       recorded_lan_port="${port}"
     fi
-  done < <(awk -F= '$1=="ListenStream" {print $2}' "${SOCKET_FILE}")
+  done < <(awk -F= '$1=="ListenStream" {print $2}' "${PROXY_SOCKET_FILE}")
   valid_port "${recorded_docker_port}" || die "cannot determine Docker-app API port"
 
   # install.sh writes shell-escaped values to a user-owned mode-600 file.
@@ -138,18 +138,18 @@ fi
 for command in systemctl grep stat; do command -v "${command}" >/dev/null || die "${command} is required"; done
 
 if [[ "${ACTION}" == remove ]]; then
-  for path in "${SOCKET_FILE}" "${SERVICE_FILE}"; do
+  for path in "${PROXY_SOCKET_FILE}" "${PROXY_SERVICE_FILE}"; do
     if [[ -e "${path}" || -L "${path}" ]]; then
       [[ -f "${path}" && ! -L "${path}" && "$(stat -c %u "${path}")" == 0 ]] || die "unsafe unit file: ${path}"
       grep -Fq "${MARKER}" "${path}" || die "refusing unmanaged unit: ${path}"
     fi
   done
   [[ "${YES}" == 1 ]] || { read -r -p 'Remove the managed Qwen API access endpoints? [y/N]: ' answer; [[ "${answer}" == y || "${answer}" == Y ]] || exit 0; }
-  systemctl disable --now "${SOCKET_UNIT}" 2>/dev/null || true
-  systemctl stop "${SERVICE_UNIT}" 2>/dev/null || true
-  rm -f -- "${SOCKET_FILE}" "${SERVICE_FILE}"
+  systemctl disable --now "${PROXY_SOCKET_UNIT}" 2>/dev/null || true
+  systemctl stop "${PROXY_SERVICE_UNIT}" 2>/dev/null || true
+  rm -f -- "${PROXY_SOCKET_FILE}" "${PROXY_SERVICE_FILE}"
   systemctl daemon-reload
-  systemctl reset-failed "${SOCKET_UNIT}" "${SERVICE_UNIT}" 2>/dev/null || true
+  systemctl reset-failed "${PROXY_SOCKET_UNIT}" "${PROXY_SERVICE_UNIT}" 2>/dev/null || true
   printf 'Managed Qwen API access endpoints removed.\n'
   exit 0
 fi
@@ -178,8 +178,8 @@ if [[ -n "${LAN_ADDRESS}" ]]; then
 fi
 
 managed_existing=0
-if [[ -e "${SOCKET_FILE}" || -e "${SERVICE_FILE}" ]]; then
-  managed_file "${SOCKET_FILE}" && managed_file "${SERVICE_FILE}" || die "refusing unmanaged or partial API access units"
+if [[ -e "${PROXY_SOCKET_FILE}" || -e "${PROXY_SERVICE_FILE}" ]]; then
+  managed_file "${PROXY_SOCKET_FILE}" && managed_file "${PROXY_SERVICE_FILE}" || die "refusing unmanaged or partial API access units"
   managed_existing=1
 fi
 if [[ "${managed_existing}" == 0 ]]; then
@@ -197,6 +197,10 @@ if [[ "${YES}" != 1 ]]; then
 fi
 
 temporary="$(mktemp -d)"; trap 'rm -rf -- "${temporary}"' EXIT
+staged_socket="${temporary}/$(basename -- "${PROXY_SOCKET_FILE}")"
+staged_service="${temporary}/$(basename -- "${PROXY_SERVICE_FILE}")"
+[[ "${staged_socket}" == "${temporary}/"* && "${staged_service}" == "${temporary}/"* ]] || \
+  die "unsafe proxy staging path"
 {
   cat <<EOF
 # ${MARKER}
@@ -215,8 +219,8 @@ NoDelay=true
 [Install]
 WantedBy=sockets.target
 EOF
-} >"${temporary}/${SOCKET_UNIT}"
-cat >"${temporary}/${SERVICE_UNIT}" <<EOF
+} >"${staged_socket}"
+cat >"${staged_service}" <<EOF
 # ${MARKER}
 [Unit]
 Description=Qwen3.8 managed API access service
@@ -228,11 +232,11 @@ ProtectSystem=strict
 ProtectHome=true
 NoNewPrivileges=true
 EOF
-systemctl stop "${SOCKET_UNIT}" "${SERVICE_UNIT}" 2>/dev/null || true
-install -o root -g root -m 0644 "${temporary}/${SOCKET_UNIT}" "${SOCKET_FILE}"
-install -o root -g root -m 0644 "${temporary}/${SERVICE_FILE}" "${SERVICE_FILE}"
+systemctl stop "${PROXY_SOCKET_UNIT}" "${PROXY_SERVICE_UNIT}" 2>/dev/null || true
+install -o root -g root -m 0644 "${staged_socket}" "${PROXY_SOCKET_FILE}"
+install -o root -g root -m 0644 "${staged_service}" "${PROXY_SERVICE_FILE}"
 systemctl daemon-reload
-systemctl enable --now "${SOCKET_UNIT}"
+systemctl enable --now "${PROXY_SOCKET_UNIT}"
 printf 'Docker-app API ready: http://host.docker.internal:%s/v1 (%s:%s -> 127.0.0.1:%s)\n' \
   "${DOCKER_PORT}" "${DOCKER_HOST}" "${DOCKER_PORT}" "${BACKEND_PORT}"
 if [[ -n "${LAN_ADDRESS}" ]]; then

@@ -43,6 +43,15 @@ class ProxyUnitParsingTests(unittest.TestCase):
         self.assertIn("Docker-app API ready", script)
         self.assertIn("LAN API ready", script)
 
+    def test_create_stages_units_by_destination_basename(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('staged_socket="${temporary}/$(basename -- "${PROXY_SOCKET_FILE}")"', script)
+        self.assertIn('staged_service="${temporary}/$(basename -- "${PROXY_SERVICE_FILE}")"', script)
+        self.assertIn('install -o root -g root -m 0644 "${staged_socket}" "${PROXY_SOCKET_FILE}"', script)
+        self.assertIn('install -o root -g root -m 0644 "${staged_service}" "${PROXY_SERVICE_FILE}"', script)
+        self.assertNotIn('"${temporary}/${PROXY_SERVICE_UNIT}"', script)
+        self.assertNotIn('"${temporary}/${PROXY_SOCKET_UNIT}"', script)
+
 
 if __name__ == "__main__":
     unittest.main()
