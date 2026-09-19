@@ -14,14 +14,15 @@ CASE_ID="${2:-}"
 STOCK_IMAGE="vllm/vllm-openai:qwen38-flash-next-arm64-cu130"
 SKINNY_IMAGE="vllm-skinny-tp1:v1"
 SKINNY_DET_IMAGE="vllm-skinny-qsa-det:v1"
+SKINNY_EXACT_IMAGE="vllm-skinny-qsa-exact:v1"
 
 usage() {
   cat <<'EOF'
 Usage:
   ./scripts/runtime/orcarouter-stock-skinny.sh plan
   ./scripts/runtime/orcarouter-stock-skinny.sh preflight
-  ./scripts/runtime/orcarouter-stock-skinny.sh start STOCK|STOCK-NOSPEC|SKINNY|SKINNY-NOSPEC|SKINNY-DET
-  ./scripts/runtime/orcarouter-stock-skinny.sh stop [STOCK|STOCK-NOSPEC|SKINNY|SKINNY-NOSPEC|SKINNY-DET]
+  ./scripts/runtime/orcarouter-stock-skinny.sh start STOCK|STOCK-NOSPEC|SKINNY|SKINNY-NOSPEC|SKINNY-DET|SKINNY-EXACT
+  ./scripts/runtime/orcarouter-stock-skinny.sh stop [STOCK|STOCK-NOSPEC|SKINNY|SKINNY-NOSPEC|SKINNY-DET|SKINNY-EXACT]
   ./scripts/runtime/orcarouter-stock-skinny.sh status
 
 Cases:
@@ -30,6 +31,7 @@ Cases:
   SKINNY         skinny-GEMM image + MTP k=2
   SKINNY-NOSPEC  skinny-GEMM image + no speculative decoding
   SKINNY-DET     skinny-GEMM image + deterministic QSA top-k + MTP k=2
+  SKINNY-EXACT   skinny-GEMM image + exact torch.topk QSA + MTP k=2
 
 Fixed controls:
   MODEL_PROFILE=orcarouter
@@ -42,6 +44,7 @@ Fixed controls:
   AUTOTUNE=0
   SPEC=mtp except *-NOSPEC cases
   QSA_DET_TOPK=1 only for SKINNY-DET
+  QSA_EXACT_TOPK=1 only for SKINNY-EXACT
   RESTART_POLICY=no
   MONITOR_ENABLED=0
   loopback port 8888
@@ -81,17 +84,19 @@ load_manifest() {
 case_values() {
   case "$1" in
     STOCK)
-      IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock"; SPEC_VALUE=mtp; QSA_DET_VALUE=0 ;;
+      IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock"; SPEC_VALUE=mtp; QSA_DET_VALUE=0; QSA_EXACT_VALUE=0 ;;
     STOCK-NOSPEC)
-      IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock-nospec"; SPEC_VALUE=none; QSA_DET_VALUE=0 ;;
+      IMAGE="${STOCK_IMAGE}"; CONTAINER_NAME="qwen38-orca-stock-nospec"; SPEC_VALUE=none; QSA_DET_VALUE=0; QSA_EXACT_VALUE=0 ;;
     SKINNY)
-      IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny"; SPEC_VALUE=mtp; QSA_DET_VALUE=0 ;;
+      IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny"; SPEC_VALUE=mtp; QSA_DET_VALUE=0; QSA_EXACT_VALUE=0 ;;
     SKINNY-NOSPEC)
-      IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny-nospec"; SPEC_VALUE=none; QSA_DET_VALUE=0 ;;
+      IMAGE="${SKINNY_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny-nospec"; SPEC_VALUE=none; QSA_DET_VALUE=0; QSA_EXACT_VALUE=0 ;;
     SKINNY-DET)
-      IMAGE="${SKINNY_DET_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny-det"; SPEC_VALUE=mtp; QSA_DET_VALUE=1 ;;
+      IMAGE="${SKINNY_DET_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny-det"; SPEC_VALUE=mtp; QSA_DET_VALUE=1; QSA_EXACT_VALUE=0 ;;
+    SKINNY-EXACT)
+      IMAGE="${SKINNY_EXACT_IMAGE}"; CONTAINER_NAME="qwen38-orca-skinny-exact"; SPEC_VALUE=mtp; QSA_DET_VALUE=0; QSA_EXACT_VALUE=1 ;;
     *)
-      printf 'ERROR: case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, or SKINNY-DET\n' >&2
+      printf 'ERROR: case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, SKINNY-DET, or SKINNY-EXACT\n' >&2
       return 2
       ;;
   esac
@@ -128,13 +133,15 @@ preflight() {
     failures=1
   fi
 
-  for image in "${STOCK_IMAGE}" "${SKINNY_IMAGE}" "${SKINNY_DET_IMAGE}"; do
+  for image in "${STOCK_IMAGE}" "${SKINNY_IMAGE}" "${SKINNY_DET_IMAGE}" "${SKINNY_EXACT_IMAGE}"; do
     if docker image inspect "${image}" >/dev/null 2>&1; then
       printf '  image           : ready (%s)\n' "${image}"
     else
       printf '  image           : missing (%s)\n' "${image}"
       if [[ "${image}" == "${SKINNY_DET_IMAGE}" ]]; then
         printf '    build with    : docker build -t %s -f scripts/Dockerfile.qsa-det scripts/\n' "${SKINNY_DET_IMAGE}"
+      elif [[ "${image}" == "${SKINNY_EXACT_IMAGE}" ]]; then
+        printf '    build with    : docker build -t %s -f scripts/Dockerfile.qsa-exact scripts/\n' "${SKINNY_EXACT_IMAGE}"
       fi
       failures=1
     fi
@@ -183,7 +190,7 @@ case "${ACTION}" in
     if service_active; then printf 'yes\n'; else printf 'no\n'; fi
     printf 'Canonical runtime: '
     docker inspect --format '{{.Name}} running={{.State.Running}} status={{.State.Status}} image={{.Config.Image}}' qwen38-flash-next 2>/dev/null || printf 'absent\n'
-    for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC SKINNY-DET; do
+    for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC SKINNY-DET SKINNY-EXACT; do
       case_values "${id}"
       docker inspect --format '{{.Name}} running={{.State.Running}} status={{.State.Status}} image={{.Config.Image}}' "${CONTAINER_NAME}" 2>/dev/null || true
     done
@@ -203,7 +210,7 @@ case "${ACTION}" in
       printf 'ERROR: canonical runtime qwen38-flash-next is still running.\n' >&2
       exit 1
     fi
-    for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC SKINNY-DET; do
+    for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC SKINNY-DET SKINNY-EXACT; do
       case_values "${id}"
       if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
         printf 'ERROR: experimental container already exists: %s; stop it first.\n' "${CONTAINER_NAME}" >&2
@@ -216,15 +223,15 @@ case "${ACTION}" in
       exit 1
     }
 
-    printf 'Starting OrcaRouter case %s with image=%s spec=%s qsa_det_topk=%s\n' "${CASE_ID}" "${IMAGE}" "${SPEC_VALUE}" "${QSA_DET_VALUE}"
-    MODEL_PROFILE=orcarouter     MODEL_DIR="${MODEL_DIR}"     VLLM_IMAGE="${IMAGE}"     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}"     SERVED_NAME="${SERVED_NAME}"     NSPEC=2     MAXLEN=262144     KV_MEM=25769803776     MAXSEQS=3     PREFIX_CACHE=0     INDEX_SHARE=0     AUTOTUNE=0     SPEC="${SPEC_VALUE}"     QSA_DET_TOPK="${QSA_DET_VALUE}"     NAME="${CONTAINER_NAME}"     PORT=8888     PUBLISH_HOST=127.0.0.1     RESTART_POLICY=no     MONITOR_ENABLED=0     MONITOR_PROTECT=0       "${SERVE}"
+    printf 'Starting OrcaRouter case %s with image=%s spec=%s qsa_det_topk=%s qsa_exact_topk=%s\n' "${CASE_ID}" "${IMAGE}" "${SPEC_VALUE}" "${QSA_DET_VALUE}" "${QSA_EXACT_VALUE}"
+    MODEL_PROFILE=orcarouter     MODEL_DIR="${MODEL_DIR}"     VLLM_IMAGE="${IMAGE}"     CONFIG_OVERRIDE="${CONFIG_OVERRIDE}"     SERVED_NAME="${SERVED_NAME}"     NSPEC=2     MAXLEN=262144     KV_MEM=25769803776     MAXSEQS=3     PREFIX_CACHE=0     INDEX_SHARE=0     AUTOTUNE=0     SPEC="${SPEC_VALUE}"     QSA_DET_TOPK="${QSA_DET_VALUE}"     QSA_EXACT_TOPK="${QSA_EXACT_VALUE}"     NAME="${CONTAINER_NAME}"     PORT=8888     PUBLISH_HOST=127.0.0.1     RESTART_POLICY=no     MONITOR_ENABLED=0     MONITOR_PROTECT=0       "${SERVE}"
     ;;
   stop)
     [[ $# -le 2 ]] || { usage >&2; exit 2; }
     if [[ -n "${CASE_ID}" ]]; then
       stop_one "${CASE_ID}"
     else
-      for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC SKINNY-DET; do stop_one "${id}"; done
+      for id in STOCK STOCK-NOSPEC SKINNY SKINNY-NOSPEC SKINNY-DET SKINNY-EXACT; do stop_one "${id}"; done
     fi
     ;;
   -h|--help|help)

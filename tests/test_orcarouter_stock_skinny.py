@@ -25,6 +25,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "SKINNY         skinny-GEMM image + MTP k=2",
             "SKINNY-NOSPEC  skinny-GEMM image + no speculative decoding",
             "SKINNY-DET     skinny-GEMM image + deterministic QSA top-k + MTP k=2",
+            "SKINNY-EXACT   skinny-GEMM image + exact torch.topk QSA + MTP k=2",
             "MODEL_PROFILE=orcarouter",
             "NSPEC=2",
             "MAXLEN=262144",
@@ -35,6 +36,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "AUTOTUNE=0",
             "SPEC=mtp except *-NOSPEC cases",
             "QSA_DET_TOPK=1 only for SKINNY-DET",
+            "QSA_EXACT_TOPK=1 only for SKINNY-EXACT",
         ):
             self.assertIn(text, result.stdout)
 
@@ -63,6 +65,16 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
         self.assertIn('QSA_DET_TOPK="${QSA_DET_VALUE}"', script)
         self.assertIn('vllm-skinny-qsa-det:v1', script)
 
+    def test_skinny_exact_changes_only_qsa_selection_mode(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('SKINNY-EXACT)', script)
+        self.assertIn('IMAGE="${SKINNY_EXACT_IMAGE}"', script)
+        self.assertIn('SPEC_VALUE=mtp', script)
+        self.assertIn('QSA_DET_VALUE=0', script)
+        self.assertIn('QSA_EXACT_VALUE=1', script)
+        self.assertIn('QSA_EXACT_TOPK="${QSA_EXACT_VALUE}"', script)
+        self.assertIn('vllm-skinny-qsa-exact:v1', script)
+
     def test_nospec_cases_disable_speculation_without_changing_image(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('STOCK-NOSPEC)', script)
@@ -88,7 +100,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 2)
-        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, or SKINNY-DET", result.stderr)
+        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, SKINNY-DET, or SKINNY-EXACT", result.stderr)
 
 
 if __name__ == "__main__":

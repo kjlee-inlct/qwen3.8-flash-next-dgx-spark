@@ -362,6 +362,56 @@ sudo ./scripts/manage-service.sh create \
 ```
 
 
+## OrcaRouter exact-QSA isolation
+
+The deterministic persistent-topk kernel experiment improved one 1024-token sweep
+case but did not make the OrcaRouter runtime globally deterministic: the standalone
+1024-token gate still produced multiple output hashes, and 2048+ sweep sizes remained
+unstable. The next isolation bypasses persistent_topk completely with exact
+`torch.topk` over visible QSA columns.
+
+Build the exact-QSA image:
+
+```bash
+docker build -t vllm-skinny-qsa-exact:v1 \
+  -f scripts/Dockerfile.qsa-exact scripts/
+```
+
+The image is the existing skinny-GEMM runtime plus only
+`scripts/patch-qsa-exact-topk.py`. The default QSA path stays unchanged unless
+`VLLM_QSA_EXACT_TOPK=1`.
+
+Run the isolated case after stopping the managed service:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh start SKINNY-EXACT
+
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-skinny-exact-det-1024.json
+```
+
+Benchmark reports record both `qsa_det_topk` and `qsa_exact_topk` from the live
+container environment, so results prove which QSA selection path was active.
+
+If the 1024 gate passes, run the same QSA sweep and decode workload used by the
+stock/skinny comparison. Exact top-k is a diagnostic correctness path and may reduce
+long-prefill throughput; do not promote it to the default image without local
+correctness and performance results.
+
+Restore the canonical runtime with the managed commit-waiting path:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh stop SKINNY-EXACT
+sudo ./scripts/manage-service.sh create \
+  --runtime-root "$HOME/.local/share/qwen38-spark/current" \
+  --start --yes
+./scripts/doctor.sh
+```
+
+
 ## QSA determinism diagnostic
 
 Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
