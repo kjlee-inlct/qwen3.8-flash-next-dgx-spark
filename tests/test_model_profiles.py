@@ -43,7 +43,7 @@ class ModelProfileTests(unittest.TestCase):
             with self.subTest(profile=profile):
                 result = self.run_install(profile)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("is a candidate and is not installable yet", result.stderr)
+                self.assertIn("is a candidate profile and is not installable yet", result.stderr)
 
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
