@@ -36,7 +36,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('mazinb) NAME="qwen38-mazinb-v029"', script)
         self.assertIn("load_download_profile mazinb", script)
-        self.assertIn("candidate_manifest_ok()", script)
+        self.assertIn("source_manifest_ok()", script)
         self.assertIn('data.get("status") == "complete"', script)
         self.assertIn('data.get("repository") == expected_repo', script)
         self.assertIn("load_manifest || return 1", script)
