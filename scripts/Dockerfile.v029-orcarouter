@@ -47,6 +47,7 @@ s=open(p, encoding="utf-8").read()
 ast.parse(s)
 assert '("full_attention", "qwen_sparse_attention")' in s
 assert 'layer_type == "qwen_sparse_attention"' in s
+assert 'self.layer_type in ("full_attention", "qwen_sparse_attention")' in s
 print("v0.29 qwen_sparse_attention compatibility installed")
 PY
 
