@@ -58,7 +58,9 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         patch = (ROOT / "scripts" / "patch-v029-qsa-layer-type.py").read_text(encoding="utf-8")
         self.assertIn('("full_attention", "qwen_sparse_attention")', patch)
         self.assertIn('layer_type == "qwen_sparse_attention"', patch)
-        self.assertIn("expected v0.29 decoder block not found", patch)
+        self.assertIn('self.layer_type in ("full_attention", "qwen_sparse_attention")', patch)
+        self.assertIn("expected v0.29 decoder init block not found", patch)
+        self.assertIn("expected v0.29 decoder forward block not found", patch)
 
     def test_start_message_does_not_claim_readiness(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
