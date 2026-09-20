@@ -16,7 +16,7 @@ PROFILE_CASE="orcarouter"
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter or mazinb\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, or hybrid-residual\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -25,19 +25,20 @@ done
 case "${PROFILE_CASE}" in
   orcarouter) NAME="qwen38-orca-v029" ;;
   mazinb) NAME="qwen38-mazinb-v029" ;;
-  *) printf 'ERROR: --profile must be orcarouter or mazinb\n' >&2; exit 2 ;;
+  hybrid-residual) NAME="qwen38-hybrid-residual-v029" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, or hybrid-residual\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual]
 
 Experiment controls:
-  checkpoint        current installed OrcaRouter checkpoint, or downloaded mazinb candidate
+  checkpoint        installed OrcaRouter, downloaded mazinb, or local residual-BF16 hybrid
   base image        vllm/vllm-openai:v0.29.0
   PLE               mmap from /model, no CPU-offload worker
   QSA               exact torch.topk
@@ -80,8 +81,24 @@ load_manifest() {
 }
 
 load_source() {
+  BASE_MODEL_DIR=""
+  BASE_MODEL_REVISION=""
   if [[ "${PROFILE_CASE}" == orcarouter ]]; then
     load_manifest || return 1
+    BASE_MODEL_DIR="${MODEL_DIR}"
+    BASE_MODEL_REVISION="${MODEL_REVISION}"
+    return 0
+  fi
+
+  if [[ "${PROFILE_CASE}" == hybrid-residual ]]; then
+    load_manifest || return 1
+    BASE_MODEL_DIR="${MODEL_DIR}"
+    BASE_MODEL_REVISION="${MODEL_REVISION}"
+    MODEL_PROFILE="hybrid-residual"
+    MODEL_DIR="${HYBRID_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-residual-bf16}"
+    SERVED_NAME="hybrid-residual/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+    MODEL_REPO="local/orcarouter-mazinb-residual-bf16"
+    MODEL_REVISION="hybrid"
     return 0
   fi
 
@@ -96,17 +113,44 @@ load_source() {
   MODEL_REVISION="${PROFILE_REVISION}"
 }
 
-candidate_manifest_ok() {
-  [[ "${PROFILE_CASE}" == mazinb ]] || return 0
-  local manifest="${MODEL_DIR}/.qwen38-model-manifest.json"
-  [[ -r "${manifest}" ]] || return 1
-  python3 - "${manifest}" "${MODEL_REPO}" <<'PY' >/dev/null
+source_manifest_ok() {
+  if [[ "${PROFILE_CASE}" == mazinb ]]; then
+    local manifest="${MODEL_DIR}/.qwen38-model-manifest.json"
+    [[ -r "${manifest}" ]] || return 1
+    python3 - "${manifest}" "${MODEL_REPO}" <<'PY' >/dev/null
 import json, sys
 path, expected_repo = sys.argv[1:]
 data = json.load(open(path, encoding="utf-8"))
 ok = data.get("status") == "complete" and data.get("repository") == expected_repo and bool(data.get("revision"))
 raise SystemExit(0 if ok else 1)
 PY
+    return
+  fi
+
+  if [[ "${PROFILE_CASE}" == hybrid-residual ]]; then
+    local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
+    [[ -r "${manifest}" ]] || return 1
+    python3 - "${manifest}" "${BASE_MODEL_REVISION}" <<'PY' >/dev/null
+import json, sys
+path, expected_base = sys.argv[1:]
+data = json.load(open(path, encoding="utf-8"))
+ok = (
+    data.get("status") == "complete"
+    and data.get("variant") == "residual-bf16"
+    and data.get("base_revision") == expected_base
+    and data.get("residual_modules") == 96
+    and data.get("fp8_targets_removed") == 96
+    and data.get("fp8_scales_removed") == 96
+    and data.get("bf16_weights_overlaid") == 96
+    and data.get("mtp_tensors_changed") == 0
+    and data.get("remaining_fp8_group0_targets") == 204
+)
+raise SystemExit(0 if ok else 1)
+PY
+    return
+  fi
+
+  return 0
 }
 
 service_active() {
@@ -136,7 +180,7 @@ preflight() {
   printf 'vLLM v0.29 checkpoint preflight (%s)\n' "${PROFILE_CASE}"
   printf '  model repo      : %s\n' "${MODEL_REPO}"
   printf '  model revision  : %s\n' "${MODEL_REVISION}"
-  if [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] && candidate_manifest_ok; then
+  if [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] && source_manifest_ok; then
     printf '  weights         : ready (%s)\n' "${MODEL_DIR}"
   else
     printf '  weights         : missing (%s)\n' "${MODEL_DIR}"
@@ -191,14 +235,20 @@ start_runtime() {
   fi
   docker image inspect "${IMAGE}" >/dev/null 2>&1 || { printf 'ERROR: image missing: %s\n' "${IMAGE}" >&2; exit 1; }
   [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
-  candidate_manifest_ok || { printf 'ERROR: candidate checkpoint manifest is incomplete or does not match %s\n' "${MODEL_REPO}" >&2; exit 1; }
+  source_manifest_ok || { printf 'ERROR: checkpoint manifest is incomplete or inconsistent for profile %s\n' "${PROFILE_CASE}" >&2; exit 1; }
 
   local split
   split='["vllm::unified_attention_with_output","vllm::unified_mla_attention_with_output","vllm::mamba_mixer2","vllm::mamba_mixer","vllm::short_conv","vllm::qwen4_exp_compute_ple_ngram_ids","vllm::qwen4_exp_ple_short_conv","vllm::qwen4_exp_qsa_with_output","vllm::linear_attention","vllm::qwen_gdn_attention_core","vllm::qwen_gdn_attention_core_fused_norm_packed","vllm::sparse_attn_indexer","vllm::ple_mmap_lookup_ids"]'
 
   mkdir -p "${HOME}/.cache/vllm-qwen38-v029" "${HOME}/.cache/flashinfer-v029"
 
-  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs 3       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+  extra_mount=()
+  if [[ "${PROFILE_CASE}" == hybrid-residual ]]; then
+    [[ -d "${BASE_MODEL_DIR}" ]] || { printf 'ERROR: hybrid base model directory missing: %s\n' "${BASE_MODEL_DIR}" >&2; exit 1; }
+    extra_mount=(-v "${BASE_MODEL_DIR}:/base-model:ro")
+  fi
+
+  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs 3       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 
   sleep 8
   local state
