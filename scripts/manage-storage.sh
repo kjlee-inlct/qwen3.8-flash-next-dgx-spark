@@ -348,7 +348,7 @@ prune_storage() {
 
   while IFS= read -r id; do
     [[ -n "${id}" ]] || continue
-    run_or_echo "${RELEASE_MANAGER}" discard "${id}"
+    run_or_echo bash "${RELEASE_MANAGER}" discard "${id}"
   done < <(inactive_releases)
 
   while IFS= read -r path; do
