@@ -48,7 +48,7 @@ class StorageManagerTests(unittest.TestCase):
             '[[ "${id}" == "${current_release}" || "${id}" == "${previous_release}" ]] && continue',
             script,
         )
-        self.assertIn('"${RELEASE_MANAGER}" discard "${id}"', script)
+        self.assertIn('bash "${RELEASE_MANAGER}" discard "${id}"', script)
 
     def test_experiment_image_cleanup_is_opt_in_and_active_image_is_protected(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
