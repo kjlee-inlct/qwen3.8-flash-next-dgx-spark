@@ -374,7 +374,7 @@ def build(
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("action", choices=("plan", "build"))
-    result.add_argument("--variant", choices=VARIANTS, default="residual-bf16")
+    result.add_argument(\n        "--variant",\n        choices=VARIANTS,\n        default=os.environ.get("HYBRID_VARIANT", "residual-bf16"),\n    )
     result.add_argument("--base", type=Path, required=True)
     result.add_argument("--overlay", type=Path, required=True)
     result.add_argument("--output", type=Path, required=True)
