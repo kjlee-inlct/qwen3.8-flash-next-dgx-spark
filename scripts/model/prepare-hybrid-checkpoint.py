@@ -134,8 +134,14 @@ def inspect(base: Path, overlay: Path) -> dict[str, Any]:
         for path in [*(base / name for name in affected)]
         if not path.is_file()
     ]
+    overlay_shards = sorted({overlay_map[module + ".weight"] for module in modules})
+    missing_files.extend(
+        str(path)
+        for path in (overlay / name for name in overlay_shards)
+        if not path.is_file()
+    )
     if missing_files:
-        raise HybridError("missing base shard(s): " + ", ".join(missing_files))
+        raise HybridError("missing required shard(s): " + ", ".join(missing_files))
 
     rewrite_bytes = sum((base / name).stat().st_size for name in affected)
     return {
@@ -307,6 +313,11 @@ def build(
     )
 
     new_index = json.loads(json.dumps(info["base_index"]))
+    metadata = new_index.get("metadata")
+    if isinstance(metadata, dict):
+        # The BF16 overlays change tensor byte counts; a stale total_size is worse
+        # than omitting this optional advisory field.
+        metadata.pop("total_size", None)
     new_map = new_index["weight_map"]
     removed_scales = 0
     for module in modules:
