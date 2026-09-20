@@ -176,6 +176,8 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn('"bf16_weights_overlaid": expected_removed', source)
         self.assertIn('"mtp_tensors_changed": 0', source)
         self.assertIn('"remaining_fp8_group0_targets": len(new_targets)', source)
+        self.assertIn("for child in output.iterdir()", source)
+        self.assertNotIn("shutil.rmtree(output)", source)
 
     def test_wrapper_uses_existing_container_image_for_build(self) -> None:
         source = WRAPPER.read_text(encoding="utf-8")
@@ -184,6 +186,7 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn('-v "${BASE}:/base:ro"', source)
         self.assertIn('-v "${OVERLAY}:/overlay:ro"', source)
         self.assertIn("--entrypoint python3", source)
+        self.assertGreaterEqual(source.count('--variant "${VARIANT}"'), 2)
         self.assertNotIn("pip install", source)
 
 
