@@ -68,6 +68,7 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-skinny-qsa-det:v1", assets)
         self.assertIn("vllm-skinny-qsa-exact:v1", assets)
         self.assertIn("vllm-skinny-stable-candidate:v1", assets)
+        self.assertIn("vllm-orcarouter-v029:v1", assets)
 
     def test_manager_uses_disposable_registry_instead_of_hardcoded_function(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")

@@ -105,6 +105,8 @@ vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 4
                 "VLLM_QSA_EXACT_TOPK=0",
                 "QWEN38_GB10_FLA_FIX=1",
                 "QWEN38_MAMBA_STATE_FIX=1",
+                "QWEN38_VLLM_BASE=v0.29",
+                "QWEN38_PLE_MMAP=1",
             ],
             "Cmd": [
                 "/model",
@@ -133,6 +135,8 @@ vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 4
         self.assertEqual(result["qsa_exact_topk"], "0")
         self.assertEqual(result["gb10_fla_fix"], "1")
         self.assertEqual(result["mamba_state_fix"], "1")
+        self.assertEqual(result["vllm_base"], "v0.29")
+        self.assertEqual(result["ple_mmap"], "1")
         self.assertEqual(
             result["speculative_config"],
             {
