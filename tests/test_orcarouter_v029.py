@@ -72,6 +72,13 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("expected v0.29 decoder init block not found", patch)
         self.assertIn("expected v0.29 decoder forward block not found", patch)
 
+    def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("port_owner()", script)
+        self.assertIn("port_in_use()", script)
+        self.assertIn("already published by container(s)", script)
+        self.assertIn("occupied by another listener", script)
+        self.assertIn("API port %s", script)
     def test_start_message_does_not_claim_readiness(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("container started; readiness pending", script)
