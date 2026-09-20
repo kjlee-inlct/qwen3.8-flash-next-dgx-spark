@@ -99,12 +99,81 @@ class HybridCheckpointTests(unittest.TestCase):
             self.assertIn("affected shards  : 1", result.stdout)
             self.assertNotIn("model-mtp.safetensors", result.stdout)
 
+    def test_plan_supports_full_group0_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            overlay = root / "overlay"
+            output = root / "output"
+            base.mkdir()
+            overlay.mkdir()
+
+            targets = [
+                f"model.language_model.layers.{layer}.mock.proj{slot}"
+                for layer in range(50)
+                for slot in range(6)
+            ]
+            base_config = {
+                "quantization_config": {
+                    "config_groups": {"group_0": {"targets": targets}}
+                }
+            }
+            (base / "config.json").write_text(json.dumps(base_config))
+
+            base_map: dict[str, str] = {}
+            overlay_map: dict[str, str] = {}
+            for module in targets:
+                base_map[module + ".weight"] = "model-00001.safetensors"
+                base_map[module + ".weight_scale"] = "model-00001.safetensors"
+                overlay_map[module + ".weight"] = "model-bf16.safetensors"
+
+            (base / "model.safetensors.index.json").write_text(
+                json.dumps({"weight_map": base_map})
+            )
+            (overlay / "model.safetensors.index.json").write_text(
+                json.dumps({"weight_map": overlay_map})
+            )
+            (base / "model-00001.safetensors").write_bytes(b"x")
+            (overlay / "model-bf16.safetensors").write_bytes(b"x")
+
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(TOOL),
+                    "plan",
+                    "--variant",
+                    "group0-bf16",
+                    "--base",
+                    str(base),
+                    "--overlay",
+                    str(overlay),
+                    "--output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Full group-0 BF16 hybrid plan", result.stdout)
+            self.assertIn("variant          : group0-bf16", result.stdout)
+            self.assertIn("group-0 modules  : 300", result.stdout)
+            self.assertIn("FP8 scales       : 300", result.stdout)
+
+    def test_group0_wrapper_selects_variant_and_output(self) -> None:
+        wrapper = (
+            ROOT / "scripts" / "model" / "prepare-group0-hybrid-checkpoint.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("HYBRID_VARIANT=group0-bf16", wrapper)
+        self.assertIn("qwen3.8-hybrid-group0-bf16", wrapper)
+
     def test_builder_requires_bf16_and_removes_exact_fp8_scales(self) -> None:
         source = TOOL.read_text(encoding="utf-8")
         self.assertIn("tensor.dtype != torch.bfloat16", source)
         self.assertIn('module + ".weight_scale"', source)
-        self.assertIn('"fp8_scales_removed": 96', source)
-        self.assertIn('"bf16_weights_overlaid": 96', source)
+        self.assertIn('"fp8_scales_removed": expected_removed', source)
+        self.assertIn('"bf16_weights_overlaid": expected_removed', source)
         self.assertIn('"mtp_tensors_changed": 0', source)
         self.assertIn('"remaining_fp8_group0_targets": len(new_targets)', source)
 
