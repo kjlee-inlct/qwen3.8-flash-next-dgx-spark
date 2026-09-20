@@ -81,7 +81,7 @@ load_manifest() {
 
 load_source() {
   if [[ "${PROFILE_CASE}" == orcarouter ]]; then
-    load_source || return 1
+    load_manifest || return 1
     return 0
   fi
 
