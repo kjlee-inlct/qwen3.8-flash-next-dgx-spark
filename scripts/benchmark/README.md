@@ -646,6 +646,16 @@ mtp_tensors_changed=0
 remaining_fp8_group0_targets=0
 ```
 
+Observed after the #76 builder fix:
+
+- full group-0 plan selected 300 modules across 15 rewritten shards;
+- the completed checkpoint reported 300 FP8 targets/scales removed and 300 BF16
+  weights overlaid;
+- MTP tensors remained unchanged and no FP8 group-0 targets remained;
+- local checkpoint size was approximately 73 GiB;
+- the v0.29 `hybrid-group0` preflight accepted the checkpoint, image, and manifest,
+  with the managed/canonical runtimes stopped and API port 8888 free.
+
 Then repeat the same small determinism gate:
 
 ```bash
