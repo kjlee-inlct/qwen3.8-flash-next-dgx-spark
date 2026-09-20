@@ -118,6 +118,41 @@ Canonical implementations include:
 - `model/inspect_model.py`
 - `model/prepare_config.py`
 
+## Model download transport
+
+`scripts/download-weights.sh` keeps revision pinning, disk-reserve checks, the
+project model manifest, candidate-profile guards, and SHA-256 verification in the
+host script. For large checkpoints, transfer is delegated to
+`huggingface_hub.snapshot_download()` inside an existing local Docker image when
+available.
+
+The host does not need the Hugging Face Python package installed. The default
+container image is `vllm-orcarouter-v029:v1`; override it with
+`HF_DOWNLOADER_IMAGE` when needed. The helper enables
+`HF_XET_HIGH_PERFORMANCE=1` by default and uses eight snapshot workers by default
+(`HF_DOWNLOAD_MAX_WORKERS` overrides this).
+
+Before transfer, existing destination files are verified against the remote LFS
+SHA-256 metadata. Verified files are excluded from `allow_patterns`, so a partial
+checkpoint directory can resume without redownloading already-good shards. Missing,
+partial, or failed-verification files are the only files requested from the snapshot
+downloader. After transfer, those files are verified again before the project model
+manifest is marked complete.
+
+If Docker, the selected image, or `huggingface_hub` in that image is unavailable,
+the script falls back to the older resumable `curl -C -` path rather than making
+host Python packaging a prerequisite.
+
+Examples:
+
+```bash
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate --check
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate
+
+HF_DOWNLOAD_MAX_WORKERS=12 \
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate
+```
+
 ## Storage management
 
 `scripts/manage-storage.sh` is the project-wide disk usage and cleanup entry point.
