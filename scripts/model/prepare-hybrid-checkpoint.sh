@@ -30,8 +30,8 @@ done
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/model/prepare-hybrid-checkpoint.sh plan
-  ./scripts/model/prepare-hybrid-checkpoint.sh build [--force]
+  bash scripts/model/prepare-hybrid-checkpoint.sh plan
+  bash scripts/model/prepare-hybrid-checkpoint.sh build [--force]
 
 Environment overrides:
   HYBRID_OVERLAY_DIR   mazinb checkpoint directory
