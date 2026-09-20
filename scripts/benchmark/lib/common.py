@@ -476,6 +476,8 @@ def runtime_config_from_docker_config(
         ),
         "qsa_det_topk": env.get("VLLM_QSA_DET_TOPK"),
         "qsa_exact_topk": env.get("VLLM_QSA_EXACT_TOPK"),
+        "gb10_fla_fix": env.get("QWEN38_GB10_FLA_FIX"),
+        "mamba_state_fix": env.get("QWEN38_MAMBA_STATE_FIX"),
     }
 
     raw_spec = option("--speculative-config")
