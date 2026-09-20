@@ -466,6 +466,54 @@ Only if the 1024 gate passes should the wider QSA determinism sweep and decode
 benchmark be run. Restore the canonical runtime through the managed service path after
 the experiment.
 
+## OrcaRouter on vLLM v0.29
+
+If the seeded stability candidate still produces multiple greedy output hashes, keep
+the OrcaRouter checkpoint fixed and move only the runtime base from the Qwen preview
+image to the official vLLM v0.29 release line.
+
+The v0.29 experiment is deliberately minimal:
+
+- OrcaRouter checkpoint from the active install manifest;
+- vLLM `v0.29.0`;
+- PLE mmap so the large n-gram table does not have to remain resident in unified RAM;
+- exact QSA top-k;
+- GB10 FLA shared-memory/num-warps workaround;
+- MTP k=2;
+- prefix cache disabled;
+- no hybrid quantization, draft-vocab reduction, or other throughput patches.
+
+Build and run:
+
+```bash
+docker build -t vllm-orcarouter-v029:v1 \
+  -f scripts/Dockerfile.v029-orcarouter scripts/
+
+sudo systemctl stop qwen38-flash-next.service
+./scripts/runtime/orcarouter-v029.sh preflight
+./scripts/runtime/orcarouter-v029.sh start
+
+./scripts/wait-ready.sh \
+  --container qwen38-orca-v029 \
+  --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Run the seeded determinism gate first:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-v029-seeded-det-1024.json
+```
+
+The report must show `vllm_base="v0.29"`, `ple_mmap="1"`,
+`qsa_exact_topk="1"`, and the explicit seeded sampling controls before the result is
+used for diagnosis.
+
+Restore the canonical runtime through the managed service path after the experiment.
+
 ## QSA determinism diagnostic
 
 Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
