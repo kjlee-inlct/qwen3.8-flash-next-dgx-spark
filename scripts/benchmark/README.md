@@ -515,6 +515,95 @@ Do not promote mazinb to the stable installer from this one gate. Run the wider
 QSA-size determinism sweep, decode/TTFT measurements, and qualification suite
 first.
 
+The subsequent local qualification gate also passed. The same mazinb boot then
+passed the 1024/2048/4096/8192/32768 determinism sweep with five repeats at each
+size and reproduced ~25.75-25.79 tok/s median decode on repeated warm runs.
+
+### Residual-writer BF16 hybrid isolation
+
+The installed OrcaRouter checkpoint has 300 explicit FP8 group-0 modules:
+
+- 48 self-attention projections (12 q/k/v/o layers);
+- 108 linear-attention projections (36 qkv/z/out layers);
+- 144 shared-expert projections (48 gate/up/down layers).
+
+The first hybrid isolates only the 96 projections that write directly back to the
+residual stream:
+
+- 12 `self_attn.o_proj`;
+- 36 `linear_attn.out_proj`;
+- 48 `mlp.shared_expert.down_proj`.
+
+For those modules the OrcaRouter index contains 96 FP8 `.weight` tensors and
+96 `.weight_scale` tensors. The mazinb checkpoint contains 96 corresponding
+BF16 `.weight` tensors. Similar MTP names are explicitly excluded; the observed
+extra keys are `mtp.layers.0.self_attn.o_proj.weight` and
+`mtp.layers.0.mlp.shared_expert.down_proj.weight`.
+
+The hybrid builder rewrites affected OrcaRouter safetensor shards so stale FP8
+weights/scales cannot leak through the loader. Unaffected base files are linked to
+the immutable OrcaRouter checkpoint and resolved at runtime through the additional
+read-only `/base-model` mount. The originals are never modified.
+
+Stop the running experiment first, then inspect the storage plan:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile mazinb
+
+./scripts/model/prepare-hybrid-checkpoint.sh plan
+```
+
+The plan must report exactly 96 residual modules and shows the number/size of base
+shards that must be rewritten. Build only after checking free disk space:
+
+```bash
+./scripts/model/prepare-hybrid-checkpoint.sh build
+```
+
+The build runs inside `vllm-orcarouter-v029:v1`; no host torch, safetensors, or
+Hugging Face Python installation is required. The completed local manifest must
+record:
+
+```text
+residual_modules=96
+fp8_targets_removed=96
+fp8_scales_removed=96
+bf16_weights_overlaid=96
+mtp_tensors_changed=0
+remaining_fp8_group0_targets=204
+```
+
+Start the hybrid on the otherwise identical v0.29 runtime:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-residual
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-residual
+
+./scripts/wait-ready.sh \
+  --container qwen38-hybrid-residual-v029 \
+  --model hybrid-residual/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Run the small correctness gate first:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-residual/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/hybrid-residual-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: the root-cause region is narrowed to the 96 FP8 residual-writer modules;
+  split next into self-attention o-proj (12), linear-attention out-proj (36), and
+  shared-expert down-proj (48);
+- FAIL: keep the residual BF16 overlay and expand the next hybrid to the remaining
+  204 FP8 group-0 modules before moving back to unrelated runtime paths.
+
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
