@@ -6,6 +6,7 @@ MODEL="${MODEL:-}"
 TIMEOUT="${TIMEOUT:-1800}"
 INTERVAL="${INTERVAL:-10}"
 LOG_TAIL="${LOG_TAIL:-20}"
+FAILURE_LOG_TAIL="${FAILURE_LOG_TAIL:-300}"
 
 usage() {
   cat <<'EOF'
@@ -19,6 +20,25 @@ timeout=1800, interval=10.
 EOF
 }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
+
+print_failure_diagnostics() {
+  local container="$1"
+  local tmp
+  tmp="$(mktemp)"
+  trap 'rm -f -- "${tmp:-}"' RETURN
+
+  docker logs --tail "${FAILURE_LOG_TAIL}" "${container}" >"${tmp}" 2>&1 || true
+
+  printf '\n===== ROOT CAUSE CANDIDATES =====\n' >&2
+  grep -nE 'Traceback|ERROR|Exception|RuntimeError|ValueError|KeyError|AttributeError|AssertionError|NotImplemented|CUDA|OOM|out of memory|weight_scale|scale_inv|quant|PLE|mmap|MTP|MoE|Killed' "${tmp}" \
+    | tail -n 120 >&2 || true
+
+  printf '\n===== LAST %s LOG LINES =====\n' "${FAILURE_LOG_TAIL}" >&2
+  cat "${tmp}" >&2
+
+  rm -f -- "${tmp}"
+  trap - RETURN
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,14 +65,14 @@ while :; do
   now="$(date +%s)"; elapsed=$((now - started))
   if (( elapsed >= TIMEOUT )); then
     printf 'TIMEOUT after %ss waiting for %s\n' "${elapsed}" "${CONTAINER}" >&2
-    docker logs --tail "${LOG_TAIL}" "${CONTAINER}" 2>&1 || true
+    print_failure_diagnostics "${CONTAINER}"
     exit 1
   fi
 
   state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER}" 2>/dev/null || true)"
   if [[ -n "${state}" && "${state}" != running ]]; then
     printf 'CONTAINER STOPPED: %s status=%s\n' "${CONTAINER}" "${state}" >&2
-    docker logs --tail "${LOG_TAIL}" "${CONTAINER}" 2>&1 || true
+    print_failure_diagnostics "${CONTAINER}"
     exit 1
   fi
 
