@@ -142,7 +142,6 @@ Examples:
 ./scripts/manage-storage.sh plan
 ./scripts/manage-storage.sh plan --experiments
 ./scripts/manage-storage.sh prune --dry-run --experiments
-./scripts/manage-storage.sh plan --optional-images
 ./scripts/manage-storage.sh prune --yes
 ```
 
@@ -155,14 +154,10 @@ The status/plan output reports Docker image logical sizes. Because Docker layers
 shared, logical size is an upper-bound-style inventory value rather than an exact
 prediction of bytes reclaimed.
 
-`recommend` ranks large recovery opportunities without deleting anything. Inactive
-managed checkpoints are shown with the exact `manage-models.sh remove ... --dry-run`
-command, Docker reclaimable space is summarized, and the Hugging Face cache is broken
-down for inspection while remaining report-only.
-
-Use `--optional-images` when an optional profile image such as the NVIDIA runtime image
-should be removed. This is separate from `--experiments`, and the active manifest image
-is protected in both modes.
+`recommend` is read-only. It ranks inactive managed checkpoints, Docker reclaimable
+space, Hugging Face cache usage, and protected active allocations. For inactive
+checkpoints it prints the exact `manage-models.sh remove ... --dry-run` command rather
+than deleting the checkpoint itself.
 
 Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
 should be removed.
