@@ -258,6 +258,9 @@ def build(
         "selected_modules": len(info["modules"]),
         "affected_shards": info["affected_shards"],
     }
+    if variant == "residual-bf16":
+        # Preserve the original manifest field for backward/runtime compatibility.
+        manifest["residual_modules"] = len(info["modules"])
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     modules = set(info["modules"])
