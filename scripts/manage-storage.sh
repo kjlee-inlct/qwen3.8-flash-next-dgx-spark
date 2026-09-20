@@ -19,7 +19,10 @@ STORAGE_ASSETS="${SCRIPT_ROOT}/scripts/storage/assets.sh"
 source "${STORAGE_ASSETS}"
 BENCH_DIR="${SCRIPT_ROOT}/scripts/benchmark/results/local"
 HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
+HF_CACHE_HELPER="${SCRIPT_ROOT}/scripts/storage/hf-cache.sh"
 ACTION="${1:-status}"
+HF_ACTION=""
+HF_TARGET=""
 YES=0
 DRY_RUN=0
 PRUNE_EXPERIMENTS=0
@@ -33,6 +36,8 @@ Usage:
   ./scripts/manage-storage.sh recommend
   ./scripts/manage-storage.sh plan [--experiments] [--build-cache-days N] [--benchmark-days N]
   ./scripts/manage-storage.sh prune [--experiments] [--build-cache-days N] [--benchmark-days N] [--yes] [--dry-run]
+  ./scripts/manage-storage.sh hf-cache list
+  ./scripts/manage-storage.sh hf-cache remove models--ORG--MODEL [--yes] [--dry-run]
 
 status
   Read-only inventory of filesystem, managed models, Docker usage, releases,
@@ -44,6 +49,11 @@ recommend
 
 plan
   Show what prune would remove. No mutation.
+
+hf-cache
+  Selectively inspect or remove one Hugging Face model cache directory. Only direct
+  $HF_HOME/hub/models--* directories are eligible. Removal requires confirmation or
+  --yes, supports --dry-run, refuses symlink/path-traversal targets, and never uses sudo.
 
 prune
   Safe cleanup:
@@ -65,7 +75,7 @@ Never removed by this command:
   - active manifest VLLM_IMAGE
   - current or previous immutable releases
   - PLE swap
-  - Hugging Face cache
+  - Hugging Face cache during normal prune; selective hf-cache remove is explicit only
   - repository source files
 
 Use ./scripts/manage-models.sh for inactive managed checkpoints.
@@ -75,7 +85,26 @@ EOF
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 positive_integer() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 
-shift || true
+if [[ "${ACTION}" == hf-cache ]]; then
+  [[ $# -ge 2 ]] || die "hf-cache requires list or remove"
+  HF_ACTION="$2"
+  case "${HF_ACTION}" in
+    list)
+      shift 2
+      ;;
+    remove)
+      [[ $# -ge 3 ]] || die "hf-cache remove requires models--ORG--MODEL"
+      HF_TARGET="$3"
+      shift 3
+      ;;
+    *)
+      die "hf-cache action must be list or remove"
+      ;;
+  esac
+else
+  shift || true
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes) YES=1 ;;
@@ -98,7 +127,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${ACTION}" in
-  status|recommend|plan|prune) ;;
+  status|recommend|plan|prune|hf-cache) ;;
   -h|--help|help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -385,9 +414,19 @@ prune_storage() {
   printf '\nStorage cleanup complete. Managed checkpoints, active runtime image, current/previous releases, PLE swap, and HF cache were preserved.\n'
 }
 
+manage_hf_cache() {
+  [[ -r "${HF_CACHE_HELPER}" ]] || die "Hugging Face cache helper unavailable: ${HF_CACHE_HELPER}"
+  local args=("${HF_ACTION}")
+  [[ -z "${HF_TARGET}" ]] || args+=("${HF_TARGET}")
+  [[ "${DRY_RUN}" == 1 ]] && args+=(--dry-run)
+  [[ "${YES}" == 1 ]] && args+=(--yes)
+  bash "${HF_CACHE_HELPER}" "${args[@]}"
+}
+
 case "${ACTION}" in
   status) print_status ;;
   recommend) bash "${SCRIPT_ROOT}/scripts/storage/recommend.sh" ;;
   plan) print_plan ;;
   prune) prune_storage ;;
+  hf-cache) manage_hf_cache ;;
 esac
