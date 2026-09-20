@@ -209,11 +209,10 @@ if (( missing_count > 0 )); then
     printf 'Container downloader unavailable: docker command not found; using curl fallback.\n' >&2
     download_missing_with_curl || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
   else
-    set +e
-    download_missing_with_container
-    download_rc=$?
-    set -e
-    if [[ "${download_rc}" -ne 0 ]]; then
+    if download_missing_with_container; then
+      :
+    else
+      download_rc=$?
       printf 'Container downloader unavailable/failed (rc=%s); using curl fallback.\n' "${download_rc}" >&2
       download_missing_with_curl || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
     fi
