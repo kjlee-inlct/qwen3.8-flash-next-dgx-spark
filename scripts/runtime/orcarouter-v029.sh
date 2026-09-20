@@ -138,6 +138,7 @@ ok = (
     data.get("status") == "complete"
     and data.get("variant") == "residual-bf16"
     and data.get("base_revision") == expected_base
+    and bool(data.get("overlay_revision"))
     and data.get("residual_modules") == 96
     and data.get("fp8_targets_removed") == 96
     and data.get("fp8_scales_removed") == 96
