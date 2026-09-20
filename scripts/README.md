@@ -138,6 +138,7 @@ Examples:
 
 ```bash
 ./scripts/manage-storage.sh status
+./scripts/manage-storage.sh recommend
 ./scripts/manage-storage.sh plan
 ./scripts/manage-storage.sh plan --experiments
 ./scripts/manage-storage.sh prune --dry-run --experiments
@@ -152,6 +153,11 @@ profiles and serving backends from scattering cleanup rules across scripts.
 The status/plan output reports Docker image logical sizes. Because Docker layers are
 shared, logical size is an upper-bound-style inventory value rather than an exact
 prediction of bytes reclaimed.
+
+`recommend` is read-only. It ranks inactive managed checkpoints, Docker reclaimable
+space, Hugging Face cache usage, and protected active allocations. For inactive
+checkpoints it prints the exact `manage-models.sh remove ... --dry-run` command rather
+than deleting the checkpoint itself.
 
 Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
 should be removed.

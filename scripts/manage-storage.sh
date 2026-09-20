@@ -30,12 +30,17 @@ usage() {
   cat <<'EOF'
 Usage:
   ./scripts/manage-storage.sh status
+  ./scripts/manage-storage.sh recommend
   ./scripts/manage-storage.sh plan [--experiments] [--build-cache-days N] [--benchmark-days N]
   ./scripts/manage-storage.sh prune [--experiments] [--build-cache-days N] [--benchmark-days N] [--yes] [--dry-run]
 
 status
   Read-only inventory of filesystem, managed models, Docker usage, releases,
   benchmark results, Hugging Face cache, and the dedicated PLE swap file.
+
+recommend
+  Read-only ranked recovery opportunities for inactive checkpoints, Docker,
+  Hugging Face cache, and protected large allocations.
 
 plan
   Show what prune would remove. No mutation.
@@ -93,7 +98,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${ACTION}" in
-  status|plan|prune) ;;
+  status|recommend|plan|prune) ;;
   -h|--help|help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -382,6 +387,7 @@ prune_storage() {
 
 case "${ACTION}" in
   status) print_status ;;
+  recommend) bash "${SCRIPT_ROOT}/scripts/storage/recommend.sh" ;;
   plan) print_plan ;;
   prune) prune_storage ;;
 esac

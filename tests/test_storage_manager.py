@@ -75,6 +75,18 @@ class StorageManagerTests(unittest.TestCase):
         self.assertNotIn("experiment_images()", script)
         self.assertIn("logical sizes", script)
 
+    def test_recommend_action_delegates_to_read_only_helper(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8")
+        self.assertIn("recommend", script)
+        self.assertIn('bash "${SCRIPT_ROOT}/scripts/storage/recommend.sh"', script)
+        self.assertIn("[1. Inactive managed checkpoints]", helper)
+        self.assertIn("[2. Docker reclaimable]", helper)
+        self.assertIn("[3. Hugging Face cache - report only]", helper)
+        self.assertIn("manage-models.sh remove", helper)
+        self.assertNotIn("rm -rf", helper)
+        self.assertNotIn("docker image rm", helper)
+
     def test_mutating_prune_checks_transition_state_and_operation_lock(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("runtime transition is active", script)
