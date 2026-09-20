@@ -249,24 +249,6 @@ def build(
         by_base_shard[base_map[module + ".weight"]].add(module)
         by_base_shard[base_map[module + ".weight_scale"]].add(module)
 
-    # Read overlay weights lazily by their source shard.
-    overlay_cache: dict[str, dict[str, Any]] = {}
-
-    def overlay_tensor(key: str):
-        shard = overlay_map[key]
-        if shard not in overlay_cache:
-            keys = {
-                module + ".weight"
-                for module in modules
-                if overlay_map[module + ".weight"] == shard
-            }
-            with safe_open(overlay / shard, framework="pt", device="cpu") as handle:
-                overlay_cache[shard] = {k: handle.get_tensor(k) for k in keys}
-        tensor = overlay_cache[shard][key]
-        if tensor.dtype != torch.bfloat16:
-            raise HybridError(f"overlay tensor is not BF16: {key}: {tensor.dtype}")
-        return tensor
-
     for index, shard in enumerate(sorted(affected), start=1):
         source = base / shard
         destination = output / shard
@@ -277,6 +259,20 @@ def build(
             for m in selected_modules
             if base_map[m + ".weight_scale"] == shard
         }
+        replacements: dict[str, Any] = {}
+        by_overlay_shard: dict[str, set[str]] = {}
+        for key in replace_weights:
+            by_overlay_shard.setdefault(overlay_map[key], set()).add(key)
+        for overlay_shard, keys in sorted(by_overlay_shard.items()):
+            with safe_open(overlay / overlay_shard, framework="pt", device="cpu") as handle:
+                for key in sorted(keys):
+                    tensor = handle.get_tensor(key)
+                    if tensor.dtype != torch.bfloat16:
+                        raise HybridError(
+                            f"overlay tensor is not BF16: {key}: {tensor.dtype}"
+                        )
+                    replacements[key] = tensor
+
         tensors: dict[str, Any] = {}
         metadata = None
         with safe_open(source, framework="pt", device="cpu") as handle:
@@ -285,7 +281,7 @@ def build(
                 if key in remove_scales:
                     continue
                 if key in replace_weights:
-                    tensors[key] = overlay_tensor(key)
+                    tensors[key] = replacements[key]
                 else:
                     tensors[key] = handle.get_tensor(key)
         print(
@@ -295,6 +291,7 @@ def build(
         )
         save_file(tensors, destination, metadata=metadata)
         del tensors
+        del replacements
 
     link_unaffected_base_files(base, output, affected)
 
