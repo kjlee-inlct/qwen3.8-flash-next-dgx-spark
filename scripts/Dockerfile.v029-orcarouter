@@ -12,7 +12,7 @@
 FROM vllm/vllm-openai:v0.29.0
 
 LABEL qwen38.base="v0.29-orcarouter"
-LABEL qwen38.stability-candidate="v0.29+ple-mmap+exact-qsa+fla"
+LABEL qwen38.stability-candidate="v0.29+qsa-layer-type+ple-mmap+exact-qsa+fla"
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG PKG=${SP}/vllm/models/qwen4_exp/nvidia
@@ -36,6 +36,19 @@ RUN sed -i 's|DEFAULT = 102400|DEFAULT = 101376  # spark-fla-shmem: GB10 99KiB|'
  && grep -q "spark-fla-shmem" ${FLA_UTILS} \
  && sed -i 's|for num_warps in \[2, 4\]|for num_warps in [2]  # spark-fla-warps: Blackwell tl.dot race|' ${FLA_CDH} \
  && grep -q "spark-fla-warps" ${FLA_CDH}
+
+COPY patch-v029-qsa-layer-type.py /tmp/patch-v029-qsa-layer-type.py
+RUN python3 /tmp/patch-v029-qsa-layer-type.py ${PKG}/model.py \
+ && rm /tmp/patch-v029-qsa-layer-type.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/model.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+assert '("full_attention", "qwen_sparse_attention")' in s
+assert 'layer_type == "qwen_sparse_attention"' in s
+print("v0.29 qwen_sparse_attention compatibility installed")
+PY
 
 COPY patch-qsa-exact-topk.py /tmp/patch-qsa-exact-topk.py
 RUN python3 /tmp/patch-qsa-exact-topk.py ${PKG}/ops/qsa.py \
