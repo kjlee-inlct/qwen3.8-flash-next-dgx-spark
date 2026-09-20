@@ -118,6 +118,18 @@ container_running() {
   [[ "$(docker inspect --format '{{.State.Running}}' "${name}" 2>/dev/null || true)" == true ]]
 }
 
+port_owner() {
+  docker ps --filter "publish=${PORT}" --format '{{.Names}}' 2>/dev/null | paste -sd, -
+}
+
+port_in_use() {
+  local owner
+  owner="$(port_owner)"
+  [[ -n "${owner}" ]] && return 0
+  command -v ss >/dev/null 2>&1 || return 1
+  ss -H -ltn 2>/dev/null | awk -v suffix=":${PORT}" '$4 ~ suffix "$" {found=1} END {exit !found}'
+}
+
 preflight() {
   local failures=0
   load_source || return 1
@@ -147,6 +159,18 @@ preflight() {
   else
     printf 'absent\n'
   fi
+  printf '  API port %s     : ' "${PORT}"
+  if port_in_use; then
+    owner="$(port_owner)"
+    if [[ -n "${owner}" ]]; then
+      printf 'occupied by %s\n' "${owner}"
+    else
+      printf 'occupied by another listener\n'
+    fi
+    failures=1
+  else
+    printf 'free\n'
+  fi
   return "${failures}"
 }
 
@@ -156,6 +180,15 @@ start_runtime() {
   service_active && { printf 'ERROR: %s is active; stop it before this experiment\n' "${SERVICE}" >&2; exit 1; }
   container_running qwen38-flash-next && { printf 'ERROR: canonical runtime is still running\n' >&2; exit 1; }
   docker inspect "${NAME}" >/dev/null 2>&1 && { printf 'ERROR: experiment container already exists: %s\n' "${NAME}" >&2; exit 1; }
+  if port_in_use; then
+    owner="$(port_owner)"
+    if [[ -n "${owner}" ]]; then
+      printf 'ERROR: 127.0.0.1:%s is already published by container(s): %s\n' "${PORT}" "${owner}" >&2
+    else
+      printf 'ERROR: 127.0.0.1:%s is already in use by another listener\n' "${PORT}" >&2
+    fi
+    exit 1
+  fi
   docker image inspect "${IMAGE}" >/dev/null 2>&1 || { printf 'ERROR: image missing: %s\n' "${IMAGE}" >&2; exit 1; }
   [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
   candidate_manifest_ok || { printf 'ERROR: candidate checkpoint manifest is incomplete or does not match %s\n' "${MODEL_REPO}" >&2; exit 1; }

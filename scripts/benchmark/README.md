@@ -472,6 +472,49 @@ Interpretation:
 - both fail: investigate shared GB10 math/kernel paths rather than the preview runtime
   or OrcaRouter-specific checkpoint packaging.
 
+
+### 2026-09-20 checkpoint-only result
+
+A same-runtime local A/B on one GB10 produced:
+
+| Checkpoint | Runtime | Seeded 1024 / 128, repeats=5 | Unique hashes |
+|---|---|---:|---:|
+| OrcaRouter pinned NVFP4 | vLLM v0.29 experiment | FAIL | 3 |
+| mazinb `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f` | same vLLM v0.29 experiment | PASS | 1 |
+
+The wider mazinb QSA-size sweep also passed at every tested prompt size with five
+repeats each:
+
+| Requested prompt tokens | Actual prompt tokens | Unique hashes |
+|---:|---:|---:|
+| 1024 | 1024 | 1 |
+| 2048 | 2048 | 1 |
+| 4096 | 4096 | 1 |
+| 8192 | 8191 | 1 |
+| 32768 | 32768 | 1 |
+
+A same-boot decode check was repeated twice. Both runs were stable around
+25.75-25.79 tok/s median decode, ~0.261 s warm median TTFT, 11.8-12.0 engine
+steps/s, and 0.5625 speculative draft-token acceptance. The first request of
+the first run paid a colder TTFT (~0.92 s); the second full repetition removed
+that outlier and reproduced the warm figures.
+
+These wider results make the checkpoint/quantization-layout explanation stronger
+than the original single-size gate alone.
+
+Both cases used the same v0.29 experiment image, exact QSA path, GB10 FLA fix,
+MTP k=2, prefix cache disabled, and seeded greedy controls. This is strong
+evidence against the preview runtime and sampler defaults as the sole cause.
+
+The mazinb model card describes its routed experts as NVFP4 group-16 while
+keeping PLE and the overlaid residual-writing path in BF16. Treat the next
+isolation target as checkpoint quantization/layout, especially OrcaRouter's
+non-expert FP8/dense path, rather than NVFP4 routed experts alone.
+
+Do not promote mazinb to the stable installer from this one gate. Run the wider
+QSA-size determinism sweep, decode/TTFT measurements, and qualification suite
+first.
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
