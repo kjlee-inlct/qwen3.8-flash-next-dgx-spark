@@ -96,6 +96,19 @@ load_source() {
   MODEL_REVISION="${PROFILE_REVISION}"
 }
 
+candidate_manifest_ok() {
+  [[ "${PROFILE_CASE}" == mazinb ]] || return 0
+  local manifest="${MODEL_DIR}/.qwen38-model-manifest.json"
+  [[ -r "${manifest}" ]] || return 1
+  python3 - "${manifest}" "${MODEL_REPO}" <<'PY' >/dev/null
+import json, sys
+path, expected_repo = sys.argv[1:]
+data = json.load(open(path, encoding="utf-8"))
+ok = data.get("status") == "complete" and data.get("repository") == expected_repo and bool(data.get("revision"))
+raise SystemExit(0 if ok else 1)
+PY
+}
+
 service_active() {
   command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "${SERVICE}" 2>/dev/null
 }
@@ -111,7 +124,7 @@ preflight() {
   printf 'vLLM v0.29 checkpoint preflight (%s)\n' "${PROFILE_CASE}"
   printf '  model repo      : %s\n' "${MODEL_REPO}"
   printf '  model revision  : %s\n' "${MODEL_REVISION}"
-  if [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]]; then
+  if [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] && candidate_manifest_ok; then
     printf '  weights         : ready (%s)\n' "${MODEL_DIR}"
   else
     printf '  weights         : missing (%s)\n' "${MODEL_DIR}"
@@ -144,6 +157,8 @@ start_runtime() {
   container_running qwen38-flash-next && { printf 'ERROR: canonical runtime is still running\n' >&2; exit 1; }
   docker inspect "${NAME}" >/dev/null 2>&1 && { printf 'ERROR: experiment container already exists: %s\n' "${NAME}" >&2; exit 1; }
   docker image inspect "${IMAGE}" >/dev/null 2>&1 || { printf 'ERROR: image missing: %s\n' "${IMAGE}" >&2; exit 1; }
+  [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
+  candidate_manifest_ok || { printf 'ERROR: candidate checkpoint manifest is incomplete or does not match %s\n' "${MODEL_REPO}" >&2; exit 1; }
 
   local split
   split='["vllm::unified_attention_with_output","vllm::unified_mla_attention_with_output","vllm::mamba_mixer2","vllm::mamba_mixer","vllm::short_conv","vllm::qwen4_exp_compute_ple_ngram_ids","vllm::qwen4_exp_ple_short_conv","vllm::qwen4_exp_qsa_with_output","vllm::linear_attention","vllm::qwen_gdn_attention_core","vllm::qwen_gdn_attention_core_fused_norm_packed","vllm::sparse_attn_indexer","vllm::ple_mmap_lookup_ids"]'
