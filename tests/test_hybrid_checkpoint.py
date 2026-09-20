@@ -71,6 +71,7 @@ class HybridCheckpointTests(unittest.TestCase):
                 json.dumps({"weight_map": overlay_map})
             )
             (base / "model-00001.safetensors").write_bytes(b"x")
+            (overlay / "model-bf16.safetensors").write_bytes(b"x")
 
             result = subprocess.run(
                 [
