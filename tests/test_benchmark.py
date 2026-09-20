@@ -100,7 +100,12 @@ vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 4
     def test_runtime_config_extracts_tuning_controls(self) -> None:
         config = {
             "Image": "vllm-nv-mixed:v2",
-            "Env": ["VLLM_QSA_DET_TOPK=1", "VLLM_QSA_EXACT_TOPK=0"],
+            "Env": [
+                "VLLM_QSA_DET_TOPK=1",
+                "VLLM_QSA_EXACT_TOPK=0",
+                "QWEN38_GB10_FLA_FIX=1",
+                "QWEN38_MAMBA_STATE_FIX=1",
+            ],
             "Cmd": [
                 "/model",
                 "--served-model-name", "qwen3.8-flash-next",
@@ -126,6 +131,8 @@ vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 4
         self.assertFalse(result["async_scheduling"])
         self.assertEqual(result["qsa_det_topk"], "1")
         self.assertEqual(result["qsa_exact_topk"], "0")
+        self.assertEqual(result["gb10_fla_fix"], "1")
+        self.assertEqual(result["mamba_state_fix"], "1")
         self.assertEqual(
             result["speculative_config"],
             {

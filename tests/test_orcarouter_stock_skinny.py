@@ -26,6 +26,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "SKINNY-NOSPEC  skinny-GEMM image + no speculative decoding",
             "SKINNY-DET     skinny-GEMM image + deterministic QSA top-k + MTP k=2",
             "SKINNY-EXACT   skinny-GEMM image + exact torch.topk QSA + MTP k=2",
+            "STABLE-CANDIDATE skinny + exact QSA + GB10 FLA race fix + guarded Mamba state copy",
             "MODEL_PROFILE=orcarouter",
             "NSPEC=2",
             "MAXLEN=262144",
@@ -36,7 +37,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             "AUTOTUNE=0",
             "SPEC=mtp except *-NOSPEC cases",
             "QSA_DET_TOPK=1 only for SKINNY-DET",
-            "QSA_EXACT_TOPK=1 only for SKINNY-EXACT",
+            "QSA_EXACT_TOPK=1 for SKINNY-EXACT and STABLE-CANDIDATE",
         ):
             self.assertIn(text, result.stdout)
 
@@ -75,6 +76,18 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
         self.assertIn('QSA_EXACT_TOPK="${QSA_EXACT_VALUE}"', script)
         self.assertIn('vllm-skinny-qsa-exact:v1', script)
 
+    def test_stability_candidate_keeps_exact_qsa_and_adds_correctness_image(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.stable-candidate").read_text(encoding="utf-8")
+        vendor = (ROOT / "scripts" / "vendor" / "mamba_utils_guarded.py").read_text(encoding="utf-8")
+        self.assertIn('STABLE-CANDIDATE)', script)
+        self.assertIn('IMAGE="${STABLE_CANDIDATE_IMAGE}"', script)
+        self.assertIn('QSA_EXACT_VALUE=1', script)
+        self.assertIn("spark-fla-warps", dockerfile)
+        self.assertIn("QWEN38_GB10_FLA_FIX=1", dockerfile)
+        self.assertIn("QWEN38_MAMBA_STATE_FIX=1", dockerfile)
+        self.assertIn("5be66376e8beaf96655f2d5682c82d538a970e66", vendor)
+
     def test_nospec_cases_disable_speculation_without_changing_image(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('STOCK-NOSPEC)', script)
@@ -100,7 +113,7 @@ class OrcaRouterStockSkinnyExperimentTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 2)
-        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, SKINNY-DET, or SKINNY-EXACT", result.stderr)
+        self.assertIn("case must be STOCK, STOCK-NOSPEC, SKINNY, SKINNY-NOSPEC, SKINNY-DET, SKINNY-EXACT, or STABLE-CANDIDATE", result.stderr)
 
 
 if __name__ == "__main__":

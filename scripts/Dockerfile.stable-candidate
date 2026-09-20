@@ -1,0 +1,38 @@
+# OrcaRouter stability candidate for DGX Spark / GB10.
+#
+# Base: exact-QSA experiment image.
+# Adds only two always-on correctness fixes used by current DGX Spark recipes:
+#   1) GB10 FLA shared-memory gate + num_warps=2 tl.dot race workaround.
+#   2) vLLM Mamba state-copy race fix + bounds guard.
+#
+# Build:
+#   docker build -t vllm-skinny-stable-candidate:v1 \
+#     -f scripts/Dockerfile.stable-candidate scripts/
+FROM vllm-skinny-qsa-exact:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG FLA_UTILS=${SP}/vllm/third_party/flash_linear_attention/ops/utils.py
+ARG FLA_CDH=${SP}/vllm/third_party/flash_linear_attention/ops/chunk_delta_h.py
+ARG MU=${SP}/vllm/v1/worker/mamba_utils.py
+
+RUN sed -i 's|DEFAULT = 102400|DEFAULT = 101376  # spark-fla-shmem: GB10 99KiB, big GDN tiles fit|' ${FLA_UTILS} \
+ && grep -q "spark-fla-shmem" ${FLA_UTILS} \
+ && sed -i 's|for num_warps in \[2, 4\]|for num_warps in [2]  # spark-fla-warps: fla#953 Blackwell tl.dot race|' ${FLA_CDH} \
+ && grep -q "spark-fla-warps" ${FLA_CDH}
+
+RUN cp ${MU} ${MU}.orig
+COPY vendor/mamba_utils_guarded.py ${MU}
+RUN python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+assert "guard_hits_ptr" in s
+assert "TEMPORAL_TILES" in s
+print("guarded Mamba state-copy implementation installed")
+PY
+
+ENV QWEN38_GB10_FLA_FIX=1 \
+    QWEN38_MAMBA_STATE_FIX=1
+
+LABEL qwen38.stability-candidate="fla+mamba+exact-qsa"

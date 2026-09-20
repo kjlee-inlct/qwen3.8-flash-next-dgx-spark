@@ -413,6 +413,59 @@ sudo ./scripts/manage-service.sh create \
 ```
 
 
+## OrcaRouter stability candidate
+
+After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
+greedy-output non-determinism, the next stability candidate combines the exact QSA
+selection path with two correctness fixes that current DGX Spark recipes apply
+unconditionally:
+
+- GB10 Flash Linear Attention shared-memory/num-warps workaround, including the
+  Blackwell `tl.dot` race workaround;
+- guarded Mamba state-copy implementation containing the vLLM overlapping-copy race
+  fix plus bounds checks.
+
+This is still an experiment, not the installer default.
+
+Build it on top of the existing exact-QSA image:
+
+```bash
+docker build -t vllm-skinny-stable-candidate:v1 \
+  -f scripts/Dockerfile.stable-candidate scripts/
+```
+
+Run it with the managed runtime stopped:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh start STABLE-CANDIDATE
+
+./scripts/wait-ready.sh \
+  --container qwen38-orca-stable-candidate \
+  --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Then run the 1024-token correctness gate first:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-stable-candidate-det-1024.json
+```
+
+The benchmark metadata must show:
+
+```json
+"qsa_exact_topk": "1",
+"gb10_fla_fix": "1",
+"mamba_state_fix": "1"
+```
+
+Only if the 1024 gate passes should the wider QSA determinism sweep and decode
+benchmark be run. Restore the canonical runtime through the managed service path after
+the experiment.
+
 ## QSA determinism diagnostic
 
 Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
