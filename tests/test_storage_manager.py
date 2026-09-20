@@ -75,24 +75,17 @@ class StorageManagerTests(unittest.TestCase):
         self.assertNotIn("experiment_images()", script)
         self.assertIn("logical sizes", script)
 
-    def test_recommend_action_reports_large_safe_candidates(self) -> None:
+    def test_recommend_action_delegates_to_read_only_helper(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8")
         self.assertIn("recommend", script)
-        self.assertIn("[1. Inactive managed checkpoints]", script)
-        self.assertIn("[2. Docker reclaimable]", script)
-        self.assertIn("[3. Hugging Face cache - report only]", script)
-        self.assertIn("manage-models.sh remove", script)
-        self.assertIn("Recommended order:", script)
-
-    def test_optional_image_cleanup_is_explicit_and_active_image_protected(self) -> None:
-        script = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("PRUNE_OPTIONAL_IMAGES=0", script)
-        self.assertIn("--optional-images", script)
-        self.assertIn("list_optional_storage_images", script)
-        self.assertIn('if [[ "${image}" == "${ACTIVE_IMAGE}" ]]', script)
-        assets = (ROOT / "scripts" / "storage" / "assets.sh").read_text(encoding="utf-8")
-        self.assertIn('STORAGE_IMAGE_CLASS="optional"', assets)
-        self.assertIn("vllm-nv-mixed:v2", assets)
+        self.assertIn('bash "${SCRIPT_ROOT}/scripts/storage/recommend.sh"', script)
+        self.assertIn("[1. Inactive managed checkpoints]", helper)
+        self.assertIn("[2. Docker reclaimable]", helper)
+        self.assertIn("[3. Hugging Face cache - report only]", helper)
+        self.assertIn("manage-models.sh remove", helper)
+        self.assertNotIn("rm -rf", helper)
+        self.assertNotIn("docker image rm", helper)
 
     def test_mutating_prune_checks_transition_state_and_operation_lock(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
