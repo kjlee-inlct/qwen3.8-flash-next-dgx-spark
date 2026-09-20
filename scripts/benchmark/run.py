@@ -99,6 +99,8 @@ def run_determinism(
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0,
+                "top_p": 1.0,
+                "seed": 0,
                 "max_tokens": output_tokens,
                 "chat_template_kwargs": {"enable_thinking": False},
             },
@@ -126,6 +128,12 @@ def run_determinism(
     all_equal = len(set(hashes)) == 1
     return {
         "status": "pass" if all_equal else "fail",
+        "sampling_controls": {
+            "temperature": 0,
+            "top_p": 1.0,
+            "seed": 0,
+            "thinking": False,
+        },
         "all_equal": all_equal,
         "unique_hashes": len(set(hashes)),
         "requested_prompt_tokens": prompt_tokens,

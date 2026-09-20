@@ -496,3 +496,8 @@ field, so A/B/C/D results remain self-describing.
 ## Reusable operator helpers
 
 Long model boots should use `./scripts/wait-ready.sh` rather than copied polling loops. Model inventory and stale checkpoint cleanup should use `./scripts/manage-models.sh`; the command refuses to delete the active installation model.
+
+
+## Determinism sampling controls
+
+Determinism requests explicitly pin `temperature=0`, `top_p=1.0`, `seed=0`, and disable thinking. The report records these controls so a failure cannot be attributed to an implicit sampler default.
