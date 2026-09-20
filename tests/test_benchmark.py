@@ -214,6 +214,13 @@ class BenchmarkRunnerTests(unittest.TestCase):
         self.assertNotEqual(first, other)
         self.assertEqual(len(first), 64)
 
+    def test_determinism_sampling_controls_are_explicit(self) -> None:
+        run_py = (BENCH / "run.py").read_text(encoding="utf-8")
+        self.assertIn('"temperature": 0', run_py)
+        self.assertIn('"top_p": 1.0', run_py)
+        self.assertIn('"seed": 0', run_py)
+        self.assertIn('"thinking": False', run_py)
+
     def test_determinism_workload_passes_only_for_identical_outputs(self) -> None:
         same = {
             "choices": [{"message": {"content": "stable"}}],
