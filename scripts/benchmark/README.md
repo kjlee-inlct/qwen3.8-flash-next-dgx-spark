@@ -550,14 +550,14 @@ Stop the running experiment first, then inspect the storage plan:
 ```bash
 ./scripts/runtime/orcarouter-v029.sh stop --profile mazinb
 
-./scripts/model/prepare-hybrid-checkpoint.sh plan
+bash scripts/model/prepare-hybrid-checkpoint.sh plan
 ```
 
 The plan must report exactly 96 residual modules and shows the number/size of base
 shards that must be rewritten. Build only after checking free disk space:
 
 ```bash
-./scripts/model/prepare-hybrid-checkpoint.sh build
+bash scripts/model/prepare-hybrid-checkpoint.sh build
 ```
 
 The build runs inside `vllm-orcarouter-v029:v1`; no host torch, safetensors, or
