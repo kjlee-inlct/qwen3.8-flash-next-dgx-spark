@@ -7,12 +7,14 @@ source "${SCRIPT_DIR}/model-profiles.sh"
 
 CHECK_ONLY=0
 QUIET=0
+ALLOW_CANDIDATE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) CHECK_ONLY=1 ;;
+    --candidate) ALLOW_CANDIDATE=1 ;;
     -q|--quiet) QUIET=1 ;;
     -h|--help)
-      printf 'Usage: [MODEL_PROFILE=orcarouter|nvidia] ./scripts/download-weights.sh [--check] [--quiet]\n'
+      printf 'Usage: [MODEL_PROFILE=PROFILE] ./scripts/download-weights.sh [--candidate] [--check] [--quiet]\n'
       printf 'Interactive downloads show per-file and overall progress by default.\n'
       exit 0 ;;
     *) printf 'FATAL: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -29,7 +31,11 @@ expand_user_path() {
 }
 
 PROFILE="${MODEL_PROFILE:-orcarouter}"
-load_model_profile "${PROFILE}" || exit $?
+if [[ "${ALLOW_CANDIDATE}" == 1 ]]; then
+  load_download_profile "${PROFILE}" || exit $?
+else
+  load_model_profile "${PROFILE}" || exit $?
+fi
 REPO="${REPO:-${PROFILE_REPO}}"; REVISION="${REVISION:-${PROFILE_REVISION}}"
 DEST="${DEST:-${MODELS_DIR:-$HOME/models}/$(basename "${PROFILE_MODEL_DIR}")}"; REQUIRE_TOKEN="${PROFILE_GATED}"
 DEST="$(realpath -m -- "$(expand_user_path "${DEST}")")"
