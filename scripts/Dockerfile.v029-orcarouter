@@ -1,0 +1,55 @@
+# OrcaRouter / DGX Spark experiment on the official vLLM v0.29 release line.
+#
+# Goal: isolate preview-runtime effects while keeping the OrcaRouter checkpoint.
+# This image intentionally includes only what is required for this checkpoint to fit
+# and for the existing determinism investigation:
+#   - PLE mmap for the 51B n-gram table
+#   - GB10 FLA shared-memory + num_warps workaround
+#   - exact QSA top-k fallback
+#
+# It intentionally excludes hybrid quantization, prefix-cache fixes, draft-vocab
+# reduction, tool-template patches, and other performance options.
+FROM vllm/vllm-openai:v0.29.0
+
+LABEL qwen38.base="v0.29-orcarouter"
+LABEL qwen38.stability-candidate="v0.29+ple-mmap+exact-qsa+fla"
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG PKG=${SP}/vllm/models/qwen4_exp/nvidia
+ARG PLE=${PKG}/ple_layer.py
+ARG FLA_UTILS=${SP}/vllm/third_party/flash_linear_attention/ops/utils.py
+ARG FLA_CDH=${SP}/vllm/third_party/flash_linear_attention/ops/chunk_delta_h.py
+
+COPY vendor/vllm_ple_mmap.py ${SP}/vllm_ple_mmap.py
+RUN cp ${PLE} ${PLE}.orig \
+ && printf '\n\n# qwen38-spark: opt-in PLE mmap for v0.29\nfrom vllm_ple_mmap import apply as _ple_mmap_apply\n_ple_mmap_apply(Qwen4ExpNGramEmbedding)\n' >> ${PLE} \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ple_layer.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+assert "_ple_mmap_apply(Qwen4ExpNGramEmbedding)" in s
+print("v0.29 PLE mmap hook installed")
+PY
+
+RUN sed -i 's|DEFAULT = 102400|DEFAULT = 101376  # spark-fla-shmem: GB10 99KiB|' ${FLA_UTILS} \
+ && grep -q "spark-fla-shmem" ${FLA_UTILS} \
+ && sed -i 's|for num_warps in \[2, 4\]|for num_warps in [2]  # spark-fla-warps: Blackwell tl.dot race|' ${FLA_CDH} \
+ && grep -q "spark-fla-warps" ${FLA_CDH}
+
+COPY patch-qsa-exact-topk.py /tmp/patch-qsa-exact-topk.py
+RUN python3 /tmp/patch-qsa-exact-topk.py ${PKG}/ops/qsa.py \
+ && rm /tmp/patch-qsa-exact-topk.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/qsa.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+assert "VLLM_QSA_EXACT_TOPK" in s
+assert "_qsa_exact_topk" in s
+print("v0.29 exact QSA path installed")
+PY
+
+ENV QWEN38_VLLM_BASE=v0.29 \
+    QWEN38_GB10_FLA_FIX=1 \
+    QWEN38_PLE_MMAP=1
