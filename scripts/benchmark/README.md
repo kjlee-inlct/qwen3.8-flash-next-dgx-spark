@@ -476,6 +476,8 @@ The v0.29 experiment is deliberately minimal:
 
 - OrcaRouter checkpoint from the active install manifest;
 - vLLM `v0.29.0`;
+- compatibility backport for newer checkpoints that use the explicit
+  `qwen_sparse_attention` layer type;
 - PLE mmap so the large n-gram table does not have to remain resident in unified RAM;
 - exact QSA top-k;
 - GB10 FLA shared-memory/num-warps workaround;
