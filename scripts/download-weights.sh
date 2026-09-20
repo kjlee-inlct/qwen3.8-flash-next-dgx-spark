@@ -60,7 +60,9 @@ API_URL="https://huggingface.co/api/models/${REPO}/revision/${REVISION}?blobs=tr
 BASE_URL="https://huggingface.co/${REPO}/resolve/${REVISION}"
 
 metadata_file="$(mktemp)"
-trap 'rm -f "${metadata_file}"' EXIT
+missing_names_file="$(mktemp)"
+missing_manifest_file="$(mktemp)"
+trap 'rm -f "${metadata_file}" "${missing_names_file}" "${missing_manifest_file}"' EXIT
 http_code="$(curl -sS -L -o "${metadata_file}" -w '%{http_code}' "${AUTH_ARGS[@]}" "${API_URL}" || true)"
 if [[ "${http_code}" != 200 ]]; then
   printf 'FATAL: Hugging Face metadata request returned HTTP %s.\n' "${http_code}" >&2
@@ -137,36 +139,100 @@ verify() {
   [[ -f "${path}" && "$(stat -c %s -- "${path}")" == "${size}" ]] || return 1
   [[ "${sha}" == - || "$(sha256sum -- "${path}" | cut -d' ' -f1)" == "${sha}" ]]
 }
+
 printf 'Checkpoint download\n  repository : %s\n  revision   : %s\n  destination: %s\n' "${REPO}" "${resolved_revision}" "${DEST}"
-fail=0
+
 file_count="$(printf '%s\n' "${manifest}" | awk 'NF {count++} END {print count+0}')"
 file_index=0
 completed_bytes=0
-curl_progress=(--no-progress-meter)
-if [[ "${QUIET}" == 0 && -t 2 ]]; then curl_progress=(--progress-bar); fi
+missing_count=0
+: >"${missing_names_file}"
+: >"${missing_manifest_file}"
+
 while IFS=$'\t' read -r name size sha; do
   [[ -n "${name}" ]] || continue
   file_index=$((file_index + 1))
-  output="${DEST}/${name}"; mkdir -p "$(dirname -- "${output}")"
+  output="${DEST}/${name}"
+  mkdir -p "$(dirname -- "${output}")"
   overall_pct="$(awk -v done="${completed_bytes}" -v total="${required_bytes}" 'BEGIN {printf "%.1f", total ? done*100/total : 100}')"
+
   if verify "${output}" "${size}" "${sha}"; then
-    printf '  [%d/%d | %s%%] ok   %s\n' "${file_index}" "${file_count}" "${overall_pct}" "${name}"
+    printf '  [%d/%d | %s%%] keep %s\n' "${file_index}" "${file_count}" "${overall_pct}" "${name}"
     completed_bytes=$((completed_bytes + size))
     continue
   fi
-  if [[ -f "${output}" && "$(stat -c %s -- "${output}")" == "${size}" ]]; then
-    printf '  BAD   %s (SHA-256 mismatch; refetching)\n' "${name}" >&2; rm -f -- "${output}"
-  fi
-  printf '  [%d/%d | %s%%] get  %s (%.2f GiB)\n' "${file_index}" "${file_count}" \
-    "${overall_pct}" "${name}" "$(awk -v n="${size}" 'BEGIN {print n/1073741824}')"
-  curl -fL -C - --retry 5 --retry-delay 5 --retry-all-errors "${curl_progress[@]}" \
-    "${AUTH_ARGS[@]}" -o "${output}" "${BASE_URL}/${name}" || { printf '  FAIL  %s\n' "${name}" >&2; fail=1; continue; }
-  if verify "${output}" "${size}" "${sha}"; then
-    completed_bytes=$((completed_bytes + size))
+
+  if [[ -f "${output}" ]]; then
+    printf '  [%d/%d | %s%%] redo %s (partial or failed verification)\n'       "${file_index}" "${file_count}" "${overall_pct}" "${name}"
+    rm -f -- "${output}"
   else
-    printf '  FAIL  %s (verification failed)\n' "${name}" >&2; fail=1
+    printf '  [%d/%d | %s%%] need %s\n' "${file_index}" "${file_count}" "${overall_pct}" "${name}"
   fi
+  printf '%s\n' "${name}" >>"${missing_names_file}"
+  printf '%s\t%s\t%s\n' "${name}" "${size}" "${sha}" >>"${missing_manifest_file}"
+  missing_count=$((missing_count + 1))
 done <<< "${manifest}"
+
+download_missing_with_curl() {
+  local name size sha output
+  local curl_progress=(--no-progress-meter)
+  if [[ "${QUIET}" == 0 && -t 2 ]]; then curl_progress=(--progress-bar); fi
+  while IFS=$'\t' read -r name size sha; do
+    [[ -n "${name}" ]] || continue
+    output="${DEST}/${name}"
+    mkdir -p "$(dirname -- "${output}")"
+    printf '  curl fallback: %s (%.2f GiB)\n' "${name}" "$(awk -v n="${size}" 'BEGIN {print n/1073741824}')"
+    curl -fL -C - --retry 5 --retry-delay 5 --retry-all-errors "${curl_progress[@]}"       "${AUTH_ARGS[@]}" -o "${output}" "${BASE_URL}/${name}" || return 1
+  done <"${missing_manifest_file}"
+}
+
+download_missing_with_container() {
+  local image="${HF_DOWNLOADER_IMAGE:-vllm-orcarouter-v029:v1}"
+  local workers="${HF_DOWNLOAD_MAX_WORKERS:-8}"
+  local xet_hp="${HF_XET_HIGH_PERFORMANCE:-1}"
+  local helper="${SCRIPT_DIR}/lib/hf_snapshot_download.py"
+
+  docker image inspect "${image}" >/dev/null 2>&1 || return 2
+  docker run --pull=never --rm --entrypoint python3 "${image}"     -c 'import huggingface_hub' >/dev/null 2>&1 || return 3
+
+  printf 'Using containerized Hugging Face downloader\n'
+  printf '  image       : %s\n' "${image}"
+  printf '  workers     : %s\n' "${workers}"
+  printf '  xet highperf: %s\n' "${xet_hp}"
+  printf '  missing     : %s files\n' "${missing_count}"
+
+  docker run --pull=never --rm     --user "$(id -u):$(id -g)"     --entrypoint python3     -e HOME=/tmp     -e HF_HOME=/tmp/hf     -e HF_TOKEN="${TOKEN}"     -e HF_HUB_DISABLE_TELEMETRY=1     -e HF_HUB_DISABLE_IMPLICIT_TOKEN=1     -e HF_XET_HIGH_PERFORMANCE="${xet_hp}"     -e HF_DOWNLOAD_MAX_WORKERS="${workers}"     -v "${DEST}:/download"     -v "${missing_names_file}:/tmp/qwen38-missing.txt:ro"     -v "${helper}:/opt/qwen38/hf_snapshot_download.py:ro"     "${image}"     /opt/qwen38/hf_snapshot_download.py     "${REPO}" "${resolved_revision}" /download /tmp/qwen38-missing.txt
+}
+
+if (( missing_count > 0 )); then
+  if ! command -v docker >/dev/null 2>&1; then
+    printf 'Container downloader unavailable: docker command not found; using curl fallback.\n' >&2
+    download_missing_with_curl || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
+  else
+    set +e
+    download_missing_with_container
+    download_rc=$?
+    set -e
+    if [[ "${download_rc}" -ne 0 ]]; then
+      printf 'Container downloader unavailable/failed (rc=%s); using curl fallback.\n' "${download_rc}" >&2
+      download_missing_with_curl || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
+    fi
+  fi
+else
+  printf 'All files already verified; no transfer needed.\n'
+fi
+
+fail=0
+while IFS=$'\t' read -r name size sha; do
+  [[ -n "${name}" ]] || continue
+  output="${DEST}/${name}"
+  if verify "${output}" "${size}" "${sha}"; then
+    printf '  verified %s\n' "${name}"
+  else
+    printf '  FAIL  %s (verification failed after transfer)\n' "${name}" >&2
+    fail=1
+  fi
+done <"${missing_manifest_file}"
 [[ "${fail}" == 0 ]] || { printf 'FINISHED WITH ERRORS -- rerun to resume.\n' >&2; exit 6; }
 
 write_model_manifest complete
