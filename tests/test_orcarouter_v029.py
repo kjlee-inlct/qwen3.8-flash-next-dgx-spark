@@ -54,6 +54,17 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("5be66376e8beaf96655f2d5682c82d538a970e66", ple)
         self.assertIn("Qwen4ExpNGramEmbedding", ple)
 
+    def test_v029_layer_type_patch_matches_current_upstream_behavior(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-qsa-layer-type.py").read_text(encoding="utf-8")
+        self.assertIn('("full_attention", "qwen_sparse_attention")', patch)
+        self.assertIn('layer_type == "qwen_sparse_attention"', patch)
+        self.assertIn("expected v0.29 decoder block not found", patch)
+
+    def test_start_message_does_not_claim_readiness(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("container started; readiness pending", script)
+        self.assertNotIn("started %s (vLLM v0.29", script)
+
     def test_runtime_marks_v029_and_ple_mmap_for_benchmark_evidence(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("QWEN38_VLLM_BASE=v0.29", script)
