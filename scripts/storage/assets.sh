@@ -14,7 +14,8 @@ list_storage_images() {
     vllm-nv-mixed:v2 \
     vllm-skinny-qsa-det:v1 \
     vllm-skinny-qsa-exact:v1 \
-    vllm-skinny-stable-candidate:v1
+    vllm-skinny-stable-candidate:v1 \
+    vllm-orcarouter-v029:v1
 }
 
 describe_storage_image() {
@@ -48,6 +49,11 @@ describe_storage_image() {
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=1
       STORAGE_IMAGE_DESCRIPTION="OrcaRouter correctness candidate: exact QSA + GB10 FLA + guarded Mamba"
+      ;;
+    vllm-orcarouter-v029:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="OrcaRouter on official vLLM v0.29 with PLE mmap"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
