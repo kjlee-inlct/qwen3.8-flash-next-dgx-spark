@@ -47,9 +47,9 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('MODEL_DIR="${HYBRID_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-residual-bf16}"', script)
         self.assertIn('BASE_MODEL_DIR="${MODEL_DIR}"', script)
         self.assertIn('"${BASE_MODEL_DIR}:/base-model:ro"', script)
-        self.assertIn('data.get("variant") == "residual-bf16"', script)
-        self.assertIn('data.get("residual_modules") == 96', script)
-        self.assertIn('data.get("remaining_fp8_group0_targets") == 204', script)
+        self.assertIn('("residual-bf16", 96, 204)', script)
+        self.assertIn('selected = data.get("selected_modules", data.get("residual_modules"))', script)
+        self.assertIn('data.get("remaining_fp8_group0_targets") == remaining', script)
 
     def test_runtime_supports_full_group0_hybrid_without_installing_it(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
