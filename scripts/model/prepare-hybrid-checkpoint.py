@@ -236,7 +236,15 @@ def build(
     if output.exists() and any(output.iterdir()):
         if not force:
             raise HybridError(f"output is not empty: {output}; use --force to rebuild it")
-        shutil.rmtree(output)
+        # The normal build runs with output bind-mounted at /output. Removing the
+        # mount root itself can fail with EBUSY, so clear only its contents.
+        for child in output.iterdir():
+            if child.is_symlink() or child.is_file():
+                child.unlink()
+            elif child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
     output.mkdir(parents=True, exist_ok=True)
 
     free = shutil.disk_usage(output).free

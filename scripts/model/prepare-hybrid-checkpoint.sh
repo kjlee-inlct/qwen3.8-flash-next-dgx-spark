@@ -6,6 +6,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env"
 STATE_PARSER="${ROOT}/scripts/lib/state_file.py"
 TOOL="${ROOT}/scripts/model/prepare-hybrid-checkpoint.py"
+VARIANT="${HYBRID_VARIANT:-residual-bf16}"
 OVERLAY="${HYBRID_OVERLAY_DIR:-$HOME/models/qwen3.8-flash-next-mazinb}"
 OUTPUT="${HYBRID_OUTPUT_DIR:-$HOME/models/qwen3.8-hybrid-residual-bf16}"
 IMAGE="${HYBRID_BUILDER_IMAGE:-vllm-orcarouter-v029:v1}"
@@ -34,6 +35,7 @@ Usage:
   bash scripts/model/prepare-hybrid-checkpoint.sh build [--force]
 
 Environment overrides:
+  HYBRID_VARIANT       residual-bf16 (default) or group0-bf16
   HYBRID_OVERLAY_DIR   mazinb checkpoint directory
   HYBRID_OUTPUT_DIR    hybrid output directory
   HYBRID_BUILDER_IMAGE image containing torch+safetensors
@@ -82,12 +84,17 @@ port_owner() {
   docker ps --filter publish=8888 --format '{{.Names}}' 2>/dev/null | paste -sd, -
 }
 
+case "${VARIANT}" in
+  residual-bf16|group0-bf16) ;;
+  *) printf 'ERROR: HYBRID_VARIANT must be residual-bf16 or group0-bf16\n' >&2; exit 2 ;;
+esac
+
 load_install
 OVERLAY_REVISION="$(overlay_revision)"
 
 case "${ACTION}" in
   plan)
-    exec python3 "${TOOL}" plan       --base "${BASE}"       --overlay "${OVERLAY}"       --output "${OUTPUT}"       --base-revision "${BASE_REVISION}"       --overlay-revision "${OVERLAY_REVISION}"
+    exec python3 "${TOOL}" plan       --variant "${VARIANT}"       --base "${BASE}"       --overlay "${OVERLAY}"       --output "${OUTPUT}"       --base-revision "${BASE_REVISION}"       --overlay-revision "${OVERLAY_REVISION}"
     ;;
   build)
     owner="$(port_owner)"
@@ -111,6 +118,7 @@ case "${ACTION}" in
       --entrypoint python3
       "${IMAGE}"
       /tool.py build
+      --variant "${VARIANT}"
       --base /base
       --overlay /overlay
       --output /output

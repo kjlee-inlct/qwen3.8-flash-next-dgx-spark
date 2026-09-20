@@ -623,6 +623,10 @@ the full group-0 hybrid only after stopping the residual runtime:
 bash scripts/model/prepare-group0-hybrid-checkpoint.sh plan
 bash scripts/model/prepare-group0-hybrid-checkpoint.sh build
 
+# If an older build created a residual-bf16 manifest in the group0 output path,
+# update to a fixed revision and rebuild the same path explicitly:
+# bash scripts/model/prepare-group0-hybrid-checkpoint.sh build --force
+
 ./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-group0
 ./scripts/runtime/orcarouter-v029.sh start --profile hybrid-group0
 
