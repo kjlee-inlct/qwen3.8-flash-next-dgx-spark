@@ -387,7 +387,7 @@ prune_storage() {
 
 case "${ACTION}" in
   status) print_status ;;
-  recommend) "${SCRIPT_ROOT}/scripts/storage/recommend.sh" ;;
+  recommend) bash "${SCRIPT_ROOT}/scripts/storage/recommend.sh" ;;
   plan) print_plan ;;
   prune) prune_storage ;;
 esac
