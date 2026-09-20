@@ -13,7 +13,8 @@ list_storage_images() {
     vllm/vllm-openai:qwen38-flash-next-arm64-cu130 \
     vllm-nv-mixed:v2 \
     vllm-skinny-qsa-det:v1 \
-    vllm-skinny-qsa-exact:v1
+    vllm-skinny-qsa-exact:v1 \
+    vllm-skinny-stable-candidate:v1
 }
 
 describe_storage_image() {
@@ -42,6 +43,11 @@ describe_storage_image() {
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=1
       STORAGE_IMAGE_DESCRIPTION="Exact QSA top-k experiment"
+      ;;
+    vllm-skinny-stable-candidate:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="OrcaRouter correctness candidate: exact QSA + GB10 FLA + guarded Mamba"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
