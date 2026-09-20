@@ -16,7 +16,7 @@ PROFILE_CASE="orcarouter"
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, or hybrid-residual\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, or hybrid-group0\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -26,19 +26,20 @@ case "${PROFILE_CASE}" in
   orcarouter) NAME="qwen38-orca-v029" ;;
   mazinb) NAME="qwen38-mazinb-v029" ;;
   hybrid-residual) NAME="qwen38-hybrid-residual-v029" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, or hybrid-residual\n' >&2; exit 2 ;;
+  hybrid-group0) NAME="qwen38-hybrid-group0-v029" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, or hybrid-group0\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
 
 Experiment controls:
-  checkpoint        installed OrcaRouter, downloaded mazinb, or local residual-BF16 hybrid
+  checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
   base image        vllm/vllm-openai:v0.29.0
   PLE               mmap from /model, no CPU-offload worker
   QSA               exact torch.topk
@@ -90,14 +91,21 @@ load_source() {
     return 0
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-residual ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
-    MODEL_PROFILE="hybrid-residual"
-    MODEL_DIR="${HYBRID_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-residual-bf16}"
-    SERVED_NAME="hybrid-residual/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-    MODEL_REPO="local/orcarouter-mazinb-residual-bf16"
+    if [[ "${PROFILE_CASE}" == hybrid-group0 ]]; then
+      MODEL_PROFILE="hybrid-group0"
+      MODEL_DIR="${HYBRID_GROUP0_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-group0-bf16}"
+      SERVED_NAME="hybrid-group0/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/orcarouter-mazinb-group0-bf16"
+    else
+      MODEL_PROFILE="hybrid-residual"
+      MODEL_DIR="${HYBRID_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-residual-bf16}"
+      SERVED_NAME="hybrid-residual/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/orcarouter-mazinb-residual-bf16"
+    fi
     MODEL_REVISION="hybrid"
     return 0
   fi
@@ -127,24 +135,31 @@ PY
     return
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-residual ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 ]]; then
     local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
     [[ -r "${manifest}" ]] || return 1
-    python3 - "${manifest}" "${BASE_MODEL_REVISION}" <<'PY' >/dev/null
+    python3 - "${manifest}" "${BASE_MODEL_REVISION}" "${PROFILE_CASE}" <<'PY' >/dev/null
 import json, sys
-path, expected_base = sys.argv[1:]
+path, expected_base, profile = sys.argv[1:]
 data = json.load(open(path, encoding="utf-8"))
+expected = (
+    ("group0-bf16", 300, 0)
+    if profile == "hybrid-group0"
+    else ("residual-bf16", 96, 204)
+)
+variant, count, remaining = expected
+selected = data.get("selected_modules", data.get("residual_modules"))
 ok = (
     data.get("status") == "complete"
-    and data.get("variant") == "residual-bf16"
+    and data.get("variant") == variant
     and data.get("base_revision") == expected_base
     and bool(data.get("overlay_revision"))
-    and data.get("residual_modules") == 96
-    and data.get("fp8_targets_removed") == 96
-    and data.get("fp8_scales_removed") == 96
-    and data.get("bf16_weights_overlaid") == 96
+    and selected == count
+    and data.get("fp8_targets_removed") == count
+    and data.get("fp8_scales_removed") == count
+    and data.get("bf16_weights_overlaid") == count
     and data.get("mtp_tensors_changed") == 0
-    and data.get("remaining_fp8_group0_targets") == 204
+    and data.get("remaining_fp8_group0_targets") == remaining
 )
 raise SystemExit(0 if ok else 1)
 PY
@@ -244,7 +259,7 @@ start_runtime() {
   mkdir -p "${HOME}/.cache/vllm-qwen38-v029" "${HOME}/.cache/flashinfer-v029"
 
   extra_mount=()
-  if [[ "${PROFILE_CASE}" == hybrid-residual ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 ]]; then
     [[ -d "${BASE_MODEL_DIR}" ]] || { printf 'ERROR: hybrid base model directory missing: %s\n' "${BASE_MODEL_DIR}" >&2; exit 1; }
     extra_mount=(-v "${BASE_MODEL_DIR}:/base-model:ro")
   fi

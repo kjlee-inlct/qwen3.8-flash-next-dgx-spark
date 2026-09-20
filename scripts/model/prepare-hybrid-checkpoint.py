@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Plan or build the residual-writer BF16 hybrid checkpoint.
+"""Plan or build OrcaRouter/mazinb BF16 hybrid checkpoints.
 
-The hybrid keeps the installed OrcaRouter checkpoint as the base, replaces only
-96 main-model residual-writer FP8 modules with BF16 weights from the mazinb
-candidate, and leaves MTP tensors untouched.
+Two variants are supported:
+- residual-bf16: replace the 96 main-model residual-writer FP8 modules.
+- group0-bf16: replace all 300 main-model FP8 group-0 modules.
 
-Plan mode needs only the Python standard library. Build mode additionally needs
-safetensors + torch and is normally invoked by prepare-hybrid-checkpoint.sh
-inside the existing v0.29 runtime image.
+Both variants leave MTP tensors untouched. Plan mode needs only the Python
+standard library. Build mode additionally needs safetensors + torch and is
+normally invoked by prepare-hybrid-checkpoint.sh inside the existing v0.29
+runtime image.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-VARIANT = "residual-bf16"
+VARIANTS = ("residual-bf16", "group0-bf16")
 BASE_MOUNT = "/base-model"
 RESERVE_BYTES = 20 * 1024**3
 MODULE_PATTERNS = {
@@ -62,13 +63,20 @@ def module_group(name: str) -> str | None:
     return None
 
 
-def target_modules(base_config: dict[str, Any]) -> list[str]:
+def target_modules(base_config: dict[str, Any], variant: str) -> list[str]:
     try:
         targets = base_config["quantization_config"]["config_groups"]["group_0"]["targets"]
     except (KeyError, TypeError) as exc:
         raise HybridError("base config has no compressed-tensors group_0 targets") from exc
     if not isinstance(targets, list) or not all(isinstance(x, str) for x in targets):
         raise HybridError("base group_0 targets are invalid")
+
+    if variant == "group0-bf16":
+        if any(name.startswith("mtp.") for name in targets):
+            raise HybridError("MTP target entered base group_0 target set")
+        if len(targets) != 300:
+            raise HybridError(f"unexpected group_0 target count: {len(targets)}")
+        return list(targets)
 
     selected = [name for name in targets if module_group(name)]
     counts = {group: 0 for group in EXPECTED}
@@ -113,11 +121,11 @@ def validate_tensor_keys(
         raise HybridError("missing expected tensor keys: " + ", ".join(missing[:10]))
 
 
-def inspect(base: Path, overlay: Path) -> dict[str, Any]:
+def inspect(base: Path, overlay: Path, variant: str) -> dict[str, Any]:
     base_config = load_json(base / "config.json")
     base_index = load_json(base / "model.safetensors.index.json")
     overlay_index = load_json(overlay / "model.safetensors.index.json")
-    modules = target_modules(base_config)
+    modules = target_modules(base_config, variant)
     base_map = weight_map(base_index, "base")
     overlay_map = weight_map(overlay_index, "overlay")
     validate_tensor_keys(modules, base_map, overlay_map)
@@ -160,15 +168,21 @@ def gib(value: int) -> float:
     return value / 1024**3
 
 
-def print_plan(base: Path, overlay: Path, output: Path, info: dict[str, Any]) -> None:
+def print_plan(
+    base: Path, overlay: Path, output: Path, info: dict[str, Any], variant: str
+) -> None:
     modules = info["modules"]
     counts = {group: sum(module_group(x) == group for x in modules) for group in EXPECTED}
-    print("Residual BF16 hybrid plan")
-    print(f"  variant          : {VARIANT}")
+    title = "Residual BF16 hybrid plan" if variant == "residual-bf16" else "Full group-0 BF16 hybrid plan"
+    print(title)
+    print(f"  variant          : {variant}")
     print(f"  base             : {base}")
     print(f"  overlay          : {overlay}")
     print(f"  output           : {output}")
-    print(f"  residual modules : {len(modules)} ({counts})")
+    if variant == "residual-bf16":
+        print(f"  residual modules : {len(modules)} ({counts})")
+    else:
+        print(f"  group-0 modules  : {len(modules)}")
     print(f"  FP8 weights      : {len(modules)}")
     print(f"  FP8 scales       : {len(modules)}")
     print(f"  BF16 overlays    : {len(modules)}")
@@ -208,6 +222,7 @@ def build(
     force: bool,
     base_revision: str,
     overlay_revision: str,
+    variant: str,
 ) -> None:
     try:
         import torch
@@ -236,13 +251,16 @@ def build(
     manifest = {
         "schema_version": 1,
         "status": "building",
-        "variant": VARIANT,
+        "variant": variant,
         "base_revision": base_revision,
         "overlay_revision": overlay_revision,
         "base_runtime_mount": BASE_MOUNT,
-        "residual_modules": len(info["modules"]),
+        "selected_modules": len(info["modules"]),
         "affected_shards": info["affected_shards"],
     }
+    if variant == "residual-bf16":
+        # Preserve the original manifest field for backward/runtime compatibility.
+        manifest["residual_modules"] = len(info["modules"])
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     modules = set(info["modules"])
@@ -304,8 +322,11 @@ def build(
     new_config = json.loads(json.dumps(info["base_config"]))
     targets = new_config["quantization_config"]["config_groups"]["group_0"]["targets"]
     new_targets = [name for name in targets if name not in modules]
-    if len(targets) - len(new_targets) != 96:
-        raise HybridError("failed to remove exactly 96 FP8 config targets")
+    expected_removed = len(modules)
+    if len(targets) - len(new_targets) != expected_removed:
+        raise HybridError(
+            f"failed to remove exactly {expected_removed} FP8 config targets"
+        )
     new_config["quantization_config"]["config_groups"]["group_0"]["targets"] = new_targets
     (output / "config.json").write_text(
         json.dumps(new_config, indent=2, sort_keys=True) + "\n",
@@ -324,8 +345,10 @@ def build(
         scale_key = module + ".weight_scale"
         if new_map.pop(scale_key, None) is not None:
             removed_scales += 1
-    if removed_scales != 96:
-        raise HybridError(f"removed {removed_scales} scales, expected 96")
+    if removed_scales != expected_removed:
+        raise HybridError(
+            f"removed {removed_scales} scales, expected {expected_removed}"
+        )
     (output / "model.safetensors.index.json").write_text(
         json.dumps(new_index, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -334,9 +357,9 @@ def build(
     manifest.update(
         {
             "status": "complete",
-            "fp8_targets_removed": 96,
-            "fp8_scales_removed": 96,
-            "bf16_weights_overlaid": 96,
+            "fp8_targets_removed": expected_removed,
+            "fp8_scales_removed": expected_removed,
+            "bf16_weights_overlaid": expected_removed,
             "mtp_tensors_changed": 0,
             "remaining_fp8_group0_targets": len(new_targets),
         }
@@ -344,13 +367,18 @@ def build(
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(
         f"done -> {output} "
-        f"(residual BF16=96, remaining FP8 group_0={len(new_targets)}, MTP changed=0)"
+        f"(BF16 overlays={expected_removed}, remaining FP8 group_0={len(new_targets)}, MTP changed=0)"
     )
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("action", choices=("plan", "build"))
+    result.add_argument(
+        "--variant",
+        choices=VARIANTS,
+        default=os.environ.get("HYBRID_VARIANT", "residual-bf16"),
+    )
     result.add_argument("--base", type=Path, required=True)
     result.add_argument("--overlay", type=Path, required=True)
     result.add_argument("--output", type=Path, required=True)
@@ -363,8 +391,8 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        info = inspect(args.base, args.overlay)
-        print_plan(args.base, args.overlay, args.output, info)
+        info = inspect(args.base, args.overlay, args.variant)
+        print_plan(args.base, args.overlay, args.output, info, args.variant)
         if args.action == "build":
             build(
                 args.base,
@@ -374,6 +402,7 @@ def main() -> int:
                 args.force,
                 args.base_revision,
                 args.overlay_revision,
+                args.variant,
             )
     except HybridError as exc:
         print(f"ERROR: {exc}", file=os.sys.stderr)

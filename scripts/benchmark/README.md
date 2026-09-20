@@ -603,6 +603,63 @@ Interpretation:
 - FAIL: keep the residual BF16 overlay and expand the next hybrid to the remaining
   204 FP8 group-0 modules before moving back to unrelated runtime paths.
 
+Observed on 2026-09-20 with git revision `804c811`:
+
+- the residual hybrid manifest completed with 96 BF16 overlays, 204 FP8 group-0
+  targets remaining, and zero MTP tensors changed;
+- the v0.29 residual hybrid reached API readiness after 712 seconds;
+- the 1024/128 greedy determinism gate failed with 3 unique output hashes across
+  5 runs. Runs 1, 2, and 5 matched; runs 3 and 4 each produced a different hash;
+- therefore the 96 residual-writer FP8 modules are not sufficient to explain or
+  remove the observed non-determinism.
+
+The next isolation step converts all 300 main-model group-0 FP8 modules to the
+corresponding mazinb BF16 weights while still leaving MTP tensors untouched. Build
+the full group-0 hybrid only after stopping the residual runtime:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-residual
+
+bash scripts/model/prepare-group0-hybrid-checkpoint.sh plan
+bash scripts/model/prepare-group0-hybrid-checkpoint.sh build
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-group0
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-group0
+
+./scripts/wait-ready.sh \
+  --container qwen38-hybrid-group0-v029 \
+  --model hybrid-group0/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+The completed group-0 hybrid manifest must report:
+
+```text
+selected_modules=300
+fp8_targets_removed=300
+fp8_scales_removed=300
+bf16_weights_overlaid=300
+mtp_tensors_changed=0
+remaining_fp8_group0_targets=0
+```
+
+Then repeat the same small determinism gate:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-group0/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/hybrid-group0-v029-det-1024.json
+```
+
+Interpret the second isolation gate as follows:
+
+- PASS: the non-deterministic region is inside the 204 FP8 group-0 modules added
+  beyond the residual-writer subset; subdivide those module families next;
+- FAIL: full main-model group-0 BF16 replacement is still insufficient, so keep
+  this result recorded before investigating MTP or other runtime paths.
+
 
 ## OrcaRouter stability candidate
 

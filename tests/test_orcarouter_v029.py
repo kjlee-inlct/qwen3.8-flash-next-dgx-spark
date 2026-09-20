@@ -28,7 +28,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             "MTP               k=2",
             "prefix cache      disabled",
             "KV cache          24 GiB",
-            "orcarouter|mazinb|hybrid-residual",
+            "orcarouter|mazinb|hybrid-residual|hybrid-group0",
         ):
             self.assertIn(text, result.stdout)
 
@@ -47,9 +47,18 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('MODEL_DIR="${HYBRID_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-residual-bf16}"', script)
         self.assertIn('BASE_MODEL_DIR="${MODEL_DIR}"', script)
         self.assertIn('"${BASE_MODEL_DIR}:/base-model:ro"', script)
-        self.assertIn('data.get("variant") == "residual-bf16"', script)
-        self.assertIn('data.get("residual_modules") == 96', script)
-        self.assertIn('data.get("remaining_fp8_group0_targets") == 204', script)
+        self.assertIn('("residual-bf16", 96, 204)', script)
+        self.assertIn('selected = data.get("selected_modules", data.get("residual_modules"))', script)
+        self.assertIn('data.get("remaining_fp8_group0_targets") == remaining', script)
+
+    def test_runtime_supports_full_group0_hybrid_without_installing_it(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('hybrid-group0) NAME="qwen38-hybrid-group0-v029"', script)
+        self.assertIn('HYBRID_GROUP0_MODEL_DIR', script)
+        self.assertIn('qwen3.8-hybrid-group0-bf16', script)
+        self.assertIn('data.get("variant") == variant', script)
+        self.assertIn('("group0-bf16", 300, 0)', script)
+        self.assertIn('selected == count', script)
 
     def test_runtime_never_mutates_managed_lifecycle(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
