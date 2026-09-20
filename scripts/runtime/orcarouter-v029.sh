@@ -129,7 +129,7 @@ start_runtime() {
     return 1
   fi
 
-  printf 'started %s (vLLM v0.29, OrcaRouter, PLE mmap, exact QSA, GB10 FLA fix, MTP k=2)\n' "${NAME}"
+  printf 'container started; readiness pending: %s (vLLM v0.29, OrcaRouter, PLE mmap, exact QSA, GB10 FLA fix, MTP k=2)\n' "${NAME}"
   printf 'wait with: ./scripts/wait-ready.sh --container %s --model %s\n' "${NAME}" "${SERVED_NAME}"
 }
 
