@@ -38,6 +38,36 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("mazinb       candidate", result.stdout)
         self.assertIn("lychee888    candidate", result.stdout)
 
+    def test_mazinb_candidate_has_download_only_metadata(self) -> None:
+        result = subprocess.run(
+            [
+                "bash",
+                "-lc",
+                'source scripts/model-profiles.sh; load_download_profile mazinb; '
+                'printf "%s\n%s\n%s\n%s\n" "$PROFILE_REPO" "$PROFILE_REVISION" "$PROFILE_MODEL_DIR" "$PROFILE_SERVED_NAME"',
+            ],
+            cwd=ROOT,
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
+        self.assertIn("f2c21eb", result.stdout)
+        self.assertIn("qwen3.8-flash-next-mazinb", result.stdout)
+
+    def test_candidate_download_requires_explicit_flag(self) -> None:
+        help_result = subprocess.run(
+            [str(ROOT / "scripts" / "download-weights.sh"), "--help"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertIn("--candidate", help_result.stdout)
+
     def test_candidate_profiles_are_not_installable(self) -> None:
         for profile in ("mazinb", "lychee888"):
             with self.subTest(profile=profile):

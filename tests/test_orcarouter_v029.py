@@ -28,8 +28,18 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             "MTP               k=2",
             "prefix cache      disabled",
             "KV cache          24 GiB",
+            "orcarouter|mazinb",
         ):
             self.assertIn(text, result.stdout)
+
+    def test_runtime_supports_mazinb_without_changing_installability(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('mazinb) NAME="qwen38-mazinb-v029"', script)
+        self.assertIn("load_download_profile mazinb", script)
+        self.assertIn("candidate_manifest_ok()", script)
+        self.assertIn('data.get("status") == "complete"', script)
+        self.assertIn('data.get("repository") == expected_repo', script)
+        self.assertIn("load_manifest || return 1", script)
 
     def test_runtime_never_mutates_managed_lifecycle(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")

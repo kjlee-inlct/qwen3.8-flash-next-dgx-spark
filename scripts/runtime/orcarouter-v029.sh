@@ -7,22 +7,37 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT}/scripts/lib/state_file.py"
+MODEL_REGISTRY="${ROOT}/scripts/model-profiles.sh"
 SERVICE="qwen38-flash-next.service"
 IMAGE="vllm-orcarouter-v029:v1"
-NAME="qwen38-orca-v029"
 PORT=8888
 ACTION="${1:-status}"
+PROFILE_CASE="orcarouter"
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter or mazinb\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    -h|--help) ACTION=help ;;
+    *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+case "${PROFILE_CASE}" in
+  orcarouter) NAME="qwen38-orca-v029" ;;
+  mazinb) NAME="qwen38-mazinb-v029" ;;
+  *) printf 'ERROR: --profile must be orcarouter or mazinb\n' >&2; exit 2 ;;
+esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight
-  ./scripts/runtime/orcarouter-v029.sh start
-  ./scripts/runtime/orcarouter-v029.sh stop
-  ./scripts/runtime/orcarouter-v029.sh status
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb]
 
 Experiment controls:
-  checkpoint        current installed OrcaRouter checkpoint
+  checkpoint        current installed OrcaRouter checkpoint, or downloaded mazinb candidate
   base image        vllm/vllm-openai:v0.29.0
   PLE               mmap from /model, no CPU-offload worker
   QSA               exact torch.topk
@@ -64,6 +79,36 @@ load_manifest() {
   [[ -n "${MODEL_DIR}" && -n "${SERVED_NAME}" ]] || { printf 'ERROR: incomplete OrcaRouter manifest\n' >&2; return 1; }
 }
 
+load_source() {
+  if [[ "${PROFILE_CASE}" == orcarouter ]]; then
+    load_manifest || return 1
+    return 0
+  fi
+
+  [[ -r "${MODEL_REGISTRY}" ]] || { printf 'ERROR: model registry missing: %s\n' "${MODEL_REGISTRY}" >&2; return 1; }
+  # shellcheck source=scripts/model-profiles.sh
+  source "${MODEL_REGISTRY}"
+  load_download_profile mazinb || return 1
+  MODEL_PROFILE="mazinb"
+  MODEL_DIR="${PROFILE_MODEL_DIR}"
+  SERVED_NAME="${PROFILE_SERVED_NAME}"
+  MODEL_REPO="${PROFILE_REPO}"
+  MODEL_REVISION="${PROFILE_REVISION}"
+}
+
+candidate_manifest_ok() {
+  [[ "${PROFILE_CASE}" == mazinb ]] || return 0
+  local manifest="${MODEL_DIR}/.qwen38-model-manifest.json"
+  [[ -r "${manifest}" ]] || return 1
+  python3 - "${manifest}" "${MODEL_REPO}" <<'PY' >/dev/null
+import json, sys
+path, expected_repo = sys.argv[1:]
+data = json.load(open(path, encoding="utf-8"))
+ok = data.get("status") == "complete" and data.get("repository") == expected_repo and bool(data.get("revision"))
+raise SystemExit(0 if ok else 1)
+PY
+}
+
 service_active() {
   command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "${SERVICE}" 2>/dev/null
 }
@@ -75,11 +120,11 @@ container_running() {
 
 preflight() {
   local failures=0
-  load_manifest || return 1
-  printf 'OrcaRouter vLLM v0.29 preflight\n'
+  load_source || return 1
+  printf 'vLLM v0.29 checkpoint preflight (%s)\n' "${PROFILE_CASE}"
   printf '  model repo      : %s\n' "${MODEL_REPO}"
   printf '  model revision  : %s\n' "${MODEL_REVISION}"
-  if [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]]; then
+  if [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] && candidate_manifest_ok; then
     printf '  weights         : ready (%s)\n' "${MODEL_DIR}"
   else
     printf '  weights         : missing (%s)\n' "${MODEL_DIR}"
@@ -106,12 +151,14 @@ preflight() {
 }
 
 start_runtime() {
-  load_manifest
+  load_source
   command -v docker >/dev/null 2>&1 || { printf 'ERROR: docker is required\n' >&2; exit 1; }
   service_active && { printf 'ERROR: %s is active; stop it before this experiment\n' "${SERVICE}" >&2; exit 1; }
   container_running qwen38-flash-next && { printf 'ERROR: canonical runtime is still running\n' >&2; exit 1; }
   docker inspect "${NAME}" >/dev/null 2>&1 && { printf 'ERROR: experiment container already exists: %s\n' "${NAME}" >&2; exit 1; }
   docker image inspect "${IMAGE}" >/dev/null 2>&1 || { printf 'ERROR: image missing: %s\n' "${IMAGE}" >&2; exit 1; }
+  [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
+  candidate_manifest_ok || { printf 'ERROR: candidate checkpoint manifest is incomplete or does not match %s\n' "${MODEL_REPO}" >&2; exit 1; }
 
   local split
   split='["vllm::unified_attention_with_output","vllm::unified_mla_attention_with_output","vllm::mamba_mixer2","vllm::mamba_mixer","vllm::short_conv","vllm::qwen4_exp_compute_ple_ngram_ids","vllm::qwen4_exp_ple_short_conv","vllm::qwen4_exp_qsa_with_output","vllm::linear_attention","vllm::qwen_gdn_attention_core","vllm::qwen_gdn_attention_core_fused_norm_packed","vllm::sparse_attn_indexer","vllm::ple_mmap_lookup_ids"]'
@@ -129,21 +176,18 @@ start_runtime() {
     return 1
   fi
 
-  printf 'container started; readiness pending: %s (vLLM v0.29, OrcaRouter, PLE mmap, exact QSA, GB10 FLA fix, MTP k=2)\n' "${NAME}"
+  printf 'container started; readiness pending: %s (profile=%s, vLLM v0.29, PLE mmap, exact QSA, GB10 FLA fix, MTP k=2)\n' "${NAME}" "${PROFILE_CASE}"
   printf 'wait with: ./scripts/wait-ready.sh --container %s --model %s\n' "${NAME}" "${SERVED_NAME}"
 }
 
 case "${ACTION}" in
   preflight)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     preflight
     ;;
   start)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     start_runtime
     ;;
   stop)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     if docker inspect "${NAME}" >/dev/null 2>&1; then
       docker rm -f "${NAME}" >/dev/null
       printf 'removed experimental container: %s\n' "${NAME}"
@@ -152,7 +196,6 @@ case "${ACTION}" in
     fi
     ;;
   status)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     printf 'Managed service active: '
     if service_active; then printf 'yes\n'; else printf 'no\n'; fi
     docker inspect --format '{{.Name}} running={{.State.Running}} status={{.State.Status}} image={{.Config.Image}}' "${NAME}" 2>/dev/null || printf 'experiment absent\n'

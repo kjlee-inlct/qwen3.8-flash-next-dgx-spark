@@ -62,12 +62,8 @@ print_model_profiles() {
   done
 }
 
-load_model_profile() {
+load_download_profile() {
   describe_model_profile "$1" || return
-  if [[ "${PROFILE_INSTALLABLE}" != 1 ]]; then
-    printf 'ERROR: model profile %s is a %s profile and is not installable yet\n' "$1" "${PROFILE_STATUS}" >&2
-    return 2
-  fi
 
   case "$1" in
     orcarouter)
@@ -86,5 +82,28 @@ load_model_profile() {
       PROFILE_GATED=0
       PROFILE_CONFIG_OVERRIDE=0
       ;;
+    mazinb)
+      # Short immutable Hugging Face commit ID currently shown by the model repo.
+      # download-weights.sh records the resolved full SHA in its local manifest.
+      PROFILE_REVISION="f2c21eb"
+      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-flash-next-mazinb"
+      PROFILE_IMAGE="vllm-orcarouter-v029:v1"
+      PROFILE_SERVED_NAME="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      PROFILE_GATED=0
+      PROFILE_CONFIG_OVERRIDE=0
+      ;;
+    lychee888)
+      printf 'ERROR: model profile %s is tracked but has no qualified download/runtime path yet\n' "$1" >&2
+      return 2
+      ;;
   esac
+}
+
+load_model_profile() {
+  describe_model_profile "$1" || return
+  if [[ "${PROFILE_INSTALLABLE}" != 1 ]]; then
+    printf 'ERROR: model profile %s is a %s profile and is not installable yet\n' "$1" "${PROFILE_STATUS}" >&2
+    return 2
+  fi
+  load_download_profile "$1"
 }

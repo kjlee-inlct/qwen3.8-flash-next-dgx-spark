@@ -413,6 +413,65 @@ sudo ./scripts/manage-service.sh create \
 ```
 
 
+## Mazinb checkpoint A/B on vLLM v0.29
+
+When the seeded OrcaRouter determinism gate fails on both the preview runtime and the
+vLLM v0.29 release line, keep the runtime fixed and change only the checkpoint.
+
+The `mazinb` profile remains a non-installable candidate. It can be downloaded only
+with the explicit `--candidate` flag, so it cannot accidentally replace the stable
+OrcaRouter install manifest or service.
+
+The candidate registry currently uses the immutable Hugging Face source ref
+`f2c21eb`; the downloader resolves it through the Hugging Face API and records the
+full resolved SHA in `.qwen38-model-manifest.json`.
+
+Preflight disk/revision metadata without downloading:
+
+```bash
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate --check
+```
+
+Download and verify the candidate:
+
+```bash
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate
+```
+
+Stop the OrcaRouter v0.29 experiment before using the shared API port:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile orcarouter
+```
+
+Run the candidate on the exact same v0.29 image and runtime controls:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight --profile mazinb
+./scripts/runtime/orcarouter-v029.sh start --profile mazinb
+
+./scripts/wait-ready.sh \
+  --container qwen38-mazinb-v029 \
+  --model mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Run the same seeded 1024-token correctness gate:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/mazinb-v029-seeded-det-1024.json
+```
+
+Interpretation:
+
+- mazinb passes while OrcaRouter fails on the same v0.29 runtime: checkpoint /
+  quantization recipe becomes the primary differentiator;
+- both fail: investigate shared GB10 math/kernel paths rather than the preview runtime
+  or OrcaRouter-specific checkpoint packaging.
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
