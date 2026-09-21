@@ -1,0 +1,28 @@
+# H10 control: corrected H9 + ModelOpt-style global-scale parameter objects.
+FROM vllm-orcarouter-v029-h9-ct-modelweight:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-global-scale-modelparam.py /tmp/patch-v029-ct-moe-global-scale-modelparam.py
+RUN cp ${CT} ${CT}.h10.orig \
+ && python3 /tmp/patch-v029-ct-moe-global-scale-modelparam.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-global-scale-modelparam.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert "PerTensorScaleParameter" in s
+assert "w13_weight_scale_2 = PerTensorScaleParameter(" in body
+assert "w2_weight_scale_2 = PerTensorScaleParameter(" in body
+assert 'layer.register_parameter("w13_weight_global_scale", w13_weight_scale_2)' in body
+assert 'layer.register_parameter("w2_weight_global_scale", w2_weight_scale_2)' in body
+assert "(1.0 / w13_weight_global_scale)" in body
+assert "(1.0 / layer.w2_weight_global_scale)" in body
+print("H10 compressed-tensors global-scale parameter patch installed")
+PY
+
+LABEL qwen38.h10="compressed-tensors-global-scale-pertensor-v1"
