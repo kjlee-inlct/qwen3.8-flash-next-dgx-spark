@@ -1246,3 +1246,21 @@ determinism result.
 The corrected control now applies only
 `{"quant_method": "block"}` through `set_weight_attrs()`, while the
 ModelWeightParameter retains its constructor-provided weight loader.
+
+### H9 corrected result: FAIL
+
+Observed on 2026-09-21:
+
+- the corrected H9 image built successfully with the expected v2 image label;
+- the runtime reached READY after 621 seconds;
+- the original OrcaRouter compressed-tensors checkpoint was unchanged;
+- routed-expert w13/w2 `weight_scale` parameters used
+  `ModelWeightParameter(input_dim=1, output_dim=2)` with
+  `quant_method=BLOCK`;
+- the 1024/128 seeded determinism gate failed with 5 unique hashes across 5
+  repeats.
+
+Therefore the expert weight-scale parameter/loader representation is not
+sufficient to repair the compressed-tensors path. The next isolation target is
+the remaining compressed-tensors-specific expert representation: packed expert
+weights, global-scale parameters, and post-load conversion.
