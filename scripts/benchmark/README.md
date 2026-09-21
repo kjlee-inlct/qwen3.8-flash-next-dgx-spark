@@ -1041,6 +1041,21 @@ Interpretation:
   BLOCK metadata alone is insufficient to repair compressed-tensors, so another
   compressed-tensors-specific processing difference must also participate.
 
+Observed on 2026-09-21:
+
+- H8 reused the original OrcaRouter compressed-tensors checkpoint unchanged;
+- only the routed-expert `weight_scale` metadata changed `GROUP -> BLOCK`;
+- runtime reached READY after 742 seconds;
+- the 1024/128 seeded determinism gate still failed with 3 unique hashes across
+  5 repeats;
+- runs 1-3 matched the stable H6 hash while runs 4-5 diverged;
+- startup selected the weight-only FP4 Marlin path.
+
+Therefore BLOCK metadata alone does not repair the compressed-tensors path.
+Together H7 and H8 show that metadata participates in the instability but is not
+the whole cause. The next isolation target is the compressed-tensors-specific
+parameter/weight-loader representation and post-load conversion path.
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
