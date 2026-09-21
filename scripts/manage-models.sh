@@ -10,7 +10,6 @@ ACTION="${1:-list}"
 TARGET="${2:-}"
 YES=0
 DRY_RUN=0
-WITH_DOCKER=0
 
 [[ -r "${MODEL_ASSETS}" ]] || { printf 'ERROR: model asset registry missing: %s\n' "${MODEL_ASSETS}" >&2; exit 1; }
 # shellcheck source=scripts/model-assets.sh
@@ -57,7 +56,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes) YES=1 ;;
     --dry-run) DRY_RUN=1 ;;
-    --with-docker) WITH_DOCKER=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -159,7 +157,9 @@ profile_present() {
   [[ -e "$MODEL_ASSET_CHECKPOINT" || -L "$MODEL_ASSET_CHECKPOINT" ]] && return 0
   command -v docker >/dev/null 2>&1 || return 1
   docker inspect "$MODEL_ASSET_CONTAINER" >/dev/null 2>&1 && return 0
-  docker image inspect "$MODEL_ASSET_IMAGE" >/dev/null 2>&1 && return 0
+  if [[ "$MODEL_ASSET_RETIRE_IMAGE" == 1 ]]; then
+    docker image inspect "$MODEL_ASSET_IMAGE" >/dev/null 2>&1 && return 0
+  fi
   return 1
 }
 
