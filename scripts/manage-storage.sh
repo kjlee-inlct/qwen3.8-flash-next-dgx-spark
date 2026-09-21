@@ -47,7 +47,7 @@ plan
 
 prune
   Safe cleanup:
-    - stopped qwen38-orca-* experiment containers
+    - stopped qwen38-* experiment containers except the canonical qwen38-flash-next container
     - dangling Docker images
     - Docker builder cache older than N days (default 7)
     - immutable releases other than current/previous
@@ -163,8 +163,8 @@ inactive_releases() {
 
 stopped_experiment_containers() {
   command -v docker >/dev/null 2>&1 || return 0
-  docker ps -a --filter 'name=^/qwen38-orca-' --format '{{.Names}} {{.State}}' 2>/dev/null |
-    awk '$2 != "running" {print $1}'
+  docker ps -a --filter 'name=qwen38-' --format '{{.Names}} {{.State}}' 2>/dev/null |
+    awk '$1 != "qwen38-flash-next" && $2 != "running" {print $1}'
 }
 
 benchmark_candidates() {
