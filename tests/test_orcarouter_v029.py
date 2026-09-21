@@ -206,6 +206,15 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("stale or incompatible H9 image", script)
         self.assertIn("Dockerfile.v029-h9-ct-modelweight-scale", script)
 
+    def test_runtime_stop_preserves_container_unless_remove_requested(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("REMOVE_AFTER_STOP=0", script)
+        self.assertIn("--remove) REMOVE_AFTER_STOP=1", script)
+        self.assertIn('docker stop --timeout 30 "${NAME}"', script)
+        self.assertIn("preserved for diagnostics", script)
+        self.assertIn('if [[ "${REMOVE_AFTER_STOP}" == 1 ]]\', script)
+        self.assertNotIn('docker rm -f "${NAME}"', script)
+
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("port_owner()", script)
