@@ -367,9 +367,14 @@ start_runtime() {
   if [[ "${PROFILE_CASE}" == hybrid-h5-neutral-input ]]; then
     H4_ALL_MODEL_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
     H3_MODEL_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
+    [[ -d "${BASE_MODEL_DIR}" ]] || { printf 'ERROR: OrcaRouter base model directory missing: %s\n' "${BASE_MODEL_DIR}" >&2; exit 1; }
     [[ -d "${H4_ALL_MODEL_DIR}" ]] || { printf 'ERROR: H4 all parent missing: %s\n' "${H4_ALL_MODEL_DIR}" >&2; exit 1; }
     [[ -d "${H3_MODEL_DIR}" ]] || { printf 'ERROR: H3 parent model directory missing: %s\n' "${H3_MODEL_DIR}" >&2; exit 1; }
-    extra_mount=(-v "${H4_ALL_MODEL_DIR}:/h4-all:ro" -v "${H3_MODEL_DIR}:/h3-model:ro")
+    extra_mount=(
+      -v "${BASE_MODEL_DIR}:/base-model:ro"
+      -v "${H4_ALL_MODEL_DIR}:/h4-all:ro"
+      -v "${H3_MODEL_DIR}:/h3-model:ro"
+    )
   elif [[ "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all ]]; then
     H3_MODEL_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
     [[ -d "${BASE_MODEL_DIR}" ]] || { printf 'ERROR: hybrid base model directory missing: %s\n' "${BASE_MODEL_DIR}" >&2; exit 1; }
