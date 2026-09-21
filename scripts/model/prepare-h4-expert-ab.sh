@@ -22,8 +22,11 @@ case "${VARIANT}" in
   orca-gate-up)
     OUTPUT="${H4_ORCA_GATE_UP_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-gate-up}"
     ;;
+  orca-all)
+    OUTPUT="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
+    ;;
   *)
-    printf 'ERROR: variant must be orca-down or orca-gate-up\n' >&2
+    printf 'ERROR: variant must be orca-down, orca-gate-up, or orca-all\n' >&2
     exit 2
     ;;
 esac
@@ -43,12 +46,15 @@ usage() {
 Usage:
   bash scripts/model/prepare-h4-expert-ab.sh plan  orca-down
   bash scripts/model/prepare-h4-expert-ab.sh plan  orca-gate-up
+  bash scripts/model/prepare-h4-expert-ab.sh plan  orca-all
   bash scripts/model/prepare-h4-expert-ab.sh build orca-down [--force]
   bash scripts/model/prepare-h4-expert-ab.sh build orca-gate-up [--force]
+  bash scripts/model/prepare-h4-expert-ab.sh build orca-all [--force]
 
 H4 is a thin delta over the proven H3 checkpoint:
   orca-down     : normalize all OrcaRouter down_proj expert tensors into ModelOpt names
   orca-gate-up  : normalize all OrcaRouter gate_proj + up_proj expert tensors together
+  orca-all      : normalize all OrcaRouter down_proj + gate_proj + up_proj expert tensors
 
 H3 ModelOpt config and mazinb input_scale remain unchanged.
 EOF
