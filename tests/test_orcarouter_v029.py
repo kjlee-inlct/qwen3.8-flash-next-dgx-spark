@@ -60,6 +60,17 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('("group0-bf16", 300, 0)', script)
         self.assertIn('selected == count', script)
 
+    def test_runtime_supports_quant_layout_hybrid_without_installing_it(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('hybrid-quant-layout) NAME="qwen38-hybrid-quant-layout-v029"', script)
+        self.assertIn("HYBRID_QUANT_LAYOUT_MODEL_DIR", script)
+        self.assertIn("qwen3.8-hybrid-quant-layout", script)
+        self.assertIn('data.get("variant") == "quant-layout-mazinb-experts"', script)
+        self.assertIn('data.get("group0_bf16_weights") == 300', script)
+        self.assertIn('data.get("base_expert_tensors_removed") == 147600', script)
+        self.assertIn('data.get("overlay_expert_tensors_added") == 221184', script)
+        self.assertIn('data.get("mtp_tensors_changed") == 0', script)
+
     def test_runtime_never_mutates_managed_lifecycle(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('install-maintenance "${STATE_FILE}"', script)

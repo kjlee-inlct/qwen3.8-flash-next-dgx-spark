@@ -16,7 +16,7 @@ PROFILE_CASE="orcarouter"
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, or hybrid-group0\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, or hybrid-quant-layout\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -27,16 +27,17 @@ case "${PROFILE_CASE}" in
   mazinb) NAME="qwen38-mazinb-v029" ;;
   hybrid-residual) NAME="qwen38-hybrid-residual-v029" ;;
   hybrid-group0) NAME="qwen38-hybrid-group0-v029" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, or hybrid-group0\n' >&2; exit 2 ;;
+  hybrid-quant-layout) NAME="qwen38-hybrid-quant-layout-v029" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, or hybrid-quant-layout\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -91,11 +92,16 @@ load_source() {
     return 0
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
-    if [[ "${PROFILE_CASE}" == hybrid-group0 ]]; then
+    if [[ "${PROFILE_CASE}" == hybrid-quant-layout ]]; then
+      MODEL_PROFILE="hybrid-quant-layout"
+      MODEL_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
+      SERVED_NAME="hybrid-quant-layout/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/orcarouter-mazinb-quant-layout"
+    elif [[ "${PROFILE_CASE}" == hybrid-group0 ]]; then
       MODEL_PROFILE="hybrid-group0"
       MODEL_DIR="${HYBRID_GROUP0_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-group0-bf16}"
       SERVED_NAME="hybrid-group0/Qwen3.8-Flash-Next-Uncensored-NVFP4"
@@ -130,6 +136,30 @@ import json, sys
 path, expected_repo = sys.argv[1:]
 data = json.load(open(path, encoding="utf-8"))
 ok = data.get("status") == "complete" and data.get("repository") == expected_repo and bool(data.get("revision"))
+raise SystemExit(0 if ok else 1)
+PY
+    return
+  fi
+
+  if [[ "${PROFILE_CASE}" == hybrid-quant-layout ]]; then
+    local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
+    [[ -r "${manifest}" ]] || return 1
+    python3 - "${manifest}" "${BASE_MODEL_REVISION}" <<'PY' >/dev/null
+import json, sys
+path, expected_base = sys.argv[1:]
+data = json.load(open(path, encoding="utf-8"))
+ok = (
+    data.get("status") == "complete"
+    and data.get("variant") == "quant-layout-mazinb-experts"
+    and data.get("base_revision") == expected_base
+    and bool(data.get("overlay_revision"))
+    and data.get("group0_bf16_weights") == 300
+    and data.get("group0_fp8_scales_removed") == 300
+    and data.get("base_expert_tensors_removed") == 147600
+    and data.get("overlay_expert_tensors_added") == 221184
+    and data.get("quantization_config_source") == "mazinb-modelopt-nvfp4"
+    and data.get("mtp_tensors_changed") == 0
+)
 raise SystemExit(0 if ok else 1)
 PY
     return
@@ -259,7 +289,7 @@ start_runtime() {
   mkdir -p "${HOME}/.cache/vllm-qwen38-v029" "${HOME}/.cache/flashinfer-v029"
 
   extra_mount=()
-  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout ]]; then
     [[ -d "${BASE_MODEL_DIR}" ]] || { printf 'ERROR: hybrid base model directory missing: %s\n' "${BASE_MODEL_DIR}" >&2; exit 1; }
     extra_mount=(-v "${BASE_MODEL_DIR}:/base-model:ro")
   fi
