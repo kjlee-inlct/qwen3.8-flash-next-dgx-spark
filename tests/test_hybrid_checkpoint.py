@@ -198,6 +198,11 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("get_shape()", source)
         self.assertNotIn("get_tensor(key)", source)
         self.assertIn('"metadata_differences"', source)
+        self.assertIn("def expert_suffix_counts", source)
+        self.assertIn('"expert_suffixes"', source)
+        self.assertIn("def summarize_quantization", source)
+        self.assertIn('"base_quantization"', source)
+        self.assertIn('"candidate_quantization"', source)
 
     def test_checkpoint_diff_wrapper_uses_existing_runtime_image(self) -> None:
         source = DIFF_WRAPPER.read_text(encoding="utf-8")

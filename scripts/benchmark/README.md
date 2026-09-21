@@ -692,9 +692,17 @@ cat "${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/analysis/orcarouter-vs-m
 ```
 
 The inventory compares tensor-key presence plus dtype/shape metadata without
-loading full tensor payloads into RAM. Use its category counts to choose the
-smallest next A/B region rather than guessing between MTP, embeddings/head,
-normalization, expert, PLE, or other checkpoint paths.
+loading full tensor payloads into RAM. It also summarizes routed-expert tensor
+suffixes and the quantization config for each checkpoint. Use those counts to
+choose the smallest next A/B region rather than guessing between MTP,
+embeddings/head, normalization, expert packing, PLE, or other checkpoint paths.
+
+For the observed OrcaRouter/mazinb pair, the first structural report already
+showed that nearly all checkpoint-only tensors belong to routed experts:
+OrcaRouter exposes packed expert weights/global scales, while mazinb exposes a
+different expert weight/input-scale/secondary-scale representation. The next
+inventory run should quantify those suffix families and config-group schemes
+before any routed-expert hybrid is attempted.
 
 
 ## OrcaRouter stability candidate
