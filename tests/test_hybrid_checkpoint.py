@@ -14,6 +14,8 @@ DIFF_TOOL = ROOT / "scripts" / "model" / "inspect-checkpoint-diff.py"
 DIFF_WRAPPER = ROOT / "scripts" / "model" / "inspect-orcarouter-mazinb-diff.sh"
 QUANT_LAYOUT_TOOL = ROOT / "scripts" / "model" / "prepare-quant-layout-hybrid-checkpoint.py"
 QUANT_LAYOUT_WRAPPER = ROOT / "scripts" / "model" / "prepare-quant-layout-hybrid-checkpoint.sh"
+H4_CHECK_TOOL = ROOT / "scripts" / "model" / "check-h4-expert-conversion.py"
+H4_CHECK_WRAPPER = ROOT / "scripts" / "model" / "check-h4-expert-conversion.sh"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -238,6 +240,22 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("/base:ro", source)
         self.assertIn("/overlay:ro", source)
         self.assertIn("qwen3.8-hybrid-quant-layout", source)
+
+    def test_h4_conversion_gate_checks_schema_without_requantization(self) -> None:
+        source = H4_CHECK_TOOL.read_text(encoding="utf-8")
+        self.assertIn('"weight_packed"', source)
+        self.assertIn('"weight_scale_2"', source)
+        self.assertIn('"modelopt.weight_scale_2 = 1 / compressed_tensors.weight_global_scale"', source)
+        self.assertIn("get_slice(key)", source)
+        self.assertIn('"input_global_scale_modules"', source)
+        self.assertIn('"input_scale_modules"', source)
+
+    def test_h4_conversion_wrapper_is_read_only(self) -> None:
+        source = H4_CHECK_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("/base:ro", source)
+        self.assertIn("/overlay:ro", source)
+        self.assertIn("h4-expert-conversion.json", source)
+        self.assertNotIn("rm -rf", source)
 
 
 if __name__ == "__main__":
