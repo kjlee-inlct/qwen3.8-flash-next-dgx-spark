@@ -61,7 +61,7 @@ managed_model_candidates() {
   [[ -n "${ACTIVE_MODEL}" ]] && roots+=("${ACTIVE_MODEL}")
   for root in "${roots[@]}"; do
     [[ -e "${root}" ]] || continue
-    if [[ -f "${root}/.qwen38-model-manifest.json" ]]; then
+    if [[ -f "${root}/.qwen38-model-manifest.json" || -f "${root}/.qwen38-hybrid-manifest.json" ]]; then
       canonical="$(realpath -m -- "${root}")"
       if [[ -z "${seen[${canonical}]:-}" ]]; then
         seen["${canonical}"]=1
@@ -77,7 +77,11 @@ managed_model_candidates() {
       [[ -n "${seen[${canonical}]:-}" ]] && continue
       seen["${canonical}"]=1
       printf '%s\n' "${canonical}"
-    done < <(find "${root}" -mindepth 1 -maxdepth 2 -type f -name .qwen38-model-manifest.json -print 2>/dev/null | sort)
+    done < <(
+      find "${root}" -mindepth 1 -maxdepth 2 -type f \
+        \( -name .qwen38-model-manifest.json -o -name .qwen38-hybrid-manifest.json \) \
+        -print 2>/dev/null | sort
+    )
   done
 }
 
