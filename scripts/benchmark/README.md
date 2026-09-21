@@ -926,6 +926,35 @@ Therefore the specific mazinb input-scale values are not required for
 determinism. The remaining high-value distinction is the expert
 representation/loader contract itself: ModelOpt NVFP4 versus the original
 compressed-tensors packed expert path.
+
+H6 isolates the activation-quantization mode inside the ModelOpt representation.
+It reuses the H5 checkpoint byte-for-byte and changes only the ModelOpt
+`quant_algo` from `NVFP4` (W4A4) to `W4A16_NVFP4`. No safetensor bytes,
+expert payloads, neutral input scales, MTP tensors, or other model config fields
+are changed.
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h5-neutral-input
+
+bash scripts/model/prepare-h6-w4a16.sh plan
+bash scripts/model/prepare-h6-w4a16.sh build
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h6-w4a16
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h6-w4a16
+
+./scripts/wait-ready.sh \
+  --container qwen38-h6-w4a16-v029 \
+  --model hybrid-h6-w4a16/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- FAIL: switching from W4A4 activation quantization to the W4A16 path is
+  sufficient to reintroduce instability. The activation/backend path becomes
+  the primary root-cause region;
+- PASS: the ModelOpt representation remains stable even in W4A16 mode, so the
+  remaining difference is more specifically the ModelOpt versus
+  compressed-tensors loader/parameter representation.
 The next high-information isolation is to restore all OrcaRouter routed-expert
 weight/group/global-scale values together while keeping the H3/mazinb
 `input_scale` tensors and ModelOpt loader contract fixed. A failure there would
