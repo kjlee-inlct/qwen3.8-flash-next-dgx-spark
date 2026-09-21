@@ -968,12 +968,35 @@ Observed on 2026-09-21:
 Therefore W4A4 activation quantization is not required for determinism. The
 remaining leading difference is the checkpoint loader/parameter representation
 and its weight-processing path: ModelOpt versus compressed-tensors.
-The next high-information isolation is to restore all OrcaRouter routed-expert
-weight/group/global-scale values together while keeping the H3/mazinb
-`input_scale` tensors and ModelOpt loader contract fixed. A failure there would
-indicate an interaction between the projection families; a pass would move the
-primary candidate to the mazinb `input_scale` representation/value path.
 
+H7 isolates one explicit loader metadata difference while reusing the H6
+checkpoint unchanged. vLLM v0.29 registers the routed-expert NVFP4
+`weight_scale` parameter as `BLOCK` in the ModelOpt loader but as `GROUP`
+in the compressed-tensors loader. H7 patches only the ModelOpt MoE metadata
+assignment from `BLOCK` to `GROUP`; checkpoint tensors, W4A16 mode, QSA, MTP,
+and all runtime controls stay fixed.
+
+Build the tiny derivative image and run the H6 checkpoint through it:
+
+```bash
+docker build -t vllm-orcarouter-v029-h7-group:v1 \
+  -f scripts/Dockerfile.v029-h7-modelopt-group scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h6-w4a16
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h7-group-metadata
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h7-group-metadata
+
+./scripts/wait-ready.sh \
+  --container qwen38-h7-group-metadata-v029 \
+  --model hybrid-h7-group-metadata/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- FAIL: the GROUP/BLOCK scale metadata and the weight-loading path it selects
+  becomes a strong root-cause candidate;
+- PASS: that metadata difference is also insufficient, leaving the
+  compressed-tensors parameter naming/processing path itself as the next target.
 
 ## OrcaRouter stability candidate
 
