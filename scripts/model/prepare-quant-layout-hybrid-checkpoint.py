@@ -107,7 +107,7 @@ def group0_modules(config: dict[str, Any]) -> list[str]:
 
 
 def is_expert_key(key: str) -> bool:
-    return ".mlp.experts." in key
+    return key.startswith("model.language_model.layers.") and ".mlp.experts." in key
 
 
 def expert_suffix(key: str) -> str | None:
@@ -175,7 +175,7 @@ def inspect(base: Path, overlay: Path) -> dict[str, Any]:
         raise HybridError(f"unexpected OrcaRouter expert layout: {base_suffix}")
     if overlay_suffix != EXPECTED_OVERLAY_EXPERT_SUFFIXES:
         raise HybridError(f"unexpected mazinb expert layout: {overlay_suffix}")
-    if any(key.startswith("mtp.") for key in base_expert | overlay_expert):
+    if any(key.startswith("mtp.") or key.startswith("model.mtp.") for key in base_expert | overlay_expert):
         raise HybridError("MTP tensor entered routed-expert set")
 
     base_remove = set(base_expert)
