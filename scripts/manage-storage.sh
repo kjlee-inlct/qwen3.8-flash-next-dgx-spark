@@ -54,11 +54,9 @@ prune
     - local benchmark result files older than N days (default 30)
 
 --experiments
-  Additionally remove known disposable experiment image tags:
-    vllm-skinny-qsa-det:v1
-    vllm-skinny-qsa-exact:v1
-  The active manifest image is always protected. Images still referenced by
-  containers are left to Docker's normal safety checks.
+  Additionally remove known disposable experiment image tags.
+  The active manifest image and images referenced by any Docker container are
+  protected explicitly. Current H3/H4 infrastructure images are not disposable.
 
 Never removed by this command:
   - active MODEL_DIR or any managed checkpoint
@@ -184,6 +182,25 @@ docker_image_logical_size() {
   fi
 }
 
+image_referenced_by_container() {
+  local image="$1"
+  command -v docker >/dev/null 2>&1 || return 1
+  docker ps -a --filter "ancestor=${image}" --format '{{.ID}}' 2>/dev/null | grep -q .
+}
+
+image_protection_reason() {
+  local image="$1"
+  if [[ "${image}" == "${ACTIVE_IMAGE}" ]]; then
+    printf '%s' 'active manifest image'
+    return 0
+  fi
+  if image_referenced_by_container "${image}"; then
+    printf '%s' 'referenced by Docker container'
+    return 0
+  fi
+  return 1
+}
+
 print_status() {
   printf 'Qwen3.8 storage status\n\n'
 
@@ -291,8 +308,8 @@ print_plan() {
     printf '\n[Known experiment image tags]\n'
     while IFS= read -r image; do
       [[ -n "${image}" ]] || continue
-      if [[ "${image}" == "${ACTIVE_IMAGE}" ]]; then
-        printf '  PROTECTED active image: %s\n' "${image}"
+      if reason="$(image_protection_reason "${image}" 2>/dev/null)"; then
+        printf '  PROTECTED %s: %s\n' "${reason}" "${image}"
       elif docker image inspect "${image}" >/dev/null 2>&1; then
         printf '  remove %s (logical=%s)\n' "${image}" "$(docker_image_logical_size "${image}")"
       else
@@ -368,8 +385,8 @@ prune_storage() {
     if [[ "${PRUNE_EXPERIMENTS}" == 1 ]]; then
       while IFS= read -r image; do
         [[ -n "${image}" ]] || continue
-        if [[ "${image}" == "${ACTIVE_IMAGE}" ]]; then
-          printf 'PROTECTED active image: %s\n' "${image}"
+        if reason="$(image_protection_reason "${image}" 2>/dev/null)"; then
+          printf 'PROTECTED %s: %s\n' "${reason}" "${image}"
           continue
         fi
         docker image inspect "${image}" >/dev/null 2>&1 || continue
