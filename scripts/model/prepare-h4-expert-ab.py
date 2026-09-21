@@ -3,7 +3,8 @@
 
 Variants:
 - orca-down: convert every OrcaRouter routed-expert down_proj into ModelOpt names.
-- orca-gate-up: convert every OrcaRouter routed-expert gate_proj+up_proj pair.\n- orca-all: convert every routed-expert down/gate/up projection together.
+- orca-gate-up: convert every OrcaRouter routed-expert gate_proj+up_proj pair.
+- orca-all: convert every routed-expert down/gate/up projection together.
 
 The H3 ModelOpt quantization config and mazinb input_scale tensors are retained.
 Only weight, weight_scale, and reciprocal weight_scale_2 are replaced.
