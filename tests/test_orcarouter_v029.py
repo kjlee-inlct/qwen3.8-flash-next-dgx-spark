@@ -13,6 +13,8 @@ H7_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h7-modelopt-group"
 H7_PATCH = ROOT / "scripts" / "patch-v029-modelopt-moe-group-scale.py"
 H8_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h8-ct-block"
 H8_PATCH = ROOT / "scripts" / "patch-v029-ct-moe-block-scale.py"
+H9_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h9-ct-modelweight-scale"
+H9_PATCH = ROOT / "scripts" / "patch-v029-ct-moe-modelweight-scale.py"
 
 
 class OrcaRouterV029ExperimentTests(unittest.TestCase):
@@ -84,6 +86,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('hybrid-h6-w4a16) NAME="qwen38-h6-w4a16-v029"', script)
         self.assertIn('hybrid-h7-group-metadata) NAME="qwen38-h7-group-metadata-v029"', script)
         self.assertIn('hybrid-h8-ct-block) NAME="qwen38-h8-ct-block-v029"', script)
+        self.assertIn('hybrid-h9-ct-modelweight) NAME="qwen38-h9-ct-modelweight-v029"', script)
+        self.assertIn('IMAGE="vllm-orcarouter-v029-h9-ct-modelweight:v1"', script)
         self.assertIn('IMAGE="vllm-orcarouter-v029-h8-ct-block:v1"', script)
         self.assertIn('IMAGE="vllm-orcarouter-v029-h7-group:v1"', script)
         self.assertIn("H4_ORCA_DOWN_MODEL_DIR", script)
@@ -93,6 +97,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("H6_W4A16_MODEL_DIR", script)
         self.assertIn("local/h7-modelopt-group-metadata", script)
         self.assertIn("local/h8-ct-block-over-orcarouter", script)
+        self.assertIn("local/h9-ct-modelweight-over-orcarouter", script)
         self.assertIn('${H5_MODEL_DIR}:/h5-parent:ro', script)
         self.assertIn('${BASE_MODEL_DIR}:/base-model:ro', script)
         self.assertIn('${H4_ALL_MODEL_DIR}:/h4-all:ro', script)
@@ -151,6 +156,18 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("expected exactly two compressed-tensors NVFP4 MoE GROUP metadata assignments", patch)
         self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
         self.assertIn("compressed-tensors-nvfp4-moe-scale-metadata-block", dockerfile)
+
+    def test_h9_patch_changes_only_ct_scale_parameter_representation(self) -> None:
+        patch = H9_PATCH.read_text(encoding="utf-8")
+        dockerfile = H9_DOCKERFILE.read_text(encoding="utf-8")
+        self.assertIn("ModelWeightParameter", patch)
+        self.assertIn('w13_weight_scale = ModelWeightParameter(', patch)
+        self.assertIn('w2_weight_scale = ModelWeightParameter(', patch)
+        self.assertIn("input_dim=1", patch)
+        self.assertIn("output_dim=2", patch)
+        self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
+        self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
+        self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block", dockerfile)
 
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")

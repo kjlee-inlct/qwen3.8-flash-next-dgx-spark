@@ -1056,6 +1056,35 @@ Together H7 and H8 show that metadata participates in the instability but is not
 the whole cause. The next isolation target is the compressed-tensors-specific
 parameter/weight-loader representation and post-load conversion path.
 
+H9 isolates the first of those representation differences. It keeps the
+original OrcaRouter compressed-tensors checkpoint and H8's `BLOCK` metadata,
+but changes only the routed-expert w13/w2 `weight_scale` parameters from plain
+`torch.nn.Parameter + set_weight_attrs` to the ModelOpt-style
+`ModelWeightParameter(input_dim=1, output_dim=2, weight_loader=...)`.
+Packed weights, global scales, quantization config, post-load rename/conversion,
+and the W4A16/Marlin runtime path remain unchanged.
+
+```bash
+docker build -t vllm-orcarouter-v029-h9-ct-modelweight:v1 \
+  -f scripts/Dockerfile.v029-h9-ct-modelweight-scale scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h8-ct-block
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h9-ct-modelweight
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h9-ct-modelweight
+
+./scripts/wait-ready.sh \
+  --container qwen38-h9-ct-modelweight-v029 \
+  --model hybrid-h9-ct-modelweight/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: the expert scale parameter/loader representation is the missing repair
+  beyond BLOCK metadata and becomes the primary root-cause candidate;
+- FAIL: scale parameter representation is still insufficient, leaving packed
+  weight/global-scale parameter handling or compressed-tensors post-load
+  conversion as the next isolation target.
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
