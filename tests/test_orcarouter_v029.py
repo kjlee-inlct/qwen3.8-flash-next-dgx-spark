@@ -212,7 +212,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("--remove) REMOVE_AFTER_STOP=1", script)
         self.assertIn('docker stop --timeout 30 "${NAME}"', script)
         self.assertIn("preserved for diagnostics", script)
-        self.assertIn('if [[ "${REMOVE_AFTER_STOP}" == 1 ]]\', script)
+        self.assertIn('if [[ "${REMOVE_AFTER_STOP}" == 1 ]]', script)
         self.assertNotIn('docker rm -f "${NAME}"', script)
 
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
