@@ -1014,6 +1014,33 @@ W4A16 control, changing only the routed-expert weight-scale metadata
 root-cause region is therefore the GROUP/BLOCK metadata handling and the
 weight-loading/processing path it controls.
 
+H8 is the reciprocal confirmation test on the original OrcaRouter
+compressed-tensors checkpoint. It leaves the checkpoint and compressed-tensors
+loader intact and changes only the routed-expert `weight_scale` metadata from
+`GROUP` to `BLOCK` for both w13 and w2.
+
+```bash
+docker build -t vllm-orcarouter-v029-h8-ct-block:v1 \
+  -f scripts/Dockerfile.v029-h8-ct-block scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h7-group-metadata
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h8-ct-block
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h8-ct-block
+
+./scripts/wait-ready.sh \
+  --container qwen38-h8-ct-block-v029 \
+  --model hybrid-h8-ct-block/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: the reciprocal change restores determinism on the original
+  compressed-tensors checkpoint, strongly confirming GROUP/BLOCK metadata
+  handling as the root-cause region;
+- FAIL: H7 proves GROUP metadata is sufficient to destabilize ModelOpt, but
+  BLOCK metadata alone is insufficient to repair compressed-tensors, so another
+  compressed-tensors-specific processing difference must also participate.
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
