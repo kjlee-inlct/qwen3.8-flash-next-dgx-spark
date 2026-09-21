@@ -54,8 +54,9 @@ class StorageManagerTests(unittest.TestCase):
     def test_experiment_image_cleanup_is_opt_in_and_active_image_is_protected(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("PRUNE_EXPERIMENTS=0", script)
-        self.assertIn("vllm-skinny-qsa-det:v1", script)
-        self.assertIn("vllm-skinny-qsa-exact:v1", script)
+        assets = (ROOT / "scripts" / "storage" / "assets.sh").read_text(encoding="utf-8")
+        self.assertIn("vllm-skinny-qsa-det:v1", assets)
+        self.assertIn("vllm-skinny-qsa-exact:v1", assets)
         self.assertIn('if [[ "${image}" == "${ACTIVE_IMAGE}" ]]', script)
         self.assertIn("image_referenced_by_container()", script)
         self.assertIn("image_protection_reason()", script)
