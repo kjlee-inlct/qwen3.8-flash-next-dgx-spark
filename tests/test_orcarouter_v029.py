@@ -15,6 +15,8 @@ H8_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h8-ct-block"
 H8_PATCH = ROOT / "scripts" / "patch-v029-ct-moe-block-scale.py"
 H9_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h9-ct-modelweight-scale"
 H9_PATCH = ROOT / "scripts" / "patch-v029-ct-moe-modelweight-scale.py"
+H10_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h10-ct-global-scale"
+H10_PATCH = ROOT / "scripts" / "patch-v029-ct-moe-global-scale-modelparam.py"
 
 
 class OrcaRouterV029ExperimentTests(unittest.TestCase):
@@ -87,6 +89,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('hybrid-h7-group-metadata) NAME="qwen38-h7-group-metadata-v029"', script)
         self.assertIn('hybrid-h8-ct-block) NAME="qwen38-h8-ct-block-v029"', script)
         self.assertIn('hybrid-h9-ct-modelweight) NAME="qwen38-h9-ct-modelweight-v029"', script)
+        self.assertIn('hybrid-h10-ct-global-scale) NAME="qwen38-h10-ct-global-scale-v029"', script)
+        self.assertIn('IMAGE="vllm-orcarouter-v029-h10-ct-global-scale:v1"', script)
         self.assertIn('IMAGE="vllm-orcarouter-v029-h9-ct-modelweight:v1"', script)
         self.assertIn('IMAGE="vllm-orcarouter-v029-h8-ct-block:v1"', script)
         self.assertIn('IMAGE="vllm-orcarouter-v029-h7-group:v1"', script)
@@ -174,6 +178,24 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertNotIn("set_weight_attrs(w2_weight_scale, extra_weight_attrs)", w2_new)
         self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
         self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block-v2", dockerfile)
+
+    def test_h10_patch_changes_only_ct_global_scale_representation(self) -> None:
+        patch = H10_PATCH.read_text(encoding="utf-8")
+        dockerfile = H10_DOCKERFILE.read_text(encoding="utf-8")
+        self.assertIn("PerTensorScaleParameter", patch)
+        self.assertIn('w13_weight_scale_2 = PerTensorScaleParameter(', patch)
+        self.assertIn('w2_weight_scale_2 = PerTensorScaleParameter(', patch)
+        self.assertIn("(1.0 / w13_weight_global_scale)", dockerfile)
+        self.assertIn("(1.0 / layer.w2_weight_global_scale)", dockerfile)
+        self.assertIn("FROM vllm-orcarouter-v029-h9-ct-modelweight:v1", dockerfile)
+        self.assertIn("compressed-tensors-global-scale-pertensor-v1", dockerfile)
+
+    def test_h10_runtime_rejects_stale_image_label(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("h10_image_ok()", script)
+        self.assertIn("compressed-tensors-global-scale-pertensor-v1", script)
+        self.assertIn("stale or incompatible H10 image", script)
+        self.assertIn("Dockerfile.v029-h10-ct-global-scale", script)
 
     def test_h9_runtime_rejects_stale_image_label(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
