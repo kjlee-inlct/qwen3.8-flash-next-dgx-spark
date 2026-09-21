@@ -79,7 +79,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("H4_ORCA_GATE_UP_MODEL_DIR", script)
         self.assertIn('data.get("parent_variant") == "quant-layout-mazinb-experts"', script)
         self.assertIn('data.get("input_scale_source") == "mazinb-h3"', script)
-        self.assertIn('"/h3-model:ro"', script)
+        self.assertIn('${H3_MODEL_DIR}:/h3-model:ro', script)
 
     def test_runtime_never_mutates_managed_lifecycle(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
