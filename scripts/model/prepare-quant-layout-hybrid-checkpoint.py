@@ -472,9 +472,7 @@ def main() -> int:
     args = parser().parse_args()
     try:
         info = inspect(args.base, args.overlay)
-        estimated = None
-        if args.action == "build":
-            estimated = estimate_output_bytes(args.base, args.overlay, info)
+        estimated = estimate_output_bytes(args.base, args.overlay, info)
         print_plan(args.base, args.overlay, args.output, info, estimated)
         if args.action == "build":
             build(
