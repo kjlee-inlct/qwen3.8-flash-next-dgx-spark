@@ -57,7 +57,9 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-skinny-qsa-det:v1", script)
         self.assertIn("vllm-skinny-qsa-exact:v1", script)
         self.assertIn('if [[ "${image}" == "${ACTIVE_IMAGE}" ]]', script)
-        self.assertIn("PROTECTED active image", script)
+        self.assertIn("image_referenced_by_container()", script)
+        self.assertIn("image_protection_reason()", script)
+        self.assertIn("referenced by Docker container", script)
 
     def test_storage_asset_registry_classifies_images(self) -> None:
         assets = (ROOT / "scripts" / "storage" / "assets.sh").read_text(encoding="utf-8")
@@ -70,6 +72,7 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-skinny-qsa-exact:v1", assets)
         self.assertIn("vllm-skinny-stable-candidate:v1", assets)
         self.assertIn("vllm-orcarouter-v029:v1", assets)
+        self.assertIn('STORAGE_IMAGE_DESCRIPTION="Current H3/H4 experiment infrastructure', assets)
 
     def test_manager_uses_disposable_registry_instead_of_hardcoded_function(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
