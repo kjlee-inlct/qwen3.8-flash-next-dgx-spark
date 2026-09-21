@@ -198,7 +198,9 @@ checkpoints it prints the exact `manage-models.sh remove ... --dry-run` command 
 than deleting the checkpoint itself.
 
 Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
-should be removed.
+should be removed. The model manager recognizes both normal model manifests and
+`.qwen38-hybrid-manifest.json`; it refuses to delete the active installation model
+or any checkpoint currently mounted by a running Docker container.
 
 ## Benchmark layout
 
