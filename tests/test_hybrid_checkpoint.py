@@ -225,6 +225,12 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn('"mazinb-modelopt-nvfp4"', source)
         self.assertIn('"mtp_tensors_changed": 0', source)
 
+    def test_quant_layout_expert_selector_excludes_mtp(self) -> None:
+        source = QUANT_LAYOUT_TOOL.read_text(encoding="utf-8")
+        self.assertIn('key.startswith("model.language_model.layers.")', source)
+        self.assertIn('".mlp.experts." in key', source)
+        self.assertIn('key.startswith("mtp.") or key.startswith("model.mtp.")', source)
+
     def test_quant_layout_wrapper_uses_existing_builder_image_and_port_guard(self) -> None:
         source = QUANT_LAYOUT_WRAPPER.read_text(encoding="utf-8")
         self.assertIn("vllm-orcarouter-v029:v1", source)
