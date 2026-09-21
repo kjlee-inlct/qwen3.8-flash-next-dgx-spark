@@ -911,6 +911,21 @@ Interpretation:
 - PASS: neutralizing the values is still stable, so the remaining distinction is
   primarily the ModelOpt activation-quantization/loader representation rather
   than the specific mazinb input-scale values.
+
+Observed on 2026-09-21:
+
+- H5 `neutral-input-scale` reached READY after 421 seconds;
+- all 73728 routed-expert `input_scale` tensors were replaced with scalar 1.0;
+- OrcaRouter expert weight/group/global-scale values from H4-all and the
+  mazinb/ModelOpt quantization config were retained;
+- the 1024/128 seeded determinism gate passed all five repeats with one unique
+  output hash;
+- the output hash matched the H4-all result.
+
+Therefore the specific mazinb input-scale values are not required for
+determinism. The remaining high-value distinction is the expert
+representation/loader contract itself: ModelOpt NVFP4 versus the original
+compressed-tensors packed expert path.
 The next high-information isolation is to restore all OrcaRouter routed-expert
 weight/group/global-scale values together while keeping the H3/mazinb
 `input_scale` tensors and ModelOpt loader contract fixed. A failure there would
