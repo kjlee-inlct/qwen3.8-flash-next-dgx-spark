@@ -67,8 +67,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("qwen3.8-hybrid-quant-layout", script)
         self.assertIn('data.get("variant") == "quant-layout-mazinb-experts"', script)
         self.assertIn('data.get("group0_bf16_weights") == 300', script)
-        self.assertIn('data.get("base_expert_tensors_removed") == 147600', script)
-        self.assertIn('data.get("overlay_expert_tensors_added") == 221184', script)
+        self.assertIn('data.get("base_expert_tensors_removed") == 221184', script)
+        self.assertIn('data.get("overlay_expert_tensors_added") == 294912', script)
         self.assertIn('data.get("mtp_tensors_changed") == 0', script)
 
     def test_runtime_never_mutates_managed_lifecycle(self) -> None:
