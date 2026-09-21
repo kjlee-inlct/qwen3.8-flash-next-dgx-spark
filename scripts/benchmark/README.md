@@ -793,6 +793,55 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
+### H4 partial routed-expert A/B
+
+The read-only conversion feasibility gate passed on the local OrcaRouter/mazinb
+pair:
+
+- 73728 routed-expert projection modules matched between checkpoints;
+- sampled packed weights are U8 on both sides after name normalization;
+- sampled group scales are F8_E4M3 on both sides with no shape mismatches;
+- OrcaRouter exposes no routed-expert input-global-scale tensors, while mazinb
+  provides 73728 `input_scale` tensors;
+- `weight_global_scale` can be mapped to ModelOpt `weight_scale_2` by
+  reciprocal;
+- gate/up global scales are validated as a pair before an H4 build.
+
+Therefore H4 keeps the H3 ModelOpt loader contract and mazinb `input_scale`
+fixed while replacing only normalized OrcaRouter weight/group/global-scale
+values. The first split follows the fused-MoE loader boundary:
+
+- `orca-down`: all 24576 `down_proj` expert modules;
+- `orca-gate-up`: all 49152 `gate_proj + up_proj` expert modules together.
+
+Both are thin delta checkpoints over H3; unchanged tensors/files are referenced
+through the read-only `/h3-model` mount instead of copying the 73-GiB parent.
+
+Plan both variants before stopping H3:
+
+```bash
+bash scripts/model/prepare-h4-expert-ab.sh plan orca-down
+bash scripts/model/prepare-h4-expert-ab.sh plan orca-gate-up
+```
+
+Build one variant at a time only after checking its reported delta size:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-quant-layout
+
+bash scripts/model/prepare-h4-expert-ab.sh build orca-down
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h4-down
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h4-down
+
+./scripts/wait-ready.sh \
+  --container qwen38-h4-down-v029 \
+  --model hybrid-h4-down/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Run the 1024/128 seeded gate first. If `orca-down` fails while H3 passes, the
+down-projection expert values are sufficient to reintroduce nondeterminism. If it
+passes, test `orca-gate-up` next under the same H3 parent and runtime controls.
+
 
 ## OrcaRouter stability candidate
 
