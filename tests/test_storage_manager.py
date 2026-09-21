@@ -64,11 +64,12 @@ class StorageManagerTests(unittest.TestCase):
 
     def test_storage_asset_registry_classifies_images(self) -> None:
         assets = (ROOT / "scripts" / "storage" / "assets.sh").read_text(encoding="utf-8")
-        self.assertIn('STORAGE_IMAGE_CLASS="stable"', assets)
+        self.assertIn('STORAGE_IMAGE_CLASS="legacy"', assets)
         self.assertIn('STORAGE_IMAGE_CLASS="baseline"', assets)
         self.assertIn('STORAGE_IMAGE_CLASS="optional"', assets)
         self.assertIn('STORAGE_IMAGE_CLASS="experiment"', assets)
         self.assertIn("vllm-skinny-tp1:v1", assets)
+        self.assertIn('STORAGE_IMAGE_DISPOSABLE=1', assets)
         self.assertIn("vllm-skinny-qsa-det:v1", assets)
         self.assertIn("vllm-skinny-qsa-exact:v1", assets)
         self.assertIn("vllm-skinny-stable-candidate:v1", assets)
@@ -116,6 +117,19 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("BENCHMARK_DAYS=30", script)
         self.assertIn('docker builder prune -f --filter "until=${hours}h"', script)
         self.assertIn('-mtime "+${BENCHMARK_DAYS}"', script)
+
+    def test_model_manager_exposes_profile_asset_lifecycle(self) -> None:
+        script = MODEL_MANAGER.read_text(encoding="utf-8")
+        registry = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
+        self.assertIn("assets)", script)
+        self.assertIn("retire)", script)
+        self.assertIn("list_assets()", script)
+        self.assertIn("retire_profile()", script)
+        self.assertIn("asset_required_by_present_profile()", script)
+        self.assertIn("refusing active profile retirement", script)
+        self.assertIn("refusing retirement: container is running", script)
+        self.assertIn("hybrid-h10-ct-global-scale", registry)
+        self.assertIn("MODEL_ASSET_DEPENDS_ON", registry)
 
     def test_model_manager_discovers_and_removes_hybrid_manifests(self) -> None:
         script = MODEL_MANAGER.read_text(encoding="utf-8")
