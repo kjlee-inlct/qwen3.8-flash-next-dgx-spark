@@ -48,6 +48,10 @@ w13_new = '''        w13_weight_scale_2 = PerTensorScaleParameter(
             weight_loader=weight_loader,
         )
         layer.register_parameter("w13_weight_global_scale", w13_weight_scale_2)
+        set_weight_attrs(
+            w13_weight_scale_2,
+            {"quant_method": FusedMoeWeightScaleSupported.TENSOR.value},
+        )
 '''
 
 w2_old = '''        w2_weight_scale_2 = torch.nn.Parameter(
@@ -64,6 +68,10 @@ w2_new = '''        w2_weight_scale_2 = PerTensorScaleParameter(
             weight_loader=weight_loader,
         )
         layer.register_parameter("w2_weight_global_scale", w2_weight_scale_2)
+        set_weight_attrs(
+            w2_weight_scale_2,
+            {"quant_method": FusedMoeWeightScaleSupported.TENSOR.value},
+        )
 '''
 
 if body.count(w13_old) != 1:

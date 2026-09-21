@@ -183,6 +183,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         patch = H10_PATCH.read_text(encoding="utf-8")
         dockerfile = H10_DOCKERFILE.read_text(encoding="utf-8")
         self.assertIn("PerTensorScaleParameter", patch)
+        self.assertGreaterEqual(patch.count("FusedMoeWeightScaleSupported.TENSOR.value"), 2)
+        self.assertGreaterEqual(patch.count("set_weight_attrs("), 2)
         self.assertIn('w13_weight_scale_2 = PerTensorScaleParameter(', patch)
         self.assertIn('w2_weight_scale_2 = PerTensorScaleParameter(', patch)
         self.assertIn("(1.0 / w13_weight_global_scale)", dockerfile)
