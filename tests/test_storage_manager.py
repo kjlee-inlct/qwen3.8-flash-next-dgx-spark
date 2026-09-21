@@ -73,7 +73,17 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-skinny-qsa-exact:v1", assets)
         self.assertIn("vllm-skinny-stable-candidate:v1", assets)
         self.assertIn("vllm-orcarouter-v029:v1", assets)
-        self.assertIn('STORAGE_IMAGE_DESCRIPTION="Current H3/H4 experiment infrastructure', assets)
+        self.assertIn("vllm-orcarouter-v029-h7-group:v1", assets)
+        self.assertIn("vllm-orcarouter-v029-h8-ct-block:v1", assets)
+        self.assertIn("vllm-orcarouter-v029-h9-ct-modelweight:v1", assets)
+        self.assertIn("vllm-orcarouter-v029-h10-ct-global-scale:v1", assets)
+        self.assertIn('STORAGE_IMAGE_DESCRIPTION="Shared vLLM v0.29 experiment base; keep"', assets)
+
+    def test_stopped_experiment_cleanup_covers_h7_h8_h9_h10_names(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("docker ps -a --filter 'name=qwen38-'", script)
+        self.assertIn('$1 != "qwen38-flash-next"', script)
+        self.assertNotIn("name=^/qwen38-orca-", script)
 
     def test_manager_uses_disposable_registry_instead_of_hardcoded_function(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
