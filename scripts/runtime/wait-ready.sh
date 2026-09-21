@@ -61,6 +61,21 @@ command -v curl >/dev/null 2>&1 || die "curl is required"
 
 started="$(date +%s)"
 next_report=0
+seen_container=0
+
+print_container_events() {
+  local since="$1" until
+  until="$(date +%s)"
+  printf '\n===== DOCKER CONTAINER EVENTS =====\n' >&2
+  docker events \
+    --since "@${since}" \
+    --until "@${until}" \
+    --filter type=container \
+    --filter "container=${CONTAINER}" \
+    --format '{{.Time}} {{.Action}} name={{index .Actor.Attributes "name"}} image={{index .Actor.Attributes "image"}}' \
+    2>/dev/null >&2 || true
+}
+
 while :; do
   now="$(date +%s)"; elapsed=$((now - started))
   if (( elapsed >= TIMEOUT )); then
@@ -70,6 +85,13 @@ while :; do
   fi
 
   state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER}" 2>/dev/null || true)"
+  if [[ -n "${state}" ]]; then
+    seen_container=1
+  elif [[ "${seen_container}" == 1 ]]; then
+    printf 'CONTAINER DISAPPEARED: %s was present earlier but no longer exists\n' "${CONTAINER}" >&2
+    print_container_events "${started}"
+    exit 1
+  fi
   if [[ -n "${state}" && "${state}" != running ]]; then
     printf 'CONTAINER STOPPED: %s status=%s\n' "${CONTAINER}" "${state}" >&2
     print_failure_diagnostics "${CONTAINER}"
