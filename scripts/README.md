@@ -197,8 +197,30 @@ space, Hugging Face cache usage, and protected active allocations. For inactive
 checkpoints it prints the exact `manage-models.sh remove ... --dry-run` command rather
 than deleting the checkpoint itself.
 
-Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
-should be removed. The model manager recognizes both normal model manifests and
+`scripts/manage-models.sh` is the logical model/profile lifecycle view. It keeps
+the original checkpoint-only `remove PATH` command, and also exposes Docker-aware
+profile commands:
+
+```bash
+./scripts/manage-models.sh assets
+./scripts/manage-models.sh retire hybrid-h8-ct-block --dry-run
+./scripts/manage-models.sh retire hybrid-h8-ct-block --yes
+```
+
+`assets` reports each profile's checkpoint, container, image, active state, and
+checkpoint/image dependencies. `retire PROFILE` removes a stopped profile
+container plus profile-owned disposable image/checkpoint assets only when their
+independent dependency checks allow it. Active installation assets, running
+containers, and assets required by a present child profile are protected.
+
+Checkpoint and Docker-image dependencies are tracked separately. For example,
+H10 uses the installed OrcaRouter checkpoint but does not depend on the legacy
+`vllm-skinny-tp1:v1` image; H10's derived image does depend on the H9 image.
+This separation allows the legacy skinny image to be reclaimed after the
+canonical installation stops referencing it without risking the current
+v0.29 experiment lineage.
+
+The checkpoint-only model manager still recognizes both normal model manifests and
 `.qwen38-hybrid-manifest.json`; it refuses to delete the active installation model
 or any checkpoint currently mounted by a running Docker container.
 
