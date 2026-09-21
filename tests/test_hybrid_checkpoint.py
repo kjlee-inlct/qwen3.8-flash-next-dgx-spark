@@ -16,6 +16,8 @@ QUANT_LAYOUT_TOOL = ROOT / "scripts" / "model" / "prepare-quant-layout-hybrid-ch
 QUANT_LAYOUT_WRAPPER = ROOT / "scripts" / "model" / "prepare-quant-layout-hybrid-checkpoint.sh"
 H4_CHECK_TOOL = ROOT / "scripts" / "model" / "check-h4-expert-conversion.py"
 H4_CHECK_WRAPPER = ROOT / "scripts" / "model" / "check-h4-expert-conversion.sh"
+H4_AB_TOOL = ROOT / "scripts" / "model" / "prepare-h4-expert-ab.py"
+H4_AB_WRAPPER = ROOT / "scripts" / "model" / "prepare-h4-expert-ab.sh"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -257,6 +259,23 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("h4-expert-conversion.json", source)
         self.assertNotIn("rm -rf", source)
 
+    def test_h4_ab_builder_uses_thin_delta_modelopt_contract(self) -> None:
+        source = H4_AB_TOOL.read_text(encoding="utf-8")
+        self.assertIn('"orca-down": 24576', source)
+        self.assertIn('"orca-gate-up": 49152', source)
+        self.assertIn('H3_MOUNT = "/h3-model"', source)
+        self.assertIn('raw.to(dtype=torch.float32).reciprocal()', source)
+        self.assertIn('"input_scale_source": "mazinb-h3"', source)
+        self.assertIn('"parent_variant": "quant-layout-mazinb-experts"', source)
+        self.assertIn('"mtp_tensors_changed": 0', source)
+
+    def test_h4_ab_wrapper_guards_runtime_and_supports_both_variants(self) -> None:
+        source = H4_AB_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("orca-down", source)
+        self.assertIn("orca-gate-up", source)
+        self.assertIn("stop the runtime before H4 build", source)
+        self.assertIn("/base:ro", source)
+        self.assertIn("/h3:ro", source)
 
 if __name__ == "__main__":
     unittest.main()
