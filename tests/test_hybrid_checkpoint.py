@@ -12,6 +12,8 @@ TOOL = ROOT / "scripts" / "model" / "prepare-hybrid-checkpoint.py"
 WRAPPER = ROOT / "scripts" / "model" / "prepare-hybrid-checkpoint.sh"
 DIFF_TOOL = ROOT / "scripts" / "model" / "inspect-checkpoint-diff.py"
 DIFF_WRAPPER = ROOT / "scripts" / "model" / "inspect-orcarouter-mazinb-diff.sh"
+QUANT_LAYOUT_TOOL = ROOT / "scripts" / "model" / "prepare-quant-layout-hybrid-checkpoint.py"
+QUANT_LAYOUT_WRAPPER = ROOT / "scripts" / "model" / "prepare-quant-layout-hybrid-checkpoint.sh"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -210,6 +212,24 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("/base:ro", source)
         self.assertIn("/candidate:ro", source)
         self.assertIn("--json-output /report.json", source)
+
+    def test_quant_layout_builder_keeps_mtp_and_switches_quantization_recipe(self) -> None:
+        source = QUANT_LAYOUT_TOOL.read_text(encoding="utf-8")
+        self.assertIn('VARIANT = "quant-layout-mazinb-experts"', source)
+        self.assertIn('"group0_bf16_weights"', source)
+        self.assertIn('"base_expert_tensors_removed"', source)
+        self.assertIn('"overlay_expert_tensors_added"', source)
+        self.assertIn('new_config["quantization_config"]', source)
+        self.assertIn('"mazinb-modelopt-nvfp4"', source)
+        self.assertIn('"mtp_tensors_changed": 0', source)
+
+    def test_quant_layout_wrapper_uses_existing_builder_image_and_port_guard(self) -> None:
+        source = QUANT_LAYOUT_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("vllm-orcarouter-v029:v1", source)
+        self.assertIn("stop the runtime before H3 build", source)
+        self.assertIn("/base:ro", source)
+        self.assertIn("/overlay:ro", source)
+        self.assertIn("qwen3.8-hybrid-quant-layout", source)
 
 
 if __name__ == "__main__":
