@@ -173,7 +173,7 @@ asset_required_by_present_profile() {
 }
 
 list_assets() {
-  local profile checkpoint_state checkpoint_size cstate istate active deps
+  local profile checkpoint_state checkpoint_size cstate istate active
   printf 'Qwen3.8 profile assets\n'
   printf '%-28s %-7s %-9s %-9s %-10s %-12s %s\n' PROFILE ACTIVE CHECKPOINT CONTAINER IMAGE SIZE DEPENDENCIES
   while IFS= read -r profile; do
