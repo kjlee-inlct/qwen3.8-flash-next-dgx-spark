@@ -697,12 +697,63 @@ suffixes and the quantization config for each checkpoint. Use those counts to
 choose the smallest next A/B region rather than guessing between MTP,
 embeddings/head, normalization, expert packing, PLE, or other checkpoint paths.
 
-For the observed OrcaRouter/mazinb pair, the first structural report already
-showed that nearly all checkpoint-only tensors belong to routed experts:
-OrcaRouter exposes packed expert weights/global scales, while mazinb exposes a
-different expert weight/input-scale/secondary-scale representation. The next
-inventory run should quantify those suffix families and config-group schemes
-before any routed-expert hybrid is attempted.
+For the observed OrcaRouter/mazinb pair, the structural inventory confirmed a
+full routed-expert representation change:
+
+- OrcaRouter: 147600 expert-only tensors, consisting of six packed/global-scale
+  suffix families at 24576 tensors each;
+- mazinb: 221184 expert-only tensors, consisting of nine
+  weight/input-scale/weight-scale-2 suffix families at 24576 tensors each;
+- OrcaRouter expert quantization is compressed-tensors
+  `nvfp4-pack-quantized`, 4-bit group-size 16;
+- mazinb expert quantization is ModelOpt `NVFP4`, also 4-bit group-size 16, but
+  with a different loader representation.
+
+This makes the routed-expert quantization layout the next isolation target. H3
+keeps OrcaRouter outside quantized regions, replaces all 300 group-0 weights with
+the already-tested mazinb BF16 weights, replaces routed experts with mazinb
+ModelOpt NVFP4 tensors, switches only `quantization_config` to mazinb, and
+leaves MTP unchanged.
+
+Plan H3 first; it reports the selected tensor counts and an estimated output
+payload from safetensor metadata:
+
+```bash
+bash scripts/model/prepare-quant-layout-hybrid-checkpoint.sh plan
+```
+
+Only after the storage plan is acceptable, stop the current experiment and build:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-group0
+bash scripts/model/prepare-quant-layout-hybrid-checkpoint.sh build
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-quant-layout
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-quant-layout
+
+./scripts/wait-ready.sh \
+  --container qwen38-hybrid-quant-layout-v029 \
+  --model hybrid-quant-layout/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Then run the same seeded 1024/128 gate:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-quant-layout/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/hybrid-quant-layout-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: the differentiating region is the routed-expert quantization
+  representation (or its interaction with the already-BF16 group0 path);
+- FAIL: even matching mazinb's quantized tensor representations is insufficient,
+  so compare the remaining common non-quantized tensor values/config fields
+  rather than further subdividing group0.
 
 
 ## OrcaRouter stability candidate
