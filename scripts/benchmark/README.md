@@ -868,6 +868,22 @@ Observed next on 2026-09-21:
 
 With both `orca-down` and `orca-gate-up` passing independently, neither
 projection family alone is sufficient to reproduce the original instability.
+
+Observed next on 2026-09-21 with `orca-all`:
+
+- all 73728 OrcaRouter routed-expert projection modules / 221184 normalized
+  weight-scale tensors were restored together;
+- mazinb/H3 `input_scale` and ModelOpt quantization config remained fixed;
+- the thin delta occupied about 64 GiB;
+- runtime reached READY after 1212 seconds;
+- the 1024/128 seeded determinism gate passed all five repeats with one unique
+  output hash.
+
+Therefore neither individual projection families nor their combined OrcaRouter
+weight/group/global-scale values are sufficient to reproduce the original
+nondeterminism. The leading remaining checkpoint/runtime difference is the
+ModelOpt activation-input-scale path versus the original compressed-tensors
+expert loader path.
 The next high-information isolation is to restore all OrcaRouter routed-expert
 weight/group/global-scale values together while keeping the H3/mazinb
 `input_scale` tensors and ModelOpt loader contract fixed. A failure there would
