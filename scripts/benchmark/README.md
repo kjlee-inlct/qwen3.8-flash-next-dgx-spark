@@ -1234,3 +1234,15 @@ dropped the `quant_method` attribute required by the generic
 result. The corrected H9 patch keeps the ModelWeightParameter representation but
 reapplies `set_weight_attrs(..., quant_method=BLOCK)` to both w13 and w2 scale
 parameters before rerunning the control.
+
+### H9 loader correction 2
+
+The second H9 boot also failed before weight loading completed. The corrected
+ModelWeightParameter objects already own their `weight_loader` attribute, so
+passing the full `extra_weight_attrs` dict into `set_weight_attrs()` tried to
+overwrite `weight_loader` and tripped vLLM's safety assertion. This is not a
+determinism result.
+
+The corrected control now applies only
+`{"quant_method": "block"}` through `set_weight_attrs()`, while the
+ModelWeightParameter retains its constructor-provided weight loader.
