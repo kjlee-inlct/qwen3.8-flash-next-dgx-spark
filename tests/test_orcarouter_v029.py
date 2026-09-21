@@ -11,6 +11,8 @@ DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-orcarouter"
 PLE = ROOT / "scripts" / "vendor" / "vllm_ple_mmap.py"
 H7_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h7-modelopt-group"
 H7_PATCH = ROOT / "scripts" / "patch-v029-modelopt-moe-group-scale.py"
+H8_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h8-ct-block"
+H8_PATCH = ROOT / "scripts" / "patch-v029-ct-moe-block-scale.py"
 
 
 class OrcaRouterV029ExperimentTests(unittest.TestCase):
@@ -81,6 +83,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('hybrid-h5-neutral-input) NAME="qwen38-h5-neutral-input-v029"', script)
         self.assertIn('hybrid-h6-w4a16) NAME="qwen38-h6-w4a16-v029"', script)
         self.assertIn('hybrid-h7-group-metadata) NAME="qwen38-h7-group-metadata-v029"', script)
+        self.assertIn('hybrid-h8-ct-block) NAME="qwen38-h8-ct-block-v029"', script)
+        self.assertIn('IMAGE="vllm-orcarouter-v029-h8-ct-block:v1"', script)
         self.assertIn('IMAGE="vllm-orcarouter-v029-h7-group:v1"', script)
         self.assertIn("H4_ORCA_DOWN_MODEL_DIR", script)
         self.assertIn("H4_ORCA_GATE_UP_MODEL_DIR", script)
@@ -88,6 +92,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("H5_NEUTRAL_INPUT_MODEL_DIR", script)
         self.assertIn("H6_W4A16_MODEL_DIR", script)
         self.assertIn("local/h7-modelopt-group-metadata", script)
+        self.assertIn("local/h8-ct-block-over-orcarouter", script)
         self.assertIn('${H5_MODEL_DIR}:/h5-parent:ro', script)
         self.assertIn('${BASE_MODEL_DIR}:/base-model:ro', script)
         self.assertIn('${H4_ALL_MODEL_DIR}:/h4-all:ro', script)
@@ -136,6 +141,16 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("expected exactly one ModelOpt NVFP4 MoE BLOCK metadata assignment", patch)
         self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
         self.assertIn("modelopt-nvfp4-moe-scale-metadata-group", dockerfile)
+
+    def test_h8_patch_is_reciprocal_ct_metadata_control(self) -> None:
+        patch = H8_PATCH.read_text(encoding="utf-8")
+        dockerfile = H8_DOCKERFILE.read_text(encoding="utf-8")
+        self.assertIn("class CompressedTensorsW4A4Nvfp4MoEMethod", patch)
+        self.assertIn("FusedMoeWeightScaleSupported.GROUP.value", patch)
+        self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
+        self.assertIn("expected exactly two compressed-tensors NVFP4 MoE GROUP metadata assignments", patch)
+        self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
+        self.assertIn("compressed-tensors-nvfp4-moe-scale-metadata-block", dockerfile)
 
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")

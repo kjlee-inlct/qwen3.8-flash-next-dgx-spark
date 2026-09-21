@@ -1,0 +1,24 @@
+# H8 reciprocal control: original Orca checkpoint + compressed-tensors loader,
+# changing only routed-expert weight_scale metadata GROUP -> BLOCK.
+FROM vllm-orcarouter-v029:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-block-scale.py /tmp/patch-v029-ct-moe-block-scale.py
+RUN cp ${CT} ${CT}.h8.orig \
+ && python3 /tmp/patch-v029-ct-moe-block-scale.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-block-scale.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert body.count('{"quant_method": FusedMoeWeightScaleSupported.BLOCK.value}') == 2
+assert '{"quant_method": FusedMoeWeightScaleSupported.GROUP.value}' not in body
+print("H8 compressed-tensors BLOCK metadata patch installed")
+PY
+
+LABEL qwen38.h8="compressed-tensors-nvfp4-moe-scale-metadata-block"
