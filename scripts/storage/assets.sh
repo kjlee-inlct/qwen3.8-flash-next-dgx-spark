@@ -2,10 +2,11 @@
 # Side-effect-free Docker asset registry for Qwen3.8 storage management.
 #
 # Classes:
-#   stable      current default/runtime image family; never auto-pruned by class
+#   stable      current default/runtime image family
+#   legacy      previous runtime image; removable when not active/referenced
 #   baseline    reference/control image used for A/B validation
 #   optional    installable optional profile image
-#   experiment  disposable experiment image, removable only with --experiments
+#   experiment  experiment image; removability is controlled per asset
 
 list_storage_images() {
   printf '%s\n' \
@@ -25,9 +26,9 @@ list_storage_images() {
 describe_storage_image() {
   case "$1" in
     vllm-skinny-tp1:v1)
-      STORAGE_IMAGE_CLASS="stable"
-      STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="Primary OrcaRouter vLLM image"
+      STORAGE_IMAGE_CLASS="legacy"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="Legacy OrcaRouter runtime; protected while install.env references it"
       ;;
     vllm/vllm-openai:qwen38-flash-next-arm64-cu130)
       STORAGE_IMAGE_CLASS="baseline"
