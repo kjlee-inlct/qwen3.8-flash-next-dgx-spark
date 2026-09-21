@@ -167,11 +167,18 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("output_dim=2", patch)
         self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
         self.assertGreaterEqual(patch.count("set_weight_attrs("), 2)
-        new_half = patch.split("w13_new =", 1)[1]
-        self.assertNotIn("set_weight_attrs(w13_weight_scale, extra_weight_attrs)", new_half)
-        self.assertNotIn("set_weight_attrs(w2_weight_scale, extra_weight_attrs)", new_half)
+        w13_new = patch.split("w13_new =", 1)[1].split("w2_old =", 1)[0]
+        w2_new = patch.split("w2_new =", 1)[1].split("if body.count", 1)[0]
+        self.assertNotIn("set_weight_attrs(w13_weight_scale, extra_weight_attrs)", w13_new)
+        self.assertNotIn("set_weight_attrs(w2_weight_scale, extra_weight_attrs)", w2_new)
         self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
-        self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block", dockerfile)
+        self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block-v2", dockerfile)
+
+    def test_h9_runtime_rejects_stale_image_label(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("h9_image_ok()", script)
+        self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block-v2", script)
+        self.assertIn("stale or incompatible H9 image", script)
 
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
