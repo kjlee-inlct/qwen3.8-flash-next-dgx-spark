@@ -17,8 +17,8 @@ Usage:
   ./scripts/manage-models.sh remove PATH [--yes] [--dry-run]
 
 list:
-  Shows managed model directories discovered from the active installation,
-  $HOME/models, and the repository-local ./model directory.
+  Shows managed model and hybrid-checkpoint directories discovered from the active
+  installation, $HOME/models, and the repository-local ./model directory.
 
 remove:
   Deletes only a directory containing .qwen38-model-manifest.json or
@@ -75,13 +75,17 @@ manifest_path() {
 
 manifest_summary() {
   python3 - "$1" <<'PY'
-import json, pathlib, sys
+import json
+import pathlib
+import sys
+
 p = pathlib.Path(sys.argv[1])
 try:
     d = json.loads(p.read_text(encoding="utf-8"))
 except Exception:
     print("INVALID\t-\t-\t-\t-")
     raise SystemExit
+
 status = d.get("status", "-")
 if p.name == ".qwen38-hybrid-manifest.json":
     kind = "hybrid"
@@ -93,6 +97,7 @@ else:
     repo = d.get("repository", "-")
     rev = d.get("revision", "-")
     files = d.get("files", [])
+
 print(f"{status}\t{kind}\t{repo}\t{rev}\t{len(files) if isinstance(files, list) else '-'}")
 PY
 }
@@ -115,12 +120,14 @@ mounted_by_running_container() {
 discover() {
   declare -A seen=()
   local -a candidates=()
+  local -a paths=()
   [[ -n "${ACTIVE_MODEL}" ]] && candidates+=("${ACTIVE_MODEL}")
   candidates+=("${HOME}/models" "${SCRIPT_ROOT}/model")
 
   local base path canonical
   for base in "${candidates[@]}"; do
     [[ -e "${base}" ]] || continue
+    paths=()
     if manifest_path "${base}" >/dev/null 2>&1; then
       paths=("${base}")
     elif [[ -d "${base}" ]]; then
@@ -142,14 +149,15 @@ discover() {
 }
 
 list_models() {
+  local found=0 path manifest status kind repo revision files size active
   printf 'Managed Qwen3.8 model directories\n'
   printf '%-8s %-10s %-8s %-8s %-42s %s\n' ACTIVE STATUS KIND SIZE REPOSITORY PATH
-  found=0
   while IFS= read -r path; do
     [[ -n "${path}" ]] || continue
     found=1
     manifest="$(manifest_path "${path}")"
-    IFS=    size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
+    IFS=$'\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
+    size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
     active=no
     [[ -n "${ACTIVE_MODEL}" && "$(realpath -m -- "${ACTIVE_MODEL}")" == "${path}" ]] && active=yes
     printf '%-8s %-10s %-8s %-8s %-42s %s\n' "${active}" "${status}" "${kind}" "${size}" "${repo}" "${path}"
@@ -159,6 +167,7 @@ list_models() {
 }
 
 remove_model() {
+  local path manifest status kind repo revision files size allowed
   path="$(realpath -m -- "${TARGET}")"
   [[ -d "${path}" ]] || die "model directory not found: ${path}"
   manifest="$(manifest_path "${path}" 2>/dev/null || true)"
@@ -176,126 +185,11 @@ remove_model() {
   [[ "${path}" == "${SCRIPT_ROOT}/model" ]] && allowed=1
   [[ "${allowed}" == 1 ]] || die "refusing deletion outside $HOME/models or repository ./model"
 
-  IFS=  [[ "${status}" != INVALID ]] || die "refusing deletion: invalid model manifest"
-  size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
-  printf 'Model removal candidate\n  path     : %s\n  kind     : %s\n  repo     : %s\n  revision : %s\n  status   : %s\n  size     : %s\n' "${path}" "${kind}" "${repo}" "${revision}" "${status}" "${size}"
-
-  if [[ "${DRY_RUN}" == 1 ]]; then
-    printf 'DRY-RUN: no files removed.\n'
-    return 0
-  fi
-  if [[ "${YES}" != 1 ]]; then
-    read -r -p 'Type DELETE to permanently remove this model directory: ' answer
-    [[ "${answer}" == DELETE ]] || die "cancelled"
-  fi
-  rm -rf --one-file-system -- "${path}"
-  printf 'Removed model directory: %s\n' "${path}"
-}
-
-case "${ACTION}" in
-  list) [[ -z "${TARGET}" ]] || die "list takes no PATH"; list_models ;;
-  remove) remove_model ;;
-  -h|--help|help) usage ;;
-  *) usage >&2; exit 2 ;;
-esac
-\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
-    size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
-    active=no
-    [[ -n "${ACTIVE_MODEL}" && "$(realpath -m -- "${ACTIVE_MODEL}")" == "${path}" ]] && active=yes
-    printf '%-8s %-10s %-8s %-42s %s\n' "${active}" "${status}" "${size}" "${repo}" "${path}"
-    printf '         revision=%s files=%s%s\n' "${revision}" "${files}" "$([[ "${active}" == yes ]] && printf ' profile=%s' "${ACTIVE_PROFILE}" || true)"
-  done < <(discover)
-  [[ "${found}" == 1 ]] || printf '(none found)\n'
-}
-
-remove_model() {
-  path="$(realpath -m -- "${TARGET}")"
-  [[ -d "${path}" ]] || die "model directory not found: ${path}"
-  [[ -f "${path}/.qwen38-model-manifest.json" ]] || die "refusing deletion: model manifest missing"
-
-  if [[ -n "${ACTIVE_MODEL}" && "$(realpath -m -- "${ACTIVE_MODEL}")" == "${path}" ]]; then
-    die "refusing active model deletion; use ./uninstall.sh --purge-model"
-  fi
-
-  allowed=0
-  [[ "${path}" == "${HOME}/models/"* ]] && allowed=1
-  [[ "${path}" == "${SCRIPT_ROOT}/model" ]] && allowed=1
-  [[ "${allowed}" == 1 ]] || die "refusing deletion outside $HOME/models or repository ./model"
-
-  IFS=$'\t' read -r status repo revision files < <(manifest_summary "${path}/.qwen38-model-manifest.json")
+  IFS=$'\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
   [[ "${status}" != INVALID ]] || die "refusing deletion: invalid model manifest"
   size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
-  printf 'Model removal candidate\n  path     : %s\n  repo     : %s\n  revision : %s\n  status   : %s\n  size     : %s\n' "${path}" "${repo}" "${revision}" "${status}" "${size}"
-
-  if [[ "${DRY_RUN}" == 1 ]]; then
-    printf 'DRY-RUN: no files removed.\n'
-    return 0
-  fi
-  if [[ "${YES}" != 1 ]]; then
-    read -r -p 'Type DELETE to permanently remove this model directory: ' answer
-    [[ "${answer}" == DELETE ]] || die "cancelled"
-  fi
-  rm -rf --one-file-system -- "${path}"
-  printf 'Removed model directory: %s\n' "${path}"
-}
-
-case "${ACTION}" in
-  list) [[ -z "${TARGET}" ]] || die "list takes no PATH"; list_models ;;
-  remove) remove_model ;;
-  -h|--help|help) usage ;;
-  *) usage >&2; exit 2 ;;
-esac
-\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
-  [[ "${status}" != INVALID ]] || die "refusing deletion: invalid model manifest"
-  size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
-  printf 'Model removal candidate\n  path     : %s\n  repo     : %s\n  revision : %s\n  status   : %s\n  size     : %s\n' "${path}" "${repo}" "${revision}" "${status}" "${size}"
-
-  if [[ "${DRY_RUN}" == 1 ]]; then
-    printf 'DRY-RUN: no files removed.\n'
-    return 0
-  fi
-  if [[ "${YES}" != 1 ]]; then
-    read -r -p 'Type DELETE to permanently remove this model directory: ' answer
-    [[ "${answer}" == DELETE ]] || die "cancelled"
-  fi
-  rm -rf --one-file-system -- "${path}"
-  printf 'Removed model directory: %s\n' "${path}"
-}
-
-case "${ACTION}" in
-  list) [[ -z "${TARGET}" ]] || die "list takes no PATH"; list_models ;;
-  remove) remove_model ;;
-  -h|--help|help) usage ;;
-  *) usage >&2; exit 2 ;;
-esac
-\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
-    size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
-    active=no
-    [[ -n "${ACTIVE_MODEL}" && "$(realpath -m -- "${ACTIVE_MODEL}")" == "${path}" ]] && active=yes
-    printf '%-8s %-10s %-8s %-42s %s\n' "${active}" "${status}" "${size}" "${repo}" "${path}"
-    printf '         revision=%s files=%s%s\n' "${revision}" "${files}" "$([[ "${active}" == yes ]] && printf ' profile=%s' "${ACTIVE_PROFILE}" || true)"
-  done < <(discover)
-  [[ "${found}" == 1 ]] || printf '(none found)\n'
-}
-
-remove_model() {
-  path="$(realpath -m -- "${TARGET}")"
-  [[ -d "${path}" ]] || die "model directory not found: ${path}"
-  [[ -f "${path}/.qwen38-model-manifest.json" ]] || die "refusing deletion: model manifest missing"
-
-  if [[ -n "${ACTIVE_MODEL}" && "$(realpath -m -- "${ACTIVE_MODEL}")" == "${path}" ]]; then
-    die "refusing active model deletion; use ./uninstall.sh --purge-model"
-  fi
-
-  allowed=0
-  [[ "${path}" == "${HOME}/models/"* ]] && allowed=1
-  [[ "${path}" == "${SCRIPT_ROOT}/model" ]] && allowed=1
-  [[ "${allowed}" == 1 ]] || die "refusing deletion outside $HOME/models or repository ./model"
-
-  IFS=$'\t' read -r status repo revision files < <(manifest_summary "${path}/.qwen38-model-manifest.json")
-  [[ "${status}" != INVALID ]] || die "refusing deletion: invalid model manifest"
-  size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
-  printf 'Model removal candidate\n  path     : %s\n  repo     : %s\n  revision : %s\n  status   : %s\n  size     : %s\n' "${path}" "${repo}" "${revision}" "${status}" "${size}"
+  printf 'Model removal candidate\n  path     : %s\n  kind     : %s\n  repo     : %s\n  revision : %s\n  status   : %s\n  size     : %s\n' \
+    "${path}" "${kind}" "${repo}" "${revision}" "${status}" "${size}"
 
   if [[ "${DRY_RUN}" == 1 ]]; then
     printf 'DRY-RUN: no files removed.\n'
