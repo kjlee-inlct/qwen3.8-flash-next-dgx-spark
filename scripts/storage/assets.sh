@@ -15,7 +15,11 @@ list_storage_images() {
     vllm-skinny-qsa-det:v1 \
     vllm-skinny-qsa-exact:v1 \
     vllm-skinny-stable-candidate:v1 \
-    vllm-orcarouter-v029:v1
+    vllm-orcarouter-v029:v1 \
+    vllm-orcarouter-v029-h7-group:v1 \
+    vllm-orcarouter-v029-h8-ct-block:v1 \
+    vllm-orcarouter-v029-h9-ct-modelweight:v1 \
+    vllm-orcarouter-v029-h10-ct-global-scale:v1
 }
 
 describe_storage_image() {
@@ -53,7 +57,27 @@ describe_storage_image() {
     vllm-orcarouter-v029:v1)
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="Current H3/H4 experiment infrastructure on vLLM v0.29 with PLE mmap"
+      STORAGE_IMAGE_DESCRIPTION="Shared vLLM v0.29 experiment base; keep"
+      ;;
+    vllm-orcarouter-v029-h7-group:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="H7 ModelOpt GROUP metadata control"
+      ;;
+    vllm-orcarouter-v029-h8-ct-block:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="H8 compressed-tensors BLOCK metadata control"
+      ;;
+    vllm-orcarouter-v029-h9-ct-modelweight:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="H9 compressed-tensors scale-parameter control; H10 parent"
+      ;;
+    vllm-orcarouter-v029-h10-ct-global-scale:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="Current H10 compressed-tensors global-scale control"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
