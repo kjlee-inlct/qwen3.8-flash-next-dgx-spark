@@ -20,7 +20,8 @@ list_storage_images() {
     vllm-orcarouter-v029-h7-group:v1 \
     vllm-orcarouter-v029-h8-ct-block:v1 \
     vllm-orcarouter-v029-h9-ct-modelweight:v1 \
-    vllm-orcarouter-v029-h10-ct-global-scale:v1
+    vllm-orcarouter-v029-h10-ct-global-scale:v1 \
+    vllm-orcarouter-v029-h11-ct-packed-modelweight:v1
 }
 
 describe_storage_image() {
@@ -78,7 +79,12 @@ describe_storage_image() {
     vllm-orcarouter-v029-h10-ct-global-scale:v1)
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="Current H10 compressed-tensors global-scale control"
+      STORAGE_IMAGE_DESCRIPTION="H10 compressed-tensors global-scale control; H11 parent"
+      ;;
+    vllm-orcarouter-v029-h11-ct-packed-modelweight:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="Current H11 compressed-tensors packed-weight parameter control"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2

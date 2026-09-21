@@ -78,6 +78,7 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-orcarouter-v029-h8-ct-block:v1", assets)
         self.assertIn("vllm-orcarouter-v029-h9-ct-modelweight:v1", assets)
         self.assertIn("vllm-orcarouter-v029-h10-ct-global-scale:v1", assets)
+        self.assertIn("vllm-orcarouter-v029-h11-ct-packed-modelweight:v1", assets)
         self.assertIn('STORAGE_IMAGE_DESCRIPTION="Shared vLLM v0.29 experiment base; keep"', assets)
 
     def test_stopped_experiment_cleanup_covers_h7_h8_h9_h10_names(self) -> None:
@@ -140,6 +141,7 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("refusing active profile retirement", script)
         self.assertIn("refusing retirement: container is running", script)
         self.assertIn("hybrid-h10-ct-global-scale", registry)
+        self.assertIn("hybrid-h11-ct-packed-modelweight", registry)
         self.assertIn("MODEL_ASSET_CHECKPOINT_DEPENDS_ON", registry)
         self.assertIn("MODEL_ASSET_IMAGE_DEPENDS_ON", registry)
         self.assertIn('model_asset_dependents() {', registry)
