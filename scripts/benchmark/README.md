@@ -757,6 +757,24 @@ Interpretation:
   so compare the remaining common non-quantized tensor values/config fields
   rather than further subdividing group0.
 
+Observed on 2026-09-21 with git revision `f4fba95`:
+
+- H3 manifest completed with 300 group0 BF16 weights, 300 group0 FP8 scales
+  removed, 221184 OrcaRouter expert tensors removed, 294912 mazinb ModelOpt
+  expert tensors added, and zero MTP tensors changed;
+- the built hybrid occupied approximately 73 GiB and passed the v0.29 preflight;
+- the runtime reached API readiness after 732 seconds;
+- the seeded 1024/128 determinism gate passed all five repetitions with one
+  unique output hash;
+- because H2 (group0 BF16 only) failed while H3 (same group0 BF16 plus mazinb
+  routed-expert representation/config) passed, the H2->H3 delta is the primary
+  remaining root-cause region.
+
+Do not collapse this result to "all quantization" generally: H1 and H2 already
+showed that the 300 non-expert group0 FP8 tensors were insufficient. The next
+isolation should subdivide the routed-expert representation/config while keeping
+the proven H2 group0-BF16 baseline fixed.
+
 
 ## OrcaRouter stability candidate
 
