@@ -9,6 +9,8 @@ ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "scripts" / "runtime" / "orcarouter-v029.sh"
 DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-orcarouter"
 PLE = ROOT / "scripts" / "vendor" / "vllm_ple_mmap.py"
+H7_DOCKERFILE = ROOT / "scripts" / "Dockerfile.v029-h7-modelopt-group"
+H7_PATCH = ROOT / "scripts" / "patch-v029-modelopt-moe-group-scale.py"
 
 
 class OrcaRouterV029ExperimentTests(unittest.TestCase):
@@ -124,6 +126,16 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('self.layer_type in ("full_attention", "qwen_sparse_attention")', patch)
         self.assertIn("expected v0.29 decoder init block not found", patch)
         self.assertIn("expected v0.29 decoder forward block not found", patch)
+
+    def test_h7_patch_is_narrow_modelopt_moe_metadata_control(self) -> None:
+        patch = H7_PATCH.read_text(encoding="utf-8")
+        dockerfile = H7_DOCKERFILE.read_text(encoding="utf-8")
+        self.assertIn("class ModelOptNvFp4FusedMoE", patch)
+        self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
+        self.assertIn("FusedMoeWeightScaleSupported.GROUP.value", patch)
+        self.assertIn("expected exactly one ModelOpt NVFP4 MoE BLOCK metadata assignment", patch)
+        self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
+        self.assertIn("modelopt-nvfp4-moe-scale-metadata-group", dockerfile)
 
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
