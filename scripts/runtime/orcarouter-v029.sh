@@ -13,10 +13,12 @@ IMAGE="vllm-orcarouter-v029:v1"
 PORT=8888
 ACTION="${1:-status}"
 PROFILE_CASE="orcarouter"
+REMOVE_AFTER_STOP=0
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, or hybrid-h10-ct-global-scale\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --remove) REMOVE_AFTER_STOP=1 ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -45,7 +47,7 @@ usage() {
 Usage:
   ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale]
   ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale] [--remove]
   ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale]
 
 Experiment controls:
@@ -63,6 +65,9 @@ Experiment controls:
 
 Build:
   docker build -t vllm-orcarouter-v029:v1     -f scripts/Dockerfile.v029-orcarouter scripts/
+
+stop preserves the stopped experiment container for post-failure logs/inspect.
+Pass --remove only when the container should be deleted after stopping.
 
 This helper is experimental and does not modify install.env or the stable runtime.
 EOF
@@ -524,8 +529,17 @@ case "${ACTION}" in
     ;;
   stop)
     if docker inspect "${NAME}" >/dev/null 2>&1; then
-      docker rm -f "${NAME}" >/dev/null
-      printf 'removed experimental container: %s\n' "${NAME}"
+      running="$(docker inspect --format '{{.State.Running}}' "${NAME}" 2>/dev/null || true)"
+      if [[ "${running}" == true ]]; then
+        docker stop --timeout 30 "${NAME}" >/dev/null
+        printf 'stopped experimental container; preserved for diagnostics: %s\n' "${NAME}"
+      else
+        printf 'experimental container already stopped; preserved for diagnostics: %s\n' "${NAME}"
+      fi
+      if [[ "${REMOVE_AFTER_STOP}" == 1 ]]; then
+        docker rm "${NAME}" >/dev/null
+        printf 'removed experimental container: %s\n' "${NAME}"
+      fi
     else
       printf 'experimental container is absent: %s\n' "${NAME}"
     fi
