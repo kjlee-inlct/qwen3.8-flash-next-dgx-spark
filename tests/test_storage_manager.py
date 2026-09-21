@@ -129,7 +129,21 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("refusing active profile retirement", script)
         self.assertIn("refusing retirement: container is running", script)
         self.assertIn("hybrid-h10-ct-global-scale", registry)
-        self.assertIn("MODEL_ASSET_DEPENDS_ON", registry)
+        self.assertIn("MODEL_ASSET_CHECKPOINT_DEPENDS_ON", registry)
+        self.assertIn("MODEL_ASSET_IMAGE_DEPENDS_ON", registry)
+        self.assertIn('model_asset_dependents() {', registry)
+        self.assertIn('checkpoint) deps="$MODEL_ASSET_CHECKPOINT_DEPENDS_ON"', registry)
+        self.assertIn('image) deps="$MODEL_ASSET_IMAGE_DEPENDS_ON"', registry)
+
+    def test_model_manager_keeps_skinny_image_independent_from_checkpoint_dependencies(self) -> None:
+        registry = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
+        script = MODEL_MANAGER.read_text(encoding="utf-8")
+        self.assertIn('MODEL_ASSET_IMAGE="vllm-skinny-tp1:v1"', registry)
+        self.assertIn('MODEL_ASSET_RETIRE_IMAGE=1', registry)
+        self.assertIn('asset_required_by_present_profile "$profile" checkpoint', script)
+        self.assertIn('asset_required_by_present_profile "$profile" image', script)
+        self.assertIn('-z "$image_dependent"', script)
+        self.assertIn('-z "$checkpoint_dependent"', script)
 
     def test_model_manager_discovers_and_removes_hybrid_manifests(self) -> None:
         script = MODEL_MANAGER.read_text(encoding="utf-8")
