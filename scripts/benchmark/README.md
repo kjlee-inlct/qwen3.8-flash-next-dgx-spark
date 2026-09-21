@@ -712,8 +712,7 @@ full routed-expert representation change:
 - mazinb expert quantization is ModelOpt `NVFP4`, also 4-bit group-size 16, but
   with a different loader representation.
 
-This makes the routed-expert quantization layout the next isolation target. H3
-keeps OrcaRouter outside quantized regions, replaces all 300 group-0 weights with
+H3 expert selection is intentionally limited to `model.language_model.layers.*.mlp.experts.*`; any MTP expert tensors remain untouched and are excluded from the layout counts.\n\nThis makes the routed-expert quantization layout the next isolation target. H3\nkeeps OrcaRouter outside quantized regions, replaces all 300 group-0 weights with
 the already-tested mazinb BF16 weights, replaces routed experts with mazinb
 ModelOpt NVFP4 tensors, switches only `quantization_config` to mazinb, and
 leaves MTP unchanged.
