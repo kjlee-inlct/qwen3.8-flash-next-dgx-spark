@@ -52,8 +52,8 @@ describe_storage_image() {
       ;;
     vllm-orcarouter-v029:v1)
       STORAGE_IMAGE_CLASS="experiment"
-      STORAGE_IMAGE_DISPOSABLE=1
-      STORAGE_IMAGE_DESCRIPTION="OrcaRouter on official vLLM v0.29 with PLE mmap"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="Current H3/H4 experiment infrastructure on vLLM v0.29 with PLE mmap"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
