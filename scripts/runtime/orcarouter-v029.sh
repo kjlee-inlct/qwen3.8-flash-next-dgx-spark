@@ -176,6 +176,14 @@ load_source() {
   MODEL_REVISION="${PROFILE_REVISION}"
 }
 
+
+h9_image_ok() {
+  [[ "${PROFILE_CASE}" != hybrid-h9-ct-modelweight ]] && return 0
+  local label
+  label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h9" }}' 2>/dev/null || true)"
+  [[ "${label}" == "compressed-tensors-nvfp4-scale-modelweight-block-v2" ]]
+}
+
 source_manifest_ok() {
   if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight ]]; then
     return 0
@@ -427,6 +435,7 @@ start_runtime() {
     exit 1
   fi
   docker image inspect "${IMAGE}" >/dev/null 2>&1 || { printf 'ERROR: image missing: %s\n' "${IMAGE}" >&2; exit 1; }
+  h9_image_ok || { printf 'ERROR: stale or incompatible H9 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
   source_manifest_ok || { printf 'ERROR: checkpoint manifest is incomplete or inconsistent for profile %s\n' "${PROFILE_CASE}" >&2; exit 1; }
 
