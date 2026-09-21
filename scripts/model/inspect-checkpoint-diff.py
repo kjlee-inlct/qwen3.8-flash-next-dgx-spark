@@ -78,9 +78,59 @@ def tensor_meta(root: Path, mapping: dict[str, str]) -> dict[str, tuple[str, tup
     return result
 
 
+def expert_suffix(key: str) -> str | None:
+    marker = ".mlp.experts."
+    if marker not in key:
+        return None
+    tail = key.split(marker, 1)[1]
+    parts = tail.split(".", 1)
+    return parts[1] if len(parts) == 2 else None
+
+
+def expert_suffix_counts(keys: set[str]) -> dict[str, int]:
+    counts = Counter(suffix for key in keys if (suffix := expert_suffix(key)))
+    return dict(sorted(counts.items()))
+
+
+def summarize_quantization(root: Path) -> dict[str, Any]:
+    config = load_json(root / "config.json")
+    quant = config.get("quantization_config")
+    if not isinstance(quant, dict):
+        return {"present": False}
+
+    result: dict[str, Any] = {"present": True}
+    for key, value in quant.items():
+        if key != "config_groups":
+            result[key] = value
+
+    groups = quant.get("config_groups")
+    group_summary: dict[str, Any] = {}
+    if isinstance(groups, dict):
+        for name, group in sorted(groups.items()):
+            if not isinstance(group, dict):
+                group_summary[str(name)] = group
+                continue
+            item = {k: v for k, v in group.items() if k != "targets"}
+            targets = group.get("targets")
+            if isinstance(targets, list):
+                item["target_count"] = len(targets)
+                item["target_examples"] = [str(x) for x in targets[:10]]
+            group_summary[str(name)] = item
+    result["config_groups"] = group_summary
+    return result
+
+
 def summarize(label: str, keys: set[str]) -> dict[str, Any]:
     cats = Counter(category(key) for key in keys)
-    return {"label": label, "count": len(keys), "categories": dict(sorted(cats.items()))}
+    result = {
+        "label": label,
+        "count": len(keys),
+        "categories": dict(sorted(cats.items())),
+    }
+    suffixes = expert_suffix_counts(keys)
+    if suffixes:
+        result["expert_suffixes"] = suffixes
+    return result
 
 
 def main() -> int:
@@ -120,6 +170,8 @@ def main() -> int:
         "candidate_group0_targets": len(cand_g0),
         "group0_only_base": len(base_g0 - cand_g0),
         "group0_only_candidate": len(cand_g0 - base_g0),
+        "base_quantization": summarize_quantization(args.base),
+        "candidate_quantization": summarize_quantization(args.candidate),
         "metadata_difference_examples": [
             {
                 "key": key,
