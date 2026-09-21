@@ -998,6 +998,22 @@ Interpretation:
 - PASS: that metadata difference is also insufficient, leaving the
   compressed-tensors parameter naming/processing path itself as the next target.
 
+Observed on 2026-09-21:
+
+- H7 `group-metadata` reused the H6 checkpoint unchanged;
+- the derivative image changed only the ModelOpt routed-expert `weight_scale`
+  metadata from `BLOCK` to `GROUP`;
+- runtime reached READY after 722 seconds;
+- the 1024/128 seeded determinism gate failed with 3 unique hashes across 5
+  repeats;
+- runs 1, 2, and 4 matched the stable H6 hash, while runs 3 and 5 diverged.
+
+This is the strongest isolation result so far. Under the fixed H6 checkpoint and
+W4A16 control, changing only the routed-expert weight-scale metadata
+`BLOCK -> GROUP` is sufficient to reintroduce nondeterminism. The primary
+root-cause region is therefore the GROUP/BLOCK metadata handling and the
+weight-loading/processing path it controls.
+
 ## OrcaRouter stability candidate
 
 After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
