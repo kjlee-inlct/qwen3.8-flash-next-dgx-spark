@@ -700,10 +700,13 @@ embeddings/head, normalization, expert packing, PLE, or other checkpoint paths.
 For the observed OrcaRouter/mazinb pair, the structural inventory confirmed a
 full routed-expert representation change:
 
-- OrcaRouter: 147600 expert-only tensors, consisting of six packed/global-scale
-  suffix families at 24576 tensors each;
-- mazinb: 221184 expert-only tensors, consisting of nine
-  weight/input-scale/weight-scale-2 suffix families at 24576 tensors each;
+- the initial diff showed 147600 OrcaRouter-only expert tensors and 221184
+  mazinb-only expert tensors;
+- the full expert layouts also share 73728 `weight_scale` tensors (three
+  projection suffix families at 24576 each), so H3 must remove 221184 OrcaRouter
+  expert tensors and add all 294912 mazinb expert tensors;
+- OrcaRouter therefore has nine routed-expert suffix families in total, while
+  mazinb has twelve;
 - OrcaRouter expert quantization is compressed-tensors
   `nvfp4-pack-quantized`, 4-bit group-size 16;
 - mazinb expert quantization is ModelOpt `NVFP4`, also 4-bit group-size 16, but

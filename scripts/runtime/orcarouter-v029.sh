@@ -155,8 +155,8 @@ ok = (
     and bool(data.get("overlay_revision"))
     and data.get("group0_bf16_weights") == 300
     and data.get("group0_fp8_scales_removed") == 300
-    and data.get("base_expert_tensors_removed") == 147600
-    and data.get("overlay_expert_tensors_added") == 221184
+    and data.get("base_expert_tensors_removed") == 221184
+    and data.get("overlay_expert_tensors_added") == 294912
     and data.get("quantization_config_source") == "mazinb-modelopt-nvfp4"
     and data.get("mtp_tensors_changed") == 0
 )
