@@ -26,20 +26,26 @@ VARIANT = "quant-layout-mazinb-experts"
 EXPECTED_BASE_EXPERT_SUFFIXES = {
     "down_proj.weight_global_scale": 24576,
     "down_proj.weight_packed": 24576,
+    "down_proj.weight_scale": 24576,
     "gate_proj.weight_global_scale": 24576,
     "gate_proj.weight_packed": 24576,
+    "gate_proj.weight_scale": 24576,
     "up_proj.weight_global_scale": 24576,
     "up_proj.weight_packed": 24576,
+    "up_proj.weight_scale": 24576,
 }
 EXPECTED_OVERLAY_EXPERT_SUFFIXES = {
     "down_proj.input_scale": 24576,
     "down_proj.weight": 24576,
+    "down_proj.weight_scale": 24576,
     "down_proj.weight_scale_2": 24576,
     "gate_proj.input_scale": 24576,
     "gate_proj.weight": 24576,
+    "gate_proj.weight_scale": 24576,
     "gate_proj.weight_scale_2": 24576,
     "up_proj.input_scale": 24576,
     "up_proj.weight": 24576,
+    "up_proj.weight_scale": 24576,
     "up_proj.weight_scale_2": 24576,
 }
 DTYPE_BITS = {
