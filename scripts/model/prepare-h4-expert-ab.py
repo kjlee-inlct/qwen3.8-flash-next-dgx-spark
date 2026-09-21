@@ -3,7 +3,7 @@
 
 Variants:
 - orca-down: convert every OrcaRouter routed-expert down_proj into ModelOpt names.
-- orca-gate-up: convert every OrcaRouter routed-expert gate_proj+up_proj pair.
+- orca-gate-up: convert every OrcaRouter routed-expert gate_proj+up_proj pair.\n- orca-all: convert every routed-expert down/gate/up projection together.
 
 The H3 ModelOpt quantization config and mazinb input_scale tensors are retained.
 Only weight, weight_scale, and reciprocal weight_scale_2 are replaced.
@@ -22,7 +22,7 @@ from typing import Any
 H3_MOUNT = "/h3-model"
 BASE_MOUNT = "/base-model"
 RESERVE_BYTES = 10 * 1024**3
-EXPECTED_MODULES = {"orca-down": 24576, "orca-gate-up": 49152}
+EXPECTED_MODULES = {"orca-down": 24576, "orca-gate-up": 49152, "orca-all": 73728}
 
 
 class H4Error(RuntimeError):
@@ -63,6 +63,8 @@ def selected_modules(mapping: dict[str, str], variant: str) -> list[str]:
         selected = sorted(
             m for m in modules if m.endswith(".gate_proj") or m.endswith(".up_proj")
         )
+    elif variant == "orca-all":
+        selected = sorted(modules)
     else:
         raise H4Error(f"unsupported variant: {variant}")
     expected = EXPECTED_MODULES[variant]
