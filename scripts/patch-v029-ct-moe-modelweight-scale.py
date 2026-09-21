@@ -60,9 +60,6 @@ w13_new = '''        weight_loader = extra_weight_attrs.get("weight_loader")
             weight_loader=weight_loader,
         )
         layer.register_parameter("w13_weight_scale", w13_weight_scale)
-        extra_weight_attrs.update(
-            {"quant_method": FusedMoeWeightScaleSupported.BLOCK.value}
-        )
         set_weight_attrs(
             w13_weight_scale,
             {"quant_method": FusedMoeWeightScaleSupported.BLOCK.value},
@@ -98,9 +95,6 @@ w2_new = '''        w2_weight_scale = ModelWeightParameter(
             weight_loader=weight_loader,
         )
         layer.register_parameter("w2_weight_scale", w2_weight_scale)
-        extra_weight_attrs.update(
-            {"quant_method": FusedMoeWeightScaleSupported.BLOCK.value}
-        )
         set_weight_attrs(
             w2_weight_scale,
             {"quant_method": FusedMoeWeightScaleSupported.BLOCK.value},
