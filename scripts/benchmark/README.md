@@ -775,6 +775,24 @@ showed that the 300 non-expert group0 FP8 tensors were insufficient. The next
 isolation should subdivide the routed-expert representation/config while keeping
 the proven H2 group0-BF16 baseline fixed.
 
+The same H3 boot then passed the wider QSA determinism sweep at requested prompt
+sizes 1024, 2048, 4096, 8192, and 32768 with five repeats per size and exactly
+one unique hash at every point. No first failing size was observed.
+
+Decode also passed on the same boot:
+
+- median decode: 26.6382 tok/s (max 26.6634 tok/s);
+- warm TTFT after the first request: about 0.222-0.230 s;
+- engine steps: 11.917/s;
+- speculative draft acceptance: 0.600733;
+- accepted tokens per draft: 1.201465.
+
+This wider result makes the H2->H3 routed-expert representation/config delta a
+strong root-cause region rather than a single-size coincidence. Further
+subdivision must preserve one coherent loader representation; mixing OrcaRouter
+packed expert tensors with a mazinb ModelOpt quantization config is not a valid
+isolation by itself.
+
 
 ## OrcaRouter stability candidate
 
