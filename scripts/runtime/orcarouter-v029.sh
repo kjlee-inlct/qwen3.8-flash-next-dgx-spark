@@ -16,7 +16,7 @@ PROFILE_CASE="orcarouter"
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, or hybrid-h4-gate-up\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, or hybrid-h4-all\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -30,16 +30,17 @@ case "${PROFILE_CASE}" in
   hybrid-quant-layout) NAME="qwen38-hybrid-quant-layout-v029" ;;
   hybrid-h4-down) NAME="qwen38-h4-down-v029" ;;
   hybrid-h4-gate-up) NAME="qwen38-h4-gate-up-v029" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, or hybrid-h4-gate-up\n' >&2; exit 2 ;;
+  hybrid-h4-all) NAME="qwen38-h4-all-v029" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, or hybrid-h4-all\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -94,11 +95,16 @@ load_source() {
     return 0
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout || "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout || "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
-    if [[ "${PROFILE_CASE}" == hybrid-h4-down ]]; then
+    if [[ "${PROFILE_CASE}" == hybrid-h4-all ]]; then
+      MODEL_PROFILE="hybrid-h4-all"
+      MODEL_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
+      SERVED_NAME="hybrid-h4-all/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h4-orca-all"
+    elif [[ "${PROFILE_CASE}" == hybrid-h4-down ]]; then
       MODEL_PROFILE="hybrid-h4-down"
       MODEL_DIR="${H4_ORCA_DOWN_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-down}"
       SERVED_NAME="hybrid-h4-down/Qwen3.8-Flash-Next-Uncensored-NVFP4"
@@ -154,7 +160,7 @@ PY
   fi
 
 
-  if [[ "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all ]]; then
     local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
     [[ -r "${manifest}" ]] || return 1
     python3 - "${manifest}" "${PROFILE_CASE}" <<'PY' >/dev/null
@@ -164,6 +170,7 @@ data = json.load(open(path, encoding="utf-8"))
 expected = {
     "hybrid-h4-down": ("h4-orca-down", 24576, 73728),
     "hybrid-h4-gate-up": ("h4-orca-gate-up", 49152, 147456),
+    "hybrid-h4-all": ("h4-orca-all", 73728, 221184),
 }[profile]
 variant, modules, tensors = expected
 ok = (
@@ -329,7 +336,7 @@ start_runtime() {
   mkdir -p "${HOME}/.cache/vllm-qwen38-v029" "${HOME}/.cache/flashinfer-v029"
 
   extra_mount=()
-  if [[ "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all ]]; then
     H3_MODEL_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
     [[ -d "${BASE_MODEL_DIR}" ]] || { printf 'ERROR: hybrid base model directory missing: %s\n' "${BASE_MODEL_DIR}" >&2; exit 1; }
     [[ -d "${H3_MODEL_DIR}" ]] || { printf 'ERROR: H3 parent model directory missing: %s\n' "${H3_MODEL_DIR}" >&2; exit 1; }
