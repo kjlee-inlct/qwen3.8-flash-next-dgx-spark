@@ -856,6 +856,24 @@ Therefore restoring all OrcaRouter routed-expert `down_proj` values is not
 sufficient to reproduce the original nondeterminism. The next discriminating
 experiment is `orca-gate-up`.
 
+Observed next on 2026-09-21:
+
+- H4 `orca-gate-up` built successfully as a 43-GiB thin delta over H3;
+- 49152 OrcaRouter `gate_proj + up_proj` expert modules / 147456 normalized
+  tensors were substituted while mazinb/H3 `input_scale` and ModelOpt
+  quantization config remained fixed;
+- runtime reached READY after 1013 seconds;
+- the 1024/128 seeded determinism gate passed all five repeats with exactly one
+  unique output hash.
+
+With both `orca-down` and `orca-gate-up` passing independently, neither
+projection family alone is sufficient to reproduce the original instability.
+The next high-information isolation is to restore all OrcaRouter routed-expert
+weight/group/global-scale values together while keeping the H3/mazinb
+`input_scale` tensors and ModelOpt loader contract fixed. A failure there would
+indicate an interaction between the projection families; a pass would move the
+primary candidate to the mazinb `input_scale` representation/value path.
+
 
 ## OrcaRouter stability candidate
 
