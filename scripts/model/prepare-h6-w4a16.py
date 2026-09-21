@@ -68,7 +68,11 @@ def clear_output(output: Path, force: bool) -> None:
 
 
 def link_parent_files(parent: Path, output: Path) -> None:
-    excluded = {"config.json", ".qwen38-hybrid-manifest.json"}
+    excluded = {
+        "config.json",
+        "model.safetensors.index.json",
+        ".qwen38-hybrid-manifest.json",
+    }
     for source in sorted(parent.iterdir(), key=lambda p: p.name):
         if source.name in excluded:
             continue
@@ -103,6 +107,17 @@ def build(parent: Path, output: Path, force: bool) -> None:
     quant["quant_algo"] = "W4A16_NVFP4"
     (output / "config.json").write_text(
         json.dumps(new_config, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    # Keep the checkpoint index as a real local file. Runtime preflight validates
+    # it from the host before Docker parent mounts (/h5-parent, /h4-all, ...)
+    # exist, so an absolute parent symlink here would appear missing.
+    index_path = parent / "model.safetensors.index.json"
+    if not index_path.is_file():
+        raise H6Error(f"H5 parent index missing: {index_path}")
+    (output / "model.safetensors.index.json").write_text(
+        index_path.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 
