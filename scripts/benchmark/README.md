@@ -955,6 +955,19 @@ Interpretation:
 - PASS: the ModelOpt representation remains stable even in W4A16 mode, so the
   remaining difference is more specifically the ModelOpt versus
   compressed-tensors loader/parameter representation.
+
+Observed on 2026-09-21:
+
+- H6 `modelopt-w4a16` reached READY after 712 seconds;
+- no safetensor bytes changed relative to H5;
+- the only intended checkpoint change was
+  `quant_algo: NVFP4 -> W4A16_NVFP4`;
+- the 1024/128 seeded determinism gate passed all five repeats with one unique
+  output hash.
+
+Therefore W4A4 activation quantization is not required for determinism. The
+remaining leading difference is the checkpoint loader/parameter representation
+and its weight-processing path: ModelOpt versus compressed-tensors.
 The next high-information isolation is to restore all OrcaRouter routed-expert
 weight/group/global-scale values together while keeping the H3/mazinb
 `input_scale` tensors and ModelOpt loader contract fixed. A failure there would
