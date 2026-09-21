@@ -1304,3 +1304,63 @@ Interpretation:
 - FAIL: global-scale parameter representation is also insufficient, leaving the
   packed expert-weight parameter representation and compressed-tensors
   post-load rename/conversion as the next isolation target.
+
+
+### H10 result: FAIL
+
+Observed on 2026-09-22:
+
+- corrected H10 reached READY after 672 seconds;
+- original OrcaRouter checkpoint values and names were unchanged;
+- H9 expert `weight_scale` used `ModelWeightParameter + BLOCK`;
+- H10 expert `weight_global_scale` used
+  `PerTensorScaleParameter(weight_loader=...)` with TENSOR metadata;
+- the 1024/128 seeded determinism gate failed with 5 unique hashes across 5
+  repeats;
+- one repeat matched the previously stable H6 hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`,
+  while other repeats matched hashes previously seen in H9.
+
+Therefore the global-scale parameter/loader representation is also insufficient
+to repair the compressed-tensors path.
+
+### H11: compressed-tensors packed expert weight parameter control
+
+H11 starts from the corrected H10 image and changes only the pre-load packed
+expert weight parameter objects:
+
+- H10: plain `torch.nn.Parameter` for `w13_weight_packed` /
+  `w2_weight_packed`;
+- H11: `ModelWeightParameter(input_dim=1, output_dim=2,
+  weight_loader=...)` for those same on-disk names.
+
+The OrcaRouter checkpoint, packed weight bytes, H9 scale representation, H10
+global-scale representation, reciprocal scale conversion, and the existing
+compressed-tensors post-load `weight_packed -> weight` wrapping/rename are
+unchanged.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h11-ct-packed-modelweight:v1 \
+  -f scripts/Dockerfile.v029-h11-ct-packed-modelweight \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h11-ct-packed-modelweight
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h11-ct-packed-modelweight
+
+./scripts/wait-ready.sh \
+  --container qwen38-h11-ct-packed-modelweight-v029 \
+  --model hybrid-h11-ct-packed-modelweight/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: the packed-weight parameter/loader representation becomes the strongest
+  remaining root-cause candidate;
+- FAIL: pre-load packed-weight parameter representation is insufficient, making
+  the compressed-tensors post-load `weight_packed -> weight` rename/wrapping
+  the next isolation target.
