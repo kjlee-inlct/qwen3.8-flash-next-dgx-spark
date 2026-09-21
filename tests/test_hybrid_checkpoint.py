@@ -20,6 +20,8 @@ H4_AB_TOOL = ROOT / "scripts" / "model" / "prepare-h4-expert-ab.py"
 H4_AB_WRAPPER = ROOT / "scripts" / "model" / "prepare-h4-expert-ab.sh"
 H5_TOOL = ROOT / "scripts" / "model" / "prepare-h5-input-scale.py"
 H5_WRAPPER = ROOT / "scripts" / "model" / "prepare-h5-input-scale.sh"
+H6_TOOL = ROOT / "scripts" / "model" / "prepare-h6-w4a16.py"
+H6_WRAPPER = ROOT / "scripts" / "model" / "prepare-h6-w4a16.sh"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -295,6 +297,19 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("stop the runtime before H5 build", source)
         self.assertIn("/h4-all:ro", source)
         self.assertIn("/h3-model:ro", source)
+
+    def test_h6_builder_is_config_only_w4a16_control(self) -> None:
+        source = H6_TOOL.read_text(encoding="utf-8")
+        self.assertIn('"quant_algo"] = "W4A16_NVFP4"', source)
+        self.assertIn('"safetensor_bytes_changed": 0', source)
+        self.assertIn('"input_scale_source": "h5-neutral-1.0"', source)
+        self.assertNotIn("save_file(", source)
+
+    def test_h6_wrapper_requires_h5_parent(self) -> None:
+        source = H6_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("qwen3.8-h5-neutral-input-scale", source)
+        self.assertIn("stop the runtime before H6 build", source)
+        self.assertIn("/h5-parent:ro", source)
 
 if __name__ == "__main__":
     unittest.main()
