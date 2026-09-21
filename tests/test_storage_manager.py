@@ -115,6 +115,11 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("docker inspect --format", script)
         self.assertIn("checkpoint is mounted by a running Docker container", script)
 
+    def test_storage_recommend_discovers_hybrid_manifests(self) -> None:
+        source = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8")
+        self.assertIn(".qwen38-hybrid-manifest.json", source)
+        self.assertIn(".qwen38-model-manifest.json", source)
+
 
 if __name__ == "__main__":
     unittest.main()
