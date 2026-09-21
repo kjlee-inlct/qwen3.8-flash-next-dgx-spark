@@ -1,0 +1,24 @@
+# H7 control image: same v0.29 experiment image plus one ModelOpt MoE metadata change.
+FROM vllm-orcarouter-v029:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG MODELOPT=${SP}/vllm/model_executor/layers/quantization/modelopt.py
+
+COPY patch-v029-modelopt-moe-group-scale.py /tmp/patch-v029-modelopt-moe-group-scale.py
+RUN cp ${MODELOPT} ${MODELOPT}.h7.orig \
+ && python3 /tmp/patch-v029-modelopt-moe-group-scale.py ${MODELOPT} \
+ && rm /tmp/patch-v029-modelopt-moe-group-scale.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class ModelOptNvFp4FusedMoE")
+end=s.index("\nclass ", start+1)
+body=s[start:end]
+assert '{"quant_method": FusedMoeWeightScaleSupported.GROUP.value}' in body
+assert '{"quant_method": FusedMoeWeightScaleSupported.BLOCK.value}' not in body
+print("H7 ModelOpt GROUP metadata patch installed")
+PY
+
+LABEL qwen38.h7="modelopt-nvfp4-moe-scale-metadata-group"
