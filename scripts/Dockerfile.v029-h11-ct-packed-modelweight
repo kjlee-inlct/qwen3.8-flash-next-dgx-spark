@@ -1,0 +1,30 @@
+# H11 control: H10 + ModelOpt-style packed expert weight parameter objects.
+# On-disk names remain w13_weight_packed / w2_weight_packed so the OrcaRouter
+# checkpoint and compressed-tensors loading contract remain unchanged.
+FROM vllm-orcarouter-v029-h10-ct-global-scale:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-packed-modelweight.py /tmp/patch-v029-ct-moe-packed-modelweight.py
+RUN cp ${CT} ${CT}.h11.orig \
+ && python3 /tmp/patch-v029-ct-moe-packed-modelweight.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-packed-modelweight.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert "w13_weight = ModelWeightParameter(" in body
+assert "w2_weight = ModelWeightParameter(" in body
+assert 'layer.register_parameter("w13_weight_packed", w13_weight)' in body
+assert 'layer.register_parameter("w2_weight_packed", w2_weight)' in body
+assert "input_dim=1" in body and "output_dim=2" in body
+assert "layer.w13_weight = torch.nn.Parameter(" in body
+assert 'delattr(layer, "w13_weight_packed")' in body
+print("H11 packed expert ModelWeightParameter patch installed")
+PY
+
+LABEL qwen38.h11="compressed-tensors-packed-modelweight-v1"
