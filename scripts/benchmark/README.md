@@ -842,6 +842,20 @@ Run the 1024/128 seeded gate first. If `orca-down` fails while H3 passes, the
 down-projection expert values are sufficient to reintroduce nondeterminism. If it
 passes, test `orca-gate-up` next under the same H3 parent and runtime controls.
 
+Observed on 2026-09-21:
+
+- H4 `orca-down` built successfully as a 22-GiB thin delta over H3;
+- 24576 OrcaRouter `down_proj` expert modules / 73728 normalized tensors were
+  substituted while mazinb/H3 `input_scale` and ModelOpt quantization config
+  remained fixed;
+- runtime reached READY after 952 seconds;
+- the 1024/128 seeded determinism gate passed all five repeats with exactly one
+  unique output hash.
+
+Therefore restoring all OrcaRouter routed-expert `down_proj` values is not
+sufficient to reproduce the original nondeterminism. The next discriminating
+experiment is `orca-gate-up`.
+
 
 ## OrcaRouter stability candidate
 
