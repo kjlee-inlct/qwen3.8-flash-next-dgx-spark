@@ -674,6 +674,28 @@ Interpret the second isolation gate as follows:
 - FAIL: full main-model group-0 BF16 replacement is still insufficient, so keep
   this result recorded before investigating MTP or other runtime paths.
 
+Observed on 2026-09-21 with git revision `c19b36e`:
+
+- the full group-0 BF16 hybrid was healthy and served the expected model;
+- the seeded 1024/128 determinism gate still failed with 3 unique hashes across
+  5 runs;
+- runs 1, 3, and 4 matched, while runs 2 and 5 each produced a different hash;
+- therefore replacing all 300 main-model FP8 group-0 modules with mazinb BF16
+  weights is still insufficient to reproduce mazinb determinism.
+
+Before building another hybrid, inventory the remaining checkpoint structure and
+tensor metadata differences between OrcaRouter and mazinb:
+
+```bash
+bash scripts/model/inspect-orcarouter-mazinb-diff.sh
+cat "${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/analysis/orcarouter-vs-mazinb-structure.json"
+```
+
+The inventory compares tensor-key presence plus dtype/shape metadata without
+loading full tensor payloads into RAM. Use its category counts to choose the
+smallest next A/B region rather than guessing between MTP, embeddings/head,
+normalization, expert, PLE, or other checkpoint paths.
+
 
 ## OrcaRouter stability candidate
 
