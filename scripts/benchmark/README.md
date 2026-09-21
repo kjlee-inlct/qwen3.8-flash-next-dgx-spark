@@ -868,11 +868,40 @@ Observed next on 2026-09-21:
 
 With both `orca-down` and `orca-gate-up` passing independently, neither
 projection family alone is sufficient to reproduce the original instability.
-The next high-information isolation is to restore all OrcaRouter routed-expert
-weight/group/global-scale values together while keeping the H3/mazinb
-`input_scale` tensors and ModelOpt loader contract fixed. A failure there would
-indicate an interaction between the projection families; a pass would move the
-primary candidate to the mazinb `input_scale` representation/value path.
+
+H4 `orca-all` then restored all 73728 OrcaRouter routed-expert projection
+modules / 221184 normalized weight-scale tensors together while retaining the
+mazinb/H3 `input_scale` tensors and ModelOpt quantization config. The 1024/128
+seeded gate still passed all five repeats with one unique hash. Therefore the
+combined OrcaRouter expert weight/group/global-scale values are also insufficient
+to reproduce the original nondeterminism.
+
+The next isolation is H5 `neutral-input-scale`: keep the proven H4-all Orca
+expert payload and ModelOpt config fixed, but replace all 73728 routed-expert
+`input_scale` tensors with scalar 1.0 values. This distinguishes the mazinb
+input-scale values from the ModelOpt loader/config path itself.
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h4-all
+
+bash scripts/model/prepare-h5-input-scale.sh plan
+bash scripts/model/prepare-h5-input-scale.sh build
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h5-neutral-input
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h5-neutral-input
+
+./scripts/wait-ready.sh \
+  --container qwen38-h5-neutral-input-v029 \
+  --model hybrid-h5-neutral-input/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- FAIL: the mazinb expert input-scale values are a material part of the
+  determinism fix;
+- PASS: neutralizing the values is still stable, so the remaining distinction is
+  primarily the ModelOpt activation-quantization/loader representation rather
+  than the specific mazinb input-scale values.
 
 
 ## OrcaRouter stability candidate
