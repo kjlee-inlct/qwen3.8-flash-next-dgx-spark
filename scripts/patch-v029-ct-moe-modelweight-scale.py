@@ -63,6 +63,7 @@ w13_new = '''        weight_loader = extra_weight_attrs.get("weight_loader")
         extra_weight_attrs.update(
             {"quant_method": FusedMoeWeightScaleSupported.BLOCK.value}
         )
+        set_weight_attrs(w13_weight_scale, extra_weight_attrs)
 '''
 
 w2_old = '''        w2_weight_scale = torch.nn.Parameter(
@@ -97,6 +98,7 @@ w2_new = '''        w2_weight_scale = ModelWeightParameter(
         extra_weight_attrs.update(
             {"quant_method": FusedMoeWeightScaleSupported.BLOCK.value}
         )
+        set_weight_attrs(w2_weight_scale, extra_weight_attrs)
 '''
 
 if body.count(w13_old) != 1:

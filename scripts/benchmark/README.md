@@ -1008,11 +1008,12 @@ Observed on 2026-09-21:
   repeats;
 - runs 1, 2, and 4 matched the stable H6 hash, while runs 3 and 5 diverged.
 
-This is the strongest isolation result so far. Under the fixed H6 checkpoint and
-W4A16 control, changing only the routed-expert weight-scale metadata
-`BLOCK -> GROUP` is sufficient to reintroduce nondeterminism. The primary
-root-cause region is therefore the GROUP/BLOCK metadata handling and the
-weight-loading/processing path it controls.
+H7 failed determinism, but later source review showed that ModelOpt
+`ModelWeightParameter` does not consume the modified `extra_weight_attrs`
+through the compressed-tensors generic scale-loading branch. Therefore H7 must
+not be treated as a clean causal `BLOCK -> GROUP` proof. It remains evidence
+that the derived runtime was unstable, but the specific metadata attribution is
+inconclusive.
 
 H8 is the reciprocal confirmation test on the original OrcaRouter
 compressed-tensors checkpoint. It leaves the checkpoint and compressed-tensors
@@ -1051,9 +1052,9 @@ Observed on 2026-09-21:
 - runs 1-3 matched the stable H6 hash while runs 4-5 diverged;
 - startup selected the weight-only FP4 Marlin path.
 
-Therefore BLOCK metadata alone does not repair the compressed-tensors path.
-Together H7 and H8 show that metadata participates in the instability but is not
-the whole cause. The next isolation target is the compressed-tensors-specific
+H8 shows that explicitly changing the compressed-tensors scale metadata to
+`BLOCK` is insufficient to restore determinism. Combined with the H7 caveat
+above, the next valid isolation target is the compressed-tensors-specific
 parameter/weight-loader representation and post-load conversion path.
 
 H9 isolates the first of those representation differences. It keeps the
@@ -1223,3 +1224,13 @@ Long model boots should use `./scripts/wait-ready.sh` rather than copied polling
 ## Determinism sampling controls
 
 Determinism requests explicitly pin `temperature=0`, `top_p=1.0`, `seed=0`, and disable thinking. The report records these controls so a failure cannot be attributed to an implicit sampler default.
+
+### H9 loader correction
+
+The first H9 image failed before inference because converting the
+compressed-tensors expert `weight_scale` objects to `ModelWeightParameter`
+dropped the `quant_method` attribute required by the generic
+`RoutedExperts.weight_loader`. That startup failure is not a determinism
+result. The corrected H9 patch keeps the ModelWeightParameter representation but
+reapplies `set_weight_attrs(..., quant_method=BLOCK)` to both w13 and w2 scale
+parameters before rerunning the control.
