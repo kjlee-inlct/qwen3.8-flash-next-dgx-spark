@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 TOOL = ROOT / "scripts" / "model" / "prepare-hybrid-checkpoint.py"
 WRAPPER = ROOT / "scripts" / "model" / "prepare-hybrid-checkpoint.sh"
+DIFF_TOOL = ROOT / "scripts" / "model" / "inspect-checkpoint-diff.py"
+DIFF_WRAPPER = ROOT / "scripts" / "model" / "inspect-orcarouter-mazinb-diff.sh"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -188,6 +190,21 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("--entrypoint python3", source)
         self.assertGreaterEqual(source.count('--variant "${VARIANT}"'), 2)
         self.assertNotIn("pip install", source)
+
+    def test_checkpoint_diff_inventory_is_metadata_only(self) -> None:
+        source = DIFF_TOOL.read_text(encoding="utf-8")
+        self.assertIn("get_slice(key)", source)
+        self.assertIn("get_dtype()", source)
+        self.assertIn("get_shape()", source)
+        self.assertNotIn("get_tensor(key)", source)
+        self.assertIn('"metadata_differences"', source)
+
+    def test_checkpoint_diff_wrapper_uses_existing_runtime_image(self) -> None:
+        source = DIFF_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("vllm-orcarouter-v029:v1", source)
+        self.assertIn("/base:ro", source)
+        self.assertIn("/candidate:ro", source)
+        self.assertIn("--json-output /report.json", source)
 
 
 if __name__ == "__main__":
