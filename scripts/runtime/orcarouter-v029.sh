@@ -16,7 +16,7 @@ PROFILE_CASE="orcarouter"
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, or hybrid-h6-w4a16\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, or hybrid-h7-group-metadata\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -33,16 +33,17 @@ case "${PROFILE_CASE}" in
   hybrid-h4-all) NAME="qwen38-h4-all-v029" ;;
   hybrid-h5-neutral-input) NAME="qwen38-h5-neutral-input-v029" ;;
   hybrid-h6-w4a16) NAME="qwen38-h6-w4a16-v029" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, or hybrid-h6-w4a16\n' >&2; exit 2 ;;
+  hybrid-h7-group-metadata) NAME="qwen38-h7-group-metadata-v029"; IMAGE="vllm-orcarouter-v029-h7-group:v1" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, or hybrid-h7-group-metadata\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -97,11 +98,16 @@ load_source() {
     return 0
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout || "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all || "${PROFILE_CASE}" == hybrid-h5-neutral-input || "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout || "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all || "${PROFILE_CASE}" == hybrid-h5-neutral-input || "${PROFILE_CASE}" == hybrid-h6-w4a16 || "${PROFILE_CASE}" == hybrid-h7-group-metadata ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
-    if [[ "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
+    if [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata ]]; then
+      MODEL_PROFILE="hybrid-h7-group-metadata"
+      MODEL_DIR="${H6_W4A16_MODEL_DIR:-$HOME/models/qwen3.8-h6-modelopt-w4a16}"
+      SERVED_NAME="hybrid-h7-group-metadata/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h7-modelopt-group-metadata"
+    elif [[ "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
       MODEL_PROFILE="hybrid-h6-w4a16"
       MODEL_DIR="${H6_W4A16_MODEL_DIR:-$HOME/models/qwen3.8-h6-modelopt-w4a16}"
       SERVED_NAME="hybrid-h6-w4a16/Qwen3.8-Flash-Next-Uncensored-NVFP4"
@@ -173,6 +179,26 @@ PY
 
 
 
+
+
+  if [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata ]]; then
+    local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
+    [[ -r "${manifest}" ]] || return 1
+    python3 - "${manifest}" <<'PY' >/dev/null
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+ok = (
+    data.get("status") == "complete"
+    and data.get("variant") == "h6-modelopt-w4a16"
+    and data.get("parent_variant") == "h5-neutral-input-scale"
+    and data.get("quant_algo_after") == "W4A16_NVFP4"
+    and data.get("safetensor_bytes_changed") == 0
+    and data.get("mtp_tensors_changed") == 0
+)
+raise SystemExit(0 if ok else 1)
+PY
+    return
+  fi
 
   if [[ "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
     local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
@@ -393,7 +419,7 @@ start_runtime() {
   mkdir -p "${HOME}/.cache/vllm-qwen38-v029" "${HOME}/.cache/flashinfer-v029"
 
   extra_mount=()
-  if [[ "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata || "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
     H5_MODEL_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
     H4_ALL_MODEL_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
     H3_MODEL_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
