@@ -27,7 +27,7 @@ class WaitReadyDiagnosticsTests(unittest.TestCase):
 
     def test_wait_ready_reports_container_disappearance_events(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("seen_container=0", script)
+        self.assertIn("seen_container=1", script)
         self.assertIn("CONTAINER DISAPPEARED", script)
         self.assertIn("print_container_events", script)
         self.assertIn("docker events", script)
