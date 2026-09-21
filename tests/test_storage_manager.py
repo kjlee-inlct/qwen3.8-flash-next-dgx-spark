@@ -111,6 +111,17 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("update transition is active", script)
         self.assertIn('acquire_operation_lock "${STATE_DIR}" "storage prune"', script)
 
+    def test_docker_volume_cleanup_is_opt_in_and_anonymous_only(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("PRUNE_VOLUMES=0", script)
+        self.assertIn("--volumes) PRUNE_VOLUMES=1", script)
+        self.assertIn("anonymous_volume_name()", script)
+        self.assertIn("unused_anonymous_volumes()", script)
+        self.assertIn("volume_referenced_by_container()", script)
+        self.assertIn("docker volume rm", script)
+        self.assertIn("named volumes are always protected", script)
+        self.assertIn("portainer_data", script)
+
     def test_build_cache_and_benchmark_retention_are_bounded(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("BUILD_CACHE_DAYS=7", script)
