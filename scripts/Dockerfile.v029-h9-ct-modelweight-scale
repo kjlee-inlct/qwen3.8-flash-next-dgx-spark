@@ -1,0 +1,28 @@
+# H9 control: original Orca checkpoint + compressed-tensors loader,
+# changing only expert weight_scale parameter representation to ModelWeightParameter
+# and using BLOCK metadata, matching ModelOpt's scale-loading representation.
+FROM vllm-orcarouter-v029:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-modelweight-scale.py /tmp/patch-v029-ct-moe-modelweight-scale.py
+RUN cp ${CT} ${CT}.h9.orig \
+ && python3 /tmp/patch-v029-ct-moe-modelweight-scale.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-modelweight-scale.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert "ModelWeightParameter" in s
+assert body.count("FusedMoeWeightScaleSupported.BLOCK.value") == 2
+assert "w13_weight_scale = ModelWeightParameter(" in body
+assert "w2_weight_scale = ModelWeightParameter(" in body
+assert "input_dim=1" in body and "output_dim=2" in body
+print("H9 compressed-tensors ModelWeightParameter scale patch installed")
+PY
+
+LABEL qwen38.h9="compressed-tensors-nvfp4-scale-modelweight-block"
