@@ -166,6 +166,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("input_dim=1", patch)
         self.assertIn("output_dim=2", patch)
         self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
+        self.assertEqual(patch.split("w13_new =", 1)[1].count("FusedMoeWeightScaleSupported.BLOCK.value"), 2)
         self.assertGreaterEqual(patch.count("set_weight_attrs("), 2)
         w13_new = patch.split("w13_new =", 1)[1].split("w2_old =", 1)[0]
         w2_new = patch.split("w2_new =", 1)[1].split("if body.count", 1)[0]
@@ -179,6 +180,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("h9_image_ok()", script)
         self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block-v2", script)
         self.assertIn("stale or incompatible H9 image", script)
+        self.assertIn("Dockerfile.v029-h9-ct-modelweight-scale", script)
 
     def test_runtime_checks_shared_api_port_before_docker_run(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
