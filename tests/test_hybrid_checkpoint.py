@@ -219,6 +219,8 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn('"group0_bf16_weights"', source)
         self.assertIn('"base_expert_tensors_removed"', source)
         self.assertIn('"overlay_expert_tensors_added"', source)
+        self.assertIn('"down_proj.weight_scale": 24576', source)
+        self.assertIn('"up_proj.weight_scale_2": 24576', source)
         self.assertIn('new_config["quantization_config"]', source)
         self.assertIn('"mazinb-modelopt-nvfp4"', source)
         self.assertIn('"mtp_tensors_changed": 0', source)
