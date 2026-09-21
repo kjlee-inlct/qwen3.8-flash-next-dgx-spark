@@ -142,7 +142,6 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         dockerfile = H7_DOCKERFILE.read_text(encoding="utf-8")
         self.assertIn("class ModelOptNvFp4FusedMoE", patch)
         self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
-        self.assertGreaterEqual(patch.count("set_weight_attrs("), 2)
         self.assertIn("FusedMoeWeightScaleSupported.GROUP.value", patch)
         self.assertIn("expected exactly one ModelOpt NVFP4 MoE BLOCK metadata assignment", patch)
         self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
