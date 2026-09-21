@@ -59,9 +59,14 @@ done
 command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
+if ! docker inspect "${CONTAINER}" >/dev/null 2>&1; then
+  printf 'ERROR: container not found before readiness wait: %s\n' "${CONTAINER}" >&2
+  exit 1
+fi
+
 started="$(date +%s)"
 next_report=0
-seen_container=0
+seen_container=1
 
 print_container_events() {
   local since="$1" until
