@@ -235,5 +235,15 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("QWEN38_GB10_FLA_FIX=1", script)
 
 
+    def test_h11_runtime_and_patch_are_registered(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-ct-moe-packed-modelweight.py").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.v029-h11-ct-packed-modelweight").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("w13_weight = ModelWeightParameter(", patch)
+        self.assertIn("w2_weight = ModelWeightParameter(", patch)
+        self.assertIn("compressed-tensors-packed-modelweight-v1", dockerfile)
+        self.assertIn("hybrid-h11-ct-packed-modelweight", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()
