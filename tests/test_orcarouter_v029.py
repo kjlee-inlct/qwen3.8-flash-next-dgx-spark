@@ -71,6 +71,16 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('data.get("overlay_expert_tensors_added") == 294912', script)
         self.assertIn('data.get("mtp_tensors_changed") == 0', script)
 
+    def test_runtime_supports_h4_partial_expert_profiles(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('hybrid-h4-down) NAME="qwen38-h4-down-v029"', script)
+        self.assertIn('hybrid-h4-gate-up) NAME="qwen38-h4-gate-up-v029"', script)
+        self.assertIn("H4_ORCA_DOWN_MODEL_DIR", script)
+        self.assertIn("H4_ORCA_GATE_UP_MODEL_DIR", script)
+        self.assertIn('data.get("parent_variant") == "quant-layout-mazinb-experts"', script)
+        self.assertIn('data.get("input_scale_source") == "mazinb-h3"', script)
+        self.assertIn('${H3_MODEL_DIR}:/h3-model:ro', script)
+
     def test_runtime_never_mutates_managed_lifecycle(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('install-maintenance "${STATE_FILE}"', script)
