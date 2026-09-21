@@ -18,6 +18,8 @@ H4_CHECK_TOOL = ROOT / "scripts" / "model" / "check-h4-expert-conversion.py"
 H4_CHECK_WRAPPER = ROOT / "scripts" / "model" / "check-h4-expert-conversion.sh"
 H4_AB_TOOL = ROOT / "scripts" / "model" / "prepare-h4-expert-ab.py"
 H4_AB_WRAPPER = ROOT / "scripts" / "model" / "prepare-h4-expert-ab.sh"
+H5_TOOL = ROOT / "scripts" / "model" / "prepare-h5-input-scale.py"
+H5_WRAPPER = ROOT / "scripts" / "model" / "prepare-h5-input-scale.sh"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -278,6 +280,21 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("stop the runtime before H4 build", source)
         self.assertIn("/base:ro", source)
         self.assertIn("/h3:ro", source)
+
+    def test_h5_builder_changes_only_expert_input_scale_values(self) -> None:
+        source = H5_TOOL.read_text(encoding="utf-8")
+        self.assertIn("EXPECTED_INPUT_SCALES = 73728", source)
+        self.assertIn("torch.ones_like(original)", source)
+        self.assertIn('"expert_value_source": "orcarouter-h4-all"', source)
+        self.assertIn('"quantization_config_source": "mazinb-modelopt-nvfp4"', source)
+        self.assertIn('"mtp_tensors_changed": 0', source)
+
+    def test_h5_wrapper_requires_h4_all_parent_and_runtime_stop(self) -> None:
+        source = H5_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("qwen3.8-h4-orca-all", source)
+        self.assertIn("stop the runtime before H5 build", source)
+        self.assertIn("/h4-all:ro", source)
+        self.assertIn("/h3-model:ro", source)
 
 if __name__ == "__main__":
     unittest.main()
