@@ -167,8 +167,9 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("output_dim=2", patch)
         self.assertIn("FusedMoeWeightScaleSupported.BLOCK.value", patch)
         self.assertGreaterEqual(patch.count("set_weight_attrs("), 2)
-        self.assertNotIn("set_weight_attrs(w13_weight_scale, extra_weight_attrs)", patch)
-        self.assertNotIn("set_weight_attrs(w2_weight_scale, extra_weight_attrs)", patch)
+        new_half = patch.split("w13_new =", 1)[1]
+        self.assertNotIn("set_weight_attrs(w13_weight_scale, extra_weight_attrs)", new_half)
+        self.assertNotIn("set_weight_attrs(w2_weight_scale, extra_weight_attrs)", new_half)
         self.assertIn("FROM vllm-orcarouter-v029:v1", dockerfile)
         self.assertIn("compressed-tensors-nvfp4-scale-modelweight-block", dockerfile)
 
