@@ -25,4 +25,4 @@ assert "input_dim=1" in body and "output_dim=2" in body
 print("H9 compressed-tensors ModelWeightParameter scale patch installed")
 PY
 
-LABEL qwen38.h9="compressed-tensors-nvfp4-scale-modelweight-block"
+LABEL qwen38.h9="compressed-tensors-nvfp4-scale-modelweight-block-v2"
