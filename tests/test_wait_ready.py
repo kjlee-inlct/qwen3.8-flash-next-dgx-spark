@@ -25,5 +25,14 @@ class WaitReadyDiagnosticsTests(unittest.TestCase):
         self.assertGreaterEqual(script.count('print_failure_diagnostics "${CONTAINER}"'), 2)
 
 
+    def test_wait_ready_reports_container_disappearance_events(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("seen_container=0", script)
+        self.assertIn("CONTAINER DISAPPEARED", script)
+        self.assertIn("print_container_events", script)
+        self.assertIn("docker events", script)
+        self.assertIn('--filter "container=${CONTAINER}"', script)
+
+
 if __name__ == "__main__":
     unittest.main()
