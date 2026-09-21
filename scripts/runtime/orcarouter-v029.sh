@@ -391,7 +391,11 @@ preflight() {
     printf '  image           : ready (%s)\n' "${IMAGE}"
   else
     printf '  image           : missing (%s)\n' "${IMAGE}"
-    printf '    build with    : docker build -t %s -f scripts/Dockerfile.v029-orcarouter scripts/\n' "${IMAGE}"
+    if [[ "${PROFILE_CASE}" == hybrid-h9-ct-modelweight ]]; then
+      printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h9-ct-modelweight-scale scripts/\n' "${IMAGE}"
+    else
+      printf '    build with    : docker build -t %s -f scripts/Dockerfile.v029-orcarouter scripts/\n' "${IMAGE}"
+    fi
     failures=1
   fi
   printf '  managed service : '
