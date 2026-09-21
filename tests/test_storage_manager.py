@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "scripts" / "manage-storage.sh"
+MODEL_MANAGER = ROOT / "scripts" / "manage-models.sh"
 
 
 class StorageManagerTests(unittest.TestCase):
@@ -101,6 +102,18 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("BENCHMARK_DAYS=30", script)
         self.assertIn('docker builder prune -f --filter "until=${hours}h"', script)
         self.assertIn('-mtime "+${BENCHMARK_DAYS}"', script)
+
+    def test_model_manager_discovers_and_removes_hybrid_manifests(self) -> None:
+        script = MODEL_MANAGER.read_text(encoding="utf-8")
+        self.assertIn(".qwen38-hybrid-manifest.json", script)
+        self.assertIn("hybrid:", script)
+        self.assertIn("model/hybrid manifest missing", script)
+
+    def test_model_manager_protects_running_container_mounts(self) -> None:
+        script = MODEL_MANAGER.read_text(encoding="utf-8")
+        self.assertIn("mounted_by_running_container()", script)
+        self.assertIn("docker inspect --format", script)
+        self.assertIn("checkpoint is mounted by a running Docker container", script)
 
 
 if __name__ == "__main__":
