@@ -34,5 +34,12 @@ class WaitReadyDiagnosticsTests(unittest.TestCase):
         self.assertIn('--filter "container=${CONTAINER}"', script)
 
 
+    def test_wait_ready_rejects_missing_initial_container(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("container not found before readiness wait", script)
+        self.assertIn('docker inspect "${CONTAINER}"', script)
+        self.assertIn("seen_container=1", script)
+
+
 if __name__ == "__main__":
     unittest.main()
