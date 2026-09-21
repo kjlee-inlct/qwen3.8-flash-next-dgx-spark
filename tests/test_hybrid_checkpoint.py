@@ -304,6 +304,8 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn('"safetensor_bytes_changed": 0', source)
         self.assertIn('"input_scale_source": "h5-neutral-1.0"', source)
         self.assertNotIn("save_file(", source)
+        self.assertIn('"model.safetensors.index.json"', source)
+        self.assertIn("index_path.read_text", source)
 
     def test_h6_wrapper_requires_h5_parent(self) -> None:
         source = H6_WRAPPER.read_text(encoding="utf-8")
