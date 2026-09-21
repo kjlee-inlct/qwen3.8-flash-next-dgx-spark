@@ -117,6 +117,9 @@ Canonical implementations include:
 - `model/model-profiles.sh`
 - `model/inspect_model.py`
 - `model/prepare_config.py`
+- `model/prepare-hybrid-checkpoint.py`
+- `model/prepare-quant-layout-hybrid-checkpoint.py`
+- `model/inspect-checkpoint-diff.py`
 
 ## Model download transport
 
