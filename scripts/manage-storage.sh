@@ -23,6 +23,7 @@ ACTION="${1:-status}"
 YES=0
 DRY_RUN=0
 PRUNE_EXPERIMENTS=0
+PRUNE_VOLUMES=0
 BUILD_CACHE_DAYS=7
 BENCHMARK_DAYS=30
 
@@ -31,8 +32,8 @@ usage() {
 Usage:
   ./scripts/manage-storage.sh status
   ./scripts/manage-storage.sh recommend
-  ./scripts/manage-storage.sh plan [--experiments] [--build-cache-days N] [--benchmark-days N]
-  ./scripts/manage-storage.sh prune [--experiments] [--build-cache-days N] [--benchmark-days N] [--yes] [--dry-run]
+  ./scripts/manage-storage.sh plan [--experiments] [--volumes] [--build-cache-days N] [--benchmark-days N]
+  ./scripts/manage-storage.sh prune [--experiments] [--volumes] [--build-cache-days N] [--benchmark-days N] [--yes] [--dry-run]
 
 status
   Read-only inventory of filesystem, managed models, Docker usage, releases,
@@ -58,12 +59,17 @@ prune
   The active manifest image and images referenced by any Docker container are
   protected explicitly. Current H3/H4 infrastructure images are not disposable.
 
+--volumes
+  Additionally remove unused anonymous local Docker volumes. Named volumes are
+  report-only and are never removed automatically.
+
 Never removed by this command:
   - active MODEL_DIR or any managed checkpoint
   - active manifest VLLM_IMAGE
   - current or previous immutable releases
   - PLE swap
   - Hugging Face cache
+  - named Docker volumes such as portainer_data
   - repository source files
 
 Use ./scripts/manage-models.sh for inactive managed checkpoints.
@@ -79,6 +85,7 @@ while [[ $# -gt 0 ]]; do
     --yes) YES=1 ;;
     --dry-run) DRY_RUN=1 ;;
     --experiments) PRUNE_EXPERIMENTS=1 ;;
+    --volumes) PRUNE_VOLUMES=1 ;;
     --build-cache-days)
       [[ $# -ge 2 ]] || die "--build-cache-days requires N"
       BUILD_CACHE_DAYS="$2"; shift
@@ -165,6 +172,42 @@ stopped_experiment_containers() {
   command -v docker >/dev/null 2>&1 || return 0
   docker ps -a --filter 'name=qwen38-' --format '{{.Names}} {{.State}}' 2>/dev/null |
     awk '$1 != "qwen38-flash-next" && $2 != "running" {print $1}'
+}
+
+
+anonymous_volume_name() {
+  [[ "$1" =~ ^[0-9a-f]{64}$ ]]
+}
+
+volume_referenced_by_container() {
+  local volume="$1"
+  command -v docker >/dev/null 2>&1 || return 1
+  docker ps -a --filter "volume=${volume}" --format '{{.ID}}' 2>/dev/null | grep -q .
+}
+
+unused_anonymous_volumes() {
+  local volume
+  command -v docker >/dev/null 2>&1 || return 0
+  while IFS= read -r volume; do
+    [[ -n "${volume}" ]] || continue
+    anonymous_volume_name "${volume}" || continue
+    volume_referenced_by_container "${volume}" && continue
+    printf '%s\n' "${volume}"
+  done < <(docker volume ls -q --filter driver=local 2>/dev/null)
+}
+
+print_volume_inventory() {
+  local volume refs kind
+  command -v docker >/dev/null 2>&1 || return 0
+  printf '\nDocker local volumes:\n'
+  printf '%-66s %-10s %s\n' VOLUME KIND REFERENCES
+  while IFS= read -r volume; do
+    [[ -n "${volume}" ]] || continue
+    kind=named
+    anonymous_volume_name "${volume}" && kind=anonymous
+    refs="$(docker ps -a --filter "volume=${volume}" --format '{{.Names}}' 2>/dev/null | paste -sd, -)"
+    printf '%-66s %-10s %s\n' "${volume}" "${kind}" "${refs:-none}"
+  done < <(docker volume ls -q --filter driver=local 2>/dev/null)
 }
 
 benchmark_candidates() {
@@ -259,6 +302,7 @@ print_status() {
     done < <(list_storage_images)
     printf '\nQwen containers:\n'
     docker ps -a --filter 'name=qwen38' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
+    print_volume_inventory
   else
     printf 'Docker unavailable.\n'
   fi
@@ -269,7 +313,8 @@ print_plan() {
   printf 'Qwen3.8 storage prune plan\n'
   printf '  build cache age : > %s day(s)\n' "${BUILD_CACHE_DAYS}"
   printf '  benchmark age   : > %s day(s)\n' "${BENCHMARK_DAYS}"
-  printf '  experiments     : %s\n\n' "$([[ "${PRUNE_EXPERIMENTS}" == 1 ]] && printf remove-known-tags || printf keep)"
+  printf '  experiments     : %s\n' "$([[ "${PRUNE_EXPERIMENTS}" == 1 ]] && printf remove-known-tags || printf keep)"
+  printf '  volumes         : %s\n\n' "$([[ "${PRUNE_VOLUMES}" == 1 ]] && printf remove-unused-anonymous || printf keep)"
 
   printf '[Stopped experiment containers]\n'
   while IFS= read -r name; do
@@ -316,6 +361,18 @@ print_plan() {
         printf '  absent %s\n' "${image}"
       fi
     done < <(list_disposable_storage_images)
+  fi
+
+  if [[ "${PRUNE_VOLUMES}" == 1 ]]; then
+    found=0
+    printf '\n[Unused anonymous Docker volumes]\n'
+    while IFS= read -r name; do
+      [[ -n "${name}" ]] || continue
+      found=1
+      printf '  remove %s\n' "${name}"
+    done < <(unused_anonymous_volumes)
+    [[ "${found}" == 1 ]] || printf '  none\n'
+    printf '  named volumes are always protected\n'
   fi
 
   printf '\n[Always protected]\n'
@@ -382,6 +439,13 @@ prune_storage() {
     hours=$(( BUILD_CACHE_DAYS * 24 ))
     run_or_echo docker builder prune -f --filter "until=${hours}h"
 
+    if [[ "${PRUNE_VOLUMES}" == 1 ]]; then
+      while IFS= read -r name; do
+        [[ -n "${name}" ]] || continue
+        run_or_echo docker volume rm "${name}"
+      done < <(unused_anonymous_volumes)
+    fi
+
     if [[ "${PRUNE_EXPERIMENTS}" == 1 ]]; then
       while IFS= read -r image; do
         [[ -n "${image}" ]] || continue
@@ -399,7 +463,7 @@ prune_storage() {
     fi
   fi
 
-  printf '\nStorage cleanup complete. Managed checkpoints, active runtime image, current/previous releases, PLE swap, and HF cache were preserved.\n'
+  printf '\nStorage cleanup complete. Managed checkpoints, active runtime image, current/previous releases, named Docker volumes, PLE swap, and HF cache were preserved.\n'
 }
 
 case "${ACTION}" in
