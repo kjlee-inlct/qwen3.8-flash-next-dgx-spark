@@ -1264,3 +1264,43 @@ Therefore the expert weight-scale parameter/loader representation is not
 sufficient to repair the compressed-tensors path. The next isolation target is
 the remaining compressed-tensors-specific expert representation: packed expert
 weights, global-scale parameters, and post-load conversion.
+
+### H10: compressed-tensors global-scale parameter control
+
+H9 showed that changing only routed-expert `weight_scale` parameters to
+ModelWeightParameter + BLOCK is insufficient: the corrected H9 runtime reached
+READY but still produced 5 unique hashes in 5 deterministic repeats.
+
+H10 keeps the corrected H9 image as its parent and changes only the routed-expert
+weight-global-scale parameter representation:
+
+- H9: plain `torch.nn.Parameter` + TENSOR attrs;
+- H10: `PerTensorScaleParameter(weight_loader=...)`.
+
+The original OrcaRouter checkpoint values and on-disk parameter names remain
+unchanged. The compressed-tensors reciprocal conversion
+`1 / weight_global_scale`, packed expert weights, input-global-scale handling,
+post-load rename, W4A16/Marlin backend, QSA, and MTP controls are unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h10-ct-global-scale:v1 \
+  -f scripts/Dockerfile.v029-h10-ct-global-scale \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h9-ct-modelweight
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h10-ct-global-scale
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h10-ct-global-scale
+
+./scripts/wait-ready.sh \
+  --container qwen38-h10-ct-global-scale-v029 \
+  --model hybrid-h10-ct-global-scale/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: global-scale parameter/loader representation is the missing difference
+  beyond H9 and becomes the primary root-cause candidate;
+- FAIL: global-scale parameter representation is also insufficient, leaving the
+  packed expert-weight parameter representation and compressed-tensors
+  post-load rename/conversion as the next isolation target.
