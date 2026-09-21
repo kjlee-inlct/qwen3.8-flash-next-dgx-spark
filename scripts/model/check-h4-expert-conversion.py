@@ -186,6 +186,28 @@ def main() -> int:
             "mazinb_weight_scale_2": overlay_globals[module + ".weight_scale_2"],
         })
 
+    gate_modules = sorted(module for module in common if module.endswith(".gate_proj"))
+    pair_modules = [(module, module[:-len("gate_proj")] + "up_proj") for module in gate_modules]
+    pair_base_keys = {
+        item + ".weight_global_scale"
+        for pair in pair_modules
+        for item in pair
+    }
+    pair_overlay_keys = {
+        item + ".weight_scale_2"
+        for pair in pair_modules
+        for item in pair
+    }
+    pair_base_values = scalar_values(args.base, base_map, pair_base_keys)
+    pair_overlay_values = scalar_values(args.overlay, overlay_map, pair_overlay_keys)
+    base_pair_mismatches = 0
+    overlay_pair_mismatches = 0
+    for gate, up in pair_modules:
+        if pair_base_values[gate + ".weight_global_scale"] != pair_base_values[up + ".weight_global_scale"]:
+            base_pair_mismatches += 1
+        if pair_overlay_values[gate + ".weight_scale_2"] != pair_overlay_values[up + ".weight_scale_2"]:
+            overlay_pair_mismatches += 1
+
     base_input_global = sum(
         1 for module in common if module + ".input_global_scale" in base_map
     )
@@ -195,7 +217,14 @@ def main() -> int:
 
     report = {
         "schema_version": 1,
-        "status": "pass" if not shape_mismatches and finite_nonzero == len(sample) else "fail",
+        "status": "pass"
+        if (
+            not shape_mismatches
+            and finite_nonzero == len(sample)
+            and base_pair_mismatches == 0
+            and overlay_pair_mismatches == 0
+        )
+        else "fail",
         "expert_modules": len(common),
         "sample_modules": len(sample),
         "base_schema": {
@@ -214,6 +243,9 @@ def main() -> int:
         "shape_mismatches": shape_mismatches,
         "reciprocal_mapping": "modelopt.weight_scale_2 = 1 / compressed_tensors.weight_global_scale",
         "reciprocal_examples": reciprocal_examples,
+        "gate_up_pairs": len(pair_modules),
+        "base_gate_up_global_scale_mismatches": base_pair_mismatches,
+        "overlay_gate_up_global_scale_mismatches": overlay_pair_mismatches,
         "h4_candidate": (
             "Normalize selected OrcaRouter experts into ModelOpt names without "
             "dequantizing: weight_packed->weight, preserve weight_scale, reciprocal "
