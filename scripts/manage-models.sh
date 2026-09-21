@@ -164,18 +164,18 @@ profile_present() {
 }
 
 asset_required_by_present_profile() {
-  local target="$1" dependent
+  local target="$1" kind="$2" dependent
   while IFS= read -r dependent; do
     [[ -n "$dependent" ]] || continue
     profile_present "$dependent" && { printf '%s' "$dependent"; return 0; }
-  done < <(model_asset_dependents "$target")
+  done < <(model_asset_dependents "$target" "$kind")
   return 1
 }
 
 list_assets() {
   local profile checkpoint_state checkpoint_size cstate istate active deps
   printf 'Qwen3.8 profile assets\n'
-  printf '%-28s %-7s %-9s %-9s %-10s %-12s %s\n' PROFILE ACTIVE CHECKPOINT CONTAINER IMAGE SIZE DEPENDS_ON
+  printf '%-28s %-7s %-9s %-9s %-10s %-12s %s\n' PROFILE ACTIVE CHECKPOINT CONTAINER IMAGE SIZE DEPENDENCIES
   while IFS= read -r profile; do
     [[ -n "$profile" ]] || continue
     describe_model_asset "$profile" || continue
@@ -189,7 +189,7 @@ list_assets() {
     istate="$(image_state "$MODEL_ASSET_IMAGE")"
     active=no
     [[ "$profile" == "$ACTIVE_PROFILE" ]] && active=yes
-    printf '%-28s %-7s %-9s %-9s %-10s %-12s %s\n'       "$profile" "$active" "$checkpoint_state" "$cstate" "$istate" "$checkpoint_size" "${MODEL_ASSET_DEPENDS_ON:--}"
+    printf '%-28s %-7s %-9s %-9s %-10s %-12s %s\n'       "$profile" "$active" "$checkpoint_state" "$cstate" "$istate" "$checkpoint_size"       "checkpoint=${MODEL_ASSET_CHECKPOINT_DEPENDS_ON:--};image=${MODEL_ASSET_IMAGE_DEPENDS_ON:--}"
     printf '  checkpoint=%s\n  container=%s\n  image=%s%s\n'       "$MODEL_ASSET_CHECKPOINT" "$MODEL_ASSET_CONTAINER" "$MODEL_ASSET_IMAGE"       "$([[ "$MODEL_ASSET_IMAGE" == "$ACTIVE_IMAGE" ]] && printf ' [active-image]' || true)"
   done < <(model_asset_profiles)
 }
@@ -205,7 +205,7 @@ run_or_echo() {
 }
 
 retire_profile() {
-  local profile="$TARGET" cstate dependent checkpoint_active=0 image_active=0
+  local profile="$TARGET" cstate checkpoint_dependent image_dependent checkpoint_active=0 image_active=0
   describe_model_asset "$profile" || die "unknown profile: $profile"
 
   [[ "$profile" != "$ACTIVE_PROFILE" ]] || die "refusing active profile retirement: $profile"
@@ -215,17 +215,22 @@ retire_profile() {
   cstate="$(container_state "$MODEL_ASSET_CONTAINER")"
   [[ "$cstate" != running ]] || die "refusing retirement: container is running: $MODEL_ASSET_CONTAINER"
 
-  dependent="$(asset_required_by_present_profile "$profile" 2>/dev/null || true)"
+  checkpoint_dependent="$(asset_required_by_present_profile "$profile" checkpoint 2>/dev/null || true)"
+  image_dependent="$(asset_required_by_present_profile "$profile" image 2>/dev/null || true)"
 
   printf 'Profile retirement candidate\n'
   printf '  profile    : %s\n' "$profile"
   printf '  checkpoint : %s\n' "$MODEL_ASSET_CHECKPOINT"
   printf '  container  : %s (%s)\n' "$MODEL_ASSET_CONTAINER" "$cstate"
   printf '  image      : %s (%s)\n' "$MODEL_ASSET_IMAGE" "$(image_state "$MODEL_ASSET_IMAGE")"
-  printf '  dependent  : %s\n' "${dependent:-none}"
+  printf '  checkpoint dependent : %s\n' "${checkpoint_dependent:-none}"
+  printf '  image dependent      : %s\n' "${image_dependent:-none}"
 
-  if [[ -n "$dependent" ]]; then
-    printf '  protection : required by present profile %s\n' "$dependent"
+  if [[ -n "$checkpoint_dependent" ]]; then
+    printf '  protection : checkpoint required by present profile %s\n' "$checkpoint_dependent"
+  fi
+  if [[ -n "$image_dependent" ]]; then
+    printf '  protection : image required by present profile %s\n' "$image_dependent"
   fi
   [[ "$checkpoint_active" == 0 ]] || printf '  protection : checkpoint is active installation MODEL_DIR\n'
   [[ "$image_active" == 0 ]] || printf '  protection : image is active installation VLLM_IMAGE\n'
@@ -239,13 +244,13 @@ retire_profile() {
     run_or_echo docker rm "$MODEL_ASSET_CONTAINER"
   fi
 
-  if [[ "$MODEL_ASSET_RETIRE_IMAGE" == 1 && "$image_active" == 0 && -z "$dependent" ]]; then
+  if [[ "$MODEL_ASSET_RETIRE_IMAGE" == 1 && "$image_active" == 0 && -z "$image_dependent" ]]; then
     if docker image inspect "$MODEL_ASSET_IMAGE" >/dev/null 2>&1; then
       run_or_echo docker image rm "$MODEL_ASSET_IMAGE"
     fi
   fi
 
-  if [[ "$MODEL_ASSET_RETIRE_CHECKPOINT" == 1 && "$checkpoint_active" == 0 && -z "$dependent" ]]; then
+  if [[ "$MODEL_ASSET_RETIRE_CHECKPOINT" == 1 && "$checkpoint_active" == 0 && -z "$checkpoint_dependent" ]]; then
     if [[ -d "$MODEL_ASSET_CHECKPOINT" ]] && manifest_path "$MODEL_ASSET_CHECKPOINT" >/dev/null 2>&1; then
       if mounted_by_running_container "$(realpath -m -- "$MODEL_ASSET_CHECKPOINT")"; then
         die "refusing checkpoint deletion: mounted by a running container"
