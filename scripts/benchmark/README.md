@@ -688,7 +688,7 @@ tensor metadata differences between OrcaRouter and mazinb:
 
 ```bash
 bash scripts/model/inspect-orcarouter-mazinb-diff.sh
-cat scripts/benchmark/results/local/orcarouter-vs-mazinb-structure.json
+cat "${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/analysis/orcarouter-vs-mazinb-structure.json"
 ```
 
 The inventory compares tensor-key presence plus dtype/shape metadata without
