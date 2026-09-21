@@ -130,7 +130,8 @@ while IFS=$'\t' read -r bytes path; do
   printf '  %12s  %s\n' "$(human_bytes "${bytes}")" "${path}"
 done < <(hf_cache_top)
 [[ "${found}" == 1 ]] || printf '  no top-level cache directories found\n'
-printf '  HF cache is never deleted by manage-storage.sh; inspect it before manual cleanup.\n'
+printf '  normal prune preserves HF cache; inspect with: ./scripts/manage-storage.sh hf-cache list\n'
+printf '  remove one selected model cache with: ./scripts/manage-storage.sh hf-cache remove models--ORG--MODEL --dry-run\n'
 
 printf '\n[4. Protected large allocations]\n'
 printf '  profile      : %s\n' "${ACTIVE_PROFILE:-none}"

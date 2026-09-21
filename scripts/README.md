@@ -181,6 +181,9 @@ Examples:
 ./scripts/manage-storage.sh plan --experiments
 ./scripts/manage-storage.sh prune --dry-run --experiments
 ./scripts/manage-storage.sh prune --yes
+./scripts/manage-storage.sh hf-cache list
+./scripts/manage-storage.sh hf-cache remove models--ORG--MODEL --dry-run
+./scripts/manage-storage.sh hf-cache remove models--ORG--MODEL
 ```
 
 Docker image policy is defined centrally in `scripts/storage/assets.sh`. Images are
@@ -196,6 +199,15 @@ prediction of bytes reclaimed.
 space, Hugging Face cache usage, and protected active allocations. For inactive
 checkpoints it prints the exact `manage-models.sh remove ... --dry-run` command rather
 than deleting the checkpoint itself.
+
+Hugging Face cache cleanup is intentionally separate from normal prune. Use
+`manage-storage.sh hf-cache list` to inventory direct `$HF_HOME/hub/models--*`
+directories and `hf-cache remove <name>` to delete one selected model cache. The
+remove path supports `--dry-run`, requires `DELETE` confirmation unless `--yes`
+is supplied, rejects symlink and traversal targets, and refuses caches containing
+entries owned by another uid. It never invokes `sudo`, which avoids partially
+deleting mixed-ownership caches such as those created by earlier root/container
+workflows.
 
 Use `scripts/manage-models.sh` separately when an inactive managed checkpoint itself
 should be removed.

@@ -89,6 +89,21 @@ class StorageManagerTests(unittest.TestCase):
         self.assertNotIn("rm -rf", helper)
         self.assertNotIn("docker image rm", helper)
 
+    def test_hf_cache_cleanup_is_selective_and_explicit(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "storage" / "hf-cache.sh").read_text(encoding="utf-8")
+        self.assertIn("hf-cache list", script)
+        self.assertIn("hf-cache remove models--ORG--MODEL", script)
+        self.assertIn('bash "${HF_CACHE_HELPER}"', script)
+        self.assertIn("models--*", helper)
+        self.assertIn("--dry-run", helper)
+        self.assertIn("Type DELETE", helper)
+        self.assertIn("--one-file-system", helper)
+        self.assertIn("never invokes sudo", helper)
+        self.assertIn("refusing symlink cache target", helper)
+        self.assertIn("refusing partial deletion", helper)
+        self.assertNotIn('rm -rf -- "${HF_CACHE}"', script)
+
     def test_mutating_prune_checks_transition_state_and_operation_lock(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("runtime transition is active", script)
