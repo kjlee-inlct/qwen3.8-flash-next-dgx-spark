@@ -2175,10 +2175,22 @@ execution.
 
 #### H20-C runtime first-token MoE trace
 
-H20-C keeps the same H20 profile/image names and bumps the image labels to v3.
-In addition to H20-A/B load-time records, both images patch
-`FusedMoEModularMethod.apply()`, the common runtime boundary that receives
-the already-selected expert routing tensors and calls `moe_kernel.apply()`.
+H20-C keeps the same H20 profile/image names. The initial v3 implementation
+patched `FusedMoEModularMethod.apply()`, but the v0.29 NVFP4 paths under test
+already own an internal modular kernel (`supports_internal_mk=True`) and call
+their quant-method `apply()` directly. Both CT and ModelOpt v3 requests
+completed successfully but emitted zero `QWEN38_H20C_RUNTIME` records. This
+was an instrumentation-location failure, not a model/runtime comparison result.
+
+The corrected v4 images patch the actual runtime methods instead:
+
+- CT: `CompressedTensorsW4A4Nvfp4MoEMethod.apply()`;
+- ModelOpt: `ModelOptNvFp4FusedMoE.apply()`.
+
+Both methods receive the already-selected expert routing tensors and directly
+call `moe_kernel.apply()`. The READY-time trigger test is isolated behind
+`torch.compiler.disable` so the file-existence condition is re-evaluated at
+runtime instead of being frozen during torch.compile/warmup.
 
 The runtime trace is disabled during startup/warmup. The `trace` command
 enables it only after READY via a container-local trigger file, then sends the
@@ -2191,7 +2203,13 @@ same fixed request twice. Each traced MoE call records:
 - post-call MoE `output`;
 - the same bounded full/sample SHA-256 fingerprint policy used by H20-A/B.
 
-Rebuild both H20 images after pulling H20-C because the image labels are v3.
+Rebuild both H20 images after pulling the H20-C internal-MK hotfix because the image labels are v4.
+
+
+The failed v3 trace attempt also exposed a CLI rough edge: because neither
+runtime JSONL existed, `runtime-compare` raised `FileNotFoundError`.
+The CLI now reports missing trace files cleanly and instructs the operator to
+run both trace commands successfully before comparing.
 
 CT/H12 runtime trace:
 
