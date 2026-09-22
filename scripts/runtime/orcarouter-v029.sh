@@ -315,11 +315,11 @@ h20_image_ok() {
   case "${PROFILE_CASE}" in
     hybrid-h20-ct-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
-      [[ "${label}" == "ct-nvfp4-convert-diag-v2" ]]
+      [[ "${label}" == "ct-nvfp4-convert-diag-v3" ]]
       ;;
     hybrid-h20-modelopt-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
-      [[ "${label}" == "modelopt-nvfp4-convert-diag-v2" ]]
+      [[ "${label}" == "modelopt-nvfp4-convert-diag-v3" ]]
       ;;
     *)
       return 0
@@ -680,6 +680,9 @@ start_runtime() {
       -e QWEN38_H20_DIAG_MAX_CALLS=4
       -e QWEN38_H20_DIAG_FULL_HASH_MAX_BYTES=1048576
       -e QWEN38_H20_DIAG_SAMPLE_ELEMS=1024
+      -e QWEN38_H20C_MAX_CALLS=128
+      -e QWEN38_H20C_FULL_HASH_MAX_BYTES=1048576
+      -e QWEN38_H20C_SAMPLE_ELEMS=1024
     )
   fi
 
