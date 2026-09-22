@@ -796,7 +796,7 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
-### H1-H15 experiment ledger
+### H1-H16 experiment ledger
 
 This ledger is the canonical compact history for the checkpoint/loader
 determinism isolation. Startup/build failures are explicitly separated from
@@ -820,7 +820,8 @@ valid determinism results.
 | H12 | H11 + preserve loaded ModelWeightParameter objects across packed->weight rename | FAIL, 2 / 5; 4 runs matched H6 stable hash | Post-load object replacement is a strong interaction signal, not yet a standalone root-cause proof. |
 | H13 | H12 + input-global-scale checkpoint objects -> PerTensorScaleParameter | FAIL, 4 / 5 | Input-global-scale parameter representation is not the missing repair; regression versus H12. |
 | H14 | H12 + register converted post-load input scales as Parameters | FAIL, 5 / 5 | Final post-load input-scale Tensor/Parameter ownership is insufficient. |
-| H15 | H14 runtime/image with MTP speculative decoding disabled | PENDING | Runtime-only A/B isolates MTP without changing checkpoint, CT post-load semantics, QSA, or image contents. |
+| H15 | H14 runtime/image with MTP speculative decoding disabled | FAIL, 4 / 5 | MTP is not sufficient to explain the remaining nondeterminism; one pair of repeats matched, but the gate still failed. |
+| H16 | H15 runtime with max_num_seqs 3 -> 1 | PENDING | Runtime-only A/B isolates scheduler/batching concurrency while keeping MTP off and reusing the same H14 image. |
 
 Important invalid/non-result events:
 
@@ -835,7 +836,7 @@ Important invalid/non-result events:
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
   the retained H4 checkpoint.
 
-Validation still worth doing independently of the H15 runtime control:
+Validation still worth doing independently of the H16 runtime control:
 
 - repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
   whether the observed 4/5 stable pattern is reproducible;
@@ -1641,3 +1642,71 @@ Interpretation:
   remaining CT/MoE post-load scale conversion path;
 - do not compare H15 to a rebuilt or modified H14 image: the control is valid
   only when the same H14 image ID is reused.
+
+### H15 result: FAIL
+
+Observed on 2026-09-22:
+
+- H15 reused `vllm-orcarouter-v029-h14-ct-input-scale-postload:v1`;
+- benchmark metadata recorded `speculative_config=null`, confirming MTP was
+  disabled for the measured run;
+- PLE mmap, exact QSA, prefix caching disabled, max_num_seqs=3, and the H14
+  checkpoint/image path remained unchanged;
+- the seeded 1024/128 gate produced 4 unique hashes across 5 repeats;
+- runs 1 and 2 matched each other; runs 3, 4, and 5 diverged;
+- run 5 produced a hash previously observed in H14, but cross-experiment hash
+  reuse is only a marker and is not proof of an identical internal path.
+
+Therefore disabling MTP speculative decoding is not sufficient to restore
+determinism. The apparent reduction from H14's 5 unique hashes to H15's 4 is
+not treated as an effect-size claim from a single five-repeat sample.
+
+The H15 boot also showed a readiness-observation anomaly: `/health` returned
+ready before the waiter accepted the exact served model, while rerunning the
+waiter later returned READY immediately. This is recorded as an operational
+observation only and is not classified as a determinism result.
+
+### H16: single-sequence runtime control
+
+H16 is a runtime-only A/B against H15. It reuses the same H14 image/checkpoint,
+keeps MTP disabled, and changes only:
+
+- H15: `max_num_seqs=3`;
+- H16: `max_num_seqs=1`.
+
+All other H15 controls remain unchanged, including PLE mmap, exact QSA, GB10 FLA
+fix, context length, prefix-cache setting, max batched tokens, and the container
+image. No H16 Docker image is built.
+
+Run the control:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h15-mtp-off
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h16-single-seq
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h16-single-seq
+
+./scripts/wait-ready.sh \
+  --container qwen38-h16-single-seq-v029 \
+  --model hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h16-single-seq-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: scheduler/batching concurrency becomes strongly implicated; follow with
+  a focused runtime scheduling/cudagraph control before returning to CT patches;
+- FAIL with multiple hashes: max_num_seqs is not sufficient to explain the
+  nondeterminism; return to the remaining CT/MoE post-load scale conversion or
+  lower-level kernel/runtime isolation;
+- the control is valid only if H15 and H16 reuse the same H14 image ID and H16
+  metadata records both `speculative_config=null` and `max_num_seqs=1`.
