@@ -266,5 +266,16 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h13-ct-input-scale", runtime)
 
 
+    def test_h14_changes_only_postload_input_scale_registration(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-ct-moe-postload-register-input-scale.py").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.v029-h14-ct-input-scale-postload").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('"w13_input_scale",', patch)
+        self.assertIn("torch.nn.Parameter(a13_scale", patch)
+        self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", dockerfile)
+        self.assertIn("compressed-tensors-postload-input-scale-parameter-v1", dockerfile)
+        self.assertIn("hybrid-h14-ct-input-scale-postload", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()

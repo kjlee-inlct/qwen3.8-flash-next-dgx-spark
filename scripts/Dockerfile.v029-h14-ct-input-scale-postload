@@ -1,0 +1,28 @@
+# H14 control: H12 + register converted input scales as parameters.
+# Intentionally skips H13's input_global_scale parameter-object experiment.
+FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-postload-register-input-scale.py /tmp/patch-v029-ct-moe-postload-register-input-scale.py
+RUN cp ${CT} ${CT}.h14.orig \
+ && python3 /tmp/patch-v029-ct-moe-postload-register-input-scale.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-postload-register-input-scale.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert 'layer.register_parameter(\n            "w13_input_scale"' in body
+assert 'layer.register_parameter(\n            "w2_input_scale"' in body
+assert "layer.w13_input_scale = a13_scale" not in body
+assert "layer.w2_input_scale = a2_scale" not in body
+assert "(1.0 / layer.w13_input_global_scale)" in body
+assert "(1.0 / layer.w2_input_global_scale)" in body
+print("H14 CT post-load input-scale registration patch installed")
+PY
+
+LABEL qwen38.h14="compressed-tensors-postload-input-scale-parameter-v1"

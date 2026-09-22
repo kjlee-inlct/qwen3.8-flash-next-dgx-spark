@@ -1520,3 +1520,58 @@ Interpretation:
   assignment/name conversion itself;
 - broader regression: reassess interaction between H12 object preservation and
   scale object semantics.
+
+
+### H13 result: FAIL and regression versus H12
+
+Observed on 2026-09-22:
+
+- H13 reached READY after 621 seconds;
+- changing only the input-global-scale checkpoint parameter objects to
+  `PerTensorScaleParameter(weight_loader=...)` did not restore determinism;
+- the 1024/128 seeded gate produced 4 unique hashes across 5 repeats;
+- only runs 2 and 5 matched the H6 stable reference hash;
+- this is worse than H12's single observed 5-repeat run (2 unique hashes, 4/5
+  matching the H6 reference).
+
+Therefore the H13 input-global-scale object representation is not the missing
+repair and should not be carried forward as the next parent.
+
+### H14: post-load input-scale parameter registration
+
+H14 deliberately branches from H12, not H13. It changes only the final
+compressed-tensors input-scale assignment after kernel-format conversion:
+
+- H12: `layer.w13_input_scale = a13_scale` and
+  `layer.w2_input_scale = a2_scale` leave plain Tensor attributes;
+- H14: register the converted `a13_scale/a2_scale` as
+  `torch.nn.Parameter` objects under the same final names.
+
+The original `w*_input_global_scale` checkpoint objects and values, reciprocal
+conversion, H12 packed-weight object preservation, all weight/global-scale
+paths, backend, QSA, and MTP remain unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h14-ct-input-scale-postload:v1 \
+  -f scripts/Dockerfile.v029-h14-ct-input-scale-postload \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h14-ct-input-scale-postload
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h14-ct-input-scale-postload
+
+./scripts/wait-ready.sh \
+  --container qwen38-h14-ct-input-scale-postload-v029 \
+  --model hybrid-h14-ct-input-scale-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: final post-load input-scale registration/parameter semantics, together
+  with H12 weight-object preservation, are sufficient for the 1024 gate;
+- H12-like partial improvement: repeat with a larger same-boot sample before
+  attribution;
+- broad FAIL/regression: move to the remaining post-load scale_2/global-scale
+  conversion and replacement semantics rather than carrying H13 forward.
