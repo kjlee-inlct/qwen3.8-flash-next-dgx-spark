@@ -14,6 +14,7 @@ PREFIX = "QWEN38_H20_MOE_DIAG "
 RUNTIME_PREFIX = "QWEN38_H20C_RUNTIME "
 TWIN_PREFIX = "QWEN38_H20D_TWIN "
 SINGLE_PREFIX = "QWEN38_H20D_SINGLE "
+UPSTREAM_PREFIX = "QWEN38_H20U_LAYER0 "
 RUNTIME_TENSOR_NAMES = (
     "x",
     "topk_weights",
@@ -197,6 +198,181 @@ def trace_runtime(
         f"requests={request_ids} layers={len(layers)}"
     )
     return 0
+
+
+def parse_upstream_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(UPSTREAM_PREFIX)
+        if pos < 0:
+            continue
+        payload = raw[pos + len(UPSTREAM_PREFIX) :].strip()
+        records.append(json.loads(payload))
+    return records
+
+
+def upstream_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    prompt: str,
+    api_base: str,
+) -> int:
+    if not _container_exists(container):
+        print(f"ERROR: H20 upstream container not found: {container}", file=sys.stderr)
+        return 2
+
+    trigger = "/tmp/qwen38_h20u_layer0.enable"
+    request_id_file = "/tmp/qwen38_h20u_request_id"
+    h20c_trigger = "/tmp/qwen38_h20c_trace.enable"
+    twin_trigger = "/tmp/qwen38_h20d_twin.enable"
+    single_trigger = "/tmp/qwen38_h20d_single.enable"
+    try:
+        _docker_exec(
+            container,
+            f"rm -f {trigger} {request_id_file} {h20c_trigger} "
+            f"{twin_trigger} {single_trigger}; touch {trigger}",
+        )
+        for request_id in (0, 1):
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(f"upstream request {request_id + 1}/2 completed")
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+
+    records = parse_upstream_records(
+        (result.stdout + "\n" + result.stderr).splitlines()
+    )
+    by_id = {int(record.get("request_id", -1)): record for record in records}
+    wanted = [by_id[rid] for rid in (0, 1) if rid in by_id]
+    if len(wanted) != 2:
+        print(
+            f"ERROR: expected H20 upstream records for request ids 0 and 1; "
+            f"found {sorted(by_id)}",
+            file=sys.stderr,
+        )
+        return 2
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in wanted),
+        encoding="utf-8",
+    )
+    print(f"wrote 2 upstream records to {output}")
+    return 0
+
+
+def compare_upstream(
+    ct_path: Path,
+    modelopt_path: Path,
+    output: Path | None,
+) -> int:
+    names = (
+        "entry_hidden",
+        "attn_block_input",
+        "attn_out",
+        "mlp_block_input",
+        "mlp_out",
+    )
+    ct_records = {int(r["request_id"]): r for r in load_jsonl(ct_path)}
+    mo_records = {int(r["request_id"]): r for r in load_jsonl(modelopt_path)}
+    common = sorted(set(ct_records) & set(mo_records))
+
+    def repeat_fields(records: dict[int, dict]) -> dict:
+        if 0 not in records or 1 not in records:
+            return {"comparable": False}
+        a = records[0].get("tensors", {})
+        b = records[1].get("tensors", {})
+        fields = {name: a.get(name) == b.get(name) for name in names}
+        first = next((name for name in names if not fields[name]), None)
+        return {
+            "comparable": True,
+            "fields": fields,
+            "first_mismatch": first,
+            "all_equal": all(fields.values()),
+        }
+
+    cross = []
+    for request_id in common:
+        ct_t = ct_records[request_id].get("tensors", {})
+        mo_t = mo_records[request_id].get("tensors", {})
+        fields = {name: ct_t.get(name) == mo_t.get(name) for name in names}
+        cross.append(
+            {
+                "request_id": request_id,
+                "fields": fields,
+                "first_mismatch": next(
+                    (name for name in names if not fields[name]),
+                    None,
+                ),
+                "all_equal": all(fields.values()),
+            }
+        )
+
+    report = {
+        "schema": 1,
+        "ct_file": str(ct_path),
+        "modelopt_file": str(modelopt_path),
+        "ct_repeat": repeat_fields(ct_records),
+        "modelopt_repeat": repeat_fields(mo_records),
+        "cross": cross,
+    }
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote upstream comparison report to {output}")
+
+    for label in ("ct_repeat", "modelopt_repeat"):
+        row = report[label]
+        if row.get("comparable"):
+            print(
+                f"{label}: all_equal={row['all_equal']} "
+                f"first_mismatch={row['first_mismatch']} fields={row['fields']}"
+            )
+    for row in cross:
+        print(
+            f"cross request={row['request_id']} all_equal={row['all_equal']} "
+            f"first_mismatch={row['first_mismatch']} fields={row['fields']}"
+        )
+    return 0 if common else 2
 
 
 def parse_single_records(lines: list[str]) -> list[dict]:
@@ -969,6 +1145,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_runtime_compare.add_argument("--modelopt", type=Path, required=True)
     p_runtime_compare.add_argument("--output", type=Path)
 
+    p_upstream = sub.add_parser("upstream-probe")
+    p_upstream.add_argument("--container", required=True)
+    p_upstream.add_argument("--model", required=True)
+    p_upstream.add_argument("--output", type=Path, required=True)
+    p_upstream.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_upstream.add_argument("--api-base", default="http://127.0.0.1:8888")
+
+    p_upstream_compare = sub.add_parser("upstream-compare")
+    p_upstream_compare.add_argument("--ct", type=Path, required=True)
+    p_upstream_compare.add_argument("--modelopt", type=Path, required=True)
+    p_upstream_compare.add_argument("--output", type=Path)
+
     p_single = sub.add_parser("single-probe")
     p_single.add_argument("--container", required=True)
     p_single.add_argument("--model", required=True)
@@ -1012,6 +1200,23 @@ def main() -> int:
             prompt=args.prompt,
             api_base=args.api_base,
         )
+    if args.command == "upstream-probe":
+        return upstream_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
+    if args.command == "upstream-compare":
+        missing = [str(path) for path in (args.ct, args.modelopt) if not path.is_file()]
+        if missing:
+            print(
+                "ERROR: upstream probe file(s) missing: " + ", ".join(missing),
+                file=sys.stderr,
+            )
+            return 2
+        return compare_upstream(args.ct, args.modelopt, args.output)
     if args.command == "single-probe":
         return single_probe(
             container=args.container,
