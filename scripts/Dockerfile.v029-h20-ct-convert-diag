@@ -3,13 +3,16 @@ FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+ARG Q4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
 
 COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
 COPY patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20c-runtime-moe-trace.py
+COPY patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-upstream-layer0.py
 RUN cp ${CT} ${CT}.h20.orig \
  && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${CT} ct \
  && python3 /tmp/patch-v029-h20c-runtime-moe-trace.py ${CT} ct \
- && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py \
+ && python3 /tmp/patch-v029-h20-upstream-layer0.py ${Q4} \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py \
  && python3 - <<'PY'
 import ast
 p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
@@ -32,9 +35,18 @@ assert "_qwen38_h20d_request_id" in s
 assert "h20d_output2 = self.moe_kernel.apply(" in body
 assert "h20d_x_ref = x.clone()" in body
 assert "h20d_x_run2 = x.clone()" in body
+q4="/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/model.py"
+q4s=open(q4, encoding="utf-8").read()
+ast.parse(q4s)
+assert "QWEN38_H20U_LAYER0 " in q4s
+assert "_qwen38_h20u_store_and_maybe_emit" in q4s
+assert '"entry_hidden": h20u_entry_hidden' in q4s
+assert '"attn_block_input": h20u_attn_block_input' in q4s
+assert '"attn_out": h20u_attn_out' in q4s
+assert '"mlp_block_input": h20u_mlp_block_input' in q4s
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v7"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v8"
