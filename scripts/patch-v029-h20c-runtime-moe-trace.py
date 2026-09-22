@@ -41,6 +41,15 @@ _QWEN38_H20C_MAX_CALLS = int(os.getenv("QWEN38_H20C_MAX_CALLS", "128"))
 _QWEN38_H20C_CALL = 0
 
 
+@torch.compiler.disable
+def _qwen38_h20c_enabled(call_index: int) -> bool:
+    return (
+        call_index < _QWEN38_H20C_MAX_CALLS
+        and os.path.exists(_QWEN38_H20C_TRACE_FILE)
+    )
+
+
+@torch.compiler.disable
 def _qwen38_h20c_request_id() -> int:
     try:
         with open(_QWEN38_H20C_REQUEST_FILE, encoding="utf-8") as handle:
@@ -49,6 +58,7 @@ def _qwen38_h20c_request_id() -> int:
         return -1
 
 
+@torch.compiler.disable
 def _qwen38_h20c_emit(
     *,
     phase: str,
@@ -143,10 +153,7 @@ new_apply = f'''    def apply(
         shared_experts_input: torch.Tensor | None,
     ) -> torch.Tensor:
 {assert_line}        global _QWEN38_H20C_CALL
-        h20c_enabled = (
-            _QWEN38_H20C_CALL < _QWEN38_H20C_MAX_CALLS
-            and os.path.exists(_QWEN38_H20C_TRACE_FILE)
-        )
+        h20c_enabled = _qwen38_h20c_enabled(_QWEN38_H20C_CALL)
         h20c_call_index = _QWEN38_H20C_CALL
         if h20c_enabled:
             _QWEN38_H20C_CALL += 1
