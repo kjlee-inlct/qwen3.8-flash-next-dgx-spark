@@ -1364,3 +1364,56 @@ Interpretation:
 - FAIL: pre-load packed-weight parameter representation is insufficient, making
   the compressed-tensors post-load `weight_packed -> weight` rename/wrapping
   the next isolation target.
+
+
+### H11 result: FAIL
+
+Observed on 2026-09-22:
+
+- H11 reached READY after 622 seconds;
+- packed expert weights used `ModelWeightParameter(input_dim=1, output_dim=2,
+  weight_loader=...)` while retaining the original
+  `w13_weight_packed` / `w2_weight_packed` checkpoint names;
+- the existing compressed-tensors post-load wrapping/rename path remained
+  unchanged;
+- the 1024/128 seeded determinism gate failed with 5 unique hashes across 5
+  repeats.
+
+Therefore the packed expert pre-load parameter/loader representation is also
+insufficient.
+
+### H12: preserve packed expert parameter objects across post-load rename
+
+H12 starts from H11 and changes only the compressed-tensors post-load rename:
+
+- H11 creates new plain `torch.nn.Parameter` objects from
+  `layer.w*_weight_packed.data`, then deletes the packed names;
+- H12 re-registers the already-loaded `ModelWeightParameter` objects directly
+  as `w13_weight` / `w2_weight`, then deletes the packed names.
+
+Checkpoint bytes/names, H9/H10 scale representations, kernel-format conversion,
+backend selection, QSA, and MTP are unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h12-ct-postload-preserve:v1 \
+  -f scripts/Dockerfile.v029-h12-ct-postload-preserve \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h12-ct-postload-preserve
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h12-ct-postload-preserve
+
+./scripts/wait-ready.sh \
+  --container qwen38-h12-ct-postload-preserve-v029 \
+  --model hybrid-h12-ct-postload-preserve/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: post-load packed-weight re-wrapping/object replacement is the strongest
+  remaining root-cause candidate;
+- FAIL: even preserving the loaded packed weight objects is insufficient, so the
+  next target is the broader compressed-tensors post-load scale/input-scale
+  assignment/conversion path rather than the packed-weight object identity alone.
