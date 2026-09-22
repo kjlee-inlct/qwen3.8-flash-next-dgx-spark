@@ -23,7 +23,8 @@ list_storage_images() {
     vllm-orcarouter-v029-h10-ct-global-scale:v1 \
     vllm-orcarouter-v029-h11-ct-packed-modelweight:v1 \
     vllm-orcarouter-v029-h12-ct-postload-preserve:v1 \
-    vllm-orcarouter-v029-h13-ct-input-scale:v1
+    vllm-orcarouter-v029-h13-ct-input-scale:v1 \
+    vllm-orcarouter-v029-h14-ct-input-scale-postload:v1
 }
 
 describe_storage_image() {
@@ -95,8 +96,13 @@ describe_storage_image() {
       ;;
     vllm-orcarouter-v029-h13-ct-input-scale:v1)
       STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="H13 input-global-scale object control; not in H14 lineage"
+      ;;
+    vllm-orcarouter-v029-h14-ct-input-scale-postload:v1)
+      STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="Current H13 compressed-tensors input-scale parameter control"
+      STORAGE_IMAGE_DESCRIPTION="Current H14 compressed-tensors post-load input-scale registration control"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
