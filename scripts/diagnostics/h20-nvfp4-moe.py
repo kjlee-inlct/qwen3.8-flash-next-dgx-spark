@@ -104,27 +104,56 @@ def compare(ct_path: Path, modelopt_path: Path, output: Path | None) -> int:
         ct_record = ct[key]
         mo_record = modelopt[key]
         tensor_results: dict[str, dict] = {}
-        for name in TENSOR_NAMES:
-            left = ct_record.get("tensors", {}).get(name)
-            right = mo_record.get("tensors", {}).get(name)
-            fields: dict[str, dict] = {}
-            equal = left is not None and right is not None
-            for field in COMPARE_FIELDS:
-                lv = None if left is None else left.get(field)
-                rv = None if right is None else right.get(field)
-                field_equal = lv == rv
-                fields[field] = {"equal": field_equal, "ct": lv, "modelopt": rv}
-                equal = equal and field_equal
-            tensor_results[name] = {"equal": equal, "fields": fields}
-            if not equal:
+        state_result: dict | None = None
+        if "tensors" in ct_record or "tensors" in mo_record:
+            for name in TENSOR_NAMES:
+                left = ct_record.get("tensors", {}).get(name)
+                right = mo_record.get("tensors", {}).get(name)
+                fields: dict[str, dict] = {}
+                equal = (left is None and right is None) or (
+                    left is not None and right is not None
+                )
+                for field in COMPARE_FIELDS:
+                    lv = None if left is None else left.get(field)
+                    rv = None if right is None else right.get(field)
+                    field_equal = lv == rv
+                    fields[field] = {
+                        "equal": field_equal,
+                        "ct": lv,
+                        "modelopt": rv,
+                    }
+                    equal = equal and field_equal
+                tensor_results[name] = {"equal": equal, "fields": fields}
+                if not equal:
+                    mismatch_count += 1
+                    if first_mismatch is None:
+                        first_mismatch = {
+                            "call_index": key[0],
+                            "phase": key[1],
+                            "tensor": name,
+                            "fields": fields,
+                        }
+
+        if "state" in ct_record or "state" in mo_record:
+            left_state = ct_record.get("state")
+            right_state = mo_record.get("state")
+            state_equal = left_state == right_state
+            state_result = {
+                "equal": state_equal,
+                "ct": left_state,
+                "modelopt": right_state,
+            }
+            if not state_equal:
                 mismatch_count += 1
                 if first_mismatch is None:
                     first_mismatch = {
                         "call_index": key[0],
                         "phase": key[1],
-                        "tensor": name,
-                        "fields": fields,
+                        "state": True,
+                        "ct": left_state,
+                        "modelopt": right_state,
                     }
+
         comparisons.append(
             {
                 "call_index": key[0],
@@ -132,6 +161,7 @@ def compare(ct_path: Path, modelopt_path: Path, output: Path | None) -> int:
                 "backend_equal": ct_record.get("backend") == mo_record.get("backend"),
                 "use_a16_equal": ct_record.get("use_a16") == mo_record.get("use_a16"),
                 "tensors": tensor_results,
+                "state": state_result,
             }
         )
 
@@ -158,18 +188,27 @@ def compare(ct_path: Path, modelopt_path: Path, output: Path | None) -> int:
     if first_mismatch is None:
         print("first_mismatch=none")
     else:
-        print(
-            "first_mismatch="
-            f"call={first_mismatch['call_index']} "
-            f"phase={first_mismatch['phase']} "
-            f"tensor={first_mismatch['tensor']}"
-        )
-        for field, values in first_mismatch["fields"].items():
-            if not values["equal"]:
-                print(
-                    f"  {field}: ct={values['ct']!r} "
-                    f"modelopt={values['modelopt']!r}"
-                )
+        if first_mismatch.get("state"):
+            print(
+                "first_mismatch="
+                f"call={first_mismatch['call_index']} "
+                f"phase={first_mismatch['phase']} state"
+            )
+            print(f"  ct={first_mismatch['ct']!r}")
+            print(f"  modelopt={first_mismatch['modelopt']!r}")
+        else:
+            print(
+                "first_mismatch="
+                f"call={first_mismatch['call_index']} "
+                f"phase={first_mismatch['phase']} "
+                f"tensor={first_mismatch['tensor']}"
+            )
+            for field, values in first_mismatch["fields"].items():
+                if not values["equal"]:
+                    print(
+                        f"  {field}: ct={values['ct']!r} "
+                        f"modelopt={values['modelopt']!r}"
+                    )
 
     return 0 if common else 2
 
