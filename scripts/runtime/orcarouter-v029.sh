@@ -17,7 +17,7 @@ REMOVE_AFTER_STOP=0
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, or hybrid-h19-ct-combined-lifecycle\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, hybrid-h19-ct-combined-lifecycle, hybrid-h20-ct-convert-diag, or hybrid-h20-modelopt-convert-diag\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     --remove) REMOVE_AFTER_STOP=1 ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -48,16 +48,18 @@ case "${PROFILE_CASE}" in
   hybrid-h17-ct-weight-scale2-postload) NAME="qwen38-h17-ct-weight-scale2-postload-v029"; IMAGE="vllm-orcarouter-v029-h17-ct-weight-scale2-postload:v1" ;;
   hybrid-h18-ct-input-scale-lifecycle) NAME="qwen38-h18-ct-input-scale-lifecycle-v029"; IMAGE="vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1" ;;
   hybrid-h19-ct-combined-lifecycle) NAME="qwen38-h19-ct-combined-lifecycle-v029"; IMAGE="vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, or hybrid-h19-ct-combined-lifecycle\n' >&2; exit 2 ;;
+  hybrid-h20-ct-convert-diag) NAME="qwen38-h20-ct-convert-diag-v029"; IMAGE="vllm-orcarouter-v029-h20-ct-convert-diag:v1" ;;
+  hybrid-h20-modelopt-convert-diag) NAME="qwen38-h20-modelopt-convert-diag-v029"; IMAGE="vllm-orcarouter-v029-h20-modelopt-convert-diag:v1" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, hybrid-h19-ct-combined-lifecycle, hybrid-h20-ct-convert-diag, or hybrid-h20-modelopt-convert-diag\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle] [--remove]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag] [--remove]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -108,7 +110,7 @@ load_manifest() {
 load_source() {
   BASE_MODEL_DIR=""
   BASE_MODEL_REVISION=""
-  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle ]]; then
+  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle || "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
@@ -172,15 +174,25 @@ load_source() {
       SERVED_NAME="hybrid-h19-ct-combined-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       MODEL_REPO="local/h19-ct-combined-lifecycle-over-h12"
       MODEL_REVISION="runtime-control"
+    elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
+      MODEL_PROFILE="hybrid-h20-ct-convert-diag"
+      SERVED_NAME="hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h20-ct-convert-diag-over-h12"
+      MODEL_REVISION="runtime-diagnostic"
     fi
     return 0
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout || "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all || "${PROFILE_CASE}" == hybrid-h5-neutral-input || "${PROFILE_CASE}" == hybrid-h6-w4a16 || "${PROFILE_CASE}" == hybrid-h7-group-metadata ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-residual || "${PROFILE_CASE}" == hybrid-group0 || "${PROFILE_CASE}" == hybrid-quant-layout || "${PROFILE_CASE}" == hybrid-h4-down || "${PROFILE_CASE}" == hybrid-h4-gate-up || "${PROFILE_CASE}" == hybrid-h4-all || "${PROFILE_CASE}" == hybrid-h5-neutral-input || "${PROFILE_CASE}" == hybrid-h6-w4a16 || "${PROFILE_CASE}" == hybrid-h7-group-metadata || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
-    if [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata ]]; then
+    if [[ "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
+      MODEL_PROFILE="hybrid-h20-modelopt-convert-diag"
+      MODEL_DIR="${H6_W4A16_MODEL_DIR:-$HOME/models/qwen3.8-h6-modelopt-w4a16}"
+      SERVED_NAME="hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h20-modelopt-convert-diag-over-h6"
+    elif [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata ]]; then
       MODEL_PROFILE="hybrid-h7-group-metadata"
       MODEL_DIR="${H6_W4A16_MODEL_DIR:-$HOME/models/qwen3.8-h6-modelopt-w4a16}"
       SERVED_NAME="hybrid-h7-group-metadata/Qwen3.8-Flash-Next-Uncensored-NVFP4"
@@ -298,6 +310,23 @@ h19_image_ok() {
   [[ "${label}" == "compressed-tensors-postload-combined-lifecycle-v1" ]]
 }
 
+h20_image_ok() {
+  local label
+  case "${PROFILE_CASE}" in
+    hybrid-h20-ct-convert-diag)
+      label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
+      [[ "${label}" == "ct-nvfp4-convert-diag-v1" ]]
+      ;;
+    hybrid-h20-modelopt-convert-diag)
+      label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
+      [[ "${label}" == "modelopt-nvfp4-convert-diag-v1" ]]
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
 h9_image_ok() {
   [[ "${PROFILE_CASE}" != hybrid-h9-ct-modelweight ]] && return 0
   local label
@@ -306,7 +335,7 @@ h9_image_ok() {
 }
 
 source_manifest_ok() {
-  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle || "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
     return 0
   fi
 
@@ -530,6 +559,10 @@ preflight() {
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h18-ct-input-scale-lifecycle scripts/\n' "${IMAGE}"
     elif [[ "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle ]]; then
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h19-ct-combined-lifecycle scripts/\n' "${IMAGE}"
+    elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
+      printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h20-ct-convert-diag scripts/\n' "${IMAGE}"
+    elif [[ "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
+      printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h20-modelopt-convert-diag scripts/\n' "${IMAGE}"
     else
       printf '    build with    : docker build -t %s -f scripts/Dockerfile.v029-orcarouter scripts/\n' "${IMAGE}"
     fi
@@ -585,6 +618,7 @@ start_runtime() {
   h17_image_ok || { printf 'ERROR: stale or incompatible H17 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   h18_image_ok || { printf 'ERROR: stale or incompatible H18 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   h19_image_ok || { printf 'ERROR: stale or incompatible H19 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
+  h20_image_ok || { printf 'ERROR: stale or incompatible H20 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
   source_manifest_ok || { printf 'ERROR: checkpoint manifest is incomplete or inconsistent for profile %s\n' "${PROFILE_CASE}" >&2; exit 1; }
 
@@ -594,7 +628,7 @@ start_runtime() {
   mkdir -p "${HOME}/.cache/vllm-qwen38-v029" "${HOME}/.cache/flashinfer-v029"
 
   extra_mount=()
-  if [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata || "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h7-group-metadata || "${PROFILE_CASE}" == hybrid-h6-w4a16 || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
     H5_MODEL_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
     H4_ALL_MODEL_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
     H3_MODEL_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
@@ -640,7 +674,16 @@ start_runtime() {
     max_num_seqs=1
   fi
 
-  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs "${max_num_seqs}"       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       "${speculative_args[@]}"
+  h20_env=()
+  if [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
+    h20_env=(
+      -e QWEN38_H20_DIAG_MAX_CALLS=4
+      -e QWEN38_H20_DIAG_FULL_HASH_MAX_BYTES=1048576
+      -e QWEN38_H20_DIAG_SAMPLE_ELEMS=1024
+    )
+  fi
+
+  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${h20_env[@]}"     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs "${max_num_seqs}"       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       "${speculative_args[@]}"
 
   sleep 8
   local state
