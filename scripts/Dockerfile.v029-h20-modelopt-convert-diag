@@ -3,11 +3,15 @@ FROM vllm-orcarouter-v029:v1
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG MO=${SP}/vllm/model_executor/layers/quantization/modelopt.py
+ARG MOD=${SP}/vllm/model_executor/layers/fused_moe/fused_moe_modular_method.py
 
 COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
+COPY patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20c-runtime-moe-trace.py
 RUN cp ${MO} ${MO}.h20.orig \
  && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${MO} modelopt \
- && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py \
+ && cp ${MOD} ${MOD}.h20c.orig \
+ && python3 /tmp/patch-v029-h20c-runtime-moe-trace.py ${MOD} modelopt \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py \
  && python3 - <<'PY'
 import ast
 p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py"
@@ -21,7 +25,14 @@ assert 'phase="quant_config"' in body
 assert 'phase="kernel_created"' in body
 assert 'phase="fused_postload"' in body
 assert "QWEN38_H20_MOE_DIAG " in s
+m="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/fused_moe_modular_method.py"
+ms=open(m, encoding="utf-8").read()
+ast.parse(ms)
+assert "QWEN38_H20C_RUNTIME " in ms
+assert '_QWEN38_H20C_SOURCE = "modelopt"' in ms
+assert 'phase="pre"' in ms
+assert 'phase="post"' in ms
 print("H20 ModelOpt NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v2"
+LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v3"
