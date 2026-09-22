@@ -2482,6 +2482,16 @@ PyTorch rejected the graph with `Unsupported: Skip calling
 torch.compiler.disable()d function`. This is an instrumentation failure, not
 an H20 model/runtime result.
 
+The first v9 image-build attempt on 2026-09-23 failed before the
+fullgraph smoke test ran. The patched Qwen4Exp source contained the text
+`@torch.compiler.disable` only inside an explanatory comment, but the
+Dockerfile validation used a raw substring assertion
+(`assert "@torch.compiler.disable" not in q4s`). That produced a false
+positive and aborted both CT and ModelOpt image builds. This is a build-time
+validation bug, not a runtime/H20 result. The validation now rejects only an
+actual standalone decorator line (`"\n@torch.compiler.disable\n"`) so the
+subsequent fullgraph custom-op smoke can execute.
+
 The v9 correction keeps the same H20 upstream boundary design but represents
 each capture point as an opaque `torch.library.custom_op`. The custom op is
 declared conservatively mutable so compiler dead-code elimination cannot remove
