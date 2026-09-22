@@ -2211,6 +2211,21 @@ runtime JSONL existed, `runtime-compare` raised `FileNotFoundError`.
 The CLI now reports missing trace files cleanly and instructs the operator to
 run both trace commands successfully before comparing.
 
+
+The first v4 rerun proved the corrected CT hook is live: two fixed requests
+produced 192 runtime records across 48 layers. The ModelOpt v4 image build then
+failed before runtime because the trace patcher sliced from
+`ModelOptNvFp4FusedMoE` to end-of-file and required the target `apply()`
+shape to occur exactly once; later ModelOpt classes contain the same apply
+shape. This is another patch-application failure, not a runtime comparison
+result. The hotfix now scopes replacement to the target class body only.
+The regression fixture intentionally includes a later class with the same
+`apply()` body and verifies it remains untouched.
+
+The `trace` command also now checks container existence before trying
+`docker exec`, so a failed preflight/start produces a concise error instead
+of a Python traceback.
+
 CT/H12 runtime trace:
 
 ```bash

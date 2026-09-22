@@ -679,6 +679,32 @@ class ModelOptNvFp4FusedMoE:
             shared_experts_input=shared_experts_input,
         )
 QWEN38_H20_MOE_DIAG = "present"
+
+class AnotherModelOptMoE:
+    def apply(
+        self,
+        layer: RoutedExperts,
+        x: torch.Tensor,
+        topk_weights: torch.Tensor,
+        topk_ids: torch.Tensor,
+        shared_experts: SharedExperts | None,
+        shared_experts_input: torch.Tensor | None,
+    ) -> torch.Tensor:
+        assert not self.is_monolithic
+        assert self.moe_kernel is not None
+        return self.moe_kernel.apply(
+            x,
+            layer.w13_weight,
+            layer.w2_weight,
+            topk_weights,
+            topk_ids,
+            activation=layer.activation,
+            global_num_experts=layer.global_num_experts,
+            expert_map=layer.expert_map,
+            apply_router_weight_on_input=layer.apply_router_weight_on_input,
+            shared_experts=shared_experts,
+            shared_experts_input=shared_experts_input,
+        )
 """,
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -703,6 +729,10 @@ QWEN38_H20_MOE_DIAG = "present"
                 self.assertIn('"topk_ids": topk_ids', patched)
                 self.assertIn('tensors={"output": output}', patched)
                 self.assertIn("return output", patched)
+                if source == "modelopt":
+                    other = patched.split("class AnotherModelOptMoE", 1)[1]
+                    self.assertIn("return self.moe_kernel.apply(", other)
+                    self.assertNotIn("QWEN38_H20C_RUNTIME ", other)
 
     def test_h20c_cli_supports_triggered_trace_and_runtime_compare(self) -> None:
         script = (
@@ -715,6 +745,8 @@ QWEN38_H20_MOE_DIAG = "present"
         self.assertIn('"max_tokens": 1', script)
         self.assertIn("ct_repeat_stability", script)
         self.assertIn("modelopt_repeat_stability", script)
+        self.assertIn("_container_exists", script)
+        self.assertIn("H20-C container not found", script)
 
 
 if __name__ == "__main__":
