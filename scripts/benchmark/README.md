@@ -2075,7 +2075,53 @@ Interpretation:
 - `pre` matches but the first mismatch appears in `post`: isolate
   `convert_to_nvfp4_moe_kernel_format()`, backend selection, or hidden
   layout/state used by that conversion;
-- both `pre` and `post` match for the sampled calls: move downstream to
-  `make_nvfp4_moe_kernel()` and
-  `fused_experts.process_weights_after_loading()`; do not return to
-  parameter-wrapper experiments without new evidence.
+- both `pre` and `post` match for the sampled calls: inspect the H20-B
+  `quant_config`, `kernel_created`, and `fused_postload` records before
+  creating another numbered experiment.
+
+#### H20-A observed result and comparator correction
+
+The first local H20-A run collected 8 records on each side (calls 0-3,
+pre/post). The original comparator incorrectly classified `None` vs `None`
+activation-scale outputs as mismatches, so its reported
+`first_mismatch=... phase=post tensor=a13_scale` was a tooling bug.
+
+Direct record inspection showed:
+
+- CT and ModelOpt used `NvFp4MoeBackend.MARLIN` with `use_a16=true`;
+- sampled/full hashes for `w13`, `w2`, `w13_scale`, `w2_scale`,
+  `w13_scale_2`, and `w2_scale_2` matched after conversion for the observed
+  calls;
+- the pre-conversion activation-scale hashes differed, but W4A16/Marlin
+  returned `a13_scale=None` and `a2_scale=None` on both sides.
+
+The comparator now treats `None` vs `None` as equal. Existing H20-A JSONL
+files can therefore be re-compared after pulling the fix; no re-run is required
+for that correction.
+
+#### H20-B post-conversion localization
+
+The same H20 image/profile names are retained, but the image label is bumped to
+v2 so stale H20-A images are rejected. Rebuild both images and repeat the
+collection. Each call now emits three additional state records:
+
+- `quant_config`: normalized snapshot of the fused-MoE quant config, MoE
+  config, experts class, and routing tables;
+- `kernel_created`: normalized kernel and fused-experts state immediately
+  after `make_nvfp4_moe_kernel()`;
+- `fused_postload`: state plus final layer tensor fingerprints after
+  `fused_experts.process_weights_after_loading()`.
+
+The snapshot recursion depth and collection sizes are bounded. Large tensors
+continue to use the existing bounded fingerprint policy.
+
+After rebuilding/rerunning both sides, use the same compare command. The first
+real mismatch now localizes the remaining search:
+
+- `quant_config`: config/routing/expert-class construction differs;
+- `kernel_created`: kernel/backend internal setup diverges despite matching
+  converter outputs;
+- `fused_postload`: downstream expert post-load processing creates the first
+  observable difference;
+- no material mismatch through `fused_postload`: move next to a single
+  first-token MoE input/output trace inside H20 rather than creating H21.
