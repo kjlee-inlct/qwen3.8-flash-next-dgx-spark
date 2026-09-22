@@ -578,6 +578,11 @@ class ModelOptNvFp4FusedMoE:
             routing_tables=layer._expert_routing_tables(),
         )
         self.moe_kernel.fused_experts.process_weights_after_loading(layer)
+
+    def another_method(self, layer):
+        return helper(
+            routing_tables=layer._expert_routing_tables(),
+        )
 """
         with tempfile.TemporaryDirectory() as tmp:
             for mode, source in (("ct", ct_block), ("modelopt", mo_block)):
@@ -600,6 +605,11 @@ class ModelOptNvFp4FusedMoE:
                 self.assertIn('phase="kernel_created"', patched)
                 self.assertIn('phase="fused_postload"', patched)
                 self.assertIn("routing_tables=h20_routing_tables", patched)
+                if mode == "modelopt":
+                    self.assertIn(
+                        "routing_tables=layer._expert_routing_tables()",
+                        patched.split("def another_method", 1)[1],
+                    )
 
 
 if __name__ == "__main__":

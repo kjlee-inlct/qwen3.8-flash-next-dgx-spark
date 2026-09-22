@@ -424,8 +424,16 @@ class_name = (
     if mode == "ct"
     else "ModelOptNvFp4FusedMoE"
 )
-start = text.index(f"class {class_name}")
-prefix, body = text[:start], text[start:]
+class_start = text.index(f"class {class_name}")
+method_start = text.index(
+    "    def process_weights_after_loading(", class_start
+)
+method_end = text.find("\n    def ", method_start + 5)
+if method_end < 0:
+    method_end = len(text)
+prefix = text[:method_start]
+body = text[method_start:method_end]
+suffix = text[method_end:]
 
 kernel_anchor = '''        assert self.experts_cls is not None
         self.moe_kernel = make_nvfp4_moe_kernel(
@@ -495,7 +503,7 @@ postload_new = f'''        _qwen38_h20_emit_state(
 if body.count(postload_old) != 1:
     raise SystemExit("expected fused-experts post-load call exactly once")
 body = body.replace(postload_old, postload_new, 1)
-text = prefix + body
+text = prefix + body + suffix
 
 path.write_text(text, encoding="utf-8")
 print(f"installed H20 NVFP4 MoE conversion diagnostics ({mode})")
