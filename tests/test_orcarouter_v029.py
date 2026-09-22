@@ -478,6 +478,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("first_mismatch", collector)
         self.assertIn("hash_scope", collector)
         self.assertIn("sha256", collector)
+        self.assertIn("phase=\"quant_config\"", patch)
+        self.assertIn("phase=\"kernel_created\"", patch)
+        self.assertIn("phase=\"fused_postload\"", patch)
+        self.assertIn("left is None and right is None", collector)
 
     def test_h20_images_are_h12_ct_vs_h6_modelopt_diagnostics(self) -> None:
         ct = (ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag").read_text(encoding="utf-8")
@@ -485,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v1", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v2", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v1", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v2", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -526,6 +530,16 @@ class CompressedTensorsW4A4Nvfp4MoEMethod:
             is_act_and_mul=self.moe.is_act_and_mul,
             use_a16=self.use_a16,
         )
+        self.moe_quant_config = self.get_fused_moe_quant_config(layer)
+        assert self.experts_cls is not None
+        self.moe_kernel = make_nvfp4_moe_kernel(
+            moe_quant_config=self.moe_quant_config,
+            moe_config=self.moe,
+            experts_cls=self.experts_cls,
+            backend=self.nvfp4_backend,
+            routing_tables=layer._expert_routing_tables(),
+        )
+        self.moe_kernel.fused_experts.process_weights_after_loading(layer)
 """
         mo_block = """import torch
 logger = init_logger(__name__)
@@ -554,6 +568,16 @@ class ModelOptNvFp4FusedMoE:
             is_act_and_mul=self.moe.is_act_and_mul,
             use_a16=self.use_a16,
         )
+        self.moe_quant_config = self.get_fused_moe_quant_config(layer)
+        assert self.experts_cls is not None
+        self.moe_kernel = make_nvfp4_moe_kernel(
+            moe_quant_config=self.moe_quant_config,
+            moe_config=self.moe,
+            experts_cls=self.experts_cls,
+            backend=self.nvfp4_backend,
+            routing_tables=layer._expert_routing_tables(),
+        )
+        self.moe_kernel.fused_experts.process_weights_after_loading(layer)
 """
         with tempfile.TemporaryDirectory() as tmp:
             for mode, source in (("ct", ct_block), ("modelopt", mo_block)):
@@ -572,6 +596,10 @@ class ModelOptNvFp4FusedMoE:
                 self.assertIn(f'source="{mode}"', patched)
                 self.assertIn('phase="pre"', patched)
                 self.assertIn('phase="post"', patched)
+                self.assertIn('phase="quant_config"', patched)
+                self.assertIn('phase="kernel_created"', patched)
+                self.assertIn('phase="fused_postload"', patched)
+                self.assertIn("routing_tables=h20_routing_tables", patched)
 
 
 if __name__ == "__main__":
