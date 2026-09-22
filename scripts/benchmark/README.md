@@ -2459,6 +2459,76 @@ Interpretation:
   MoE with the same state in this minimal control, so kernel-state comparison
   is premature.
 
+Observed H20-D v7 single-pass result on 2026-09-22:
+
+- CT/H12 request 0 vs request 1 differed in every layer-0 MoE boundary tensor:
+  `x`, `topk_weights`, `topk_ids`, `shared_experts_input`, and
+  `output`;
+- ModelOpt/H6 request 0 vs request 1 matched in all of those tensors;
+- CT and H6 also entered layer-0 MoE with different inputs on both requests.
+
+This resolves the H20-C/H20-D instrumentation conflict: the CT/H12 path is
+already request-unstable before the layer-0 routed experts kernel, even when no
+diagnostic second kernel call is present. Marlin kernel-state comparison is
+therefore premature.
+
+##### H20 layer-0 upstream boundary probe
+
+The v8 diagnostic image instruments the actual NVIDIA Qwen4Exp decoder path in
+`vllm/models/qwen4_exp/nvidia/model.py`. It records only layer 0 and keeps all
+request-0 snapshots on GPU until request 1 reaches the same boundary. CPU
+fingerprinting is deferred until both requests have been captured.
+
+Boundaries:
+
+- `entry_hidden`: multi-stream hidden state entering
+  `Qwen4ExpDecoderLayer.forward()`;
+- `attn_block_input`: output of the attention hyper-connection mix;
+- `attn_out`: attention/QSA or linear-attention output;
+- `mlp_block_input`: output of `mlp_hyper_connection.combine_and_mix()`,
+  which is the exact input passed into the MoE block;
+- `mlp_out`: layer-0 MLP/MoE output.
+
+Run CT/H12 after READY:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20u-v8-ct.jsonl
+```
+
+Run ModelOpt/H6 after READY:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20u-v8-modelopt.jsonl
+```
+
+Compare:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-compare \
+  --ct scripts/benchmark/results/local/h20u-v8-ct.jsonl \
+  --modelopt scripts/benchmark/results/local/h20u-v8-modelopt.jsonl \
+  --output scripts/benchmark/results/local/h20u-v8-ct-vs-modelopt.json
+```
+
+Interpretation:
+
+- CT repeat first mismatch at `entry_hidden`: divergence exists before decoder
+  layer 0; next H20 probe moves to embedding / initial HC multi-stream setup;
+- `entry_hidden` equal but `attn_block_input` differs: attention
+  hyper-connection mix is the first boundary;
+- first mismatch at `attn_out`: attention/QSA/linear-attention path is the
+  first unstable stage;
+- first mismatch at `mlp_block_input`: MLP hyper-connection combine/mix is the
+  first unstable stage;
+- H6 should remain repeat-stable; if it does not, treat the probe itself as
+  perturbing before localizing further.
+
 Interpretation:
 
 - CT `output_equal=false`, H6 `output_equal=true`: strong evidence that the
