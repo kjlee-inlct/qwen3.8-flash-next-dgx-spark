@@ -2390,6 +2390,75 @@ The v6 `twin-compare` also reports which input differs (`x`,
 `topk_weights`, `topk_ids`, or `shared_experts_input`) whenever
 `input_equal=false`.
 
+Observed H20-D v6 result on 2026-09-22:
+
+- CT/H12 remained twin-stable for both fixed requests;
+- ModelOpt/H6 remained twin-stable for both fixed requests;
+- cross-source comparison still reported `input_equal=false` and
+  `output1_equal=false` for both requests;
+- every recorded layer-0 input differed cross-source: `x`,
+  `topk_weights`, `topk_ids`, and `shared_experts_input`;
+- CT request 0 and request 1 also had different layer-0 input hashes, while
+  the two ModelOpt/H6 requests had identical layer-0 input hashes.
+
+This conflicts with H20-C's observation that the CT repeat first diverged at
+layer-0 `post`, so the next step must resolve the instrumentation difference
+before moving deeper into Marlin state. In particular, the H20-D twin probe
+adds a second layer-0 kernel invocation to request 0, which can perturb
+request-to-request state even though the immutable snapshot itself is now
+correct.
+
+##### H20-D single-pass control
+
+The v7 diagnostic image adds a single-pass control at the same layer-0 boundary.
+It keeps the immutable GPU-only input snapshots but executes the normal
+`moe_kernel.apply()` exactly once. No diagnostic second kernel invocation is
+performed. H20-C tracing and the twin trigger are disabled while this control
+is active.
+
+Run on CT/H12:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py single-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20d-v7-ct-single.jsonl
+```
+
+Run on ModelOpt/H6:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py single-probe \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20d-v7-modelopt-single.jsonl
+```
+
+Compare:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py single-compare \
+  --ct scripts/benchmark/results/local/h20d-v7-ct-single.jsonl \
+  --modelopt scripts/benchmark/results/local/h20d-v7-modelopt-single.jsonl \
+  --output scripts/benchmark/results/local/h20d-v7-ct-vs-modelopt-single.json
+```
+
+Interpretation:
+
+- CT repeat inputs equal in single-pass control, but unequal in twin mode:
+  the extra diagnostic kernel call is perturbing later request state; H20-C
+  remains the more faithful runtime boundary result;
+- CT repeat inputs still unequal in single-pass control while H6 repeat inputs
+  are equal: divergence already exists before layer-0 MoE on the CT/H12 path;
+  move the next H20 boundary upstream rather than into Marlin;
+- both sources repeat-stable, cross inputs equal, outputs differ: then inspect
+  Marlin/runtime state at layer 0;
+- cross inputs already differ on request 0: CT and H6 are not entering layer-0
+  MoE with the same state in this minimal control, so kernel-state comparison
+  is premature.
+
 Interpretation:
 
 - CT `output_equal=false`, H6 `output_equal=true`: strong evidence that the
