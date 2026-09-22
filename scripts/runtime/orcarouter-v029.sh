@@ -375,7 +375,7 @@ PY
     return
   fi
 
-  if [[ "${PROFILE_CASE}" == hybrid-h6-w4a16 ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h6-w4a16 || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
     local manifest="${MODEL_DIR}/.qwen38-hybrid-manifest.json"
     [[ -r "${manifest}" ]] || return 1
     python3 - "${manifest}" <<'PY' >/dev/null
