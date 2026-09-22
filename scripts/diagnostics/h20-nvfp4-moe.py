@@ -12,6 +12,7 @@ from pathlib import Path
 
 PREFIX = "QWEN38_H20_MOE_DIAG "
 RUNTIME_PREFIX = "QWEN38_H20C_RUNTIME "
+TWIN_PREFIX = "QWEN38_H20D_TWIN "
 RUNTIME_TENSOR_NAMES = (
     "x",
     "topk_weights",
