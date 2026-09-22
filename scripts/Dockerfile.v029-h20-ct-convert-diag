@@ -48,6 +48,17 @@ assert "_qwen38_h20u_capture(attn_out, 2, self.layer_idx)" in q4s
 assert "_qwen38_h20u_capture(block_input, 3, self.layer_idx)" in q4s
 assert "_qwen38_h20u_capture(mlp_out, 4, self.layer_idx)" in q4s
 assert "@torch.compiler.disable" not in q4s
+import torch
+from vllm.models.qwen4_exp.nvidia.model import _qwen38_h20u_capture
+
+@torch.compile(fullgraph=True, backend="eager")
+def h20u_fullgraph_smoke(x):
+    _qwen38_h20u_capture(x, 0, 0)
+    return x + 1
+
+h20u_smoke_in = torch.tensor([1.0])
+h20u_smoke_out = h20u_fullgraph_smoke(h20u_smoke_in)
+assert h20u_smoke_out.item() == 2.0
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
