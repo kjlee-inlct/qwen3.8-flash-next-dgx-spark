@@ -21,6 +21,7 @@ new_import = """from typing import TYPE_CHECKING
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import torch
 """
