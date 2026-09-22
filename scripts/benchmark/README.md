@@ -2150,3 +2150,117 @@ real mismatch now localizes the remaining search:
   observable difference;
 - no material mismatch through `fused_postload`: move next to a single
   first-token MoE input/output trace inside H20 rather than creating H21.
+
+#### H20-B observed result
+
+Observed on 2026-09-22 after the scoped-anchor hotfix:
+
+- both v3-predecessor H20-B images built successfully;
+- CT/H12 reached READY and produced 20 records:
+  4 calls x 5 phases (`pre`, `post`, `quant_config`,
+  `kernel_created`, `fused_postload`);
+- ModelOpt/H6 reached READY and produced the same 20-record shape;
+- comparison reported `common_records=20`, `only_ct=0`,
+  `only_modelopt=0`;
+- the only 8 tensor mismatches were the four calls' pre-conversion
+  `a13_scale` / `a2_scale` fingerprints;
+- no additional state mismatch appeared in `quant_config`,
+  `kernel_created`, or `fused_postload`.
+
+This keeps the activation-scale representation difference as a known
+pre-conversion difference, but it does not survive the W4A16/Marlin conversion
+boundary and no downstream load-time state divergence was observed. The next
+localization step therefore remains inside H20 and moves to actual runtime MoE
+execution.
+
+#### H20-C runtime first-token MoE trace
+
+H20-C keeps the same H20 profile/image names and bumps the image labels to v3.
+In addition to H20-A/B load-time records, both images patch
+`FusedMoEModularMethod.apply()`, the common runtime boundary that receives
+the already-selected expert routing tensors and calls `moe_kernel.apply()`.
+
+The runtime trace is disabled during startup/warmup. The `trace` command
+enables it only after READY via a container-local trigger file, then sends the
+same fixed request twice. Each traced MoE call records:
+
+- `layer_name`;
+- request id and call index;
+- pre-call `x`, `topk_weights`, `topk_ids`,
+  `shared_experts_input`;
+- post-call MoE `output`;
+- the same bounded full/sample SHA-256 fingerprint policy used by H20-A/B.
+
+Rebuild both H20 images after pulling H20-C because the image labels are v3.
+
+CT/H12 runtime trace:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py trace \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20c-ct-runtime.jsonl
+```
+
+Then stop/remove CT and run the same trace on ModelOpt/H6:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-modelopt-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-modelopt-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py trace \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20c-modelopt-runtime.jsonl
+```
+
+Compare both runtime traces:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py runtime-compare \
+  --ct scripts/benchmark/results/local/h20c-ct-runtime.jsonl \
+  --modelopt scripts/benchmark/results/local/h20c-modelopt-runtime.jsonl \
+  --output scripts/benchmark/results/local/h20c-ct-vs-modelopt.json
+```
+
+The comparator normalizes each source by request id and per-request MoE-call
+ordinal, rather than assuming global call indices match across boots. It also
+reports repeat stability independently for CT and ModelOpt.
+
+Interpretation:
+
+- first mismatch in pre `x`: divergence already exists before that MoE call;
+  the previous layer/residual/attention path becomes the next boundary;
+- `x` matches but `topk_weights` or `topk_ids` differs: the router path is
+  the first observed runtime divergence;
+- all pre tensors match but `output` differs: the routed MoE kernel execution
+  itself is the first observed divergence;
+- CT request 0 vs 1 diverges before the CT-vs-H6 comparison point: prioritize
+  that within-CT first mismatch because it directly localizes nondeterminism;
+- all traced MoE calls match across both requests and both sources: continue
+  H20 with the next non-MoE runtime boundary instead of creating H21.
