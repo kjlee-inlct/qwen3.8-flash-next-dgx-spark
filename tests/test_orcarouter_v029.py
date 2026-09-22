@@ -245,5 +245,16 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h11-ct-packed-modelweight", runtime)
 
 
+    def test_h12_preserves_modelweight_object_across_postload_rename(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-ct-moe-postload-preserve-weight-param.py").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.v029-h12-ct-postload-preserve").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('register_parameter("w13_weight", layer.w13_weight_packed)', patch)
+        self.assertIn('register_parameter("w2_weight", layer.w2_weight_packed)', patch)
+        self.assertNotIn("torch.nn.Parameter(\n            layer.w13_weight_packed.data", patch)
+        self.assertIn("compressed-tensors-postload-preserve-modelweight-v1", dockerfile)
+        self.assertIn("hybrid-h12-ct-postload-preserve", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()
