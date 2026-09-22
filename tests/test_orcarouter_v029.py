@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v8", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v9", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v8", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v9", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -814,13 +814,49 @@ class AfterLayer:
             patched = target.read_text(encoding="utf-8")
             compile(patched, str(target), "exec")
             self.assertIn("QWEN38_H20U_LAYER0 ", patched)
-            self.assertIn("_qwen38_h20u_request_id(self.layer_idx)", patched)
-            self.assertIn("h20u_entry_hidden", patched)
-            self.assertIn("h20u_attn_block_input", patched)
-            self.assertIn("h20u_attn_out", patched)
-            self.assertIn("h20u_mlp_block_input", patched)
-            self.assertIn("_qwen38_h20u_store_and_maybe_emit", patched)
+            self.assertIn("@torch.library.custom_op(", patched)
+            self.assertIn('"qwen38_h20u::capture"', patched)
+            self.assertIn('mutates_args={"tensor"}', patched)
+            self.assertIn("_qwen38_h20u_capture(hidden_states, 0, self.layer_idx)", patched)
+            self.assertIn("_qwen38_h20u_capture(block_input, 1, self.layer_idx)", patched)
+            self.assertIn("_qwen38_h20u_capture(attn_out, 2, self.layer_idx)", patched)
+            self.assertIn("_qwen38_h20u_capture(block_input, 3, self.layer_idx)", patched)
+            self.assertIn("_qwen38_h20u_capture(mlp_out, 4, self.layer_idx)", patched)
+            self.assertNotIn("@torch.compiler.disable", patched)
             self.assertIn("if 0 not in _QWEN38_H20U_PENDING", patched)
+
+    def test_h20_upstream_custom_op_pattern_compiles_fullgraph(self) -> None:
+        code = r"""
+import torch
+
+calls = []
+
+@torch.library.custom_op(
+    "qwen38_h20u_test::capture",
+    mutates_args={"tensor"},
+)
+def capture(tensor: torch.Tensor, stage: int, layer_idx: int) -> None:
+    calls.append((stage, layer_idx, tensor.detach().clone()))
+
+@torch.compile(fullgraph=True, backend="eager")
+def run(x):
+    capture(x, 0, 0)
+    return x + 1
+
+x = torch.tensor([1.0])
+y = run(x)
+assert y.item() == 2.0
+assert len(calls) == 1
+assert calls[0][0:2] == (0, 0)
+"""
+        result = subprocess.run(
+            ["python3", "-c", code],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_h20c_cli_supports_triggered_trace_and_runtime_compare(self) -> None:
         script = (
