@@ -17,7 +17,7 @@ REMOVE_AFTER_STOP=0
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, or hybrid-h14-ct-input-scale-postload\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, or hybrid-h15-mtp-off\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     --remove) REMOVE_AFTER_STOP=1 ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -43,16 +43,17 @@ case "${PROFILE_CASE}" in
   hybrid-h12-ct-postload-preserve) NAME="qwen38-h12-ct-postload-preserve-v029"; IMAGE="vllm-orcarouter-v029-h12-ct-postload-preserve:v1" ;;
   hybrid-h13-ct-input-scale) NAME="qwen38-h13-ct-input-scale-v029"; IMAGE="vllm-orcarouter-v029-h13-ct-input-scale:v1" ;;
   hybrid-h14-ct-input-scale-postload) NAME="qwen38-h14-ct-input-scale-postload-v029"; IMAGE="vllm-orcarouter-v029-h14-ct-input-scale-postload:v1" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, or hybrid-h14-ct-input-scale-postload\n' >&2; exit 2 ;;
+  hybrid-h15-mtp-off) NAME="qwen38-h15-mtp-off-v029"; IMAGE="vllm-orcarouter-v029-h14-ct-input-scale-postload:v1" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, or hybrid-h15-mtp-off\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload] [--remove]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off] [--remove]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -60,7 +61,7 @@ Experiment controls:
   PLE               mmap from /model, no CPU-offload worker
   QSA               exact torch.topk
   GB10 FLA fix      enabled
-  MTP               k=2
+  MTP               k=2 (hybrid-h15-mtp-off: disabled)
   context           262144
   prefix cache      disabled
   max sequences     3
@@ -103,7 +104,7 @@ load_manifest() {
 load_source() {
   BASE_MODEL_DIR=""
   BASE_MODEL_REVISION=""
-  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
+  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
@@ -141,6 +142,11 @@ load_source() {
       MODEL_PROFILE="hybrid-h14-ct-input-scale-postload"
       SERVED_NAME="hybrid-h14-ct-input-scale-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       MODEL_REPO="local/h14-ct-input-scale-postload-over-orcarouter"
+      MODEL_REVISION="runtime-control"
+    elif [[ "${PROFILE_CASE}" == hybrid-h15-mtp-off ]]; then
+      MODEL_PROFILE="hybrid-h15-mtp-off"
+      SERVED_NAME="hybrid-h15-mtp-off/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h15-mtp-off-over-h14"
       MODEL_REVISION="runtime-control"
     fi
     return 0
@@ -241,7 +247,7 @@ h13_image_ok() {
 }
 
 h14_image_ok() {
-  [[ "${PROFILE_CASE}" != hybrid-h14-ct-input-scale-postload ]] && return 0
+  [[ "${PROFILE_CASE}" != hybrid-h14-ct-input-scale-postload && "${PROFILE_CASE}" != hybrid-h15-mtp-off ]] && return 0
   local label
   label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h14" }}' 2>/dev/null || true)"
   [[ "${label}" == "compressed-tensors-postload-input-scale-parameter-v1" ]]
@@ -255,7 +261,7 @@ h9_image_ok() {
 }
 
 source_manifest_ok() {
-  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off ]]; then
     return 0
   fi
 
@@ -471,7 +477,7 @@ preflight() {
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h12-ct-postload-preserve scripts/\n' "${IMAGE}"
     elif [[ "${PROFILE_CASE}" == hybrid-h13-ct-input-scale ]]; then
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h13-ct-input-scale scripts/\n' "${IMAGE}"
-    elif [[ "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
+    elif [[ "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off ]]; then
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h14-ct-input-scale-postload scripts/\n' "${IMAGE}"
     else
       printf '    build with    : docker build -t %s -f scripts/Dockerfile.v029-orcarouter scripts/\n' "${IMAGE}"
@@ -569,7 +575,14 @@ start_runtime() {
     extra_mount=(-v "${BASE_MODEL_DIR}:/base-model:ro")
   fi
 
-  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs 3       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+  local mtp_status="off"
+  local speculative_args=()
+  if [[ "${PROFILE_CASE}" != hybrid-h15-mtp-off ]]; then
+    mtp_status="k=2"
+    speculative_args=(--speculative-config '{"method":"mtp","num_speculative_tokens":2}')
+  fi
+
+  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs 3       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       "${speculative_args[@]}"
 
   sleep 8
   local state
@@ -580,7 +593,7 @@ start_runtime() {
     return 1
   fi
 
-  printf 'container started; readiness pending: %s (profile=%s, vLLM v0.29, PLE mmap, exact QSA, GB10 FLA fix, MTP k=2)\n' "${NAME}" "${PROFILE_CASE}"
+  printf 'container started; readiness pending: %s (profile=%s, vLLM v0.29, PLE mmap, exact QSA, GB10 FLA fix, MTP %s)\n' "${NAME}" "${PROFILE_CASE}" "${mtp_status}"
   printf 'wait with: ./scripts/wait-ready.sh --container %s --model %s\n' "${NAME}" "${SERVED_NAME}"
 }
 
