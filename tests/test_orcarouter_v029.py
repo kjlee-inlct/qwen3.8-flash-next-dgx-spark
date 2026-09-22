@@ -353,5 +353,59 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h17-ct-weight-scale2-postload", runtime)
 
 
+    def test_h18_patch_executes_against_h12_input_scale_shape(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-ct-moe-postload-input-scale-lifecycle.py"
+        fixture = """class CompressedTensorsW4A4Nvfp4MoEMethod:
+    def process_weights_after_loading(self, layer):
+        # Use a single gscale for w13.
+        values = convert(
+            w13_scale_2=(1.0 / w13_weight_global_scale),
+            a13_scale=(1.0 / layer.w13_input_global_scale),
+            w2_scale_2=(1.0 / layer.w2_weight_global_scale),
+            a2_scale=(1.0 / layer.w2_input_global_scale),
+        )
+        replace_parameter(layer, "w13_weight_scale_2", w13_scale_2)
+        replace_parameter(layer, "w2_weight_scale_2", w2_scale_2)
+        layer.w13_input_scale = a13_scale
+        layer.w2_input_scale = a2_scale
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "ct.py"
+            target.write_text(fixture, encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(patch), str(target)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patched = target.read_text(encoding="utf-8")
+        self.assertIn('register_parameter("w13_input_scale", w13_input_scale_param)', patched)
+        self.assertIn('register_parameter("w2_input_scale", w2_input_scale_param)', patched)
+        self.assertIn("a13_scale=(1.0 / layer.w13_input_scale)", patched)
+        self.assertIn("a2_scale=(1.0 / layer.w2_input_scale)", patched)
+        self.assertIn('replace_parameter(layer, "w13_input_scale", a13_scale)', patched)
+        self.assertIn('replace_parameter(layer, "w2_input_scale", a2_scale)', patched)
+        self.assertIn("w13_scale_2=(1.0 / w13_weight_global_scale)", patched)
+        self.assertIn("w2_scale_2=(1.0 / layer.w2_weight_global_scale)", patched)
+
+
+    def test_h18_canonicalizes_input_scale_without_h17_weight_scale2_change(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-ct-moe-postload-input-scale-lifecycle.py").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.v029-h18-ct-input-scale-lifecycle").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('register_parameter("w13_input_scale", w13_input_scale_param)', patch)
+        self.assertIn('register_parameter("w2_input_scale", w2_input_scale_param)', patch)
+        self.assertIn('delattr(layer, "w13_input_global_scale")', patch)
+        self.assertIn('delattr(layer, "w2_input_global_scale")', patch)
+        self.assertIn("a13_scale=(1.0 / layer.w13_input_scale)", patch)
+        self.assertIn("a2_scale=(1.0 / layer.w2_input_scale)", patch)
+        self.assertNotIn("w13_weight_scale_2_param", patch)
+        self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", dockerfile)
+        self.assertIn("compressed-tensors-postload-input-scale-lifecycle-v1", dockerfile)
+        self.assertIn("hybrid-h18-ct-input-scale-lifecycle", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()
