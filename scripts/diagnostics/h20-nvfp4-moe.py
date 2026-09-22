@@ -354,6 +354,8 @@ def compare_runtime(
 
 
 def load_jsonl(path: Path) -> list[dict]:
+    if not path.is_file():
+        raise FileNotFoundError(f"diagnostic JSONL missing: {path}")
     records: list[dict] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
@@ -540,6 +542,17 @@ def main() -> int:
             prompt=args.prompt,
             api_base=args.api_base,
         )
+    missing = [str(path) for path in (args.ct, args.modelopt) if not path.is_file()]
+    if missing:
+        print(
+            "ERROR: runtime trace file(s) missing: " + ", ".join(missing),
+            file=sys.stderr,
+        )
+        print(
+            "Run the H20-C trace command successfully on both profiles before runtime-compare.",
+            file=sys.stderr,
+        )
+        return 2
     return compare_runtime(args.ct, args.modelopt, args.output)
 
 
