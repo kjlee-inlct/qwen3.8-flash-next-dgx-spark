@@ -50,8 +50,9 @@ _QWEN38_H20_DIAG_SAMPLE_ELEMS = int(
 
 
 def _qwen38_h20_bytes(tensor: torch.Tensor) -> bytes:
-    cpu = tensor.detach().contiguous().cpu().view(torch.uint8)
-    return cpu.numpy().tobytes()
+    # View as raw bytes before the host copy so CPU float8 support is irrelevant.
+    cpu_bytes = tensor.detach().contiguous().view(torch.uint8).cpu()
+    return cpu_bytes.numpy().tobytes()
 
 
 def _qwen38_h20_fingerprint(tensor: torch.Tensor | None) -> dict | None:
@@ -90,8 +91,8 @@ def _qwen38_h20_fingerprint(tensor: torch.Tensor | None) -> dict | None:
         }
     )
     pieces = [flat.narrow(0, start, min(k, numel - start)) for start in starts]
-    sample = torch.cat(pieces) if len(pieces) > 1 else pieces[0]
-    payload = _qwen38_h20_bytes(sample)
+    # Hash raw windows independently of dtype arithmetic support (notably FP8).
+    payload = b"".join(_qwen38_h20_bytes(piece) for piece in pieces)
     result["hash_scope"] = {
         "kind": "head-middle-tail-elements",
         "elements_per_window": k,
