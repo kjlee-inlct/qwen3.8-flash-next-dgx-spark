@@ -81,6 +81,7 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-orcarouter-v029-h11-ct-packed-modelweight:v1", assets)
         self.assertIn("vllm-orcarouter-v029-h12-ct-postload-preserve:v1", assets)
         self.assertIn("vllm-orcarouter-v029-h13-ct-input-scale:v1", assets)
+        self.assertIn("vllm-orcarouter-v029-h14-ct-input-scale-postload:v1", assets)
         self.assertIn('STORAGE_IMAGE_DESCRIPTION="Shared vLLM v0.29 experiment base; keep"', assets)
 
     def test_stopped_experiment_cleanup_covers_h7_h8_h9_h10_names(self) -> None:
@@ -146,6 +147,7 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("hybrid-h11-ct-packed-modelweight", registry)
         self.assertIn("hybrid-h12-ct-postload-preserve", registry)
         self.assertIn("hybrid-h13-ct-input-scale", registry)
+        self.assertIn("hybrid-h14-ct-input-scale-postload", registry)
         self.assertIn("MODEL_ASSET_CHECKPOINT_DEPENDS_ON", registry)
         self.assertIn("MODEL_ASSET_IMAGE_DEPENDS_ON", registry)
         self.assertIn('model_asset_dependents() {', registry)
