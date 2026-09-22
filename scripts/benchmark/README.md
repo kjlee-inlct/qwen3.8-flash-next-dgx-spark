@@ -1417,3 +1417,54 @@ Interpretation:
 - FAIL: even preserving the loaded packed weight objects is insufficient, so the
   next target is the broader compressed-tensors post-load scale/input-scale
   assignment/conversion path rather than the packed-weight object identity alone.
+
+
+### H12 result: FAIL, but strongly improved
+
+Observed on 2026-09-22:
+
+- H12 reached READY after 611 seconds;
+- the 1024/128 seeded determinism gate still failed;
+- however only 2 unique hashes were observed across 5 repeats;
+- 4 of 5 repeats matched the stable H6 hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- the fifth repeat produced
+  `973e217f93f585dac5b8a11275d5329716a672fc268f682b884b53d18c53ca0a`.
+
+Therefore preserving the loaded packed-weight parameter objects materially
+improves determinism, but is not sufficient for a PASS.
+
+### H13: input-global-scale parameter representation
+
+H13 starts from H12 and changes only the input-global-scale parameter objects:
+
+- H12: plain `torch.nn.Parameter` for
+  `w13_input_global_scale` / `w2_input_global_scale`;
+- H13: `PerTensorScaleParameter(weight_loader=...)` for the same on-disk names.
+
+The CT reciprocal conversion `1 / input_global_scale`, post-load assignments,
+checkpoint values/names, H12 packed-weight preservation, weight scale/global
+scale paths, backend selection, QSA, and MTP remain unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h13-ct-input-scale:v1 \
+  -f scripts/Dockerfile.v029-h13-ct-input-scale \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h13-ct-input-scale
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h13-ct-input-scale
+
+./scripts/wait-ready.sh \
+  --container qwen38-h13-ct-input-scale-v029 \
+  --model hybrid-h13-ct-input-scale/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: input-scale parameter/loader representation is the remaining difference
+  needed on top of H12;
+- FAIL with the same 4/5 stable pattern: move next to the input-scale post-load
+  assignment/name conversion itself;
+- broader regression: reassess interaction between H12 object preservation and
+  scale object semantics.

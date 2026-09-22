@@ -256,5 +256,15 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h12-ct-postload-preserve", runtime)
 
 
+    def test_h13_changes_only_input_global_scale_parameter_objects(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-ct-moe-input-scale-modelparam.py").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.v029-h13-ct-input-scale").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("w13_input_scale = PerTensorScaleParameter(", patch)
+        self.assertIn("w2_input_scale = PerTensorScaleParameter(", patch)
+        self.assertIn("compressed-tensors-input-scale-pertensor-v1", dockerfile)
+        self.assertIn("hybrid-h13-ct-input-scale", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()
