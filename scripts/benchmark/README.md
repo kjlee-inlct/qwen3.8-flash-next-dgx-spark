@@ -832,6 +832,10 @@ Important invalid/non-result events:
 - H10 initially had a startup-only loader failure because the new
   PerTensorScaleParameter global-scale objects lacked TENSOR quant_method
   metadata. The corrected H10 run is the valid determinism result.
+- The first H17 image build failed before runtime because the patch script
+  incorrectly required `layer.w13_weight_global_scale[:, 0]` to occur exactly
+  once even though H12 uses it in both the `allclose` check and the contiguous
+  extraction. This is a patch-application failure, not a determinism result.
 - A missing image/container, build failure, or readiness failure is never
   classified as a determinism FAIL.
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
@@ -1733,6 +1737,12 @@ single five-repeat sample does not establish that single-sequence scheduling
 improved stability.
 
 ### H17: post-load weight_scale_2 lifecycle control
+
+The first H17 build attempt failed in the patch script before an image was
+created. The failure came from an overlapping text-replacement assertion, not
+from vLLM startup or inference. The corrected patch now matches the `allclose`
+and contiguous-extraction blocks independently, and CI executes the patch
+against an H12-shaped fixture to guard this exact failure mode.
 
 H17 returns to H12 as the parent because H12 is the strongest observed CT-side
 signal and H13-H16 did not establish a repair. H17 changes only the lifecycle of
