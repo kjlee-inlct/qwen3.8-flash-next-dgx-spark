@@ -148,6 +148,8 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("hybrid-h12-ct-postload-preserve", registry)
         self.assertIn("hybrid-h13-ct-input-scale", registry)
         self.assertIn("hybrid-h14-ct-input-scale-postload", registry)
+        self.assertIn("hybrid-h15-mtp-off", registry)
+        self.assertIn('H14 determinism FAIL; retained as the H15 MTP-off runtime-control parent', (ROOT / "scripts" / "storage" / "assets.sh").read_text(encoding="utf-8"))
         self.assertIn("MODEL_ASSET_CHECKPOINT_DEPENDS_ON", registry)
         self.assertIn("MODEL_ASSET_IMAGE_DEPENDS_ON", registry)
         self.assertIn('model_asset_dependents() {', registry)
