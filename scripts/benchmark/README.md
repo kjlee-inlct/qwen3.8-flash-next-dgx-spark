@@ -796,7 +796,7 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
-### H1-H16 experiment ledger
+### H1-H17 experiment ledger
 
 This ledger is the canonical compact history for the checkpoint/loader
 determinism isolation. Startup/build failures are explicitly separated from
@@ -821,7 +821,8 @@ valid determinism results.
 | H13 | H12 + input-global-scale checkpoint objects -> PerTensorScaleParameter | FAIL, 4 / 5 | Input-global-scale parameter representation is not the missing repair; regression versus H12. |
 | H14 | H12 + register converted post-load input scales as Parameters | FAIL, 5 / 5 | Final post-load input-scale Tensor/Parameter ownership is insufficient. |
 | H15 | H14 runtime/image with MTP speculative decoding disabled | FAIL, 4 / 5 | MTP is not sufficient to explain the remaining nondeterminism; one pair of repeats matched, but the gate still failed. |
-| H16 | H15 runtime with max_num_seqs 3 -> 1 | PENDING | Runtime-only A/B isolates scheduler/batching concurrency while keeping MTP off and reusing the same H14 image. |
+| H16 | H15 runtime with max_num_seqs 3 -> 1 | FAIL, 4 / 5 | Single-sequence scheduling is not sufficient; run 1 matched the H6 stable reference and runs 2-3 matched each other, but the gate failed. |
+| H17 | H12 + rename loaded weight_global_scale parameters to final weight_scale_2 names before conversion | PENDING | Isolates CT post-load weight_scale_2 object/name lifecycle while preserving checkpoint bytes, reciprocal values, and input-scale handling. |
 
 Important invalid/non-result events:
 
@@ -836,7 +837,7 @@ Important invalid/non-result events:
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
   the retained H4 checkpoint.
 
-Validation still worth doing independently of the H16 runtime control:
+Validation still worth doing independently of the H17 CT lifecycle control:
 
 - repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
   whether the observed 4/5 stable pattern is reproducible;
@@ -1710,3 +1711,87 @@ Interpretation:
   lower-level kernel/runtime isolation;
 - the control is valid only if H15 and H16 reuse the same H14 image ID and H16
   metadata records both `speculative_config=null` and `max_num_seqs=1`.
+
+### H16 result: FAIL
+
+Observed on 2026-09-22:
+
+- H16 reused `vllm-orcarouter-v029-h14-ct-input-scale-postload:v1`;
+- benchmark metadata recorded `speculative_config=null` and
+  `max_num_seqs=1`, confirming both intended runtime controls;
+- PLE mmap, exact QSA, prefix caching disabled, and the H14 checkpoint/image
+  remained unchanged;
+- the seeded 1024/128 gate produced 4 unique hashes across 5 repeats;
+- run 1 matched the H6 stable reference hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- runs 2 and 3 matched each other; runs 4 and 5 diverged;
+- run 5 matched the non-stable hash previously observed as H12's fifth repeat.
+
+Therefore reducing `max_num_seqs` to one is not sufficient to restore
+determinism. The repeated hashes are retained as diagnostic markers only; this
+single five-repeat sample does not establish that single-sequence scheduling
+improved stability.
+
+### H17: post-load weight_scale_2 lifecycle control
+
+H17 returns to H12 as the parent because H12 is the strongest observed CT-side
+signal and H13-H16 did not establish a repair. H17 changes only the lifecycle of
+the loaded weight-global-scale parameter objects after checkpoint loading.
+
+The vLLM v0.29 ModelOpt path creates `w13_weight_scale_2` /
+`w2_weight_scale_2` parameters under their final names before post-load kernel
+conversion, then calls `replace_parameter()` on those same names. The CT path
+loads the corresponding values as `w13_weight_global_scale` /
+`w2_weight_global_scale`, computes reciprocal kernel scales, and only then
+creates/replaces `w*_weight_scale_2`.
+
+H17 keeps H10's loaded `PerTensorScaleParameter` objects and H12's packed-weight
+object preservation, but after loading:
+
+- moves the loaded `w13_weight_global_scale` object to
+  `w13_weight_scale_2`;
+- moves the loaded `w2_weight_global_scale` object to
+  `w2_weight_scale_2`;
+- keeps the exact reciprocal conversion values unchanged;
+- lets the existing CT `replace_parameter()` calls operate on final-name
+  parameters that already exist;
+- leaves the input-global-scale/input-scale path unchanged.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h17-ct-weight-scale2-postload:v1 \
+  -f scripts/Dockerfile.v029-h17-ct-weight-scale2-postload \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h16-single-seq
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h17-ct-weight-scale2-postload
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h17-ct-weight-scale2-postload
+
+./scripts/wait-ready.sh \
+  --container qwen38-h17-ct-weight-scale2-postload-v029 \
+  --model hybrid-h17-ct-weight-scale2-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h17-ct-weight-scale2-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h17-ct-weight-scale2-postload-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: post-load weight-scale2 object/name lifecycle becomes a strong
+  root-cause candidate and should be followed by a reproduction run before
+  combining it with input-scale lifecycle changes;
+- FAIL with an H12-like partial pattern: repeat H12/H17 with larger same-boot
+  samples before attributing an effect;
+- broad FAIL: weight-scale2 lifecycle alone is insufficient; the next clean CT
+  isolation target is the analogous input_global_scale -> input_scale canonical
+  lifecycle, while preserving reciprocal values.
