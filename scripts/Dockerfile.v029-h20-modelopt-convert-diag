@@ -1,0 +1,24 @@
+# H20 ModelOpt diagnostic: base v0.29 + bounded NVFP4 MoE conversion fingerprints.
+FROM vllm-orcarouter-v029:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG MO=${SP}/vllm/model_executor/layers/quantization/modelopt.py
+
+COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
+RUN cp ${MO} ${MO}.h20.orig \
+ && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${MO} modelopt \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+body=s[s.index("class ModelOptNvFp4FusedMoE"):]
+assert 'source="modelopt"' in body
+assert 'phase="pre"' in body
+assert 'phase="post"' in body
+assert "QWEN38_H20_MOE_DIAG " in s
+print("H20 ModelOpt NVFP4 conversion diagnostics installed")
+PY
+
+LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v1"
