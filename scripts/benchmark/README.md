@@ -796,7 +796,7 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
-### H1-H18 experiment ledger
+### H1-H19 experiment ledger
 
 This ledger is the canonical compact history for the checkpoint/loader
 determinism isolation. Startup/build failures are explicitly separated from
@@ -823,7 +823,8 @@ valid determinism results.
 | H15 | H14 runtime/image with MTP speculative decoding disabled | FAIL, 4 / 5 | MTP is not sufficient to explain the remaining nondeterminism; one pair of repeats matched, but the gate still failed. |
 | H16 | H15 runtime with max_num_seqs 3 -> 1 | FAIL, 4 / 5 | Single-sequence scheduling is not sufficient; run 1 matched the H6 stable reference and runs 2-3 matched each other, but the gate failed. |
 | H17 | H12 + rename loaded weight_global_scale parameters to final weight_scale_2 names before conversion | FAIL, 4 / 5 | Final weight_scale_2 name/object lifecycle alone is insufficient; two runs matched each other and one matched the H6 stable hash. |
-| H18 | H12 + rename loaded input_global_scale parameters to final input_scale names before conversion and replace converted scales on those names | PENDING | Isolates CT post-load input_scale lifecycle while preserving reciprocal values and leaving H17 weight_scale_2 changes out. |
+| H18 | H12 + rename loaded input_global_scale parameters to final input_scale names before conversion and replace converted scales on those names | FAIL, 5 / 5 | Input-scale final-name/object lifecycle alone is insufficient; all five repeats diverged. |
+| H19 | H12 + apply both H17 weight_scale_2 lifecycle and H18 input_scale lifecycle | PENDING | Tests whether the two final-name post-load lifecycles interact while preserving checkpoint bytes and reciprocal values. |
 
 Important invalid/non-result events:
 
@@ -842,7 +843,7 @@ Important invalid/non-result events:
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
   the retained H4 checkpoint.
 
-Validation still worth doing independently of the H18 CT lifecycle control:
+Validation still worth doing independently of the H19 combined lifecycle control:
 
 - repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
   whether the observed 4/5 stable pattern is reproducible;
@@ -1881,3 +1882,77 @@ Interpretation:
 - broad FAIL: input-scale lifecycle alone is also insufficient, leaving a
   combined post-load lifecycle control or lower-level kernel-format conversion
   as the next isolation target.
+
+### H18 result: FAIL
+
+Observed on 2026-09-22:
+
+- H18 built successfully and reached READY after 641 seconds;
+- runtime metadata recorded vLLM v0.29, PLE mmap, exact QSA, prefix caching
+  disabled, max_num_seqs=3, and MTP k=2;
+- the seeded 1024/128 determinism gate produced 5 unique hashes across 5
+  repeats;
+- no repeat matched the H6 stable reference hash;
+- hashes previously observed in other experiments reappeared, but cross-run
+  hash reuse remains only a diagnostic marker.
+
+Therefore canonicalizing only the post-load
+`input_global_scale -> input_scale` final-name/object lifecycle is not
+sufficient to restore determinism. H18 is a clean broad negative result.
+
+### H19: combined post-load scale lifecycle control
+
+H19 returns to H12 and combines exactly the already-tested H17 and H18
+post-load lifecycle changes. It does not introduce a new checkpoint transform
+or a new numerical scale conversion.
+
+The H19 image applies the two existing patches sequentially to the H12 parent:
+
+1. H17 canonicalizes `weight_global_scale -> weight_scale_2` before kernel
+   conversion and lets the converted weight scale_2 tensors replace those
+   existing final-name parameters.
+2. H18 canonicalizes `input_global_scale -> input_scale` before kernel
+   conversion and lets the converted input-scale tensors replace those existing
+   final-name parameters.
+
+Checkpoint bytes, reciprocal values, H12 packed-weight preservation, backend,
+QSA, MTP, batching, and cache controls remain unchanged.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1 \
+  -f scripts/Dockerfile.v029-h19-ct-combined-lifecycle \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h18-ct-input-scale-lifecycle
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h19-ct-combined-lifecycle
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h19-ct-combined-lifecycle
+
+./scripts/wait-ready.sh \
+  --container qwen38-h19-ct-combined-lifecycle-v029 \
+  --model hybrid-h19-ct-combined-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h19-ct-combined-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h19-ct-combined-lifecycle-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: the weight-scale2 and input-scale lifecycle changes have a meaningful
+  interaction; reproduce H19 before any broader attribution;
+- H12-like partial convergence: expand same-boot repeats and compare directly
+  against a fresh H12 run before calling it an interaction effect;
+- broad FAIL: final-name/object lifecycle alignment is insufficient even in
+  combination. Stop adding wrapper-only CT patches and move to tensor-level
+  diagnostics around `convert_to_nvfp4_moe_kernel_format()` to locate the
+  first CT-vs-ModelOpt divergence.

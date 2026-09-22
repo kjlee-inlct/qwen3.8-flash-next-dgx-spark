@@ -26,7 +26,8 @@ list_storage_images() {
     vllm-orcarouter-v029-h13-ct-input-scale:v1 \
     vllm-orcarouter-v029-h14-ct-input-scale-postload:v1 \
     vllm-orcarouter-v029-h17-ct-weight-scale2-postload:v1 \
-    vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1
+    vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1 \
+    vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1
 }
 
 describe_storage_image() {
@@ -113,8 +114,13 @@ describe_storage_image() {
       ;;
     vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1)
       STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=1
+      STORAGE_IMAGE_DESCRIPTION="H18 CT post-load input_scale lifecycle control completed"
+      ;;
+    vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1)
+      STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="Current H18 CT post-load input_scale lifecycle control"
+      STORAGE_IMAGE_DESCRIPTION="Current H19 combined CT post-load lifecycle control"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
