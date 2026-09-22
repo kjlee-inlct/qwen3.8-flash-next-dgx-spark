@@ -251,7 +251,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('register_parameter("w13_weight", layer.w13_weight_packed)', patch)
         self.assertIn('register_parameter("w2_weight", layer.w2_weight_packed)', patch)
-        self.assertNotIn("torch.nn.Parameter(\n            layer.w13_weight_packed.data", patch)
+        self.assertIn('assert "layer.w13_weight = torch.nn.Parameter(" not in body', dockerfile)
         self.assertIn("compressed-tensors-postload-preserve-modelweight-v1", dockerfile)
         self.assertIn("hybrid-h12-ct-postload-preserve", runtime)
 
