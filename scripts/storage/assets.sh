@@ -102,7 +102,7 @@ describe_storage_image() {
     vllm-orcarouter-v029-h14-ct-input-scale-postload:v1)
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="H14 determinism FAIL; retained as the H15 MTP-off runtime-control parent"
+      STORAGE_IMAGE_DESCRIPTION="H14/H15 determinism FAIL; retained as the H16 single-sequence runtime-control image"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2

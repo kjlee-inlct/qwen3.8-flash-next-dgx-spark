@@ -280,10 +280,20 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
     def test_h15_reuses_h14_image_and_disables_mtp_only(self) -> None:
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('hybrid-h15-mtp-off) NAME="qwen38-h15-mtp-off-v029"; IMAGE="vllm-orcarouter-v029-h14-ct-input-scale-postload:v1"', runtime)
-        self.assertIn('if [[ "${PROFILE_CASE}" != hybrid-h15-mtp-off ]]; then', runtime)
+        self.assertIn('if [[ "${PROFILE_CASE}" != hybrid-h15-mtp-off && "${PROFILE_CASE}" != hybrid-h16-single-seq ]]; then', runtime)
         self.assertIn('speculative_args=(--speculative-config \'{"method":"mtp","num_speculative_tokens":2}\')', runtime)
         self.assertIn('"${speculative_args[@]}"', runtime)
         self.assertIn('SERVED_NAME="hybrid-h15-mtp-off/Qwen3.8-Flash-Next-Uncensored-NVFP4"', runtime)
+
+
+    def test_h16_reuses_h14_image_disables_mtp_and_sets_single_sequence(self) -> None:
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('hybrid-h16-single-seq) NAME="qwen38-h16-single-seq-v029"; IMAGE="vllm-orcarouter-v029-h14-ct-input-scale-postload:v1"', runtime)
+        self.assertIn('if [[ "${PROFILE_CASE}" != hybrid-h15-mtp-off && "${PROFILE_CASE}" != hybrid-h16-single-seq ]]; then', runtime)
+        self.assertIn('if [[ "${PROFILE_CASE}" == hybrid-h16-single-seq ]]; then', runtime)
+        self.assertIn('max_num_seqs=1', runtime)
+        self.assertIn('--max-num-seqs "${max_num_seqs}"', runtime)
+        self.assertIn('SERVED_NAME="hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4"', runtime)
 
 
 if __name__ == "__main__":
