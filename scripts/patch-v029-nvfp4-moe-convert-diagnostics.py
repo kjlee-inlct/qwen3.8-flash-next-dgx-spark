@@ -102,6 +102,80 @@ def _qwen38_h20_fingerprint(tensor: torch.Tensor | None) -> dict | None:
     return result
 
 
+def _qwen38_h20_type_name(value) -> str:
+    cls = value if isinstance(value, type) else type(value)
+    return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def _qwen38_h20_snapshot(value, depth: int = 0):
+    if depth > 4:
+        return {"type": _qwen38_h20_type_name(value), "truncated": True}
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, torch.Tensor):
+        return {"tensor": _qwen38_h20_fingerprint(value)}
+    if isinstance(value, type):
+        return {"type_object": _qwen38_h20_type_name(value)}
+    if isinstance(value, (list, tuple)):
+        return [_qwen38_h20_snapshot(item, depth + 1) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): _qwen38_h20_snapshot(val, depth + 1)
+            for key, val in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if hasattr(value, "value") and isinstance(
+        getattr(value, "value"), (bool, int, float, str)
+    ):
+        return {
+            "enum_type": _qwen38_h20_type_name(value),
+            "value": getattr(value, "value"),
+        }
+
+    data = {"type": _qwen38_h20_type_name(value)}
+    attrs = getattr(value, "__dict__", None)
+    if isinstance(attrs, dict):
+        selected = {}
+        for key in sorted(attrs):
+            if key.startswith("_"):
+                continue
+            val = attrs[key]
+            if callable(val):
+                continue
+            selected[key] = _qwen38_h20_snapshot(val, depth + 1)
+        if selected:
+            data["attrs"] = selected
+    return data
+
+
+def _qwen38_h20_emit_state(
+    *,
+    source: str,
+    phase: str,
+    call_index: int,
+    backend,
+    use_a16: bool,
+    layer,
+    state: dict,
+) -> None:
+    if call_index >= _QWEN38_H20_DIAG_MAX_CALLS:
+        return
+    record = {
+        "schema": 2,
+        "source": source,
+        "phase": phase,
+        "call_index": call_index,
+        "backend": str(backend),
+        "use_a16": bool(use_a16),
+        "num_experts": int(getattr(layer, "num_experts", -1)),
+        "global_num_experts": int(getattr(layer, "global_num_experts", -1)),
+        "state": _qwen38_h20_snapshot(state),
+    }
+    print(
+        "QWEN38_H20_MOE_DIAG " + json.dumps(record, sort_keys=True),
+        flush=True,
+    )
+
+
 def _qwen38_h20_emit(
     *,
     source: str,
@@ -335,6 +409,85 @@ else:
     if body.count(old) != 1:
         raise SystemExit("expected ModelOpt NVFP4 MoE conversion block not found exactly once")
     text = prefix + body.replace(old, new, 1)
+
+source_name = "ct" if mode == "ct" else "modelopt"
+class_name = (
+    "CompressedTensorsW4A4Nvfp4MoEMethod"
+    if mode == "ct"
+    else "ModelOptNvFp4FusedMoE"
+)
+start = text.index(f"class {class_name}")
+prefix, body = text[:start], text[start:]
+
+kernel_anchor = '''        assert self.experts_cls is not None
+        self.moe_kernel = make_nvfp4_moe_kernel(
+'''
+kernel_insert = f'''        assert self.experts_cls is not None
+        h20_routing_tables = layer._expert_routing_tables()
+        _qwen38_h20_emit_state(
+            source="{source_name}",
+            phase="quant_config",
+            call_index=h20_call_index,
+            backend=self.nvfp4_backend,
+            use_a16=self.use_a16,
+            layer=layer,
+            state={{
+                "moe_quant_config": self.moe_quant_config,
+                "moe_config": self.moe,
+                "experts_cls": self.experts_cls,
+                "routing_tables": h20_routing_tables,
+            }},
+        )
+        self.moe_kernel = make_nvfp4_moe_kernel(
+'''
+if body.count(kernel_anchor) != 1:
+    raise SystemExit("expected modular-kernel creation anchor exactly once")
+body = body.replace(kernel_anchor, kernel_insert, 1)
+
+routing_old = "            routing_tables=layer._expert_routing_tables(),\n"
+if body.count(routing_old) != 1:
+    raise SystemExit("expected routing_tables call exactly once")
+body = body.replace(routing_old, "            routing_tables=h20_routing_tables,\n", 1)
+
+postload_old = "        self.moe_kernel.fused_experts.process_weights_after_loading(layer)\n"
+postload_new = f'''        _qwen38_h20_emit_state(
+            source="{source_name}",
+            phase="kernel_created",
+            call_index=h20_call_index,
+            backend=self.nvfp4_backend,
+            use_a16=self.use_a16,
+            layer=layer,
+            state={{
+                "moe_kernel": self.moe_kernel,
+                "fused_experts": self.moe_kernel.fused_experts,
+            }},
+        )
+        self.moe_kernel.fused_experts.process_weights_after_loading(layer)
+        _qwen38_h20_emit_state(
+            source="{source_name}",
+            phase="fused_postload",
+            call_index=h20_call_index,
+            backend=self.nvfp4_backend,
+            use_a16=self.use_a16,
+            layer=layer,
+            state={{
+                "moe_kernel": self.moe_kernel,
+                "fused_experts": self.moe_kernel.fused_experts,
+                "layer_w13": layer.w13_weight,
+                "layer_w2": layer.w2_weight,
+                "layer_w13_scale": layer.w13_weight_scale,
+                "layer_w2_scale": layer.w2_weight_scale,
+                "layer_w13_scale_2": layer.w13_weight_scale_2,
+                "layer_w2_scale_2": layer.w2_weight_scale_2,
+                "layer_a13_scale": layer.w13_input_scale,
+                "layer_a2_scale": layer.w2_input_scale,
+            }},
+        )
+'''
+if body.count(postload_old) != 1:
+    raise SystemExit("expected fused-experts post-load call exactly once")
+body = body.replace(postload_old, postload_new, 1)
+text = prefix + body
 
 path.write_text(text, encoding="utf-8")
 print(f"installed H20 NVFP4 MoE conversion diagnostics ({mode})")
