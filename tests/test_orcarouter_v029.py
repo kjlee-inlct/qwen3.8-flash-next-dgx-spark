@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -294,6 +295,47 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('max_num_seqs=1', runtime)
         self.assertIn('--max-num-seqs "${max_num_seqs}"', runtime)
         self.assertIn('SERVED_NAME="hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4"', runtime)
+
+
+    def test_h17_patch_executes_against_h12_postload_shape(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-ct-moe-postload-weight-scale2-lifecycle.py"
+        fixture = """class CompressedTensorsW4A4Nvfp4MoEMethod:
+    def process_weights_after_loading(self, layer):
+        # Use a single gscale for w13.
+        if self.moe.is_act_and_mul and not torch.allclose(
+            layer.w13_weight_global_scale[:, 0], layer.w13_weight_global_scale[:, 1]
+        ):
+            pass
+        w13_weight_global_scale = layer.w13_weight_global_scale[:, 0].contiguous()
+        values = convert(
+            w13_scale_2=(1.0 / w13_weight_global_scale),
+            a13_scale=(1.0 / layer.w13_input_global_scale),
+            w2_scale_2=(1.0 / layer.w2_weight_global_scale),
+            a2_scale=(1.0 / layer.w2_input_global_scale),
+        )
+        replace_parameter(layer, "w13_weight_scale_2", w13_scale_2)
+        replace_parameter(layer, "w2_weight_scale_2", w2_scale_2)
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "ct.py"
+            target.write_text(fixture, encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(patch), str(target)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patched = target.read_text(encoding="utf-8")
+        self.assertIn('register_parameter("w13_weight_scale_2", w13_weight_scale_2_param)', patched)
+        self.assertIn('register_parameter("w2_weight_scale_2", w2_weight_scale_2_param)', patched)
+        self.assertIn("layer.w13_weight_scale_2[:, 0], layer.w13_weight_scale_2[:, 1]", patched)
+        self.assertIn("w13_weight_scale_2 = layer.w13_weight_scale_2[:, 0].contiguous()", patched)
+        self.assertIn("w13_scale_2=(1.0 / w13_weight_scale_2)", patched)
+        self.assertIn("w2_scale_2=(1.0 / layer.w2_weight_scale_2)", patched)
+        self.assertIn("a13_scale=(1.0 / layer.w13_input_global_scale)", patched)
+        self.assertIn("a2_scale=(1.0 / layer.w2_input_global_scale)", patched)
 
 
     def test_h17_canonicalizes_weight_scale2_before_postload_replace(self) -> None:

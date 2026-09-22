@@ -41,16 +41,37 @@ if body.count(anchor) != 1:
     raise SystemExit("expected H12 single-gscale anchor not found exactly once")
 body = body.replace(anchor, rename, 1)
 
-replacements = {
-    "layer.w13_weight_global_scale[:, 0]": "layer.w13_weight_scale_2[:, 0]",
-    "layer.w13_weight_global_scale[:, 1]": "layer.w13_weight_scale_2[:, 1]",
-    "w13_weight_global_scale = layer.w13_weight_global_scale[:, 0].contiguous()": "w13_weight_scale_2 = layer.w13_weight_scale_2[:, 0].contiguous()",
+allclose_old = '''        if self.moe.is_act_and_mul and not torch.allclose(
+            layer.w13_weight_global_scale[:, 0], layer.w13_weight_global_scale[:, 1]
+        ):
+'''
+allclose_new = '''        if self.moe.is_act_and_mul and not torch.allclose(
+            layer.w13_weight_scale_2[:, 0], layer.w13_weight_scale_2[:, 1]
+        ):
+'''
+if body.count(allclose_old) != 1:
+    raise SystemExit("expected H12 w13 global-scale allclose block not found exactly once")
+body = body.replace(allclose_old, allclose_new, 1)
+
+assignment_old = (
+    "        w13_weight_global_scale = "
+    "layer.w13_weight_global_scale[:, 0].contiguous()\n"
+)
+assignment_new = (
+    "        w13_weight_scale_2 = "
+    "layer.w13_weight_scale_2[:, 0].contiguous()\n"
+)
+if body.count(assignment_old) != 1:
+    raise SystemExit("expected H12 w13 global-scale contiguous assignment not found exactly once")
+body = body.replace(assignment_old, assignment_new, 1)
+
+conversion_replacements = {
     "w13_scale_2=(1.0 / w13_weight_global_scale)": "w13_scale_2=(1.0 / w13_weight_scale_2)",
     "w2_scale_2=(1.0 / layer.w2_weight_global_scale)": "w2_scale_2=(1.0 / layer.w2_weight_scale_2)",
 }
-for old, new in replacements.items():
+for old, new in conversion_replacements.items():
     if body.count(old) != 1:
-        raise SystemExit(f"expected H12 fragment not found exactly once: {old}")
+        raise SystemExit(f"expected H12 conversion fragment not found exactly once: {old}")
     body = body.replace(old, new, 1)
 
 path.write_text(text[:start] + body, encoding="utf-8")
