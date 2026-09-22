@@ -15,7 +15,8 @@ model_asset_profiles() {
     hybrid-h9-ct-modelweight \
     hybrid-h10-ct-global-scale \
     hybrid-h11-ct-packed-modelweight \
-    hybrid-h12-ct-postload-preserve
+    hybrid-h12-ct-postload-preserve \
+    hybrid-h13-ct-input-scale
 }
 
 describe_model_asset() {
@@ -114,6 +115,14 @@ describe_model_asset() {
       MODEL_ASSET_RETIRE_IMAGE=1
       MODEL_ASSET_CHECKPOINT_DEPENDS_ON="orcarouter"
       MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h11-ct-packed-modelweight"
+      ;;
+    hybrid-h13-ct-input-scale)
+      MODEL_ASSET_CHECKPOINT="${SCRIPT_ROOT}/model"
+      MODEL_ASSET_CONTAINER="qwen38-h13-ct-input-scale-v029"
+      MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h13-ct-input-scale:v1"
+      MODEL_ASSET_RETIRE_IMAGE=1
+      MODEL_ASSET_CHECKPOINT_DEPENDS_ON="orcarouter"
+      MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h12-ct-postload-preserve"
       ;;
     *)
       return 2
