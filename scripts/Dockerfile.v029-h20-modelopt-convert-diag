@@ -17,6 +17,9 @@ body=s[s.index("class ModelOptNvFp4FusedMoE"):]
 assert 'source="modelopt"' in body
 assert 'phase="pre"' in body
 assert 'phase="post"' in body
+assert 'phase="quant_config"' in body
+assert 'phase="kernel_created"' in body
+assert 'phase="fused_postload"' in body
 assert "QWEN38_H20_MOE_DIAG " in s
 print("H20 ModelOpt NVFP4 conversion diagnostics installed")
 PY
