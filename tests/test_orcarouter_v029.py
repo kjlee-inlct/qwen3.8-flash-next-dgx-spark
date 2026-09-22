@@ -489,14 +489,16 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v2", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v3", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v2", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v3", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
         self.assertIn("QWEN38_H20_DIAG_SAMPLE_ELEMS=1024", runtime)
+        self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
+        self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("h20_image_ok()", runtime)
 
 
@@ -610,6 +612,75 @@ class ModelOptNvFp4FusedMoE:
                         "routing_tables=layer._expert_routing_tables()",
                         patched.split("def another_method", 1)[1],
                     )
+
+
+    def test_h20c_runtime_trace_patcher_executes_on_modular_apply_shape(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-h20c-runtime-moe-trace.py"
+        fixture = """from typing import TYPE_CHECKING
+
+import torch
+
+logger = init_logger(__name__)
+
+class FusedMoEModularMethod:
+    def apply(
+        self,
+        layer: "RoutedExperts",
+        x: torch.Tensor,
+        topk_weights: torch.Tensor,
+        topk_ids: torch.Tensor,
+        shared_experts: SharedExperts | None,
+        shared_experts_input: torch.Tensor | None,
+    ) -> torch.Tensor:
+        assert self.moe_kernel is not None
+        return self.moe_kernel.apply(
+            hidden_states=x,
+            w1=layer.w13_weight,
+            w2=layer.w2_weight,
+            topk_weights=topk_weights,
+            topk_ids=topk_ids,
+            activation=layer.activation,
+            global_num_experts=layer.global_num_experts,
+            apply_router_weight_on_input=layer.apply_router_weight_on_input,
+            expert_map=layer.expert_map,
+            shared_experts=shared_experts,
+            shared_experts_input=shared_experts_input,
+        )
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            for source in ("ct", "modelopt"):
+                target = Path(tmp) / f"{source}.py"
+                target.write_text(fixture, encoding="utf-8")
+                result = subprocess.run(
+                    ["python3", str(patch), str(target), source],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                patched = target.read_text(encoding="utf-8")
+                self.assertIn("QWEN38_H20C_RUNTIME ", patched)
+                self.assertIn(f'_QWEN38_H20C_SOURCE = "{source}"', patched)
+                self.assertIn("_QWEN38_H20C_REQUEST_FILE", patched)
+                self.assertIn('phase="pre"', patched)
+                self.assertIn('phase="post"', patched)
+                self.assertIn('"topk_weights": topk_weights', patched)
+                self.assertIn('"topk_ids": topk_ids', patched)
+                self.assertIn('tensors={"output": output}', patched)
+                self.assertIn("return output", patched)
+
+    def test_h20c_cli_supports_triggered_trace_and_runtime_compare(self) -> None:
+        script = (
+            ROOT / "scripts" / "diagnostics" / "h20-nvfp4-moe.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('sub.add_parser("trace")', script)
+        self.assertIn('sub.add_parser("runtime-compare")', script)
+        self.assertIn("/tmp/qwen38_h20c_trace.enable", script)
+        self.assertIn("/tmp/qwen38_h20c_request_id", script)
+        self.assertIn('"max_tokens": 1', script)
+        self.assertIn("ct_repeat_stability", script)
+        self.assertIn("modelopt_repeat_stability", script)
 
 
 if __name__ == "__main__":
