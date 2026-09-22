@@ -17,7 +17,7 @@ REMOVE_AFTER_STOP=0
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, or hybrid-h13-ct-input-scale\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, or hybrid-h14-ct-input-scale-postload\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     --remove) REMOVE_AFTER_STOP=1 ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -42,16 +42,17 @@ case "${PROFILE_CASE}" in
   hybrid-h11-ct-packed-modelweight) NAME="qwen38-h11-ct-packed-modelweight-v029"; IMAGE="vllm-orcarouter-v029-h11-ct-packed-modelweight:v1" ;;
   hybrid-h12-ct-postload-preserve) NAME="qwen38-h12-ct-postload-preserve-v029"; IMAGE="vllm-orcarouter-v029-h12-ct-postload-preserve:v1" ;;
   hybrid-h13-ct-input-scale) NAME="qwen38-h13-ct-input-scale-v029"; IMAGE="vllm-orcarouter-v029-h13-ct-input-scale:v1" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, or hybrid-h13-ct-input-scale\n' >&2; exit 2 ;;
+  hybrid-h14-ct-input-scale-postload) NAME="qwen38-h14-ct-input-scale-postload-v029"; IMAGE="vllm-orcarouter-v029-h14-ct-input-scale-postload:v1" ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, or hybrid-h14-ct-input-scale-postload\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale] [--remove]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload] [--remove]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -102,7 +103,7 @@ load_manifest() {
 load_source() {
   BASE_MODEL_DIR=""
   BASE_MODEL_REVISION=""
-  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale ]]; then
+  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
@@ -135,6 +136,11 @@ load_source() {
       MODEL_PROFILE="hybrid-h13-ct-input-scale"
       SERVED_NAME="hybrid-h13-ct-input-scale/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       MODEL_REPO="local/h13-ct-input-scale-over-orcarouter"
+      MODEL_REVISION="runtime-control"
+    elif [[ "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
+      MODEL_PROFILE="hybrid-h14-ct-input-scale-postload"
+      SERVED_NAME="hybrid-h14-ct-input-scale-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h14-ct-input-scale-postload-over-orcarouter"
       MODEL_REVISION="runtime-control"
     fi
     return 0
@@ -234,6 +240,13 @@ h13_image_ok() {
   [[ "${label}" == "compressed-tensors-input-scale-pertensor-v1" ]]
 }
 
+h14_image_ok() {
+  [[ "${PROFILE_CASE}" != hybrid-h14-ct-input-scale-postload ]] && return 0
+  local label
+  label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h14" }}' 2>/dev/null || true)"
+  [[ "${label}" == "compressed-tensors-postload-input-scale-parameter-v1" ]]
+}
+
 h9_image_ok() {
   [[ "${PROFILE_CASE}" != hybrid-h9-ct-modelweight ]] && return 0
   local label
@@ -242,7 +255,7 @@ h9_image_ok() {
 }
 
 source_manifest_ok() {
-  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
     return 0
   fi
 
@@ -458,6 +471,8 @@ preflight() {
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h12-ct-postload-preserve scripts/\n' "${IMAGE}"
     elif [[ "${PROFILE_CASE}" == hybrid-h13-ct-input-scale ]]; then
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h13-ct-input-scale scripts/\n' "${IMAGE}"
+    elif [[ "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload ]]; then
+      printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h14-ct-input-scale-postload scripts/\n' "${IMAGE}"
     else
       printf '    build with    : docker build -t %s -f scripts/Dockerfile.v029-orcarouter scripts/\n' "${IMAGE}"
     fi
@@ -509,6 +524,7 @@ start_runtime() {
   h11_image_ok || { printf 'ERROR: stale or incompatible H11 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   h12_image_ok || { printf 'ERROR: stale or incompatible H12 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   h13_image_ok || { printf 'ERROR: stale or incompatible H13 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
+  h14_image_ok || { printf 'ERROR: stale or incompatible H14 image: %s; rebuild from current main\n' "${IMAGE}" >&2; exit 1; }
   [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || { printf 'ERROR: checkpoint index missing: %s\n' "${MODEL_DIR}" >&2; exit 1; }
   source_manifest_ok || { printf 'ERROR: checkpoint manifest is incomplete or inconsistent for profile %s\n' "${PROFILE_CASE}" >&2; exit 1; }
 
