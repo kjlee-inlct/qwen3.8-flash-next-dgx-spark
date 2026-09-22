@@ -39,14 +39,18 @@ q4="/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/model.p
 q4s=open(q4, encoding="utf-8").read()
 ast.parse(q4s)
 assert "QWEN38_H20U_LAYER0 " in q4s
-assert "_qwen38_h20u_store_and_maybe_emit" in q4s
-assert '"entry_hidden": h20u_entry_hidden' in q4s
-assert '"attn_block_input": h20u_attn_block_input' in q4s
-assert '"attn_out": h20u_attn_out' in q4s
-assert '"mlp_block_input": h20u_mlp_block_input' in q4s
+assert '@torch.library.custom_op(' in q4s
+assert '"qwen38_h20u::capture"' in q4s
+assert 'mutates_args={"tensor"}' in q4s
+assert "_qwen38_h20u_capture(hidden_states, 0, self.layer_idx)" in q4s
+assert "_qwen38_h20u_capture(block_input, 1, self.layer_idx)" in q4s
+assert "_qwen38_h20u_capture(attn_out, 2, self.layer_idx)" in q4s
+assert "_qwen38_h20u_capture(block_input, 3, self.layer_idx)" in q4s
+assert "_qwen38_h20u_capture(mlp_out, 4, self.layer_idx)" in q4s
+assert "@torch.compiler.disable" not in q4s
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v8"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v9"
