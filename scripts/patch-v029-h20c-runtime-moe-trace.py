@@ -251,7 +251,7 @@ new_apply = f'''    def apply(
                     "output2": h20d_output2,
                 }},
             )
-            return output
+            return h20d_output1
 
         h20c_enabled = _qwen38_h20c_enabled(_QWEN38_H20C_CALL)
         h20c_call_index = _QWEN38_H20C_CALL
