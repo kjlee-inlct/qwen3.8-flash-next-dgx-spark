@@ -796,7 +796,7 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
-### H1-H17 experiment ledger
+### H1-H18 experiment ledger
 
 This ledger is the canonical compact history for the checkpoint/loader
 determinism isolation. Startup/build failures are explicitly separated from
@@ -822,7 +822,8 @@ valid determinism results.
 | H14 | H12 + register converted post-load input scales as Parameters | FAIL, 5 / 5 | Final post-load input-scale Tensor/Parameter ownership is insufficient. |
 | H15 | H14 runtime/image with MTP speculative decoding disabled | FAIL, 4 / 5 | MTP is not sufficient to explain the remaining nondeterminism; one pair of repeats matched, but the gate still failed. |
 | H16 | H15 runtime with max_num_seqs 3 -> 1 | FAIL, 4 / 5 | Single-sequence scheduling is not sufficient; run 1 matched the H6 stable reference and runs 2-3 matched each other, but the gate failed. |
-| H17 | H12 + rename loaded weight_global_scale parameters to final weight_scale_2 names before conversion | PENDING | Isolates CT post-load weight_scale_2 object/name lifecycle while preserving checkpoint bytes, reciprocal values, and input-scale handling. |
+| H17 | H12 + rename loaded weight_global_scale parameters to final weight_scale_2 names before conversion | FAIL, 4 / 5 | Final weight_scale_2 name/object lifecycle alone is insufficient; two runs matched each other and one matched the H6 stable hash. |
+| H18 | H12 + rename loaded input_global_scale parameters to final input_scale names before conversion and replace converted scales on those names | PENDING | Isolates CT post-load input_scale lifecycle while preserving reciprocal values and leaving H17 weight_scale_2 changes out. |
 
 Important invalid/non-result events:
 
@@ -841,7 +842,7 @@ Important invalid/non-result events:
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
   the retained H4 checkpoint.
 
-Validation still worth doing independently of the H17 CT lifecycle control:
+Validation still worth doing independently of the H18 CT lifecycle control:
 
 - repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
   whether the observed 4/5 stable pattern is reproducible;
@@ -1805,3 +1806,78 @@ Interpretation:
 - broad FAIL: weight-scale2 lifecycle alone is insufficient; the next clean CT
   isolation target is the analogous input_global_scale -> input_scale canonical
   lifecycle, while preserving reciprocal values.
+
+### H17 result: FAIL
+
+Observed on 2026-09-22:
+
+- the corrected H17 image built successfully and reached READY after 692 seconds;
+- runtime metadata recorded vLLM v0.29, PLE mmap, exact QSA, prefix caching
+  disabled, max_num_seqs=3, and MTP k=2;
+- the seeded 1024/128 gate produced 4 unique hashes across 5 repeats;
+- runs 1 and 5 matched each other at
+  `910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee`;
+- run 4 matched the H6 stable reference hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- the remaining runs produced distinct hashes.
+
+Therefore canonicalizing only the post-load
+`weight_global_scale -> weight_scale_2` object/name lifecycle is not
+sufficient to restore determinism. The repeated hashes are retained as
+diagnostic markers only and are not interpreted as an effect-size estimate.
+
+### H18: post-load input_scale lifecycle control
+
+H18 returns to H12 as its parent and does not carry H17 forward. It isolates the
+analogous input-scale lifecycle while keeping checkpoint bytes and reciprocal
+conversion values unchanged.
+
+After checkpoint loading H18:
+
+- moves the loaded `w13_input_global_scale` parameter object to the final
+  `w13_input_scale` name;
+- moves the loaded `w2_input_global_scale` parameter object to the final
+  `w2_input_scale` name;
+- keeps `1 / input_scale` conversion semantics unchanged;
+- replaces the converted `a13_scale` / `a2_scale` tensors through
+  `replace_parameter()` on those existing final names;
+- leaves the H12 weight/global-scale path unchanged, including the original
+  `weight_global_scale -> weight_scale_2` behavior.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1 \
+  -f scripts/Dockerfile.v029-h18-ct-input-scale-lifecycle \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h17-ct-weight-scale2-postload
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h18-ct-input-scale-lifecycle
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h18-ct-input-scale-lifecycle
+
+./scripts/wait-ready.sh \
+  --container qwen38-h18-ct-input-scale-lifecycle-v029 \
+  --model hybrid-h18-ct-input-scale-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h18-ct-input-scale-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h18-ct-input-scale-lifecycle-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: post-load input-scale lifecycle becomes a strong root-cause candidate;
+  reproduce H18 before combining it with the H17 weight-scale2 lifecycle;
+- H12-like partial convergence: repeat H12/H18 with larger same-boot samples
+  before making a causal claim;
+- broad FAIL: input-scale lifecycle alone is also insufficient, leaving a
+  combined post-load lifecycle control or lower-level kernel-format conversion
+  as the next isolation target.
