@@ -22,7 +22,9 @@ model_asset_profiles() {
     hybrid-h16-single-seq \
     hybrid-h17-ct-weight-scale2-postload \
     hybrid-h18-ct-input-scale-lifecycle \
-    hybrid-h19-ct-combined-lifecycle
+    hybrid-h19-ct-combined-lifecycle \
+    hybrid-h20-ct-convert-diag \
+    hybrid-h20-modelopt-convert-diag
 }
 
 describe_model_asset() {
@@ -177,6 +179,22 @@ describe_model_asset() {
       MODEL_ASSET_RETIRE_IMAGE=1
       MODEL_ASSET_CHECKPOINT_DEPENDS_ON="orcarouter"
       MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h12-ct-postload-preserve"
+      ;;
+    hybrid-h20-ct-convert-diag)
+      MODEL_ASSET_CHECKPOINT="${SCRIPT_ROOT}/model"
+      MODEL_ASSET_CONTAINER="qwen38-h20-ct-convert-diag-v029"
+      MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h20-ct-convert-diag:v1"
+      MODEL_ASSET_RETIRE_IMAGE=1
+      MODEL_ASSET_CHECKPOINT_DEPENDS_ON="orcarouter"
+      MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h12-ct-postload-preserve"
+      ;;
+    hybrid-h20-modelopt-convert-diag)
+      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-h6-modelopt-w4a16"
+      MODEL_ASSET_CONTAINER="qwen38-h20-modelopt-convert-diag-v029"
+      MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h20-modelopt-convert-diag:v1"
+      MODEL_ASSET_RETIRE_IMAGE=1
+      MODEL_ASSET_CHECKPOINT_DEPENDS_ON="hybrid-h6-w4a16"
+      MODEL_ASSET_IMAGE_DEPENDS_ON=""
       ;;
     *)
       return 2
