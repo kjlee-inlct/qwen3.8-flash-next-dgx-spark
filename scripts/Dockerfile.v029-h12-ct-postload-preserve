@@ -1,0 +1,27 @@
+# H12 control: H11 + preserve packed expert parameter objects across post-load rename.
+FROM vllm-orcarouter-v029-h11-ct-packed-modelweight:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-postload-preserve-weight-param.py /tmp/patch-v029-ct-moe-postload-preserve-weight-param.py
+RUN cp ${CT} ${CT}.h12.orig \
+ && python3 /tmp/patch-v029-ct-moe-postload-preserve-weight-param.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-postload-preserve-weight-param.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert 'layer.register_parameter("w13_weight", layer.w13_weight_packed)' in body
+assert 'layer.register_parameter("w2_weight", layer.w2_weight_packed)' in body
+assert 'layer.w13_weight = torch.nn.Parameter(' not in body
+assert 'layer.w2_weight = torch.nn.Parameter(' not in body
+assert 'delattr(layer, "w13_weight_packed")' in body
+assert 'delattr(layer, "w2_weight_packed")' in body
+print("H12 CT post-load parameter-preserving rename installed")
+PY
+
+LABEL qwen38.h12="compressed-tensors-postload-preserve-modelweight-v1"
