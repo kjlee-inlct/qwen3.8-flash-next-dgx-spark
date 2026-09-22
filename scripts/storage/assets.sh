@@ -102,7 +102,7 @@ describe_storage_image() {
     vllm-orcarouter-v029-h14-ct-input-scale-postload:v1)
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
-      STORAGE_IMAGE_DESCRIPTION="Current H14 compressed-tensors post-load input-scale registration control"
+      STORAGE_IMAGE_DESCRIPTION="H14 determinism FAIL; retained as the H15 MTP-off runtime-control parent"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
