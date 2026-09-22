@@ -199,10 +199,15 @@ class_name = (
     else "ModelOptNvFp4FusedMoE"
 )
 class_start = text.index(f"class {class_name}")
-prefix, body = text[:class_start], text[class_start:]
+next_class = text.find("\nclass ", class_start + 1)
+if next_class < 0:
+    next_class = len(text)
+prefix = text[:class_start]
+body = text[class_start:next_class]
+suffix = text[next_class:]
 if body.count(old_apply) != 1:
-    raise SystemExit(f"expected {class_name}.apply() exactly once")
-text = prefix + body.replace(old_apply, new_apply, 1)
+    raise SystemExit(f"expected {class_name}.apply() exactly once in class body")
+text = prefix + body.replace(old_apply, new_apply, 1) + suffix
 
 path.write_text(text, encoding="utf-8")
 print(f"installed H20-C internal-MK runtime MoE trace ({source})")
