@@ -796,7 +796,7 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
-### H1-H19 experiment ledger
+### H1-H20 experiment ledger
 
 This ledger is the canonical compact history for the checkpoint/loader
 determinism isolation. Startup/build failures are explicitly separated from
@@ -824,7 +824,8 @@ valid determinism results.
 | H16 | H15 runtime with max_num_seqs 3 -> 1 | FAIL, 4 / 5 | Single-sequence scheduling is not sufficient; run 1 matched the H6 stable reference and runs 2-3 matched each other, but the gate failed. |
 | H17 | H12 + rename loaded weight_global_scale parameters to final weight_scale_2 names before conversion | FAIL, 4 / 5 | Final weight_scale_2 name/object lifecycle alone is insufficient; two runs matched each other and one matched the H6 stable hash. |
 | H18 | H12 + rename loaded input_global_scale parameters to final input_scale names before conversion and replace converted scales on those names | FAIL, 5 / 5 | Input-scale final-name/object lifecycle alone is insufficient; all five repeats diverged. |
-| H19 | H12 + apply both H17 weight_scale_2 lifecycle and H18 input_scale lifecycle | PENDING | Tests whether the two final-name post-load lifecycles interact while preserving checkpoint bytes and reciprocal values. |
+| H19 | H12 + apply both H17 weight_scale_2 lifecycle and H18 input_scale lifecycle | FAIL, 5 / 5 | Combined final-name/object lifecycle alignment is insufficient; wrapper/object lifecycle isolation is closed. |
+| H20 | Instrument H12 CT and deterministic H6 ModelOpt around convert_to_nvfp4_moe_kernel_format() with normalized tensor fingerprints | PENDING diagnostic | Locates the first CT-vs-ModelOpt divergence before or after kernel-format conversion without changing checkpoint bytes. |
 
 Important invalid/non-result events:
 
@@ -843,7 +844,7 @@ Important invalid/non-result events:
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
   the retained H4 checkpoint.
 
-Validation still worth doing independently of the H19 combined lifecycle control:
+Validation still worth doing independently of the H20 conversion diagnostic:
 
 - repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
   whether the observed 4/5 stable pattern is reproducible;
@@ -1956,3 +1957,125 @@ Interpretation:
   combination. Stop adding wrapper-only CT patches and move to tensor-level
   diagnostics around `convert_to_nvfp4_moe_kernel_format()` to locate the
   first CT-vs-ModelOpt divergence.
+
+### H19 result: FAIL
+
+Observed on 2026-09-22:
+
+- H19 built successfully and reached READY after 621 seconds;
+- runtime metadata recorded vLLM v0.29, PLE mmap, exact QSA, prefix caching
+  disabled, max_num_seqs=3, and MTP k=2;
+- the seeded 1024/128 determinism gate produced 5 unique hashes across 5
+  repeats;
+- run 3 matched the H6 stable reference hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- all five H19 repeats were mutually distinct.
+
+Therefore combining the H17 weight-scale2 lifecycle and H18 input-scale
+lifecycle changes is also insufficient. H17-H19 close the wrapper/final-name
+object-lifecycle branch: do not add further wrapper-only CT patches without new
+tensor-level evidence.
+
+### H20: NVFP4 MoE kernel-format conversion diagnostics
+
+H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
+path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
+`convert_to_nvfp4_moe_kernel_format()`.
+
+Two images are used:
+
+- `vllm-orcarouter-v029-h20-ct-convert-diag:v1`: H12 CT parent plus
+  conversion fingerprint instrumentation;
+- `vllm-orcarouter-v029-h20-modelopt-convert-diag:v1`: the shared v0.29 base
+  plus the same normalized instrumentation in `ModelOptNvFp4FusedMoE`, run
+  against the H6 checkpoint.
+
+For each of the first four routed-expert conversion calls, H20 records both
+`pre` and `post` phases using the same tensor names:
+
+- `w13`, `w13_scale`, `w13_scale_2`, `a13_scale`;
+- `w2`, `w2_scale`, `w2_scale_2`, `a2_scale`.
+
+Each fingerprint includes shape, dtype, stride, contiguous state, numel, byte
+size, device, storage offset, and a SHA-256 digest. Tensors up to 1 MiB are
+hashed in full. Larger contiguous tensors use a deterministic
+head/middle/tail sample (1024 elements per window) so diagnostics do not copy
+entire expert weights back to the CPU. Large non-contiguous tensors are
+metadata-only. A matching sampled digest is useful evidence but is not proof
+that every byte of a large tensor is identical.
+
+Build both diagnostic images:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-ct-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-ct-convert-diag \
+  scripts/
+
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-modelopt-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-modelopt-convert-diag \
+  scripts/
+```
+
+Collect the CT side first:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h19-ct-combined-lifecycle
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py collect \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --output scripts/benchmark/results/local/h20-ct-convert-diag.jsonl
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag
+```
+
+Then collect the deterministic ModelOpt/H6 side:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-modelopt-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-modelopt-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py collect \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --output scripts/benchmark/results/local/h20-modelopt-convert-diag.jsonl
+```
+
+Compare the normalized records:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py compare \
+  --ct scripts/benchmark/results/local/h20-ct-convert-diag.jsonl \
+  --modelopt scripts/benchmark/results/local/h20-modelopt-convert-diag.jsonl \
+  --output scripts/benchmark/results/local/h20-ct-vs-modelopt.json
+```
+
+Interpretation:
+
+- first mismatch in `pre`: the normalized values/layout entering conversion
+  still differ; focus on checkpoint normalization, loader semantics, or the
+  exact reciprocal/global-scale representation before the kernel converter;
+- `pre` matches but the first mismatch appears in `post`: isolate
+  `convert_to_nvfp4_moe_kernel_format()`, backend selection, or hidden
+  layout/state used by that conversion;
+- both `pre` and `post` match for the sampled calls: move downstream to
+  `make_nvfp4_moe_kernel()` and
+  `fused_experts.process_weights_after_loading()`; do not return to
+  parameter-wrapper experiments without new evidence.
