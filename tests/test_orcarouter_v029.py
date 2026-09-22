@@ -463,5 +463,38 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h19-ct-combined-lifecycle", runtime)
 
 
+    def test_h20_diagnostic_patcher_is_bounded_and_normalized(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py").read_text(encoding="utf-8")
+        collector = (ROOT / "scripts" / "diagnostics" / "h20-nvfp4-moe.py").read_text(encoding="utf-8")
+        self.assertIn("QWEN38_H20_DIAG_MAX_CALLS", patch)
+        self.assertIn("QWEN38_H20_DIAG_FULL_HASH_MAX_BYTES", patch)
+        self.assertIn("head-middle-tail-elements", patch)
+        self.assertIn("metadata-only-noncontiguous", patch)
+        self.assertIn('source="ct"', patch)
+        self.assertIn('source="modelopt"', patch)
+        self.assertIn('"w13_scale_2"', patch)
+        self.assertIn('"a13_scale"', patch)
+        self.assertIn("QWEN38_H20_MOE_DIAG ", patch)
+        self.assertIn("first_mismatch", collector)
+        self.assertIn("hash_scope", collector)
+        self.assertIn("sha256", collector)
+
+    def test_h20_images_are_h12_ct_vs_h6_modelopt_diagnostics(self) -> None:
+        ct = (ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag").read_text(encoding="utf-8")
+        mo = (ROOT / "scripts" / "Dockerfile.v029-h20-modelopt-convert-diag").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
+        self.assertIn(" ct", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v1", ct)
+        self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
+        self.assertIn(" modelopt", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v1", mo)
+        self.assertIn("hybrid-h20-ct-convert-diag", runtime)
+        self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
+        self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
+        self.assertIn("QWEN38_H20_DIAG_SAMPLE_ELEMS=1024", runtime)
+        self.assertIn("h20_image_ok()", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()
