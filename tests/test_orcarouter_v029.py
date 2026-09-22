@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v5", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v6", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v5", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v6", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -728,7 +728,10 @@ class AnotherModelOptMoE:
                 self.assertIn("@torch.compiler.disable", patched)
                 self.assertIn("_qwen38_h20c_enabled", patched)
                 self.assertIn("_qwen38_h20d_request_id", patched)
-                self.assertIn("h20d_x = x.clone()", patched)
+                self.assertIn("h20d_x_ref = x.clone()", patched)
+                self.assertIn("h20d_x_run2 = x.clone()", patched)
+                self.assertIn("h20d_topk_weights_ref = topk_weights.clone()", patched)
+                self.assertIn("h20d_topk_weights_run2 = topk_weights.clone()", patched)
                 self.assertIn("h20d_output1 = output.clone()", patched)
                 self.assertIn("h20d_output2 = self.moe_kernel.apply(", patched)
                 self.assertIn("return h20d_output1", patched)
@@ -761,6 +764,8 @@ class AnotherModelOptMoE:
         self.assertIn("QWEN38_H20D_TWIN ", script)
         self.assertIn("output1_equal", script)
         self.assertIn("input_equal", script)
+        self.assertIn("shared_experts_input", script)
+        self.assertIn("input {name}", script)
 
 
 if __name__ == "__main__":
