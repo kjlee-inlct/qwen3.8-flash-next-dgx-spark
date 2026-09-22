@@ -2474,7 +2474,23 @@ therefore premature.
 
 ##### H20 layer-0 upstream boundary probe
 
-The v8 diagnostic image instruments the actual NVIDIA Qwen4Exp decoder path in
+The initial v8 implementation failed during EngineCore profile/AOT compilation,
+before READY and before any diagnostic request. The root cause was the upstream
+patch calling a `@torch.compiler.disable` helper from inside
+`Qwen4ExpModel`, which vLLM compiles with `torch.compile(fullgraph=True)`.
+PyTorch rejected the graph with `Unsupported: Skip calling
+torch.compiler.disable()d function`. This is an instrumentation failure, not
+an H20 model/runtime result.
+
+The v9 correction keeps the same H20 upstream boundary design but represents
+each capture point as an opaque `torch.library.custom_op`. The custom op is
+declared conservatively mutable so compiler dead-code elimination cannot remove
+the side-effecting diagnostic node. Its runtime implementation performs the
+trigger/request-id file checks, stores GPU clones, and emits fingerprints only
+after request 1 has reached all five boundaries. No
+`torch.compiler.disable` call remains inside the fullgraph model path.
+
+The v9 diagnostic image instruments the actual NVIDIA Qwen4Exp decoder path in
 `vllm/models/qwen4_exp/nvidia/model.py`. It records only layer 0 and keeps all
 request-0 snapshots on GPU until request 1 reaches the same boundary. CPU
 fingerprinting is deferred until both requests have been captured.
@@ -2495,7 +2511,7 @@ Run CT/H12 after READY:
 python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --container qwen38-h20-ct-convert-diag-v029 \
   --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
-  --output scripts/benchmark/results/local/h20u-v8-ct.jsonl
+  --output scripts/benchmark/results/local/h20u-v9-ct.jsonl
 ```
 
 Run ModelOpt/H6 after READY:
@@ -2504,16 +2520,16 @@ Run ModelOpt/H6 after READY:
 python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --container qwen38-h20-modelopt-convert-diag-v029 \
   --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
-  --output scripts/benchmark/results/local/h20u-v8-modelopt.jsonl
+  --output scripts/benchmark/results/local/h20u-v9-modelopt.jsonl
 ```
 
 Compare:
 
 ```bash
 python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-compare \
-  --ct scripts/benchmark/results/local/h20u-v8-ct.jsonl \
-  --modelopt scripts/benchmark/results/local/h20u-v8-modelopt.jsonl \
-  --output scripts/benchmark/results/local/h20u-v8-ct-vs-modelopt.json
+  --ct scripts/benchmark/results/local/h20u-v9-ct.jsonl \
+  --modelopt scripts/benchmark/results/local/h20u-v9-modelopt.jsonl \
+  --output scripts/benchmark/results/local/h20u-v9-ct-vs-modelopt.json
 ```
 
 Interpretation:
