@@ -21,4 +21,4 @@ assert "QWEN38_H20_MOE_DIAG " in s
 print("H20 ModelOpt NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v1"
+LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v2"
