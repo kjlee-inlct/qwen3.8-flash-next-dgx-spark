@@ -2323,19 +2323,15 @@ H6 begins to diverge under that instrumentation.
 #### H20-D same-input twin kernel probe
 
 H20-D stays inside H20 and minimizes the H20-C observation before any new
-repair experiment is created. The H20 diagnostic image label is bumped to v5.
+repair experiment is created. The initial H20-D image label was v5; the immutable-input correction bumps it to v6.
 
 For each fixed request, only
-`language_model.model.layers.0.mlp.experts` is probed. Before the first
-kernel call, H20-D performs GPU-only clones of `x`, `topk_weights`, and
-`topk_ids`; it does not hash or copy them to the CPU. Then:
+`language_model.model.layers.0.mlp.experts` is probed. Before the first kernel call, H20-D performs two GPU-only clone sets of `x`, `topk_weights`, `topk_ids`, and `shared_experts_input`: an immutable reference set used only for later fingerprinting, and a separate run2 set passed to the second kernel call. It does not hash or copy them to the CPU. Then:
 
 1. execute the normal `moe_kernel.apply()`;
 2. preserve its output with a GPU clone;
-3. immediately execute the same `moe_kernel.apply()` again using the
-   pre-call GPU snapshots;
-4. only after both kernel executions, fingerprint the saved input snapshot and
-   both outputs;
+3. immediately execute the same `moe_kernel.apply()` again using only the separate run2 GPU clones;
+4. only after both kernel executions, fingerprint the untouched reference clones and both outputs;
 5. return the first output clone to the model so the second diagnostic call
    cannot overwrite the value used by the forward pass.
 
@@ -2343,7 +2339,7 @@ This directly tests whether the same loaded weights and same routed inputs can
 produce two different outputs within one request. H20-C tracing is disabled
 while the H20-D trigger is active.
 
-Build/rebuild the v5 diagnostic images, start one profile, wait for READY, then
+Build/rebuild the v6 diagnostic images, start one profile, wait for READY, then
 run:
 
 ```bash
@@ -2372,6 +2368,27 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py twin-compare \
   --modelopt scripts/benchmark/results/local/h20d-modelopt-twin.jsonl \
   --output scripts/benchmark/results/local/h20d-ct-vs-modelopt.json
 ```
+
+
+Observed initial H20-D v5 result on 2026-09-22:
+
+- CT/H12 request 0 and request 1 both reported `output_equal=true`;
+- ModelOpt/H6 request 0 and request 1 both reported `output_equal=true`;
+- the first cross-source compare reported `input_equal=false` and
+  `output1_equal=false` for both requests.
+
+The within-source twin result is valid evidence that neither path produces
+immediate same-input/same-state nondeterminism in back-to-back layer-0 kernel
+calls. However, the v5 cross-input result is not reliable: the same GPU clones
+used as the purported input snapshots were also passed into the second kernel
+call and fingerprinted only afterward. A backend that mutates hidden/routing
+buffers in place could therefore change the recorded "input". H20-D v6 fixes
+this by keeping immutable reference clones that are never passed to either
+kernel invocation and separate run2 clones for the second execution.
+
+The v6 `twin-compare` also reports which input differs (`x`,
+`topk_weights`, `topk_ids`, or `shared_experts_input`) whenever
+`input_equal=false`.
 
 Interpretation:
 

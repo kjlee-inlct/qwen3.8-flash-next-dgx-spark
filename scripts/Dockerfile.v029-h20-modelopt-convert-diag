@@ -27,9 +27,11 @@ assert "QWEN38_H20C_RUNTIME " in s
 assert "QWEN38_H20D_TWIN " in s
 assert "_qwen38_h20d_request_id" in s
 assert "h20d_output2 = self.moe_kernel.apply(" in body
+assert "h20d_x_ref = x.clone()" in body
+assert "h20d_x_run2 = x.clone()" in body
 assert '_QWEN38_H20C_SOURCE = "modelopt"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 ModelOpt NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v5"
+LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v6"

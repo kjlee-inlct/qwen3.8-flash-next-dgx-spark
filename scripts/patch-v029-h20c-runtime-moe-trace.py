@@ -207,10 +207,20 @@ new_apply = f'''    def apply(
 {assert_line}        global _QWEN38_H20C_CALL
         h20d_request_id = _qwen38_h20d_request_id(layer)
         if h20d_request_id >= 0:
-            h20d_x = x.clone()
-            h20d_topk_weights = topk_weights.clone()
-            h20d_topk_ids = topk_ids.clone()
-            h20d_shared_input = (
+            # Keep immutable GPU-only reference snapshots for post-run
+            # fingerprinting. Separate run2 clones are passed to the second
+            # kernel invocation because the backend may mutate inputs or
+            # routing buffers in place.
+            h20d_x_ref = x.clone()
+            h20d_topk_weights_ref = topk_weights.clone()
+            h20d_topk_ids_ref = topk_ids.clone()
+            h20d_shared_input_ref = (
+                None if shared_experts_input is None else shared_experts_input.clone()
+            )
+            h20d_x_run2 = x.clone()
+            h20d_topk_weights_run2 = topk_weights.clone()
+            h20d_topk_ids_run2 = topk_ids.clone()
+            h20d_shared_input_run2 = (
                 None if shared_experts_input is None else shared_experts_input.clone()
             )
             output = self.moe_kernel.apply(
@@ -228,25 +238,26 @@ new_apply = f'''    def apply(
             )
             h20d_output1 = output.clone()
             h20d_output2 = self.moe_kernel.apply(
-                h20d_x,
+                h20d_x_run2,
                 layer.w13_weight,
                 layer.w2_weight,
-                h20d_topk_weights,
-                h20d_topk_ids,
+                h20d_topk_weights_run2,
+                h20d_topk_ids_run2,
                 activation=layer.activation,
                 global_num_experts=layer.global_num_experts,
                 expert_map=layer.expert_map,
                 apply_router_weight_on_input=layer.apply_router_weight_on_input,
                 shared_experts=shared_experts,
-                shared_experts_input=h20d_shared_input,
+                shared_experts_input=h20d_shared_input_run2,
             )
             _qwen38_h20d_emit(
                 request_id=h20d_request_id,
                 layer=layer,
                 tensors={{
-                    "x": h20d_x,
-                    "topk_weights": h20d_topk_weights,
-                    "topk_ids": h20d_topk_ids,
+                    "x": h20d_x_ref,
+                    "topk_weights": h20d_topk_weights_ref,
+                    "topk_ids": h20d_topk_ids_ref,
+                    "shared_experts_input": h20d_shared_input_ref,
                     "output1": h20d_output1,
                     "output2": h20d_output2,
                 }},
