@@ -76,17 +76,17 @@ def _qwen38_h20d_emit(
     layer,
     tensors: dict[str, torch.Tensor | None],
 ) -> None:
-    record = {
+    record = {{
         "schema": 1,
         "source": _QWEN38_H20C_SOURCE,
         "phase": "twin",
         "request_id": request_id,
         "layer_name": str(getattr(layer, "layer_name", "")),
-        "tensors": {
+        "tensors": {{
             name: _qwen38_h20_fingerprint(tensor)
             for name, tensor in tensors.items()
-        },
-    }
+        }},
+    }}
     print(
         "QWEN38_H20D_TWIN " + json.dumps(record, sort_keys=True),
         flush=True,
