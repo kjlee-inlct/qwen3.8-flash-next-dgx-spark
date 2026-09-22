@@ -2101,6 +2101,15 @@ for that correction.
 
 #### H20-B post-conversion localization
 
+The first H20-B ModelOpt v2 build attempt failed before runtime because the
+patcher searched the entire `ModelOptNvFp4FusedMoE` class for
+`routing_tables=layer._expert_routing_tables()` and incorrectly required that
+text to occur exactly once. v0.29 contains additional routed-expert methods
+with the same expression. This is a patch-application/build failure, not an
+H20 diagnostic result. The corrected patcher scopes all kernel-creation
+replacements to `process_weights_after_loading()` only, and the regression
+fixture includes an additional method with the same routing-table expression.
+
 The same H20 image/profile names are retained, but the image label is bumped to
 v2 so stale H20-A images are rejected. Rebuild both images and repeat the
 collection. Each call now emits three additional state records:
@@ -2114,6 +2123,22 @@ collection. Each call now emits three additional state records:
 
 The snapshot recursion depth and collection sizes are bounded. Large tensors
 continue to use the existing bounded fingerprint policy.
+
+Because experimental `stop` intentionally preserves stopped containers for
+diagnostics, remove an old H20 container before starting a rebuilt image:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-modelopt-convert-diag \
+  --remove
+```
+
+It is safe for either command to report that the corresponding container is
+already absent. Do not delete collected JSONL files when removing containers.
 
 After rebuilding/rerunning both sides, use the same compare command. The first
 real mismatch now localizes the remaining search:
