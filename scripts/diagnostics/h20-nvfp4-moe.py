@@ -353,15 +353,22 @@ def compare_twin(
     for request_id in common:
         ct_t = ct[request_id].get("tensors", {})
         mo_t = mo[request_id].get("tensors", {})
-        input_equal = all(
-            ct_t.get(name) == mo_t.get(name)
-            for name in ("x", "topk_weights", "topk_ids")
-        )
+        input_names = ("x", "topk_weights", "topk_ids", "shared_experts_input")
+        input_equal = all(ct_t.get(name) == mo_t.get(name) for name in input_names)
+        input_fields = {
+            name: {
+                "equal": ct_t.get(name) == mo_t.get(name),
+                "ct": ct_t.get(name),
+                "modelopt": mo_t.get(name),
+            }
+            for name in input_names
+        }
         output1_equal = ct_t.get("output1") == mo_t.get("output1")
         cross.append(
             {
                 "request_id": request_id,
                 "input_equal": input_equal,
+                "inputs": input_fields,
                 "output1_equal": output1_equal,
             }
         )
@@ -396,6 +403,17 @@ def compare_twin(
             f"input_equal={row['input_equal']} "
             f"output1_equal={row['output1_equal']}"
         )
+        if not row["input_equal"]:
+            for name, detail in row["inputs"].items():
+                if detail["equal"]:
+                    continue
+                ct_hash = None if detail["ct"] is None else detail["ct"].get("sha256")
+                mo_hash = (
+                    None
+                    if detail["modelopt"] is None
+                    else detail["modelopt"].get("sha256")
+                )
+                print(f"  input {name}: ct={ct_hash!r} modelopt={mo_hash!r}")
     return 0 if common else 2
 
 
