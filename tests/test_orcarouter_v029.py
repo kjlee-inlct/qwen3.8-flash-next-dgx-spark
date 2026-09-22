@@ -463,5 +463,116 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h19-ct-combined-lifecycle", runtime)
 
 
+    def test_h20_diagnostic_patcher_is_bounded_and_normalized(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py").read_text(encoding="utf-8")
+        collector = (ROOT / "scripts" / "diagnostics" / "h20-nvfp4-moe.py").read_text(encoding="utf-8")
+        self.assertIn("QWEN38_H20_DIAG_MAX_CALLS", patch)
+        self.assertIn("QWEN38_H20_DIAG_FULL_HASH_MAX_BYTES", patch)
+        self.assertIn("head-middle-tail-elements", patch)
+        self.assertIn("metadata-only-noncontiguous", patch)
+        self.assertIn('source="ct"', patch)
+        self.assertIn('source="modelopt"', patch)
+        self.assertIn('"w13_scale_2"', patch)
+        self.assertIn('"a13_scale"', patch)
+        self.assertIn("QWEN38_H20_MOE_DIAG ", patch)
+        self.assertIn("first_mismatch", collector)
+        self.assertIn("hash_scope", collector)
+        self.assertIn("sha256", collector)
+
+    def test_h20_images_are_h12_ct_vs_h6_modelopt_diagnostics(self) -> None:
+        ct = (ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag").read_text(encoding="utf-8")
+        mo = (ROOT / "scripts" / "Dockerfile.v029-h20-modelopt-convert-diag").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
+        self.assertIn(" ct", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v1", ct)
+        self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
+        self.assertIn(" modelopt", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v1", mo)
+        self.assertIn("hybrid-h20-ct-convert-diag", runtime)
+        self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
+        self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
+        self.assertIn("QWEN38_H20_DIAG_SAMPLE_ELEMS=1024", runtime)
+        self.assertIn("h20_image_ok()", runtime)
+
+
+    def test_h20_patcher_executes_on_v029_ct_and_modelopt_shapes(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py"
+        ct_block = """import torch
+logger = init_logger(__name__)
+class CompressedTensorsW4A4Nvfp4MoEMethod:
+    def process_weights_after_loading(self, layer):
+        # Shuffle weights into the NvFp4 kernel format.
+        (
+            w13,
+            w13_scale,
+            w13_scale_2,
+            a13_scale,
+            w2,
+            w2_scale,
+            w2_scale_2,
+            a2_scale,
+        ) = convert_to_nvfp4_moe_kernel_format(
+            nvfp4_backend=self.nvfp4_backend,
+            layer=layer,
+            w13=layer.w13_weight,
+            w13_scale=layer.w13_weight_scale,
+            w13_scale_2=(1.0 / w13_weight_global_scale),
+            a13_scale=(1.0 / layer.w13_input_global_scale),
+            w2=layer.w2_weight,
+            w2_scale=layer.w2_weight_scale,
+            w2_scale_2=(1.0 / layer.w2_weight_global_scale),
+            a2_scale=(1.0 / layer.w2_input_global_scale),
+            is_act_and_mul=self.moe.is_act_and_mul,
+            use_a16=self.use_a16,
+        )
+"""
+        mo_block = """import torch
+logger = init_logger(__name__)
+class ModelOptNvFp4FusedMoE:
+    def process_weights_after_loading(self, layer):
+        (
+            w13,
+            w13_scale,
+            w13_scale_2,
+            a13_scale,
+            w2,
+            w2_scale,
+            w2_scale_2,
+            a2_scale,
+        ) = convert_to_nvfp4_moe_kernel_format(
+            nvfp4_backend=self.nvfp4_backend,
+            layer=layer,
+            w13=layer.w13_weight,
+            w13_scale=layer.w13_weight_scale,
+            w13_scale_2=w13_weight_scale_2,
+            a13_scale=layer.w13_input_scale,
+            w2=layer.w2_weight,
+            w2_scale=layer.w2_weight_scale,
+            w2_scale_2=layer.w2_weight_scale_2,
+            a2_scale=layer.w2_input_scale,
+            is_act_and_mul=self.moe.is_act_and_mul,
+            use_a16=self.use_a16,
+        )
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            for mode, source in (("ct", ct_block), ("modelopt", mo_block)):
+                target = Path(tmp) / f"{mode}.py"
+                target.write_text(source, encoding="utf-8")
+                result = subprocess.run(
+                    ["python3", str(patch), str(target), mode],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                patched = target.read_text(encoding="utf-8")
+                self.assertIn("QWEN38_H20_MOE_DIAG ", patched)
+                self.assertIn(f'source="{mode}"', patched)
+                self.assertIn('phase="pre"', patched)
+                self.assertIn('phase="post"', patched)
+
+
 if __name__ == "__main__":
     unittest.main()

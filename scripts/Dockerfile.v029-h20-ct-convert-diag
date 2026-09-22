@@ -1,0 +1,25 @@
+# H20 CT diagnostic: H12 + bounded NVFP4 MoE conversion fingerprints.
+FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
+RUN cp ${CT} ${CT}.h20.orig \
+ && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${CT} ct \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+body=s[s.index("class CompressedTensorsW4A4Nvfp4MoEMethod"):]
+assert 'source="ct"' in body
+assert 'phase="pre"' in body
+assert 'phase="post"' in body
+assert "h20_w13_scale_2 = 1.0 / w13_weight_global_scale" in body
+assert "QWEN38_H20_MOE_DIAG " in s
+print("H20 CT NVFP4 conversion diagnostics installed")
+PY
+
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v1"
