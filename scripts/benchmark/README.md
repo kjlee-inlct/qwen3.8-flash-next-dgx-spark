@@ -712,7 +712,10 @@ full routed-expert representation change:
 - mazinb expert quantization is ModelOpt `NVFP4`, also 4-bit group-size 16, but
   with a different loader representation.
 
-H3 expert selection is intentionally limited to `model.language_model.layers.*.mlp.experts.*`; any MTP expert tensors remain untouched and are excluded from the layout counts.\n\nThis makes the routed-expert quantization layout the next isolation target. H3\nkeeps OrcaRouter outside quantized regions, replaces all 300 group-0 weights with
+H3 expert selection is intentionally limited to `model.language_model.layers.*.mlp.experts.*`; any MTP expert tensors remain untouched and are excluded from the layout counts.
+
+This makes the routed-expert quantization layout the next isolation target. H3
+keeps OrcaRouter outside quantized regions, replaces all 300 group-0 weights with
 the already-tested mazinb BF16 weights, replaces routed experts with mazinb
 ModelOpt NVFP4 tensors, switches only `quantization_config` to mazinb, and
 leaves MTP unchanged.
@@ -793,6 +796,51 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
+### H1-H12 experiment ledger
+
+This ledger is the canonical compact history for the checkpoint/loader
+determinism isolation. Startup/build failures are explicitly separated from
+valid determinism results.
+
+| ID | Isolated change | Valid result | Key interpretation |
+|---|---|---|---|
+| H1 | Replace 96 residual-writer group-0 FP8 modules with mazinb BF16; MTP unchanged | FAIL, 3 unique hashes / 5 | Residual-writer subset is insufficient. |
+| H2 | Replace all 300 main-model group-0 FP8 modules with mazinb BF16; MTP unchanged | FAIL, 3 / 5 | Main-model group-0 values are insufficient. |
+| H3 | H2 + replace routed experts with mazinb ModelOpt NVFP4 representation/config | PASS, 1 / 5; wider 1024-32768 sweep also PASS | H2->H3 routed-expert representation/config delta is the decisive region. |
+| H4a | H3 + restore OrcaRouter down-proj expert values | PASS, 1 / 5 | Down-proj values alone are insufficient. |
+| H4b | H3 + restore OrcaRouter gate/up expert values | PASS, 1 / 5 | Gate/up values alone are insufficient. |
+| H4c | H3 + restore all OrcaRouter expert weight/group/global-scale values | PASS, 1 / 5 | OrcaRouter expert numeric values themselves are insufficient under ModelOpt representation. |
+| H5 | H4c + set all 73728 ModelOpt input_scale tensors to 1.0 | PASS, 1 / 5 | Specific mazinb input-scale values are not required. |
+| H6 | H5 bytes unchanged; ModelOpt quant_algo NVFP4 -> W4A16_NVFP4 | PASS, 1 / 5 | W4A4 activation quantization is not required; representation/loader path remains. |
+| H7 | H6 derivative intended to change ModelOpt weight_scale metadata BLOCK -> GROUP | FAIL, 3 / 5, but causal attribution inconclusive | Later source review showed this is not a clean metadata-only proof. |
+| H8 | Original Orca CT path; weight_scale metadata GROUP -> BLOCK | FAIL, 3 / 5 | BLOCK metadata alone cannot repair CT. |
+| H9 | H8 + weight_scale objects -> ModelWeightParameter + BLOCK | FAIL, 5 / 5 | weight_scale parameter/loader representation alone is insufficient. |
+| H10 | H9 + weight_global_scale objects -> PerTensorScaleParameter | FAIL, 5 / 5 | global-scale object representation alone is insufficient. |
+| H11 | H10 + packed expert weights -> ModelWeightParameter before post-load processing | FAIL, 5 / 5 | Pre-load packed-weight object representation alone is insufficient. |
+| H12 | H11 + preserve loaded ModelWeightParameter objects across packed->weight rename | FAIL, 2 / 5; 4 runs matched H6 stable hash | Post-load object replacement is a strong interaction signal, not yet a standalone root-cause proof. |
+
+Important invalid/non-result events:
+
+- H9 had two startup-only failures before the corrected valid run: first missing
+  quant_method metadata, then an attempted overwrite of the constructor-owned
+  weight_loader. Neither is a determinism result.
+- H10 initially had a startup-only loader failure because the new
+  PerTensorScaleParameter global-scale objects lacked TENSOR quant_method
+  metadata. The corrected H10 run is the valid determinism result.
+- A missing image/container, build failure, or readiness failure is never
+  classified as a determinism FAIL.
+- H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
+  the retained H4 checkpoint.
+
+Validation still worth doing independently of H13+:
+
+- repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
+  whether the observed 4/5 stable pattern is reproducible;
+- repeat H12 after a fresh runtime start. If the 4/5 pattern disappears, do not
+  use its apparent improvement as evidence of effect size;
+- preserve the stable H6 hash as a reference marker, but do not equate matching
+  one output hash with proof that the internal execution path is identical.
+
 ### H4 partial routed-expert A/B
 
 The read-only conversion feasibility gate passed on the local OrcaRouter/mazinb
@@ -872,7 +920,7 @@ projection family alone is sufficient to reproduce the original instability.
 Observed next on 2026-09-21 with `orca-all`:
 
 - all 73728 OrcaRouter routed-expert projection modules / 221184 normalized
-  weight-scale tensors were restored together;
+  expert weight/group/global-scale tensors were restored together;
 - mazinb/H3 `input_scale` and ModelOpt quantization config remained fixed;
 - the thin delta occupied about 64 GiB;
 - runtime reached READY after 1212 seconds;
@@ -1038,9 +1086,10 @@ Interpretation:
 - PASS: the reciprocal change restores determinism on the original
   compressed-tensors checkpoint, strongly confirming GROUP/BLOCK metadata
   handling as the root-cause region;
-- FAIL: H7 proves GROUP metadata is sufficient to destabilize ModelOpt, but
-  BLOCK metadata alone is insufficient to repair compressed-tensors, so another
-  compressed-tensors-specific processing difference must also participate.
+- FAIL: BLOCK metadata alone is insufficient to repair compressed-tensors.
+  Because later source review showed H7 is not a clean GROUP-metadata causal
+  proof, the combined H7/H8 result only justifies moving to the
+  compressed-tensors-specific parameter/loader and post-load processing path.
 
 Observed on 2026-09-21:
 
@@ -1431,8 +1480,11 @@ Observed on 2026-09-22:
 - the fifth repeat produced
   `973e217f93f585dac5b8a11275d5329716a672fc268f682b884b53d18c53ca0a`.
 
-Therefore preserving the loaded packed-weight parameter objects materially
-improves determinism, but is not sufficient for a PASS.
+In this five-repeat run, preserving the loaded packed-weight parameter objects
+was associated with a strong reduction from five unique hashes to two, but it
+was not sufficient for a PASS. Treat the apparent improvement as a high-value
+signal rather than a quantified effect until it reproduces across additional
+same-boot repeats and fresh runtime starts.
 
 ### H13: input-global-scale parameter representation
 
