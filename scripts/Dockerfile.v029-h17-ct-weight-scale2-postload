@@ -1,0 +1,31 @@
+# H17 control: H12 + canonical post-load weight_scale_2 lifecycle.
+FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-postload-weight-scale2-lifecycle.py /tmp/patch-v029-ct-moe-postload-weight-scale2-lifecycle.py
+RUN cp ${CT} ${CT}.h17.orig \
+ && python3 /tmp/patch-v029-ct-moe-postload-weight-scale2-lifecycle.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-postload-weight-scale2-lifecycle.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert 'layer.register_parameter("w13_weight_scale_2", w13_weight_scale_2_param)' in body
+assert 'layer.register_parameter("w2_weight_scale_2", w2_weight_scale_2_param)' in body
+assert 'delattr(layer, "w13_weight_global_scale")' in body
+assert 'delattr(layer, "w2_weight_global_scale")' in body
+assert "w13_scale_2=(1.0 / w13_weight_scale_2)" in body
+assert "w2_scale_2=(1.0 / layer.w2_weight_scale_2)" in body
+assert "a13_scale=(1.0 / layer.w13_input_global_scale)" in body
+assert "a2_scale=(1.0 / layer.w2_input_global_scale)" in body
+assert 'replace_parameter(layer, "w13_weight_scale_2", w13_scale_2)' in body
+assert 'replace_parameter(layer, "w2_weight_scale_2", w2_scale_2)' in body
+print("H17 CT post-load weight_scale_2 lifecycle patch installed")
+PY
+
+LABEL qwen38.h17="compressed-tensors-postload-weight-scale2-lifecycle-v1"

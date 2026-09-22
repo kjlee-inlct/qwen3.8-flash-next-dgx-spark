@@ -296,5 +296,20 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('SERVED_NAME="hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4"', runtime)
 
 
+    def test_h17_canonicalizes_weight_scale2_before_postload_replace(self) -> None:
+        patch = (ROOT / "scripts" / "patch-v029-ct-moe-postload-weight-scale2-lifecycle.py").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "scripts" / "Dockerfile.v029-h17-ct-weight-scale2-postload").read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('register_parameter("w13_weight_scale_2", w13_weight_scale_2_param)', patch)
+        self.assertIn('register_parameter("w2_weight_scale_2", w2_weight_scale_2_param)', patch)
+        self.assertIn('delattr(layer, "w13_weight_global_scale")', patch)
+        self.assertIn('delattr(layer, "w2_weight_global_scale")', patch)
+        self.assertIn("w13_scale_2=(1.0 / w13_weight_scale_2)", patch)
+        self.assertIn("w2_scale_2=(1.0 / layer.w2_weight_scale_2)", patch)
+        self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", dockerfile)
+        self.assertIn("compressed-tensors-postload-weight-scale2-lifecycle-v1", dockerfile)
+        self.assertIn("hybrid-h17-ct-weight-scale2-postload", runtime)
+
+
 if __name__ == "__main__":
     unittest.main()
