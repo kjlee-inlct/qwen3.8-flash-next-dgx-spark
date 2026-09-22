@@ -13,6 +13,7 @@ from pathlib import Path
 PREFIX = "QWEN38_H20_MOE_DIAG "
 RUNTIME_PREFIX = "QWEN38_H20C_RUNTIME "
 TWIN_PREFIX = "QWEN38_H20D_TWIN "
+SINGLE_PREFIX = "QWEN38_H20D_SINGLE "
 RUNTIME_TENSOR_NAMES = (
     "x",
     "topk_weights",
@@ -196,6 +197,209 @@ def trace_runtime(
         f"requests={request_ids} layers={len(layers)}"
     )
     return 0
+
+
+def parse_single_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(SINGLE_PREFIX)
+        if pos < 0:
+            continue
+        payload = raw[pos + len(SINGLE_PREFIX) :].strip()
+        records.append(json.loads(payload))
+    return records
+
+
+def single_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    repeats: int,
+    prompt: str,
+    api_base: str,
+) -> int:
+    if not _container_exists(container):
+        print(f"ERROR: H20-D container not found: {container}", file=sys.stderr)
+        return 2
+
+    existing = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if existing.returncode != 0:
+        print(existing.stderr, file=sys.stderr)
+        return existing.returncode
+    prior = parse_single_records(
+        (existing.stdout + "\n" + existing.stderr).splitlines()
+    )
+    start_id = 0
+    if prior:
+        start_id = max(int(record.get("request_id", -1)) for record in prior) + 1
+
+    trigger = "/tmp/qwen38_h20d_single.enable"
+    request_id_file = "/tmp/qwen38_h20d_single_request_id"
+    twin_trigger = "/tmp/qwen38_h20d_twin.enable"
+    h20c_trigger = "/tmp/qwen38_h20c_trace.enable"
+    try:
+        _docker_exec(
+            container,
+            f"rm -f {trigger} {request_id_file} {twin_trigger} {h20c_trigger}; touch {trigger}",
+        )
+        for offset in range(repeats):
+            request_id = start_id + offset
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(f"single request {offset + 1}/{repeats} completed id={request_id}")
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+    all_records = parse_single_records(
+        (result.stdout + "\n" + result.stderr).splitlines()
+    )
+    wanted_ids = set(range(start_id, start_id + repeats))
+    records = [
+        record
+        for record in all_records
+        if int(record.get("request_id", -1)) in wanted_ids
+    ]
+    if len(records) != repeats:
+        print(
+            f"ERROR: expected {repeats} {SINGLE_PREFIX.strip()} records, "
+            f"found {len(records)} for request ids {sorted(wanted_ids)}",
+            file=sys.stderr,
+        )
+        return 2
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    for record in records:
+        print(
+            f"single request={record.get('request_id')} "
+            f"layer={record.get('layer_name')!r}"
+        )
+    print(f"wrote {len(records)} single-pass records to {output}")
+    return 0
+
+
+def compare_single(
+    ct_path: Path,
+    modelopt_path: Path,
+    output: Path | None,
+) -> int:
+    ct_records = load_jsonl(ct_path)
+    mo_records = load_jsonl(modelopt_path)
+    ct = {int(record["request_id"]): record for record in ct_records}
+    mo = {int(record["request_id"]): record for record in mo_records}
+    common = sorted(set(ct) & set(mo))
+    names = ("x", "topk_weights", "topk_ids", "shared_experts_input", "output")
+
+    def repeat_summary(records: dict[int, dict]) -> dict:
+        ids = sorted(records)
+        if len(ids) < 2:
+            return {"comparable": False}
+        a, b = ids[:2]
+        ta = records[a].get("tensors", {})
+        tb = records[b].get("tensors", {})
+        fields = {name: ta.get(name) == tb.get(name) for name in names}
+        return {
+            "comparable": True,
+            "requests": [a, b],
+            "fields": fields,
+            "all_equal": all(fields.values()),
+        }
+
+    cross = []
+    for request_id in common:
+        ct_t = ct[request_id].get("tensors", {})
+        mo_t = mo[request_id].get("tensors", {})
+        fields = {name: ct_t.get(name) == mo_t.get(name) for name in names}
+        cross.append(
+            {
+                "request_id": request_id,
+                "fields": fields,
+                "input_equal": all(
+                    fields[name]
+                    for name in (
+                        "x",
+                        "topk_weights",
+                        "topk_ids",
+                        "shared_experts_input",
+                    )
+                ),
+                "output_equal": fields["output"],
+            }
+        )
+
+    report = {
+        "schema": 1,
+        "ct_file": str(ct_path),
+        "modelopt_file": str(modelopt_path),
+        "common_requests": common,
+        "ct_repeat": repeat_summary(ct),
+        "modelopt_repeat": repeat_summary(mo),
+        "cross": cross,
+    }
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote single-pass comparison report to {output}")
+
+    for label in ("ct_repeat", "modelopt_repeat"):
+        row = report[label]
+        if row.get("comparable"):
+            print(
+                f"{label}: all_equal={row['all_equal']} "
+                f"fields={row['fields']}"
+            )
+    for row in cross:
+        print(
+            f"cross request={row['request_id']} "
+            f"input_equal={row['input_equal']} output_equal={row['output_equal']} "
+            f"fields={row['fields']}"
+        )
+    return 0 if common else 2
 
 
 def parse_twin_records(lines: list[str]) -> list[dict]:
@@ -765,6 +969,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_runtime_compare.add_argument("--modelopt", type=Path, required=True)
     p_runtime_compare.add_argument("--output", type=Path)
 
+    p_single = sub.add_parser("single-probe")
+    p_single.add_argument("--container", required=True)
+    p_single.add_argument("--model", required=True)
+    p_single.add_argument("--output", type=Path, required=True)
+    p_single.add_argument("--repeats", type=int, default=2)
+    p_single.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_single.add_argument("--api-base", default="http://127.0.0.1:8888")
+
+    p_single_compare = sub.add_parser("single-compare")
+    p_single_compare.add_argument("--ct", type=Path, required=True)
+    p_single_compare.add_argument("--modelopt", type=Path, required=True)
+    p_single_compare.add_argument("--output", type=Path)
+
     p_twin = sub.add_parser("twin-probe")
     p_twin.add_argument("--container", required=True)
     p_twin.add_argument("--model", required=True)
@@ -795,6 +1012,24 @@ def main() -> int:
             prompt=args.prompt,
             api_base=args.api_base,
         )
+    if args.command == "single-probe":
+        return single_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
+            repeats=args.repeats,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
+    if args.command == "single-compare":
+        missing = [str(path) for path in (args.ct, args.modelopt) if not path.is_file()]
+        if missing:
+            print(
+                "ERROR: single-pass probe file(s) missing: " + ", ".join(missing),
+                file=sys.stderr,
+            )
+            return 2
+        return compare_single(args.ct, args.modelopt, args.output)
     if args.command == "twin-probe":
         return twin_probe(
             container=args.container,
