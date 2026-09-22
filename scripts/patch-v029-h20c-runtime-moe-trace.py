@@ -50,6 +50,54 @@ _QWEN38_H20D_TARGET_LAYER = os.getenv(
     "language_model.model.layers.0.mlp.experts",
 )
 _QWEN38_H20D_DONE_REQUESTS: set[int] = set()
+_QWEN38_H20D_SINGLE_FILE = os.getenv(
+    "QWEN38_H20D_SINGLE_FILE", "/tmp/qwen38_h20d_single.enable"
+)
+_QWEN38_H20D_SINGLE_REQUEST_FILE = os.getenv(
+    "QWEN38_H20D_SINGLE_REQUEST_FILE", "/tmp/qwen38_h20d_single_request_id"
+)
+_QWEN38_H20D_SINGLE_DONE_REQUESTS: set[int] = set()
+
+
+@torch.compiler.disable
+def _qwen38_h20d_single_request_id(layer) -> int:
+    if not os.path.exists(_QWEN38_H20D_SINGLE_FILE):
+        return -1
+    if str(getattr(layer, "layer_name", "")) != _QWEN38_H20D_TARGET_LAYER:
+        return -1
+    try:
+        with open(_QWEN38_H20D_SINGLE_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return -1
+    if request_id in _QWEN38_H20D_SINGLE_DONE_REQUESTS:
+        return -1
+    _QWEN38_H20D_SINGLE_DONE_REQUESTS.add(request_id)
+    return request_id
+
+
+@torch.compiler.disable
+def _qwen38_h20d_single_emit(
+    *,
+    request_id: int,
+    layer,
+    tensors: dict[str, torch.Tensor | None],
+) -> None:
+    record = {{
+        "schema": 1,
+        "source": _QWEN38_H20C_SOURCE,
+        "phase": "single",
+        "request_id": request_id,
+        "layer_name": str(getattr(layer, "layer_name", "")),
+        "tensors": {{
+            name: _qwen38_h20_fingerprint(tensor)
+            for name, tensor in tensors.items()
+        }},
+    }}
+    print(
+        "QWEN38_H20D_SINGLE " + json.dumps(record, sort_keys=True),
+        flush=True,
+    )
 
 
 @torch.compiler.disable
@@ -205,6 +253,41 @@ new_apply = f'''    def apply(
         shared_experts_input: torch.Tensor | None,
     ) -> torch.Tensor:
 {assert_line}        global _QWEN38_H20C_CALL
+        h20d_single_request_id = _qwen38_h20d_single_request_id(layer)
+        if h20d_single_request_id >= 0:
+            h20d_single_x_ref = x.clone()
+            h20d_single_topk_weights_ref = topk_weights.clone()
+            h20d_single_topk_ids_ref = topk_ids.clone()
+            h20d_single_shared_input_ref = (
+                None if shared_experts_input is None else shared_experts_input.clone()
+            )
+            output = self.moe_kernel.apply(
+                x,
+                layer.w13_weight,
+                layer.w2_weight,
+                topk_weights,
+                topk_ids,
+                activation=layer.activation,
+                global_num_experts=layer.global_num_experts,
+                expert_map=layer.expert_map,
+                apply_router_weight_on_input=layer.apply_router_weight_on_input,
+                shared_experts=shared_experts,
+                shared_experts_input=shared_experts_input,
+            )
+            h20d_single_output = output.clone()
+            _qwen38_h20d_single_emit(
+                request_id=h20d_single_request_id,
+                layer=layer,
+                tensors={{
+                    "x": h20d_single_x_ref,
+                    "topk_weights": h20d_single_topk_weights_ref,
+                    "topk_ids": h20d_single_topk_ids_ref,
+                    "shared_experts_input": h20d_single_shared_input_ref,
+                    "output": h20d_single_output,
+                }},
+            )
+            return h20d_single_output
+
         h20d_request_id = _qwen38_h20d_request_id(layer)
         if h20d_request_id >= 0:
             # Keep immutable GPU-only reference snapshots for post-run
