@@ -117,12 +117,19 @@ def _qwen38_h20_snapshot(value, depth: int = 0):
     if isinstance(value, type):
         return {"type_object": _qwen38_h20_type_name(value)}
     if isinstance(value, (list, tuple)):
-        return [_qwen38_h20_snapshot(item, depth + 1) for item in value]
+        items = [_qwen38_h20_snapshot(item, depth + 1) for item in value[:32]]
+        if len(value) > 32:
+            items.append({"truncated_items": len(value) - 32})
+        return items
     if isinstance(value, dict):
-        return {
+        items = sorted(value.items(), key=lambda item: str(item[0]))
+        result = {
             str(key): _qwen38_h20_snapshot(val, depth + 1)
-            for key, val in sorted(value.items(), key=lambda item: str(item[0]))
+            for key, val in items[:64]
         }
+        if len(items) > 64:
+            result["__truncated_items__"] = len(items) - 64
+        return result
     if hasattr(value, "value") and isinstance(
         getattr(value, "value"), (bool, int, float, str)
     ):
@@ -135,13 +142,14 @@ def _qwen38_h20_snapshot(value, depth: int = 0):
     attrs = getattr(value, "__dict__", None)
     if isinstance(attrs, dict):
         selected = {}
-        for key in sorted(attrs):
-            if key.startswith("_"):
-                continue
+        public_keys = [key for key in sorted(attrs) if not key.startswith("_")]
+        for key in public_keys[:64]:
             val = attrs[key]
             if callable(val):
                 continue
             selected[key] = _qwen38_h20_snapshot(val, depth + 1)
+        if len(public_keys) > 64:
+            selected["__truncated_attrs__"] = len(public_keys) - 64
         if selected:
             data["attrs"] = selected
     return data
