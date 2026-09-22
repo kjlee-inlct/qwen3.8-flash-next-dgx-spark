@@ -796,7 +796,7 @@ subdivision must preserve one coherent loader representation; mixing OrcaRouter
 packed expert tensors with a mazinb ModelOpt quantization config is not a valid
 isolation by itself.
 
-### H1-H12 experiment ledger
+### H1-H15 experiment ledger
 
 This ledger is the canonical compact history for the checkpoint/loader
 determinism isolation. Startup/build failures are explicitly separated from
@@ -818,6 +818,9 @@ valid determinism results.
 | H10 | H9 + weight_global_scale objects -> PerTensorScaleParameter | FAIL, 5 / 5 | global-scale object representation alone is insufficient. |
 | H11 | H10 + packed expert weights -> ModelWeightParameter before post-load processing | FAIL, 5 / 5 | Pre-load packed-weight object representation alone is insufficient. |
 | H12 | H11 + preserve loaded ModelWeightParameter objects across packed->weight rename | FAIL, 2 / 5; 4 runs matched H6 stable hash | Post-load object replacement is a strong interaction signal, not yet a standalone root-cause proof. |
+| H13 | H12 + input-global-scale checkpoint objects -> PerTensorScaleParameter | FAIL, 4 / 5 | Input-global-scale parameter representation is not the missing repair; regression versus H12. |
+| H14 | H12 + register converted post-load input scales as Parameters | FAIL, 5 / 5 | Final post-load input-scale Tensor/Parameter ownership is insufficient. |
+| H15 | H14 runtime/image with MTP speculative decoding disabled | PENDING | Runtime-only A/B isolates MTP without changing checkpoint, CT post-load semantics, QSA, or image contents. |
 
 Important invalid/non-result events:
 
@@ -832,7 +835,7 @@ Important invalid/non-result events:
 - H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
   the retained H4 checkpoint.
 
-Validation still worth doing independently of H13+:
+Validation still worth doing independently of the H15 runtime control:
 
 - repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
   whether the observed 4/5 stable pattern is reproducible;
@@ -1575,3 +1578,66 @@ Interpretation:
   attribution;
 - broad FAIL/regression: move to the remaining post-load scale_2/global-scale
   conversion and replacement semantics rather than carrying H13 forward.
+
+### H14 result: FAIL
+
+Observed on 2026-09-22:
+
+- H14 reached READY after 641 seconds;
+- registering the converted post-load `w13_input_scale` /
+  `w2_input_scale` tensors as `torch.nn.Parameter` objects did not restore
+  determinism;
+- the seeded 1024/128 gate produced 5 unique hashes across 5 repeats;
+- all five repeats produced different outputs;
+- the runtime controls remained PLE mmap, exact QSA, prefix caching disabled,
+  max_num_seqs=3, and MTP k=2.
+
+Therefore the final post-load input-scale Tensor-vs-Parameter representation is
+insufficient to explain the remaining nondeterminism. H14 is a clean negative
+result and its post-load registration change must not be treated as an assumed
+repair.
+
+### H15: MTP-off runtime control
+
+H15 is a runtime-only A/B against H14. It reuses the exact H14 image and
+checkpoint and changes only speculative decoding:
+
+- H14: MTP speculative decoding enabled with k=2;
+- H15: no `--speculative-config` argument, so MTP speculative decoding is off.
+
+Checkpoint bytes, H12/H14 compressed-tensors post-load changes, PLE mmap, exact
+QSA, GB10 FLA fix, context length, prefix-cache setting, batching limits, and
+container image remain unchanged. No H15 Docker image is built.
+
+Run the control:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \\
+  --profile hybrid-h14-ct-input-scale-postload
+
+./scripts/runtime/orcarouter-v029.sh preflight \\
+  --profile hybrid-h15-mtp-off
+./scripts/runtime/orcarouter-v029.sh start \\
+  --profile hybrid-h15-mtp-off
+
+./scripts/wait-ready.sh \\
+  --container qwen38-h15-mtp-off-v029 \\
+  --model hybrid-h15-mtp-off/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \\
+  --model hybrid-h15-mtp-off/Qwen3.8-Flash-Next-Uncensored-NVFP4 \\
+  --determinism-prompt-tokens 1024 \\
+  --determinism-output-tokens 128 \\
+  --determinism-repeats 5 \\
+  --output scripts/benchmark/results/local/h15-mtp-off-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: MTP participation is strongly implicated in the H14 nondeterminism and
+  should be isolated further before additional CT object-semantics patches;
+- FAIL with multiple hashes: MTP is not sufficient to explain the remaining
+  nondeterminism; proceed to a single-sequence/runtime-scheduling control or the
+  remaining CT/MoE post-load scale conversion path;
+- do not compare H15 to a rebuilt or modified H14 image: the control is valid
+  only when the same H14 image ID is reused.
