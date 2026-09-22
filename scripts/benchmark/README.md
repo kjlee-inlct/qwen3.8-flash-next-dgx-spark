@@ -2297,3 +2297,93 @@ Interpretation:
   that within-CT first mismatch because it directly localizes nondeterminism;
 - all traced MoE calls match across both requests and both sources: continue
   H20 with the next non-MoE runtime boundary instead of creating H21.
+
+#### H20-C observed result
+
+Observed on 2026-09-22 after the ModelOpt class-scope hotfix:
+
+- CT/H12 produced 192 runtime records across 48 MoE layers for two fixed
+  requests;
+- ModelOpt/H6 produced the same 192-record / 48-layer shape;
+- `runtime-compare` reported `common_records=192`, `only_ct=0`,
+  `only_modelopt=0`;
+- the first CT-vs-H6 mismatch was request 0, ordinal 0, layer 0, `post`:
+  the pre-call `x`, `topk_weights`, and `topk_ids` matched, but the
+  MoE output hash differed;
+- CT request 0 vs request 1 diverged at layer 0 `post`;
+- ModelOpt/H6 request 0 vs request 1 first diverged at layer 3 `post`.
+
+This is the first runtime evidence that the observed divergence appears at a
+MoE kernel output boundary while the corresponding routed input/routing data
+still match. It is not yet sufficient to attribute the production
+nondeterminism to CT or to the Marlin kernel itself, because H20-C performs
+CPU hashing/synchronization around every traced MoE call and even deterministic
+H6 begins to diverge under that instrumentation.
+
+#### H20-D same-input twin kernel probe
+
+H20-D stays inside H20 and minimizes the H20-C observation before any new
+repair experiment is created. The H20 diagnostic image label is bumped to v5.
+
+For each fixed request, only
+`language_model.model.layers.0.mlp.experts` is probed. Before the first
+kernel call, H20-D performs GPU-only clones of `x`, `topk_weights`, and
+`topk_ids`; it does not hash or copy them to the CPU. Then:
+
+1. execute the normal `moe_kernel.apply()`;
+2. preserve its output with a GPU clone;
+3. immediately execute the same `moe_kernel.apply()` again using the
+   pre-call GPU snapshots;
+4. only after both kernel executions, fingerprint the saved input snapshot and
+   both outputs;
+5. return the first output clone to the model so the second diagnostic call
+   cannot overwrite the value used by the forward pass.
+
+This directly tests whether the same loaded weights and same routed inputs can
+produce two different outputs within one request. H20-C tracing is disabled
+while the H20-D trigger is active.
+
+Build/rebuild the v5 diagnostic images, start one profile, wait for READY, then
+run:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py twin-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20d-ct-twin.jsonl
+```
+
+After stopping/removing CT and starting ModelOpt/H6:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py twin-probe \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20d-modelopt-twin.jsonl
+```
+
+Compare:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py twin-compare \
+  --ct scripts/benchmark/results/local/h20d-ct-twin.jsonl \
+  --modelopt scripts/benchmark/results/local/h20d-modelopt-twin.jsonl \
+  --output scripts/benchmark/results/local/h20d-ct-vs-modelopt.json
+```
+
+Interpretation:
+
+- CT `output_equal=false`, H6 `output_equal=true`: strong evidence that the
+  CT-loaded/runtime state causes same-input kernel nondeterminism;
+- both CT and H6 `output_equal=false`: focus on Marlin/GB10 kernel execution,
+  workspace reuse, or the diagnostic twin-call interaction rather than CT
+  checkpoint semantics;
+- both `output_equal=true` but CT-vs-H6 `output1_equal=false` with
+  `input_equal=true`: the two paths are stable within one call context but
+  still compute different layer-0 MoE results; inspect runtime kernel state not
+  captured by H20-B;
+- both twin outputs and cross-source outputs match: H20-C's layer-0 divergence
+  was instrumentation/request-sequencing induced; move the next minimal probe
+  downstream without creating H21.
