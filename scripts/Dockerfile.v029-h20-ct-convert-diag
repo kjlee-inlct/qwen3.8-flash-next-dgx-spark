@@ -17,6 +17,9 @@ body=s[s.index("class CompressedTensorsW4A4Nvfp4MoEMethod"):]
 assert 'source="ct"' in body
 assert 'phase="pre"' in body
 assert 'phase="post"' in body
+assert 'phase="quant_config"' in body
+assert 'phase="kernel_created"' in body
+assert 'phase="fused_postload"' in body
 assert "h20_w13_scale_2 = 1.0 / w13_weight_global_scale" in body
 assert "QWEN38_H20_MOE_DIAG " in s
 print("H20 CT NVFP4 conversion diagnostics installed")
