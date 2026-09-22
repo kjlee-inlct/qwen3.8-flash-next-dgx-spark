@@ -35,6 +35,9 @@ _QWEN38_H20C_SOURCE = "{source}"
 _QWEN38_H20C_TRACE_FILE = os.getenv(
     "QWEN38_H20C_TRACE_FILE", "/tmp/qwen38_h20c_trace.enable"
 )
+_QWEN38_H20C_REQUEST_FILE = os.getenv(
+    "QWEN38_H20C_REQUEST_FILE", "/tmp/qwen38_h20c_request_id"
+)
 _QWEN38_H20C_MAX_CALLS = int(os.getenv("QWEN38_H20C_MAX_CALLS", "32"))
 _QWEN38_H20C_FULL_HASH_MAX_BYTES = int(
     os.getenv("QWEN38_H20C_FULL_HASH_MAX_BYTES", "1048576")
@@ -96,6 +99,13 @@ def _qwen38_h20c_fingerprint(tensor: torch.Tensor | None) -> dict | None:
     return result
 
 
+def _qwen38_h20c_request_id() -> int:
+    try:
+        return int(Path(_QWEN38_H20C_REQUEST_FILE).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return -1
+
+
 def _qwen38_h20c_emit(
     *,
     phase: str,
@@ -108,6 +118,7 @@ def _qwen38_h20c_emit(
         "source": _QWEN38_H20C_SOURCE,
         "phase": phase,
         "call_index": call_index,
+        "request_id": _qwen38_h20c_request_id(),
         "layer_name": str(getattr(layer, "layer_name", "")),
         "tensors": {{
             name: _qwen38_h20c_fingerprint(tensor)
