@@ -35,27 +35,21 @@ _QWEN38_H20U_TRIGGER = os.getenv(
 _QWEN38_H20U_REQUEST_FILE = os.getenv(
     "QWEN38_H20U_REQUEST_FILE", "/tmp/qwen38_h20u_request_id"
 )
-_QWEN38_H20U_PENDING: dict[int, dict[str, torch.Tensor | None]] = {}
-
-
-@torch.compiler.disable
-def _qwen38_h20u_request_id(layer_idx: int) -> int:
-    if layer_idx != 0 or not os.path.exists(_QWEN38_H20U_TRIGGER):
-        return -1
-    try:
-        with open(_QWEN38_H20U_REQUEST_FILE, encoding="utf-8") as handle:
-            return int(handle.read().strip())
-    except (OSError, ValueError):
-        return -1
+_QWEN38_H20U_STAGE_NAMES = {
+    0: "entry_hidden",
+    1: "attn_block_input",
+    2: "attn_out",
+    3: "mlp_block_input",
+    4: "mlp_out",
+}
+_QWEN38_H20U_PENDING: dict[int, dict[str, torch.Tensor]] = {}
 
 
 def _qwen38_h20u_bytes(tensor: torch.Tensor) -> bytes:
     return tensor.detach().contiguous().view(torch.uint8).cpu().numpy().tobytes()
 
 
-def _qwen38_h20u_fingerprint(tensor: torch.Tensor | None) -> dict | None:
-    if tensor is None:
-        return None
+def _qwen38_h20u_fingerprint(tensor: torch.Tensor) -> dict:
     t = tensor.detach()
     numel = int(t.numel())
     nbytes = int(numel * t.element_size())
@@ -92,24 +86,22 @@ def _qwen38_h20u_fingerprint(tensor: torch.Tensor | None) -> dict | None:
     return result
 
 
-@torch.compiler.disable
-def _qwen38_h20u_store_and_maybe_emit(
-    request_id: int,
-    tensors: dict[str, torch.Tensor | None],
-) -> None:
-    _QWEN38_H20U_PENDING[request_id] = tensors
-    # Emit only after both requests are captured. This ensures request 0 has
-    # no CPU fingerprint/synchronization before request 1 reaches layer 0.
+def _qwen38_h20u_emit_if_complete() -> None:
     if 0 not in _QWEN38_H20U_PENDING or 1 not in _QWEN38_H20U_PENDING:
+        return
+    required = set(_QWEN38_H20U_STAGE_NAMES.values())
+    if any(set(_QWEN38_H20U_PENDING[rid]) != required for rid in (0, 1)):
         return
     for rid in (0, 1):
         record = {
-            "schema": 1,
+            "schema": 2,
             "phase": "layer0-upstream",
             "request_id": rid,
             "tensors": {
-                name: _qwen38_h20u_fingerprint(tensor)
-                for name, tensor in _QWEN38_H20U_PENDING[rid].items()
+                name: _qwen38_h20u_fingerprint(
+                    _QWEN38_H20U_PENDING[rid][name]
+                )
+                for name in _QWEN38_H20U_STAGE_NAMES.values()
             },
         }
         print(
@@ -117,6 +109,41 @@ def _qwen38_h20u_store_and_maybe_emit(
             flush=True,
         )
     _QWEN38_H20U_PENDING.clear()
+
+
+# Qwen4ExpModel is captured with torch.compile(fullgraph=True). A normal Python
+# helper (including @torch.compiler.disable) is therefore illegal inside its
+# forward graph. Keep the graph boundary opaque with a mutable custom op. The
+# implementation does not alter tensor values; mutability is declared
+# conservatively so compiler DCE cannot remove this diagnostic side-effect op.
+@torch.library.custom_op(
+    "qwen38_h20u::capture",
+    mutates_args={"tensor"},
+)
+def _qwen38_h20u_capture(
+    tensor: torch.Tensor,
+    stage: int,
+    layer_idx: int,
+) -> None:
+    if layer_idx != 0 or not os.path.exists(_QWEN38_H20U_TRIGGER):
+        return
+    stage_name = _QWEN38_H20U_STAGE_NAMES.get(stage)
+    if stage_name is None:
+        return
+    try:
+        with open(_QWEN38_H20U_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return
+    if request_id not in (0, 1):
+        return
+    _QWEN38_H20U_PENDING.setdefault(request_id, {})[stage_name] = (
+        tensor.detach().clone()
+    )
+    # Fingerprinting/CPU synchronization occurs only after request 1 has
+    # reached all layer-0 boundaries.
+    if request_id == 1 and stage == 4:
+        _qwen38_h20u_emit_if_complete()
 '''
 if text.count(helper_anchor) != 1:
     raise SystemExit("expected hyperconnection import anchor exactly once")
@@ -133,10 +160,8 @@ suffix = text[next_class:]
 start_anchor = """        attn_hc = self.attn_hyper_connection
         if self.ple is not None:
 """
-start_repl = """        h20u_request_id = _qwen38_h20u_request_id(self.layer_idx)
-        h20u_entry_hidden = (
-            hidden_states.clone() if h20u_request_id >= 0 else None
-        )
+start_repl = """        if self.layer_idx == 0:
+            _qwen38_h20u_capture(hidden_states, 0, self.layer_idx)
 
         attn_hc = self.attn_hyper_connection
         if self.ple is not None:
@@ -148,9 +173,8 @@ body = body.replace(start_anchor, start_repl, 1)
 attn_anchor = """        if self.layer_type == "linear_attention":
             attn_out = self.linear_attn(hidden_states=block_input)
 """
-attn_repl = """        h20u_attn_block_input = (
-            block_input.clone() if h20u_request_id >= 0 else None
-        )
+attn_repl = """        if self.layer_idx == 0:
+            _qwen38_h20u_capture(block_input, 1, self.layer_idx)
 
         if self.layer_type == "linear_attention":
             attn_out = self.linear_attn(hidden_states=block_input)
@@ -166,27 +190,18 @@ mlp_anchor = """        mlp_hc = self.mlp_hyper_connection
         mlp_out = self.mlp(block_input)
         return hidden_states, mlp_out, injection
 """
-mlp_repl = """        h20u_attn_out = attn_out.clone() if h20u_request_id >= 0 else None
+mlp_repl = """        if self.layer_idx == 0:
+            _qwen38_h20u_capture(attn_out, 2, self.layer_idx)
 
         mlp_hc = self.mlp_hyper_connection
         hidden_states, block_input, injection = mlp_hc.combine_and_mix(
             hidden_states, attn_out, injection
         )
-        h20u_mlp_block_input = (
-            block_input.clone() if h20u_request_id >= 0 else None
-        )
+        if self.layer_idx == 0:
+            _qwen38_h20u_capture(block_input, 3, self.layer_idx)
         mlp_out = self.mlp(block_input)
-        if h20u_request_id >= 0:
-            _qwen38_h20u_store_and_maybe_emit(
-                h20u_request_id,
-                {
-                    "entry_hidden": h20u_entry_hidden,
-                    "attn_block_input": h20u_attn_block_input,
-                    "attn_out": h20u_attn_out,
-                    "mlp_block_input": h20u_mlp_block_input,
-                    "mlp_out": mlp_out.clone(),
-                },
-            )
+        if self.layer_idx == 0:
+            _qwen38_h20u_capture(mlp_out, 4, self.layer_idx)
         return hidden_states, mlp_out, injection
 """
 if body.count(mlp_anchor) != 1:
@@ -195,4 +210,4 @@ body = body.replace(mlp_anchor, mlp_repl, 1)
 
 text = prefix + body + suffix
 path.write_text(text, encoding="utf-8")
-print("installed H20 layer-0 Qwen4Exp upstream diagnostics")
+print("installed H20 layer-0 Qwen4Exp upstream custom-op diagnostics")
