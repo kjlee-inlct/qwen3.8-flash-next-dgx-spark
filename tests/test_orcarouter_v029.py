@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v7", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v8", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v7", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v8", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -748,6 +748,80 @@ class AnotherModelOptMoE:
                     self.assertIn("return self.moe_kernel.apply(", other)
                     self.assertNotIn("QWEN38_H20C_RUNTIME ", other)
 
+    def test_h20_upstream_patcher_executes_on_qwen4exp_layer(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-h20-upstream-layer0.py"
+        fixture = """from itertools import islice
+
+import torch
+from torch import nn
+
+from .hyperconnection import GatedResidual, HyperConnectionConfig
+
+class Qwen4ExpDecoderLayer(nn.Module):
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        prev_block_output: torch.Tensor | None,
+        prev_injection: torch.Tensor | None,
+        positions: torch.Tensor,
+        *,
+        input_ids: torch.Tensor | None,
+        query_start_loc: torch.Tensor | None,
+        ngram_context: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        attn_hc = self.attn_hyper_connection
+        if self.ple is not None:
+            pass
+
+        if prev_block_output is not None and prev_injection is not None:
+            hidden_states, block_input, injection = attn_hc.combine_and_mix(
+                hidden_states, prev_block_output, prev_injection
+            )
+        else:
+            hidden_states, block_input, injection = attn_hc.mix(hidden_states)
+
+        if self.layer_type == "linear_attention":
+            attn_out = self.linear_attn(hidden_states=block_input)
+        elif self.layer_type == "full_attention":
+            attn_out = self.self_attn(
+                hidden_states=block_input,
+                positions=positions,
+            )
+        else:
+            raise ValueError("Invalid layer_type")
+
+        mlp_hc = self.mlp_hyper_connection
+        hidden_states, block_input, injection = mlp_hc.combine_and_mix(
+            hidden_states, attn_out, injection
+        )
+        mlp_out = self.mlp(block_input)
+        return hidden_states, mlp_out, injection
+
+class AfterLayer:
+    pass
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "model.py"
+            target.write_text(fixture, encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(patch), str(target)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patched = target.read_text(encoding="utf-8")
+            compile(patched, str(target), "exec")
+            self.assertIn("QWEN38_H20U_LAYER0 ", patched)
+            self.assertIn("_qwen38_h20u_request_id(self.layer_idx)", patched)
+            self.assertIn("h20u_entry_hidden", patched)
+            self.assertIn("h20u_attn_block_input", patched)
+            self.assertIn("h20u_attn_out", patched)
+            self.assertIn("h20u_mlp_block_input", patched)
+            self.assertIn("_qwen38_h20u_store_and_maybe_emit", patched)
+            self.assertIn("if 0 not in _QWEN38_H20U_PENDING", patched)
+
     def test_h20c_cli_supports_triggered_trace_and_runtime_compare(self) -> None:
         script = (
             ROOT / "scripts" / "diagnostics" / "h20-nvfp4-moe.py"
@@ -773,6 +847,13 @@ class AnotherModelOptMoE:
         self.assertIn("input_equal", script)
         self.assertIn("shared_experts_input", script)
         self.assertIn("input {name}", script)
+        self.assertIn('sub.add_parser("upstream-probe")', script)
+        self.assertIn('sub.add_parser("upstream-compare")', script)
+        self.assertIn("/tmp/qwen38_h20u_layer0.enable", script)
+        self.assertIn("QWEN38_H20U_LAYER0 ", script)
+        self.assertIn("entry_hidden", script)
+        self.assertIn("attn_block_input", script)
+        self.assertIn("mlp_block_input", script)
 
 
 if __name__ == "__main__":
