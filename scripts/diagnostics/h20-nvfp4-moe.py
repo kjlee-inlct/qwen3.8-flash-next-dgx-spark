@@ -103,6 +103,16 @@ def _docker_exec(container: str, command: str) -> None:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip())
 
 
+def _container_exists(container: str) -> bool:
+    result = subprocess.run(
+        ["docker", "inspect", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def trace_runtime(
     *,
     container: str,
@@ -112,6 +122,16 @@ def trace_runtime(
     prompt: str,
     api_base: str,
 ) -> int:
+    if not _container_exists(container):
+        print(
+            f"ERROR: H20-C container not found: {container}",
+            file=sys.stderr,
+        )
+        print(
+            "Start the requested H20 profile successfully and wait for READY before tracing.",
+            file=sys.stderr,
+        )
+        return 2
     trigger = "/tmp/qwen38_h20c_trace.enable"
     request_id_file = "/tmp/qwen38_h20c_request_id"
     try:
