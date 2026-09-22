@@ -1,0 +1,29 @@
+# H13 control: H12 + ModelOpt-style input-global-scale parameter objects.
+FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
+
+COPY patch-v029-ct-moe-input-scale-modelparam.py /tmp/patch-v029-ct-moe-input-scale-modelparam.py
+RUN cp ${CT} ${CT}.h13.orig \
+ && python3 /tmp/patch-v029-ct-moe-input-scale-modelparam.py ${CT} \
+ && rm /tmp/patch-v029-ct-moe-input-scale-modelparam.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+start=s.index("class CompressedTensorsW4A4Nvfp4MoEMethod")
+body=s[start:]
+assert "w13_input_scale = PerTensorScaleParameter(" in body
+assert "w2_input_scale = PerTensorScaleParameter(" in body
+assert 'register_parameter("w13_input_global_scale", w13_input_scale)' in body
+assert 'register_parameter("w2_input_global_scale", w2_input_scale)' in body
+assert "(1.0 / layer.w13_input_global_scale)" in body
+assert "(1.0 / layer.w2_input_global_scale)" in body
+assert "layer.w13_input_scale = a13_scale" in body
+assert "layer.w2_input_scale = a2_scale" in body
+print("H13 CT input-global-scale parameter patch installed")
+PY
+
+LABEL qwen38.h13="compressed-tensors-input-scale-pertensor-v1"
