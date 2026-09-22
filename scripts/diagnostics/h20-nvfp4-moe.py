@@ -12,6 +12,7 @@ from pathlib import Path
 
 PREFIX = "QWEN38_H20_MOE_DIAG "
 RUNTIME_PREFIX = "QWEN38_H20C_RUNTIME "
+TWIN_PREFIX = "QWEN38_H20D_TWIN "
 RUNTIME_TENSOR_NAMES = (
     "x",
     "topk_weights",
@@ -195,6 +196,207 @@ def trace_runtime(
         f"requests={request_ids} layers={len(layers)}"
     )
     return 0
+
+
+def parse_twin_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(TWIN_PREFIX)
+        if pos < 0:
+            continue
+        payload = raw[pos + len(TWIN_PREFIX) :].strip()
+        records.append(json.loads(payload))
+    return records
+
+
+def twin_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    repeats: int,
+    prompt: str,
+    api_base: str,
+) -> int:
+    if not _container_exists(container):
+        print(f"ERROR: H20-D container not found: {container}", file=sys.stderr)
+        print(
+            "Start the requested H20 profile successfully and wait for READY before probing.",
+            file=sys.stderr,
+        )
+        return 2
+
+    existing = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if existing.returncode != 0:
+        print(existing.stderr, file=sys.stderr)
+        return existing.returncode
+    prior = parse_twin_records((existing.stdout + "\n" + existing.stderr).splitlines())
+    start_id = 0
+    if prior:
+        start_id = max(int(record.get("request_id", -1)) for record in prior) + 1
+
+    trigger = "/tmp/qwen38_h20d_twin.enable"
+    request_id_file = "/tmp/qwen38_h20d_request_id"
+    h20c_trigger = "/tmp/qwen38_h20c_trace.enable"
+    try:
+        _docker_exec(
+            container,
+            f"rm -f {trigger} {request_id_file} {h20c_trigger}; touch {trigger}",
+        )
+        for offset in range(repeats):
+            request_id = start_id + offset
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(f"twin request {offset + 1}/{repeats} completed id={request_id}")
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+    all_records = parse_twin_records(
+        (result.stdout + "\n" + result.stderr).splitlines()
+    )
+    wanted_ids = set(range(start_id, start_id + repeats))
+    records = [
+        record
+        for record in all_records
+        if int(record.get("request_id", -1)) in wanted_ids
+    ]
+    if len(records) != repeats:
+        print(
+            f"ERROR: expected {repeats} {TWIN_PREFIX.strip()} records, "
+            f"found {len(records)} for request ids {sorted(wanted_ids)}",
+            file=sys.stderr,
+        )
+        return 2
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    for record in records:
+        tensors = record.get("tensors", {})
+        same = tensors.get("output1") == tensors.get("output2")
+        print(
+            f"twin request={record.get('request_id')} "
+            f"layer={record.get('layer_name')!r} output_equal={same}"
+        )
+    print(f"wrote {len(records)} twin records to {output}")
+    return 0
+
+
+def compare_twin(
+    ct_path: Path,
+    modelopt_path: Path,
+    output: Path | None,
+) -> int:
+    ct_records = load_jsonl(ct_path)
+    mo_records = load_jsonl(modelopt_path)
+    ct = {int(record["request_id"]): record for record in ct_records}
+    mo = {int(record["request_id"]): record for record in mo_records}
+    common = sorted(set(ct) & set(mo))
+
+    def summarize(records: dict[int, dict]) -> list[dict]:
+        result: list[dict] = []
+        for request_id in sorted(records):
+            record = records[request_id]
+            tensors = record.get("tensors", {})
+            result.append(
+                {
+                    "request_id": request_id,
+                    "layer_name": record.get("layer_name"),
+                    "output_equal": tensors.get("output1") == tensors.get("output2"),
+                    "output1": tensors.get("output1"),
+                    "output2": tensors.get("output2"),
+                }
+            )
+        return result
+
+    cross: list[dict] = []
+    for request_id in common:
+        ct_t = ct[request_id].get("tensors", {})
+        mo_t = mo[request_id].get("tensors", {})
+        input_equal = all(
+            ct_t.get(name) == mo_t.get(name)
+            for name in ("x", "topk_weights", "topk_ids")
+        )
+        output1_equal = ct_t.get("output1") == mo_t.get("output1")
+        cross.append(
+            {
+                "request_id": request_id,
+                "input_equal": input_equal,
+                "output1_equal": output1_equal,
+            }
+        )
+
+    report = {
+        "schema": 1,
+        "ct_file": str(ct_path),
+        "modelopt_file": str(modelopt_path),
+        "ct": summarize(ct),
+        "modelopt": summarize(mo),
+        "common_requests": common,
+        "cross": cross,
+    }
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote twin comparison report to {output}")
+
+    for label, rows in (("ct", report["ct"]), ("modelopt", report["modelopt"])):
+        for row in rows:
+            print(
+                f"{label}_twin request={row['request_id']} "
+                f"output_equal={row['output_equal']} "
+                f"layer={row['layer_name']!r}"
+            )
+    for row in cross:
+        print(
+            f"cross request={row['request_id']} "
+            f"input_equal={row['input_equal']} "
+            f"output1_equal={row['output1_equal']}"
+        )
+    return 0 if common else 2
 
 
 def _runtime_index(records: list[dict]) -> dict[tuple[int, int, str], dict]:
@@ -544,6 +746,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_runtime_compare.add_argument("--ct", type=Path, required=True)
     p_runtime_compare.add_argument("--modelopt", type=Path, required=True)
     p_runtime_compare.add_argument("--output", type=Path)
+
+    p_twin = sub.add_parser("twin-probe")
+    p_twin.add_argument("--container", required=True)
+    p_twin.add_argument("--model", required=True)
+    p_twin.add_argument("--output", type=Path, required=True)
+    p_twin.add_argument("--repeats", type=int, default=2)
+    p_twin.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_twin.add_argument("--api-base", default="http://127.0.0.1:8888")
+
+    p_twin_compare = sub.add_parser("twin-compare")
+    p_twin_compare.add_argument("--ct", type=Path, required=True)
+    p_twin_compare.add_argument("--modelopt", type=Path, required=True)
+    p_twin_compare.add_argument("--output", type=Path)
     return parser
 
 
@@ -562,6 +777,24 @@ def main() -> int:
             prompt=args.prompt,
             api_base=args.api_base,
         )
+    if args.command == "twin-probe":
+        return twin_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
+            repeats=args.repeats,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
+    if args.command == "twin-compare":
+        missing = [str(path) for path in (args.ct, args.modelopt) if not path.is_file()]
+        if missing:
+            print(
+                "ERROR: twin probe file(s) missing: " + ", ".join(missing),
+                file=sys.stderr,
+            )
+            return 2
+        return compare_twin(args.ct, args.modelopt, args.output)
     missing = [str(path) for path in (args.ct, args.modelopt) if not path.is_file()]
     if missing:
         print(

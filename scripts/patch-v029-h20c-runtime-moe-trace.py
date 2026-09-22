@@ -39,6 +39,58 @@ _QWEN38_H20C_REQUEST_FILE = os.getenv(
 )
 _QWEN38_H20C_MAX_CALLS = int(os.getenv("QWEN38_H20C_MAX_CALLS", "128"))
 _QWEN38_H20C_CALL = 0
+_QWEN38_H20D_TRACE_FILE = os.getenv(
+    "QWEN38_H20D_TRACE_FILE", "/tmp/qwen38_h20d_twin.enable"
+)
+_QWEN38_H20D_REQUEST_FILE = os.getenv(
+    "QWEN38_H20D_REQUEST_FILE", "/tmp/qwen38_h20d_request_id"
+)
+_QWEN38_H20D_TARGET_LAYER = os.getenv(
+    "QWEN38_H20D_TARGET_LAYER",
+    "language_model.model.layers.0.mlp.experts",
+)
+_QWEN38_H20D_DONE_REQUESTS: set[int] = set()
+
+
+@torch.compiler.disable
+def _qwen38_h20d_request_id(layer) -> int:
+    if not os.path.exists(_QWEN38_H20D_TRACE_FILE):
+        return -1
+    if str(getattr(layer, "layer_name", "")) != _QWEN38_H20D_TARGET_LAYER:
+        return -1
+    try:
+        with open(_QWEN38_H20D_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return -1
+    if request_id in _QWEN38_H20D_DONE_REQUESTS:
+        return -1
+    _QWEN38_H20D_DONE_REQUESTS.add(request_id)
+    return request_id
+
+
+@torch.compiler.disable
+def _qwen38_h20d_emit(
+    *,
+    request_id: int,
+    layer,
+    tensors: dict[str, torch.Tensor | None],
+) -> None:
+    record = {{
+        "schema": 1,
+        "source": _QWEN38_H20C_SOURCE,
+        "phase": "twin",
+        "request_id": request_id,
+        "layer_name": str(getattr(layer, "layer_name", "")),
+        "tensors": {{
+            name: _qwen38_h20_fingerprint(tensor)
+            for name, tensor in tensors.items()
+        }},
+    }}
+    print(
+        "QWEN38_H20D_TWIN " + json.dumps(record, sort_keys=True),
+        flush=True,
+    )
 
 
 @torch.compiler.disable
@@ -153,6 +205,54 @@ new_apply = f'''    def apply(
         shared_experts_input: torch.Tensor | None,
     ) -> torch.Tensor:
 {assert_line}        global _QWEN38_H20C_CALL
+        h20d_request_id = _qwen38_h20d_request_id(layer)
+        if h20d_request_id >= 0:
+            h20d_x = x.clone()
+            h20d_topk_weights = topk_weights.clone()
+            h20d_topk_ids = topk_ids.clone()
+            h20d_shared_input = (
+                None if shared_experts_input is None else shared_experts_input.clone()
+            )
+            output = self.moe_kernel.apply(
+                x,
+                layer.w13_weight,
+                layer.w2_weight,
+                topk_weights,
+                topk_ids,
+                activation=layer.activation,
+                global_num_experts=layer.global_num_experts,
+                expert_map=layer.expert_map,
+                apply_router_weight_on_input=layer.apply_router_weight_on_input,
+                shared_experts=shared_experts,
+                shared_experts_input=shared_experts_input,
+            )
+            h20d_output1 = output.clone()
+            h20d_output2 = self.moe_kernel.apply(
+                h20d_x,
+                layer.w13_weight,
+                layer.w2_weight,
+                h20d_topk_weights,
+                h20d_topk_ids,
+                activation=layer.activation,
+                global_num_experts=layer.global_num_experts,
+                expert_map=layer.expert_map,
+                apply_router_weight_on_input=layer.apply_router_weight_on_input,
+                shared_experts=shared_experts,
+                shared_experts_input=h20d_shared_input,
+            )
+            _qwen38_h20d_emit(
+                request_id=h20d_request_id,
+                layer=layer,
+                tensors={{
+                    "x": h20d_x,
+                    "topk_weights": h20d_topk_weights,
+                    "topk_ids": h20d_topk_ids,
+                    "output1": h20d_output1,
+                    "output2": h20d_output2,
+                }},
+            )
+            return h20d_output1
+
         h20c_enabled = _qwen38_h20c_enabled(_QWEN38_H20C_CALL)
         h20c_call_index = _QWEN38_H20C_CALL
         if h20c_enabled:
@@ -210,4 +310,4 @@ if body.count(old_apply) != 1:
 text = prefix + body.replace(old_apply, new_apply, 1) + suffix
 
 path.write_text(text, encoding="utf-8")
-print(f"installed H20-C internal-MK runtime MoE trace ({source})")
+print(f"installed H20-C/H20-D internal-MK MoE diagnostics ({source})")
