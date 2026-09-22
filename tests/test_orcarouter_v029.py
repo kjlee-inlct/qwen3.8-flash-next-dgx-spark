@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v3", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v4", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v3", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v4", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -614,18 +614,18 @@ class ModelOptNvFp4FusedMoE:
                     )
 
 
-    def test_h20c_runtime_trace_patcher_executes_on_modular_apply_shape(self) -> None:
-        patch = ROOT / "scripts" / "patch-v029-h20c-runtime-moe-trace.py"
-        fixture = """from typing import TYPE_CHECKING
-
-import torch
-
+    def test_h20c_runtime_trace_patcher_executes_on_internal_nvfp4_apply(self) -> None:
+        trace_patch = ROOT / "scripts" / "patch-v029-h20c-runtime-moe-trace.py"
+        fixtures = {
+            "ct": """import torch
+import json
+import os
 logger = init_logger(__name__)
-
-class FusedMoEModularMethod:
+def _qwen38_h20_fingerprint(tensor): return {"sha256": "x"}
+class CompressedTensorsW4A4Nvfp4MoEMethod:
     def apply(
         self,
-        layer: "RoutedExperts",
+        layer: RoutedExperts,
         x: torch.Tensor,
         topk_weights: torch.Tensor,
         topk_ids: torch.Tensor,
@@ -634,25 +634,59 @@ class FusedMoEModularMethod:
     ) -> torch.Tensor:
         assert self.moe_kernel is not None
         return self.moe_kernel.apply(
-            hidden_states=x,
-            w1=layer.w13_weight,
-            w2=layer.w2_weight,
-            topk_weights=topk_weights,
-            topk_ids=topk_ids,
+            x,
+            layer.w13_weight,
+            layer.w2_weight,
+            topk_weights,
+            topk_ids,
             activation=layer.activation,
             global_num_experts=layer.global_num_experts,
-            apply_router_weight_on_input=layer.apply_router_weight_on_input,
             expert_map=layer.expert_map,
+            apply_router_weight_on_input=layer.apply_router_weight_on_input,
             shared_experts=shared_experts,
             shared_experts_input=shared_experts_input,
         )
-"""
+QWEN38_H20_MOE_DIAG = "present"
+""",
+            "modelopt": """import torch
+import json
+import os
+logger = init_logger(__name__)
+def _qwen38_h20_fingerprint(tensor): return {"sha256": "x"}
+class ModelOptNvFp4FusedMoE:
+    def apply(
+        self,
+        layer: RoutedExperts,
+        x: torch.Tensor,
+        topk_weights: torch.Tensor,
+        topk_ids: torch.Tensor,
+        shared_experts: SharedExperts | None,
+        shared_experts_input: torch.Tensor | None,
+    ) -> torch.Tensor:
+        assert not self.is_monolithic
+        assert self.moe_kernel is not None
+        return self.moe_kernel.apply(
+            x,
+            layer.w13_weight,
+            layer.w2_weight,
+            topk_weights,
+            topk_ids,
+            activation=layer.activation,
+            global_num_experts=layer.global_num_experts,
+            expert_map=layer.expert_map,
+            apply_router_weight_on_input=layer.apply_router_weight_on_input,
+            shared_experts=shared_experts,
+            shared_experts_input=shared_experts_input,
+        )
+QWEN38_H20_MOE_DIAG = "present"
+""",
+        }
         with tempfile.TemporaryDirectory() as tmp:
-            for source in ("ct", "modelopt"):
+            for source, fixture in fixtures.items():
                 target = Path(tmp) / f"{source}.py"
                 target.write_text(fixture, encoding="utf-8")
                 result = subprocess.run(
-                    ["python3", str(patch), str(target), source],
+                    ["python3", str(trace_patch), str(target), source],
                     cwd=ROOT,
                     text=True,
                     capture_output=True,
@@ -662,9 +696,9 @@ class FusedMoEModularMethod:
                 patched = target.read_text(encoding="utf-8")
                 self.assertIn("QWEN38_H20C_RUNTIME ", patched)
                 self.assertIn(f'_QWEN38_H20C_SOURCE = "{source}"', patched)
-                self.assertIn("_QWEN38_H20C_REQUEST_FILE", patched)
-                self.assertIn('phase="pre"', patched)
-                self.assertIn('phase="post"', patched)
+                self.assertIn("@torch.compiler.disable", patched)
+                self.assertIn("_qwen38_h20c_enabled", patched)
+                self.assertIn("output = self.moe_kernel.apply(", patched)
                 self.assertIn('"topk_weights": topk_weights', patched)
                 self.assertIn('"topk_ids": topk_ids', patched)
                 self.assertIn('tensors={"output": output}', patched)
