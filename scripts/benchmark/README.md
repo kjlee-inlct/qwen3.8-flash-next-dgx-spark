@@ -2598,39 +2598,55 @@ This localizes the first observed instability to layer-0
 receives the same hidden input and remains stable, the next H20 step targets
 the QKVZ projection itself rather than the broader linear-attention block.
 
-##### H20 layer-0 QKVZ twin projection probe
+##### H20 layer-0 QKVZ projection probe
 
-The v11 image keeps the normal first `in_proj_qkvz(hidden_states)` result as
-the production value passed downstream. After that first result is available,
-a fullgraph-safe custom-op checks a READY-time trigger and, only when enabled,
-calls the same layer-0 QKVZ projection once more on an immutable GPU clone of
-the same input. The normal first output is not replaced by the diagnostic
-second output.
+Observed v11 result on 2026-09-23:
 
-The v11 runtime also logs the layer-0 projection class, quant-method class, and
-quant-config class as `QWEN38_H20P_META`.
+- projection class: `MergedColumnParallelLinear`;
+- quant method: `CompressedTensorsLinearMethod`;
+- quant config: `CompressedTensorsConfig`;
+- both requests reported `output_equal=false`;
+- request 0 vs request 1 kept `input_equal=true` while the normal first
+  projection outputs differed.
 
-Run CT/H12 after rebuilding the v11 CT image and reaching READY:
+This confirms the v10 localization to `in_proj_qkvz`, but v11 mixed two
+execution contexts: the normal first projection ran inside the fullgraph/AOT
+compiled model, while the diagnostic second projection was invoked eagerly
+inside the custom-op runtime. Therefore v11 does not by itself prove immediate
+same-kernel nondeterminism.
+
+##### H20 QKVZ compiled-vs-eager control
+
+The v12 image keeps the same production compiled projection output, then runs
+the same layer-0 QKVZ projection twice eagerly on identical GPU clones inside
+the READY-triggered custom-op. It records:
+
+- `compiled_output`: the production fullgraph/AOT projection result;
+- `eager1`, `eager2`: two consecutive eager calls on the same input;
+- `compiled_vs_eager_equal`;
+- `eager_repeat_equal`;
+- the actual compressed-tensors scheme class and underlying linear-kernel class.
+
+Run CT/H12 after rebuilding the v12 CT image and reaching READY:
 
 ```bash
 python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
   --container qwen38-h20-ct-convert-diag-v029 \
   --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
-  --output scripts/benchmark/results/local/h20p-v11-ct.jsonl
+  --output scripts/benchmark/results/local/h20p-v12-ct.jsonl
 ```
 
 Interpretation:
 
-- either request reports `output_equal=false`: the same QKVZ projection,
-  loaded weights, and same input can produce different outputs back-to-back;
-  inspect the quantized-linear backend/kernel/workspace path directly;
-- both requests report `output_equal=true`, while
-  `qkvz_repeat input_equal=true output1_equal=false`: the projection is
-  stable within one immediate call context but changes across requests, so
-  focus on request sequencing, cached quantization state, or workspace/state
-  reused by that projection path;
-- `input_equal=false`: the v10 boundary result was not reproduced and the
-  upstream input must be rechecked before deeper attribution.
+- `eager_repeat_equal=false`: same-input eager calls are themselves unstable;
+  inspect the reported underlying linear-kernel/backend directly;
+- `eager_repeat_equal=true` but `compiled_vs_eager_equal=false`: the
+  projection is stable in eager execution but the fullgraph/AOT result differs;
+  focus on compiled-vs-eager kernel selection, AOT graph lowering, or compiled
+  buffer/workspace behavior;
+- both are true, but `qkvz_repeat input_equal=true compiled_output_equal=false`:
+  request-to-request state affects only the production compiled path;
+- `input_equal=false`: the v10/v11 same-input premise was not reproduced.
 
 Interpretation:
 
