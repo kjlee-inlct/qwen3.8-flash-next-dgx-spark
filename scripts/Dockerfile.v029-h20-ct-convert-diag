@@ -50,7 +50,7 @@ assert '@torch.library.custom_op(' in q4s
 assert '"qwen38_h20u::capture"' in q4s
 assert 'mutates_args={"tensor"}' in q4s
 assert "_qwen38_h20u_capture(hidden_states, 0, self.layer_idx)" in q4s
-assert "self.layer_idx in (0, 1)" in q4s
+assert "_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 15, 31, 47)" in q4s
 assert "_qwen38_h20u_capture(block_input, 1, self.layer_idx)" in q4s
 assert "_qwen38_h20u_capture(attn_out, 2, self.layer_idx)" in q4s
 assert "_qwen38_h20u_capture(block_input, 3, self.layer_idx)" in q4s
@@ -109,4 +109,4 @@ assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v16"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v17"
