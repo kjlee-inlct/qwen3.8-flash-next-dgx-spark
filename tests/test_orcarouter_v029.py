@@ -489,7 +489,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v14", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v15", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -932,12 +932,20 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             self.assertIn('"lock_pre"', patched)
             self.assertIn("locks.zero_()", patched)
 
-    def test_h20_v14_ct_image_enables_batch_invariant_humming(self) -> None:
+    def test_h20_v15_ct_image_localizes_batch_invariant_to_fp8(self) -> None:
         dockerfile = (
             ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag"
         ).read_text(encoding="utf-8")
-        self.assertIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v14"', dockerfile)
+        patch = (
+            ROOT / "scripts" / "patch-v029-h20-humming-fp8-batch-invariant.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
+        self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
+        self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v15"', dockerfile)
+        self.assertIn('class HummingFP8ScaledMMLinearKernel', patch)
+        self.assertIn('_qwen38_h20_compute["use_batch_invariant"] = True', patch)
+        self.assertIn('class HummingInt8ScaledMMLinearKernel', patch)
 
     def test_h20_v13_dockerfiles_drop_v12_qkvz_key(self) -> None:
         for name in (
