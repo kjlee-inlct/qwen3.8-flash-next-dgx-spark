@@ -2584,6 +2584,54 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py linear-probe \
   --output scripts/benchmark/results/local/h20l-v10-ct.jsonl
 ```
 
+Observed H20 v10 result on 2026-09-23:
+
+- CT/H12 request 0 vs request 1 had identical `input_hidden`;
+- `mixed_qkvz` was the first mismatching tensor;
+- `ba` remained identical;
+- `core_attn_out` and final `output` then differed;
+- the fused GDN path was active, so `mixed_qkv`, `z`, `b`, and `a`
+  were not materialized as separate probe boundaries.
+
+This localizes the first observed instability to layer-0
+`in_proj_qkvz`, before GDN recurrent/core state. Because `in_proj_ba`
+receives the same hidden input and remains stable, the next H20 step targets
+the QKVZ projection itself rather than the broader linear-attention block.
+
+##### H20 layer-0 QKVZ twin projection probe
+
+The v11 image keeps the normal first `in_proj_qkvz(hidden_states)` result as
+the production value passed downstream. After that first result is available,
+a fullgraph-safe custom-op checks a READY-time trigger and, only when enabled,
+calls the same layer-0 QKVZ projection once more on an immutable GPU clone of
+the same input. The normal first output is not replaced by the diagnostic
+second output.
+
+The v11 runtime also logs the layer-0 projection class, quant-method class, and
+quant-config class as `QWEN38_H20P_META`.
+
+Run CT/H12 after rebuilding the v11 CT image and reaching READY:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20p-v11-ct.jsonl
+```
+
+Interpretation:
+
+- either request reports `output_equal=false`: the same QKVZ projection,
+  loaded weights, and same input can produce different outputs back-to-back;
+  inspect the quantized-linear backend/kernel/workspace path directly;
+- both requests report `output_equal=true`, while
+  `qkvz_repeat input_equal=true output1_equal=false`: the projection is
+  stable within one immediate call context but changes across requests, so
+  focus on request sequencing, cached quantization state, or workspace/state
+  reused by that projection path;
+- `input_equal=false`: the v10 boundary result was not reproduced and the
+  upstream input must be rechecked before deeper attribution.
+
 Interpretation:
 
 - first mismatch at `mixed_qkvz` or `ba`: input projection/quantized linear

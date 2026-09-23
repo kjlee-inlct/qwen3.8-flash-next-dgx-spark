@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v10", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v11", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v10", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v11", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -836,6 +836,17 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         super().__init__(config, vllm_config, prefix)
 
         self.num_k_heads = config.linear_num_key_heads
+        self.hidden_size = 4096
+        self.key_dim = 1024
+        self.value_dim = 1024
+        self.quant_config = None
+        self.in_proj_qkvz = self.create_qkvz_proj(
+            hidden_size=self.hidden_size,
+            key_dim=self.key_dim,
+            value_dim=self.value_dim,
+            quant_config=self.quant_config,
+            prefix=f"{prefix}.in_proj_qkvz",
+        )
 
     def forward_cuda(self, hidden_states: torch.Tensor) -> torch.Tensor:
         num_tokens = hidden_states.size(0)
@@ -909,6 +920,11 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             self.assertIn("_qwen38_h20l_capture(ba, 2, self._qwen38_h20_layer_idx)", patched)
             self.assertIn("core_attn_out, 7, self._qwen38_h20_layer_idx", patched)
             self.assertIn("output, 8, self._qwen38_h20_layer_idx", patched)
+            self.assertIn("QWEN38_H20P_QKVZ ", patched)
+            self.assertIn('"qwen38_h20p::qkvz_twin"', patched)
+            self.assertIn("_QWEN38_H20P_QKVZ_PROJ = self.in_proj_qkvz", patched)
+            self.assertIn("_qwen38_h20p_qkvz_twin(", patched)
+            self.assertIn("QWEN38_H20P_META layer=0", patched)
 
     def test_h20_upstream_dockerfiles_smoke_fullgraph_custom_op(self) -> None:
         for name in (
@@ -958,6 +974,11 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("QWEN38_H20L_LINEAR ", script)
         self.assertIn("mixed_qkvz", script)
         self.assertIn("core_attn_out", script)
+        self.assertIn('sub.add_parser("qkvz-twin-probe")', script)
+        self.assertIn("/tmp/qwen38_h20p_qkvz_twin.enable", script)
+        self.assertIn("QWEN38_H20P_QKVZ ", script)
+        self.assertIn("qkvz_repeat", script)
+        self.assertIn("output_equal", script)
 
 
 if __name__ == "__main__":
