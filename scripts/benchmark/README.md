@@ -1999,12 +1999,19 @@ a missing experiment/result is visible immediately.
 | v13 | completed | Explicit Humming `locks.zero_()` did not restore determinism; lock fingerprints were unchanged pre/post. Persistent locks deprioritized. |
 | v14 | startup/control-design failure | Global `VLLM_BATCH_INVARIANT=1` was rejected by GDN attention before READY. No QKVZ result. |
 | v15 | completed / localization success | FP8-linear-local `use_batch_invariant=true` reached READY and made compiled, eager-repeat, and cross-request QKVZ outputs all equal. |
-| repair candidate | pending runtime validation | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` profile applies only the local Humming FP8 batch-invariant patch. Next gates: 5-repeat determinism, then 1K/2K/4K/8K/32K sweep. |
+| repair candidate | completed / FAIL | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` reached READY, but 8192/128×5 produced 5 unique hashes. The 1K/2K/4K/8K/32K sweep also failed at every size (4,5,5,5,5 unique hashes). FP8-local batch-invariant is insufficient as an end-to-end repair. |
 
-Current H20 conclusion: the observed CT/H12 QKVZ instability follows the default
-non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and disappears in the
-v15 local batch-invariant control. This remains a repair candidate until the
-diagnostic-free repair profile passes the normal determinism gates.
+Current H20 conclusion: the observed layer-0 CT/H12 QKVZ instability follows
+the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
+disappears at that probed boundary in the v15 local batch-invariant control.
+However, the diagnostic-free repair profile still fails end-to-end determinism
+broadly. Therefore the local Humming FP8 setting explains one observed
+divergence boundary but is not sufficient to repair the whole model. The next
+control is to run the normal end-to-end determinism workload on the v15
+diagnostic image itself before adding another kernel patch. That separates
+"v15 instrumentation changes execution enough to stabilize the whole model"
+from "v15 only stabilizes the probed layer-0 QKVZ boundary while a later
+independent divergence remains."
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
@@ -2804,6 +2811,40 @@ batch-invariant mode is enabled only for
 disabled, so GDN attention is unaffected.
 
 ##### H20 FP8 batch-invariant repair candidate
+
+Observed repair validation on 2026-09-23:
+
+- the diagnostic-free repair image built successfully with label
+  `ct-h12-humming-fp8-batch-invariant-v1` and reached READY;
+- runtime metadata retained vLLM v0.29, exact QSA, MTP k=2,
+  max_num_seqs=3, prefix caching disabled, and the H12 checkpoint;
+- the primary 8192-requested-token / 128-output / 5-repeat determinism gate
+  failed with five distinct output hashes;
+- the wider sweep was also executed and failed at every tested size:
+  - 1024: 4 unique hashes / 5 repeats;
+  - 2048: 5 / 5;
+  - 4096: 5 / 5;
+  - 8192 requested (8191 actual): 5 / 5;
+  - 32768: 5 / 5.
+
+This is a broad negative end-to-end result. It supersedes the earlier
+"repair candidate pending" state. The v15 QKVZ probe remains valid evidence
+that the local batch-invariant setting stabilizes that specific layer-0
+projection boundary, but it does not prove that the same setting removes all
+later sources of nondeterminism.
+
+Before introducing another repair patch, run the ordinary end-to-end
+determinism workload on the v15 diagnostic image itself. Use the same 8192/128
+×5 workload. Interpretation:
+
+- v15 diagnostic image PASS, diagnostic-free repair FAIL: H20 instrumentation
+  or its altered execution schedule is materially changing end-to-end
+  behavior; do not attribute the repair to batch-invariant mode alone;
+- both v15 diagnostic and diagnostic-free repair FAIL: layer-0 QKVZ was a real
+  localized divergence but not the only end-to-end divergence; resume tracing
+  after the now-stable QKVZ boundary;
+- v15 diagnostic FAIL with layer-0 QKVZ still stable: move the next lightweight
+  boundary probe downstream rather than revisiting QKVZ.
 
 The next validation removes all H20 runtime instrumentation. The repair image
 is built directly on H12 and applies only the local Humming FP8
