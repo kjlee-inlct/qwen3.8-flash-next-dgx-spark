@@ -4,15 +4,18 @@ FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
 ARG Q4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
+ARG GDN=${SP}/vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py
 
 COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
 COPY patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20c-runtime-moe-trace.py
 COPY patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-upstream-layer0.py
+COPY patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py
 RUN cp ${CT} ${CT}.h20.orig \
  && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${CT} ct \
  && python3 /tmp/patch-v029-h20c-runtime-moe-trace.py ${CT} ct \
  && python3 /tmp/patch-v029-h20-upstream-layer0.py ${Q4} \
- && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py \
+ && python3 /tmp/patch-v029-h20-linear-attn-layer0.py ${GDN} \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py \
  && python3 - <<'PY'
 import ast
 p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
@@ -59,9 +62,28 @@ def h20u_fullgraph_smoke(x):
 h20u_smoke_in = torch.tensor([1.0])
 h20u_smoke_out = h20u_fullgraph_smoke(h20u_smoke_in)
 assert h20u_smoke_out.item() == 2.0
+gdn="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py"
+gdns=open(gdn, encoding="utf-8").read()
+ast.parse(gdns)
+assert "QWEN38_H20L_LINEAR " in gdns
+assert '"qwen38_h20l::capture"' in gdns
+assert "_qwen38_h20l_capture(mixed_qkvz, 1" in gdns
+assert "_qwen38_h20l_capture(ba, 2" in gdns
+assert "_qwen38_h20l_capture(core_attn_out, 7" in gdns
+assert "_qwen38_h20l_capture(output, 8" in gdns
+from vllm.model_executor.layers.mamba.gdn.qwen_gdn_linear_attn import _qwen38_h20l_capture
+
+@torch.compile(fullgraph=True, backend="eager")
+def h20l_fullgraph_smoke(x):
+    _qwen38_h20l_capture(x, 0, 0)
+    return x + 1
+
+h20l_smoke_in = torch.tensor([1.0])
+h20l_smoke_out = h20l_fullgraph_smoke(h20l_smoke_in)
+assert h20l_smoke_out.item() == 2.0
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v9"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v10"
