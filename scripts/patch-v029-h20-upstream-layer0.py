@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20 upstream layer-0/1 Qwen4Exp boundary diagnostics."""
+"""Install H20 sparse-layer Qwen4Exp boundary diagnostics."""
 
 from __future__ import annotations
 
@@ -42,6 +42,8 @@ _QWEN38_H20U_STAGE_NAMES = {
     3: "mlp_block_input",
     4: "mlp_out",
 }
+_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 15, 31, 47)
+_QWEN38_H20U_LAST_LAYER = _QWEN38_H20U_LAYERS[-1]
 _QWEN38_H20U_PENDING: dict[tuple[int, int], dict[str, torch.Tensor]] = {}
 
 
@@ -86,33 +88,37 @@ def _qwen38_h20u_fingerprint(tensor: torch.Tensor) -> dict:
     return result
 
 
-def _qwen38_h20u_emit_if_complete(layer_idx: int) -> None:
+def _qwen38_h20u_emit_if_complete() -> None:
     required = set(_QWEN38_H20U_STAGE_NAMES.values())
-    keys = [(layer_idx, rid) for rid in (0, 1)]
+    keys = [
+        (layer_idx, request_id)
+        for layer_idx in _QWEN38_H20U_LAYERS
+        for request_id in (0, 1)
+    ]
     if any(key not in _QWEN38_H20U_PENDING for key in keys):
         return
     if any(set(_QWEN38_H20U_PENDING[key]) != required for key in keys):
         return
-    for rid in (0, 1):
-        key = (layer_idx, rid)
-        record = {
-            "schema": 3,
-            "phase": "layer-upstream",
-            "layer_idx": layer_idx,
-            "request_id": rid,
-            "tensors": {
-                name: _qwen38_h20u_fingerprint(
-                    _QWEN38_H20U_PENDING[key][name]
-                )
-                for name in _QWEN38_H20U_STAGE_NAMES.values()
-            },
-        }
-        print(
-            "QWEN38_H20U_LAYER0 " + json.dumps(record, sort_keys=True),
-            flush=True,
-        )
-    for key in keys:
-        _QWEN38_H20U_PENDING.pop(key, None)
+    for layer_idx in _QWEN38_H20U_LAYERS:
+        for request_id in (0, 1):
+            key = (layer_idx, request_id)
+            record = {
+                "schema": 4,
+                "phase": "sparse-layer-upstream",
+                "layer_idx": layer_idx,
+                "request_id": request_id,
+                "tensors": {
+                    name: _qwen38_h20u_fingerprint(
+                        _QWEN38_H20U_PENDING[key][name]
+                    )
+                    for name in _QWEN38_H20U_STAGE_NAMES.values()
+                },
+            }
+            print(
+                "QWEN38_H20U_LAYER0 " + json.dumps(record, sort_keys=True),
+                flush=True,
+            )
+    _QWEN38_H20U_PENDING.clear()
 
 
 # Qwen4ExpModel is captured with torch.compile(fullgraph=True). A normal Python
@@ -129,7 +135,7 @@ def _qwen38_h20u_capture(
     stage: int,
     layer_idx: int,
 ) -> None:
-    if layer_idx not in (0, 1) or not os.path.exists(_QWEN38_H20U_TRIGGER):
+    if layer_idx not in _QWEN38_H20U_LAYERS or not os.path.exists(_QWEN38_H20U_TRIGGER):
         return
     stage_name = _QWEN38_H20U_STAGE_NAMES.get(stage)
     if stage_name is None:
@@ -143,10 +149,15 @@ def _qwen38_h20u_capture(
         return
     key = (layer_idx, request_id)
     _QWEN38_H20U_PENDING.setdefault(key, {})[stage_name] = tensor.detach().clone()
-    # Fingerprinting/CPU synchronization occurs only after request 1 has
-    # reached all boundaries for this layer.
-    if request_id == 1 and stage == 4:
-        _qwen38_h20u_emit_if_complete(layer_idx)
+    # Avoid perturbing intermediate layers with CPU synchronization. Keep all
+    # sparse-layer snapshots on GPU and fingerprint only after request 1 has
+    # reached the final selected layer.
+    if (
+        request_id == 1
+        and layer_idx == _QWEN38_H20U_LAST_LAYER
+        and stage == 4
+    ):
+        _qwen38_h20u_emit_if_complete()
 '''
 if text.count(helper_anchor) != 1:
     raise SystemExit("expected hyperconnection import anchor exactly once")
@@ -163,7 +174,7 @@ suffix = text[next_class:]
 start_anchor = """        attn_hc = self.attn_hyper_connection
         if self.ple is not None:
 """
-start_repl = """        if self.layer_idx in (0, 1):
+start_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(hidden_states, 0, self.layer_idx)
 
         attn_hc = self.attn_hyper_connection
@@ -176,7 +187,7 @@ body = body.replace(start_anchor, start_repl, 1)
 attn_anchor = """        if self.layer_type == "linear_attention":
             attn_out = self.linear_attn(hidden_states=block_input)
 """
-attn_repl = """        if self.layer_idx in (0, 1):
+attn_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(block_input, 1, self.layer_idx)
 
         if self.layer_type == "linear_attention":
@@ -193,17 +204,17 @@ mlp_anchor = """        mlp_hc = self.mlp_hyper_connection
         mlp_out = self.mlp(block_input)
         return hidden_states, mlp_out, injection
 """
-mlp_repl = """        if self.layer_idx in (0, 1):
+mlp_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(attn_out, 2, self.layer_idx)
 
         mlp_hc = self.mlp_hyper_connection
         hidden_states, block_input, injection = mlp_hc.combine_and_mix(
             hidden_states, attn_out, injection
         )
-        if self.layer_idx in (0, 1):
+        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(block_input, 3, self.layer_idx)
         mlp_out = self.mlp(block_input)
-        if self.layer_idx in (0, 1):
+        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(mlp_out, 4, self.layer_idx)
         return hidden_states, mlp_out, injection
 """
@@ -213,4 +224,4 @@ body = body.replace(mlp_anchor, mlp_repl, 1)
 
 text = prefix + body + suffix
 path.write_text(text, encoding="utf-8")
-print("installed H20 layer-0/1 Qwen4Exp upstream custom-op diagnostics")
+print("installed H20 sparse-layer Qwen4Exp upstream custom-op diagnostics")
