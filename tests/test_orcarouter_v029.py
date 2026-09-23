@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v11", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v12", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v11", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v12", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -925,6 +925,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             self.assertIn("_QWEN38_H20P_QKVZ_PROJ = self.in_proj_qkvz", patched)
             self.assertIn("_qwen38_h20p_qkvz_twin(", patched)
             self.assertIn("QWEN38_H20P_META layer=0", patched)
+            self.assertIn("QWEN38_H20P_BACKEND layer=0", patched)
+            self.assertIn('"compiled_vs_eager_equal"', patched)
+            self.assertIn('"eager_repeat_equal"', patched)
 
     def test_h20_upstream_dockerfiles_smoke_fullgraph_custom_op(self) -> None:
         for name in (
@@ -978,7 +981,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("/tmp/qwen38_h20p_qkvz_twin.enable", script)
         self.assertIn("QWEN38_H20P_QKVZ ", script)
         self.assertIn("qkvz_repeat", script)
-        self.assertIn("output_equal", script)
+        self.assertIn("compiled_vs_eager_equal", script)
+        self.assertIn("eager_repeat_equal", script)
+        self.assertIn("compiled_output_equal", script)
 
 
 if __name__ == "__main__":

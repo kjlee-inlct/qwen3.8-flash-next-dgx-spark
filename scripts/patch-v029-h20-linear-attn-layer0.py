@@ -175,20 +175,31 @@ def _qwen38_h20p_qkvz_twin(
 
     input_ref = input_hidden.detach().clone()
     output1_ref = output1.detach().clone()
-    output2, _ = proj(input_ref.clone())
-    output2_ref = output2.detach().clone()
+    eager1, _ = proj(input_ref.clone())
+    eager1_ref = eager1.detach().clone()
+    eager2, _ = proj(input_ref.clone())
+    eager2_ref = eager2.detach().clone()
 
     input_fp = _qwen38_h20l_fingerprint(input_ref)
     output1_fp = _qwen38_h20l_fingerprint(output1_ref)
-    output2_fp = _qwen38_h20l_fingerprint(output2_ref)
+    eager1_fp = _qwen38_h20l_fingerprint(eager1_ref)
+    eager2_fp = _qwen38_h20l_fingerprint(eager2_ref)
+    scheme = getattr(proj, "scheme", None)
+    kernel = getattr(scheme, "fp8_linear", None)
+    if kernel is None:
+        kernel = getattr(scheme, "linear_kernel", None)
     record = {
-        "schema": 1,
-        "phase": "layer0-qkvz-twin",
+        "schema": 2,
+        "phase": "layer0-qkvz-compiled-vs-eager",
         "request_id": request_id,
         "input": input_fp,
-        "output1": output1_fp,
-        "output2": output2_fp,
-        "output_equal": output1_fp == output2_fp,
+        "compiled_output": output1_fp,
+        "eager1": eager1_fp,
+        "eager2": eager2_fp,
+        "compiled_vs_eager_equal": output1_fp == eager1_fp,
+        "eager_repeat_equal": eager1_fp == eager2_fp,
+        "scheme_cls": type(scheme).__name__,
+        "kernel_cls": type(kernel).__name__,
     }
     print(
         "QWEN38_H20P_QKVZ " + json.dumps(record, sort_keys=True),
@@ -244,6 +255,15 @@ qkvz_repl = """        self.in_proj_qkvz = self.create_qkvz_proj(
                 type(self.in_proj_qkvz).__name__,
                 type(getattr(self.in_proj_qkvz, "quant_method", None)).__name__,
                 type(self.quant_config).__name__,
+            )
+            scheme = getattr(self.in_proj_qkvz, "scheme", None)
+            kernel = getattr(scheme, "fp8_linear", None)
+            if kernel is None:
+                kernel = getattr(scheme, "linear_kernel", None)
+            logger.warning(
+                "QWEN38_H20P_BACKEND layer=0 scheme=%s kernel=%s",
+                type(scheme).__name__,
+                type(kernel).__name__,
             )
 """
 if text.count(qkvz_anchor) != 1:
