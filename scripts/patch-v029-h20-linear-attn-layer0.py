@@ -49,6 +49,14 @@ _QWEN38_H20L_STAGE_NAMES = {
 }
 _QWEN38_H20L_PENDING: dict[int, dict[str, torch.Tensor]] = {}
 
+_QWEN38_H20P_TRIGGER = os.getenv(
+    "QWEN38_H20P_TRIGGER", "/tmp/qwen38_h20p_qkvz_twin.enable"
+)
+_QWEN38_H20P_REQUEST_FILE = os.getenv(
+    "QWEN38_H20P_REQUEST_FILE", "/tmp/qwen38_h20p_request_id"
+)
+_QWEN38_H20P_QKVZ_PROJ = None
+
 
 def _qwen38_h20l_bytes(tensor: torch.Tensor) -> bytes:
     return tensor.detach().contiguous().view(torch.uint8).cpu().numpy().tobytes()
@@ -141,6 +149,51 @@ def _qwen38_h20l_capture(
     )
     if request_id == 1 and stage == 8:
         _qwen38_h20l_emit_if_complete()
+
+
+@torch.library.custom_op(
+    "qwen38_h20p::qkvz_twin",
+    mutates_args={"input_hidden", "output1"},
+)
+def _qwen38_h20p_qkvz_twin(
+    input_hidden: torch.Tensor,
+    output1: torch.Tensor,
+    layer_idx: int,
+) -> None:
+    if layer_idx != 0 or not os.path.exists(_QWEN38_H20P_TRIGGER):
+        return
+    try:
+        with open(_QWEN38_H20P_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return
+    if request_id not in (0, 1):
+        return
+    proj = _QWEN38_H20P_QKVZ_PROJ
+    if proj is None:
+        return
+
+    input_ref = input_hidden.detach().clone()
+    output1_ref = output1.detach().clone()
+    output2, _ = proj(input_ref.clone())
+    output2_ref = output2.detach().clone()
+
+    input_fp = _qwen38_h20l_fingerprint(input_ref)
+    output1_fp = _qwen38_h20l_fingerprint(output1_ref)
+    output2_fp = _qwen38_h20l_fingerprint(output2_ref)
+    record = {
+        "schema": 1,
+        "phase": "layer0-qkvz-twin",
+        "request_id": request_id,
+        "input": input_fp,
+        "output1": output1_fp,
+        "output2": output2_fp,
+        "output_equal": output1_fp == output2_fp,
+    }
+    print(
+        "QWEN38_H20P_QKVZ " + json.dumps(record, sort_keys=True),
+        flush=True,
+    )
 '''
 if text.count(helper_anchor) != 1:
     raise SystemExit("expected qwen GDN logger anchor exactly once")
@@ -167,6 +220,35 @@ init_repl = """        super().__init__(config, vllm_config, prefix)
 if text.count(init_anchor) != 1:
     raise SystemExit("expected QwenGatedDeltaNetAttention init anchor exactly once")
 text = text.replace(init_anchor, init_repl, 1)
+
+qkvz_anchor = """        self.in_proj_qkvz = self.create_qkvz_proj(
+            hidden_size=self.hidden_size,
+            key_dim=self.key_dim,
+            value_dim=self.value_dim,
+            quant_config=self.quant_config,
+            prefix=f"{prefix}.in_proj_qkvz",
+        )
+"""
+qkvz_repl = """        self.in_proj_qkvz = self.create_qkvz_proj(
+            hidden_size=self.hidden_size,
+            key_dim=self.key_dim,
+            value_dim=self.value_dim,
+            quant_config=self.quant_config,
+            prefix=f"{prefix}.in_proj_qkvz",
+        )
+        if self._qwen38_h20_layer_idx == 0:
+            global _QWEN38_H20P_QKVZ_PROJ
+            _QWEN38_H20P_QKVZ_PROJ = self.in_proj_qkvz
+            logger.warning(
+                "QWEN38_H20P_META layer=0 proj_cls=%s quant_method=%s quant_config=%s",
+                type(self.in_proj_qkvz).__name__,
+                type(getattr(self.in_proj_qkvz, "quant_method", None)).__name__,
+                type(self.quant_config).__name__,
+            )
+"""
+if text.count(qkvz_anchor) != 1:
+    raise SystemExit("expected qkvz projection construction anchor exactly once")
+text = text.replace(qkvz_anchor, qkvz_repl, 1)
 
 class_start = text.index("class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):")
 next_class = text.find("\nclass ", class_start + 1)
@@ -202,6 +284,11 @@ proj_repl = """        mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
         if self._qwen38_h20_layer_idx == 0:
             _qwen38_h20l_capture(
                 mixed_qkvz, 1, self._qwen38_h20_layer_idx
+            )
+            _qwen38_h20p_qkvz_twin(
+                hidden_states,
+                mixed_qkvz,
+                self._qwen38_h20_layer_idx,
             )
             _qwen38_h20l_capture(ba, 2, self._qwen38_h20_layer_idx)
 
