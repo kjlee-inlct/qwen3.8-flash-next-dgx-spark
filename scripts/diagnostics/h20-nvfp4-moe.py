@@ -315,14 +315,18 @@ def qkvz_twin_probe(
         print(meta[-1].strip())
     for record in records:
         print(
-            f"qkvz_twin request={record['request_id']} "
-            f"output_equal={record.get('output_equal')}"
+            f"qkvz_probe request={record['request_id']} "
+            f"compiled_vs_eager_equal={record.get('compiled_vs_eager_equal')} "
+            f"eager_repeat_equal={record.get('eager_repeat_equal')} "
+            f"scheme={record.get('scheme_cls')} "
+            f"kernel={record.get('kernel_cls')}"
         )
     left, right = records
     print(
         "qkvz_repeat: "
         f"input_equal={left.get('input') == right.get('input')} "
-        f"output1_equal={left.get('output1') == right.get('output1')}"
+        f"compiled_output_equal="
+        f"{left.get('compiled_output') == right.get('compiled_output')}"
     )
     print(f"wrote 2 QKVZ twin records to {output}")
     return 0
