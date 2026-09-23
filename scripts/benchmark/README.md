@@ -2003,19 +2003,22 @@ a missing experiment/result is visible immediately.
 | v15 end-to-end control | completed / FAIL | The v15 diagnostic image itself also failed 8192/128×5 with 3 unique hashes. QKVZ-local stability does not imply whole-model determinism; resume localization downstream of the now-stable QKVZ boundary. |
 | v15 downstream GDN probe | completed / stable | Reusing the existing layer-0 linear-attention probe on v15 gave `all_equal=true`: `input_hidden`, `mixed_qkvz`, `ba`, `core_attn_out`, and final attention `output` all matched across requests. The remaining end-to-end divergence is downstream of layer-0 attention. |
 | v15 upstream layer-0 probe | completed / stable | `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out` all matched across requests. Layer 0 is stable end-to-end under the v15 diagnostic image. |
-| v16 layer-1 upstream probe | pending | Extend the same fullgraph-safe upstream probe to layers 0 and 1, emit layer-indexed records, and print per-layer repeat summaries immediately. Goal: determine whether divergence is already present at layer-1 entry or first appears inside layer 1. |
+| v16 layer-1 upstream probe | completed / stable | Repeated v16 probes showed both layer 0 and layer 1 fully stable at `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out`. The remaining divergence is downstream of layer 1. |
+| v17 sparse-layer search | pending | Capture layers 0,1,3,7,15,31,47 with the same fullgraph-safe boundaries, defer CPU fingerprinting until request 1 reaches layer 47, and identify the first layer interval containing the remaining divergence. |
 
-Current H20 conclusion: the observed layer-0 CT/H12 QKVZ instability follows
+Current H20 conclusion: the original layer-0 CT/H12 QKVZ instability follows
 the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
-disappears at that probed boundary in the v15 local batch-invariant control.
-However, the diagnostic-free repair profile still fails end-to-end determinism
-broadly. Therefore the local Humming FP8 setting explains one observed
-divergence boundary but is not sufficient to repair the whole model. The next
-control is to run the normal end-to-end determinism workload on the v15
-diagnostic image itself before adding another kernel patch. That separates
-"v15 instrumentation changes execution enough to stabilize the whole model"
-from "v15 only stabilizes the probed layer-0 QKVZ boundary while a later
-independent divergence remains."
+disappears at that boundary in the local batch-invariant control, but this is
+not the only source of end-to-end nondeterminism. The diagnostic-free repair
+still fails broadly, and the v15 diagnostic image also fails end-to-end.
+
+Subsequent probes show that layer 0 is fully stable and v16 shows layer 1 is
+also fully stable across every captured decoder boundary. Continuing one layer
+per image would create unnecessary version churn. H20 v17 therefore performs a
+sparse decoder search at layers 0, 1, 3, 7, 15, 31, and 47. Request-0 and
+request-1 snapshots stay on GPU until the final selected layer is reached so
+intermediate CPU hashing does not perturb the search. Once the first unstable
+interval is found, only that interval will be bisected.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
@@ -2860,6 +2863,21 @@ runtime uses the fused GDN decode path. The existing upstream probe was then
 reused on the same v15 image and layer 0 also matched at every captured
 decoder boundary: `entry_hidden`, `attn_block_input`, `attn_out`,
 `mlp_block_input`, and `mlp_out` were all equal across the two requests.
+
+Observed v16 result on 2026-09-23:
+
+- the v16 image built successfully with label `ct-nvfp4-convert-diag-v16`
+  and reached READY;
+- two separate upstream-probe runs produced the same result;
+- layer 0 was fully stable across all five boundaries;
+- layer 1 was also fully stable across all five boundaries;
+- therefore the remaining end-to-end divergence is downstream of layer 1.
+
+Rather than extend one layer at a time, v17 captures sparse layers
+`0,1,3,7,15,31,47`. All sparse-layer tensors remain GPU snapshots until
+request 1 reaches layer 47, then they are fingerprinted and emitted together.
+This keeps the search lightweight while locating the first unstable layer
+interval in a single boot.
 
 Therefore the remaining end-to-end divergence is strictly downstream of layer
 0 in this control. H20 v16 extends only the same upstream custom-op capture to
