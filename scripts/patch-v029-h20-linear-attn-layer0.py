@@ -175,29 +175,61 @@ def _qwen38_h20p_qkvz_twin(
 
     input_ref = input_hidden.detach().clone()
     output1_ref = output1.detach().clone()
-    eager1, _ = proj(input_ref.clone())
-    eager1_ref = eager1.detach().clone()
-    eager2, _ = proj(input_ref.clone())
-    eager2_ref = eager2.detach().clone()
-
-    input_fp = _qwen38_h20l_fingerprint(input_ref)
-    output1_fp = _qwen38_h20l_fingerprint(output1_ref)
-    eager1_fp = _qwen38_h20l_fingerprint(eager1_ref)
-    eager2_fp = _qwen38_h20l_fingerprint(eager2_ref)
     scheme = getattr(proj, "scheme", None)
     kernel = getattr(scheme, "fp8_linear", None)
     if kernel is None:
         kernel = getattr(scheme, "linear_kernel", None)
+    locks = getattr(kernel, "locks", None)
+
+    lock_pre_ref = locks.detach().clone() if locks is not None else None
+    natural, _ = proj(input_ref.clone())
+    natural_ref = natural.detach().clone()
+    lock_after_natural_ref = (
+        locks.detach().clone() if locks is not None else None
+    )
+
+    if locks is not None:
+        locks.zero_()
+    lock_zero1_pre_ref = locks.detach().clone() if locks is not None else None
+    zero1, _ = proj(input_ref.clone())
+    zero1_ref = zero1.detach().clone()
+    lock_zero1_post_ref = locks.detach().clone() if locks is not None else None
+
+    if locks is not None:
+        locks.zero_()
+    lock_zero2_pre_ref = locks.detach().clone() if locks is not None else None
+    zero2, _ = proj(input_ref.clone())
+    zero2_ref = zero2.detach().clone()
+    lock_zero2_post_ref = locks.detach().clone() if locks is not None else None
+
+    input_fp = _qwen38_h20l_fingerprint(input_ref)
+    output1_fp = _qwen38_h20l_fingerprint(output1_ref)
+    natural_fp = _qwen38_h20l_fingerprint(natural_ref)
+    zero1_fp = _qwen38_h20l_fingerprint(zero1_ref)
+    zero2_fp = _qwen38_h20l_fingerprint(zero2_ref)
+
+    def _fp_optional(tensor):
+        return None if tensor is None else _qwen38_h20l_fingerprint(tensor)
+
     record = {
-        "schema": 2,
-        "phase": "layer0-qkvz-compiled-vs-eager",
+        "schema": 3,
+        "phase": "layer0-qkvz-humming-lock-control",
         "request_id": request_id,
         "input": input_fp,
         "compiled_output": output1_fp,
-        "eager1": eager1_fp,
-        "eager2": eager2_fp,
-        "compiled_vs_eager_equal": output1_fp == eager1_fp,
-        "eager_repeat_equal": eager1_fp == eager2_fp,
+        "natural_eager": natural_fp,
+        "zeroed_eager1": zero1_fp,
+        "zeroed_eager2": zero2_fp,
+        "compiled_vs_natural_equal": output1_fp == natural_fp,
+        "zeroed_repeat_equal": zero1_fp == zero2_fp,
+        "natural_vs_zeroed_equal": natural_fp == zero1_fp,
+        "locks_present": locks is not None,
+        "lock_pre": _fp_optional(lock_pre_ref),
+        "lock_after_natural": _fp_optional(lock_after_natural_ref),
+        "lock_zero1_pre": _fp_optional(lock_zero1_pre_ref),
+        "lock_zero1_post": _fp_optional(lock_zero1_post_ref),
+        "lock_zero2_pre": _fp_optional(lock_zero2_pre_ref),
+        "lock_zero2_post": _fp_optional(lock_zero2_post_ref),
         "scheme_cls": type(scheme).__name__,
         "kernel_cls": type(kernel).__name__,
     }
