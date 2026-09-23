@@ -2000,6 +2000,7 @@ a missing experiment/result is visible immediately.
 | v14 | startup/control-design failure | Global `VLLM_BATCH_INVARIANT=1` was rejected by GDN attention before READY. No QKVZ result. |
 | v15 | completed / localization success | FP8-linear-local `use_batch_invariant=true` reached READY and made compiled, eager-repeat, and cross-request QKVZ outputs all equal. |
 | repair candidate | completed / FAIL | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` reached READY, but 8192/128×5 produced 5 unique hashes. The 1K/2K/4K/8K/32K sweep also failed at every size (4,5,5,5,5 unique hashes). FP8-local batch-invariant is insufficient as an end-to-end repair. |
+| v15 end-to-end control | completed / FAIL | The v15 diagnostic image itself also failed 8192/128×5 with 3 unique hashes. QKVZ-local stability does not imply whole-model determinism; resume localization downstream of the now-stable QKVZ boundary. |
 
 Current H20 conclusion: the observed layer-0 CT/H12 QKVZ instability follows
 the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
@@ -2832,6 +2833,20 @@ This is a broad negative end-to-end result. It supersedes the earlier
 that the local batch-invariant setting stabilizes that specific layer-0
 projection boundary, but it does not prove that the same setting removes all
 later sources of nondeterminism.
+
+The ordinary end-to-end determinism workload was also run on the v15
+diagnostic image itself on 2026-09-23. It failed with three unique hashes across
+five repeats. Runs 1, 3, and 5 shared the same hash, while runs 2 and 4 each
+differed. This proves the H20 instrumentation did not make the whole model
+deterministic, although the diagnostic image was less variable than the
+diagnostic-free repair in this sample.
+
+Because the v15 QKVZ-local probe remains stable while the full generation still
+fails, the next H20 action is not another repair patch. Reuse the existing
+layer-0 GDN boundary probe on the v15 image and move the first-mismatch search
+downstream of `mixed_qkvz`: compare `core_attn_out` and final attention
+`output` across requests. Only if those remain stable should localization move
+to the next decoder boundary.
 
 Before introducing another repair patch, run the ordinary end-to-end
 determinism workload on the v15 diagnostic image itself. Use the same 8192/128
