@@ -932,6 +932,16 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             self.assertIn('"lock_pre"', patched)
             self.assertIn("locks.zero_()", patched)
 
+    def test_h20_v13_dockerfiles_drop_v12_qkvz_key(self) -> None:
+        for name in (
+            "Dockerfile.v029-h20-ct-convert-diag",
+            "Dockerfile.v029-h20-modelopt-convert-diag",
+        ):
+            dockerfile = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+            self.assertIn('"zeroed_repeat_equal"', dockerfile)
+            self.assertIn('"natural_vs_zeroed_equal"', dockerfile)
+            self.assertNotIn('"compiled_vs_eager_equal"', dockerfile)
+
     def test_h20_upstream_dockerfiles_smoke_fullgraph_custom_op(self) -> None:
         for name in (
             "Dockerfile.v029-h20-ct-convert-diag",
