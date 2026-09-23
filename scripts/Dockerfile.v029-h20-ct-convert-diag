@@ -67,10 +67,10 @@ gdns=open(gdn, encoding="utf-8").read()
 ast.parse(gdns)
 assert "QWEN38_H20L_LINEAR " in gdns
 assert '"qwen38_h20l::capture"' in gdns
-assert "_qwen38_h20l_capture(mixed_qkvz, 1" in gdns
-assert "_qwen38_h20l_capture(ba, 2" in gdns
-assert "_qwen38_h20l_capture(core_attn_out, 7" in gdns
-assert "_qwen38_h20l_capture(output, 8" in gdns
+assert "mixed_qkvz, 1, self._qwen38_h20_layer_idx" in gdns
+assert "_qwen38_h20l_capture(ba, 2, self._qwen38_h20_layer_idx)" in gdns
+assert "core_attn_out, 7, self._qwen38_h20_layer_idx" in gdns
+assert "output, 8, self._qwen38_h20_layer_idx" in gdns
 from vllm.model_executor.layers.mamba.gdn.qwen_gdn_linear_attn import _qwen38_h20l_capture
 
 @torch.compile(fullgraph=True, backend="eager")
