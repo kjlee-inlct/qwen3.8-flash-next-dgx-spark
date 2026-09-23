@@ -80,9 +80,14 @@ def h20l_fullgraph_smoke(x):
 h20l_smoke_in = torch.tensor([1.0])
 h20l_smoke_out = h20l_fullgraph_smoke(h20l_smoke_in)
 assert h20l_smoke_out.item() == 2.0
+assert "QWEN38_H20P_QKVZ " in gdns
+assert '"qwen38_h20p::qkvz_twin"' in gdns
+assert "_QWEN38_H20P_QKVZ_PROJ = self.in_proj_qkvz" in gdns
+assert "_qwen38_h20p_qkvz_twin(" in gdns
+assert "QWEN38_H20P_META layer=0" in gdns
 assert '_QWEN38_H20C_SOURCE = "modelopt"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 ModelOpt NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v10"
+LABEL qwen38.h20="modelopt-nvfp4-convert-diag-v11"
