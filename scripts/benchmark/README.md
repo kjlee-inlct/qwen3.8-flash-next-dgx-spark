@@ -2692,6 +2692,60 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
   --output scripts/benchmark/results/local/h20p-v13-ct.jsonl
 ```
 
+Observed H20 v13 result on 2026-09-23:
+
+- `locks_present=true` for both requests;
+- request 0 and request 1 both reported `zeroed_repeat_equal=false`;
+- every recorded lock pre/post comparison was equal:
+  `pre_vs_after_natural=true`, `zero1_pre_vs_post=true`, and
+  `zero2_pre_vs_post=true`;
+- request inputs remained equal across requests;
+- in this run, the production compiled outputs also matched across requests;
+- the first explicitly zero-reset eager outputs still differed across requests.
+
+This deprioritizes persistent Humming `locks` as the cause. Explicit lock
+reset neither stabilized same-input eager execution nor exposed any mutation
+of the lock tensor.
+
+The Humming linear wrapper derives its compute config from
+`VLLM_BATCH_INVARIANT` and passes that value as `use_batch_invariant` to
+the Humming backend. The repository did not set this environment variable, so
+the preceding H20 runs used the default non-batch-invariant Humming mode.
+
+##### H20 Humming batch-invariant control
+
+The v14 CT diagnostic image differs from the v13 CT image only by:
+
+```text
+VLLM_BATCH_INVARIANT=1
+```
+
+The same H12 checkpoint, H20 patches, QKVZ probe, max sequence count, MTP
+configuration, and runtime arguments remain unchanged. This is intentionally a
+global Humming compute-mode control because the Humming compute config is
+constructed during post-load initialization.
+
+Run the existing QKVZ probe after rebuilding and starting the v14 CT image:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20p-v14-ct.jsonl
+```
+
+Interpretation:
+
+- same-input eager outputs become stable under v14: the Humming
+  batch-invariant compute mode is strongly implicated and should be promoted
+  to a repair candidate, followed by the normal determinism suite;
+- eager outputs remain unstable: batch-invariant mode is insufficient and the
+  next H20 probe should move into the Humming GEMM implementation/algorithm
+  path or test an alternate W8A16 FP8 backend;
+- production compiled output becomes repeat-stable while eager remains
+  unstable: retain the distinction between the production path and diagnostic
+  eager calls before adopting a repair.
+
 Interpretation:
 
 - `zeroed_repeat_equal=true` while the natural eager result differs:
