@@ -1,24 +1,25 @@
 # H20 CT diagnostic: H12 + bounded NVFP4 MoE conversion fingerprints.
 FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
-# H20 v14 control: ask Humming to use its batch-invariant compute path.
-ENV VLLM_BATCH_INVARIANT=1
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
 ARG Q4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
 ARG GDN=${SP}/vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py
+ARG HUM=${SP}/vllm/model_executor/kernels/linear/scaled_mm/humming.py
 
 COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
 COPY patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20c-runtime-moe-trace.py
 COPY patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-upstream-layer0.py
 COPY patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py
+COPY patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py
 RUN cp ${CT} ${CT}.h20.orig \
  && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${CT} ct \
  && python3 /tmp/patch-v029-h20c-runtime-moe-trace.py ${CT} ct \
  && python3 /tmp/patch-v029-h20-upstream-layer0.py ${Q4} \
  && python3 /tmp/patch-v029-h20-linear-attn-layer0.py ${GDN} \
- && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py \
+ && python3 /tmp/patch-v029-h20-humming-fp8-batch-invariant.py ${HUM} \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py \
  && python3 - <<'PY'
 import ast
 p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
@@ -94,9 +95,17 @@ assert '"zeroed_repeat_equal"' in gdns
 assert '"natural_vs_zeroed_equal"' in gdns
 assert '"lock_pre"' in gdns
 assert "locks.zero_()" in gdns
+hum="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm/humming.py"
+hums=open(hum, encoding="utf-8").read()
+ast.parse(hums)
+fp8=hums[hums.index("class HummingFP8ScaledMMLinearKernel"):hums.index("class HummingInt8ScaledMMLinearKernel")]
+int8=hums[hums.index("class HummingInt8ScaledMMLinearKernel"):]
+assert 'QWEN38_H20Q_FP8_BATCH_INVARIANT' in fp8
+assert '_qwen38_h20_compute["use_batch_invariant"] = True' in fp8
+assert 'QWEN38_H20Q_FP8_BATCH_INVARIANT' not in int8
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v14"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v15"
