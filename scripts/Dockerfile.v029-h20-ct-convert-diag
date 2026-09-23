@@ -91,7 +91,6 @@ assert '"zeroed_repeat_equal"' in gdns
 assert '"natural_vs_zeroed_equal"' in gdns
 assert '"lock_pre"' in gdns
 assert "locks.zero_()" in gdns
-assert '"compiled_vs_eager_equal"' in gdns
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")

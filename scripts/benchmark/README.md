@@ -2659,6 +2659,17 @@ nor `apply_humming_linear()` resets the lock tensor before execution.
 
 ##### H20 Humming lock-state control
 
+The first v13 image-build attempt on 2026-09-23 failed in Dockerfile static
+validation before the fullgraph smoke or runtime probe executed. The v13
+diagnostic record renamed the v12 field `compiled_vs_eager_equal` to
+`compiled_vs_natural_equal`, but both diagnostic Dockerfiles still asserted
+that the removed v12 key existed. The new v13 keys and lock-reset code had
+already been installed successfully; the stale validation assertion alone
+aborted the build. This is a build-validation regression, not an H20 runtime
+result. The stale v12 assertion was removed and a regression test now requires
+v13 Dockerfiles to contain the new lock-control keys while rejecting the old
+one.
+
 The v13 control records the persistent Humming lock tensor before and after a
 natural eager QKVZ call, then executes two additional same-input eager calls
 with `locks.zero_()` immediately before each call. No CPU fingerprinting is
