@@ -2001,6 +2001,7 @@ a missing experiment/result is visible immediately.
 | v15 | completed / localization success | FP8-linear-local `use_batch_invariant=true` reached READY and made compiled, eager-repeat, and cross-request QKVZ outputs all equal. |
 | repair candidate | completed / FAIL | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` reached READY, but 8192/128×5 produced 5 unique hashes. The 1K/2K/4K/8K/32K sweep also failed at every size (4,5,5,5,5 unique hashes). FP8-local batch-invariant is insufficient as an end-to-end repair. |
 | v15 end-to-end control | completed / FAIL | The v15 diagnostic image itself also failed 8192/128×5 with 3 unique hashes. QKVZ-local stability does not imply whole-model determinism; resume localization downstream of the now-stable QKVZ boundary. |
+| v15 downstream GDN probe | completed / stable | Reusing the existing layer-0 linear-attention probe on v15 gave `all_equal=true`: `input_hidden`, `mixed_qkvz`, `ba`, `core_attn_out`, and final attention `output` all matched across requests. The remaining end-to-end divergence is downstream of layer-0 attention. |
 
 Current H20 conclusion: the observed layer-0 CT/H12 QKVZ instability follows
 the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
@@ -2842,11 +2843,23 @@ deterministic, although the diagnostic image was less variable than the
 diagnostic-free repair in this sample.
 
 Because the v15 QKVZ-local probe remains stable while the full generation still
-fails, the next H20 action is not another repair patch. Reuse the existing
-layer-0 GDN boundary probe on the v15 image and move the first-mismatch search
-downstream of `mixed_qkvz`: compare `core_attn_out` and final attention
-`output` across requests. Only if those remain stable should localization move
-to the next decoder boundary.
+fails, the existing layer-0 GDN boundary probe was reused on the same v15 image.
+The two requests matched at every captured stage:
+
+- `input_hidden=true`;
+- `mixed_qkvz=true`;
+- `ba=true`;
+- `core_attn_out=true`;
+- final attention `output=true`;
+- overall `all_equal=true`, with no first mismatch.
+
+The missing `mixed_qkv/z/b/a` split stages are expected because the active
+runtime uses the fused GDN decode path. This result moves the remaining
+end-to-end divergence beyond layer-0 attention. The next control should reuse
+the existing upstream layer-0 probe and compare `entry_hidden`,
+`attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out`.
+Do not create a v16 image unless that probe identifies a boundary that needs new
+instrumentation.
 
 Before introducing another repair patch, run the ordinary end-to-end
 determinism workload on the v15 diagnostic image itself. Use the same 8192/128
