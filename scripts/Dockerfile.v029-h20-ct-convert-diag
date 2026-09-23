@@ -1,6 +1,9 @@
 # H20 CT diagnostic: H12 + bounded NVFP4 MoE conversion fingerprints.
 FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
+# H20 v14 control: ask Humming to use its batch-invariant compute path.
+ENV VLLM_BATCH_INVARIANT=1
+
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
 ARG Q4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
@@ -96,4 +99,4 @@ assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v13"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v14"
