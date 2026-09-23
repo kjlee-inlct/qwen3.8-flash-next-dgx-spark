@@ -2542,6 +2542,63 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-compare \
   --output scripts/benchmark/results/local/h20u-v9-ct-vs-modelopt.json
 ```
 
+Observed H20 upstream v9 result on 2026-09-23:
+
+- CT/H12 request 0 vs request 1 matched at `entry_hidden` and
+  `attn_block_input`, then first diverged at `attn_out`;
+- ModelOpt/H6 request 0 vs request 1 matched at every recorded boundary;
+- CT-vs-H6 also first diverged at `attn_out` for both request 0 and request 1.
+
+This moves the first observed CT repeat divergence inside layer-0 attention.
+The Qwen3.8 Flash Next layer schedule starts with `linear_attention`, so layer
+0 uses `QwenGatedDeltaNetAttention`, not QSA/full attention.
+
+##### H20 layer-0 GDN linear-attention probe
+
+The v10 diagnostic image instruments
+`QwenGatedDeltaNetAttention.forward_cuda()` at layer 0 with the same
+fullgraph-safe mutable custom-op pattern. Request-0 tensors remain GPU-only
+until request 1 reaches the final output boundary.
+
+Recorded stages:
+
+- `input_hidden`: exact linear-attention input;
+- `mixed_qkvz`: result of `in_proj_qkvz`;
+- `ba`: result of `in_proj_ba`;
+- `mixed_qkv`, `z`, `b`, `a`: explicit split path inputs when the
+  non-fused GDN path is used;
+- `core_attn_out`: output of the GDN core, or fused core+norm buffer on the
+  fused path;
+- `output`: final linear-attention output after output projection.
+
+The probe reports CT request 0 vs request 1 directly, so ModelOpt/H6 does not
+need to be rebooted initially because v9 already established H6 repeat
+stability through `attn_out`.
+
+Run CT/H12 after rebuilding the v10 CT image and reaching READY:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py linear-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20l-v10-ct.jsonl
+```
+
+Interpretation:
+
+- first mismatch at `mixed_qkvz` or `ba`: input projection/quantized linear
+  path is request-unstable despite identical hidden input;
+- projections equal and first mismatch at `core_attn_out`: focus on GDN
+  conv/recurrent state allocation, restore/reset, and the core kernel;
+- `core_attn_out` equal but `output` differs: focus on gated norm or
+  `out_proj`;
+- all stages equal: the v9 `attn_out` difference was probe-dependent and
+  should be reproduced before going deeper.
+
+A ModelOpt/H6 v10 detailed control can be collected later with the same command
+and compared via `linear-compare`, but it is not required for the first CT
+localization pass.
+
 Interpretation:
 
 - CT repeat first mismatch at `entry_hidden`: divergence exists before decoder
