@@ -316,17 +316,33 @@ def qkvz_twin_probe(
     for record in records:
         print(
             f"qkvz_probe request={record['request_id']} "
-            f"compiled_vs_eager_equal={record.get('compiled_vs_eager_equal')} "
-            f"eager_repeat_equal={record.get('eager_repeat_equal')} "
+            f"compiled_vs_natural_equal="
+            f"{record.get('compiled_vs_natural_equal')} "
+            f"natural_vs_zeroed_equal="
+            f"{record.get('natural_vs_zeroed_equal')} "
+            f"zeroed_repeat_equal={record.get('zeroed_repeat_equal')} "
+            f"locks_present={record.get('locks_present')} "
             f"scheme={record.get('scheme_cls')} "
             f"kernel={record.get('kernel_cls')}"
         )
+        if record.get("locks_present"):
+            print(
+                f"qkvz_locks request={record['request_id']} "
+                f"pre_vs_after_natural="
+                f"{record.get('lock_pre') == record.get('lock_after_natural')} "
+                f"zero1_pre_vs_post="
+                f"{record.get('lock_zero1_pre') == record.get('lock_zero1_post')} "
+                f"zero2_pre_vs_post="
+                f"{record.get('lock_zero2_pre') == record.get('lock_zero2_post')}"
+            )
     left, right = records
     print(
         "qkvz_repeat: "
         f"input_equal={left.get('input') == right.get('input')} "
         f"compiled_output_equal="
-        f"{left.get('compiled_output') == right.get('compiled_output')}"
+        f"{left.get('compiled_output') == right.get('compiled_output')} "
+        f"zeroed_eager1_equal="
+        f"{left.get('zeroed_eager1') == right.get('zeroed_eager1')}"
     )
     print(f"wrote 2 QKVZ twin records to {output}")
     return 0

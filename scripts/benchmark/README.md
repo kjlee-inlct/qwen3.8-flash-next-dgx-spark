@@ -2636,6 +2636,63 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
   --output scripts/benchmark/results/local/h20p-v12-ct.jsonl
 ```
 
+Observed H20 v12 result on 2026-09-23:
+
+- scheme: `CompressedTensorsW8A16Fp8`;
+- kernel: `HummingFP8ScaledMMLinearKernel`;
+- both request 0 and request 1 reported
+  `compiled_vs_eager_equal=false`;
+- both requests also reported `eager_repeat_equal=false`;
+- request 0 vs request 1 kept `input_equal=true` while
+  `compiled_output_equal=false`.
+
+The second point is the decisive one: two eager calls of the same layer-0
+QKVZ projection on identical input clones already disagree. The instability is
+therefore below `CompressedTensorsLinearMethod` / `CompressedTensorsW8A16Fp8`
+and inside the Humming FP8 linear path or its persistent execution state.
+
+The vLLM v0.29 Humming FP8 kernel allocates a persistent
+`self.locks = torch.zeros(1024, int32, device=...)` once during
+`process_weights_after_loading()` and passes the same lock tensor into every
+`apply_humming_linear(..., locks=self.locks)` call. Neither the kernel wrapper
+nor `apply_humming_linear()` resets the lock tensor before execution.
+
+##### H20 Humming lock-state control
+
+The v13 control records the persistent Humming lock tensor before and after a
+natural eager QKVZ call, then executes two additional same-input eager calls
+with `locks.zero_()` immediately before each call. No CPU fingerprinting is
+performed until all three eager executions have completed.
+
+For each request it records:
+
+- `natural_eager`: normal eager execution using the current lock state;
+- `zeroed_eager1`, `zeroed_eager2`: executions after explicit lock reset;
+- `natural_vs_zeroed_equal`;
+- `zeroed_repeat_equal`;
+- lock fingerprints before/after natural and both zeroed calls.
+
+Run CT/H12 after rebuilding the v13 CT image and reaching READY:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20p-v13-ct.jsonl
+```
+
+Interpretation:
+
+- `zeroed_repeat_equal=true` while the natural eager result differs:
+  persistent Humming lock state is strongly implicated; the next control should
+  patch/reset locks at the kernel boundary and re-run determinism;
+- `zeroed_repeat_equal=false`: resetting locks is insufficient, so continue
+  into Humming GEMM internals/workspace/algorithm behavior;
+- lock pre/post fingerprints differ: confirms the lock workspace is mutated by
+  the GEMM call;
+- lock fingerprints stay equal while outputs differ: the lock tensor is not
+  explaining the nondeterminism and should be deprioritized.
+
 Interpretation:
 
 - `eager_repeat_equal=false`: same-input eager calls are themselves unstable;
