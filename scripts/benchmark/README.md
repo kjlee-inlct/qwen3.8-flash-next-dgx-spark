@@ -1978,6 +1978,34 @@ tensor-level evidence.
 
 ### H20: NVFP4 MoE kernel-format conversion diagnostics
 
+#### H20 experiment ledger
+
+This table is the canonical continuity check for H20. Detailed evidence remains
+in the sections below; every new H20 control must add or update one row here so
+a missing experiment/result is visible immediately.
+
+| Step | Status | Observed result / disposition |
+|---|---|---|
+| H20-A | completed | CT vs ModelOpt converter post tensors matched except discarded pre activation-scale differences; comparator `None == None` bug corrected. |
+| H20-B | completed | Quant config, kernel creation, and fused post-load state matched apart from the same pre activation-scale differences. |
+| H20-C | completed, instrumentation caveat | Runtime tracing first showed CT divergence at layer-0 post, but heavy CPU hashing also perturbed H6; result used only to motivate lighter controls. |
+| H20-D v5/v6 | completed, perturbing twin control | Immediate twin MoE calls were internally stable, but the added second call could perturb later request state. |
+| H20-D v7 | completed | Single-pass control proved CT/H12 was already request-unstable before the layer-0 MoE kernel while H6 remained stable. |
+| v8 | instrumentation failure | Upstream layer-0 probe failed during fullgraph compilation because a `torch.compiler.disable` helper was called from the compiled path. No model result. |
+| v9 | completed | Fullgraph-safe custom-op probe: CT first diverged at layer-0 `attn_out`; H6 remained stable. |
+| v10 | completed | Layer-0 GDN probe localized the first CT mismatch to `mixed_qkvz`; `input_hidden` and `ba` remained equal. |
+| v11 | completed, interpretation refined | QKVZ twin showed compiled-vs-eager differences, but mixed execution contexts prevented same-kernel attribution. |
+| v12 | completed | Two eager same-input QKVZ calls also differed; backend identified as `CompressedTensorsW8A16Fp8` + `HummingFP8ScaledMMLinearKernel`. |
+| v13 | completed | Explicit Humming `locks.zero_()` did not restore determinism; lock fingerprints were unchanged pre/post. Persistent locks deprioritized. |
+| v14 | startup/control-design failure | Global `VLLM_BATCH_INVARIANT=1` was rejected by GDN attention before READY. No QKVZ result. |
+| v15 | completed / localization success | FP8-linear-local `use_batch_invariant=true` reached READY and made compiled, eager-repeat, and cross-request QKVZ outputs all equal. |
+| repair candidate | pending runtime validation | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` profile applies only the local Humming FP8 batch-invariant patch. Next gates: 5-repeat determinism, then 1K/2K/4K/8K/32K sweep. |
+
+Current H20 conclusion: the observed CT/H12 QKVZ instability follows the default
+non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and disappears in the
+v15 local batch-invariant control. This remains a repair candidate until the
+diagnostic-free repair profile passes the normal determinism gates.
+
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
 `convert_to_nvfp4_moe_kernel_format()`.
