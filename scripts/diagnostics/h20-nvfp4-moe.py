@@ -15,6 +15,7 @@ RUNTIME_PREFIX = "QWEN38_H20C_RUNTIME "
 TWIN_PREFIX = "QWEN38_H20D_TWIN "
 SINGLE_PREFIX = "QWEN38_H20D_SINGLE "
 UPSTREAM_PREFIX = "QWEN38_H20U_LAYER0 "
+LINEAR_PREFIX = "QWEN38_H20L_LINEAR "
 RUNTIME_TENSOR_NAMES = (
     "x",
     "topk_weights",
@@ -198,6 +199,221 @@ def trace_runtime(
         f"requests={request_ids} layers={len(layers)}"
     )
     return 0
+
+
+LINEAR_STAGE_NAMES = (
+    "input_hidden",
+    "mixed_qkvz",
+    "ba",
+    "mixed_qkv",
+    "z",
+    "b",
+    "a",
+    "core_attn_out",
+    "output",
+)
+
+
+def parse_linear_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(LINEAR_PREFIX)
+        if pos < 0:
+            continue
+        payload = raw[pos + len(LINEAR_PREFIX) :].strip()
+        records.append(json.loads(payload))
+    return records
+
+
+def _linear_repeat_summary(records: list[dict]) -> dict:
+    by_id = {int(record["request_id"]): record for record in records}
+    if 0 not in by_id or 1 not in by_id:
+        return {"comparable": False, "request_ids": sorted(by_id)}
+    left = by_id[0].get("tensors", {})
+    right = by_id[1].get("tensors", {})
+    present = [
+        name for name in LINEAR_STAGE_NAMES if name in left and name in right
+    ]
+    fields = {name: left[name] == right[name] for name in present}
+    first = next((name for name in present if not fields[name]), None)
+    return {
+        "comparable": True,
+        "present_stages": present,
+        "missing_left": [name for name in LINEAR_STAGE_NAMES if name not in left],
+        "missing_right": [name for name in LINEAR_STAGE_NAMES if name not in right],
+        "fields": fields,
+        "first_mismatch": first,
+        "all_equal": bool(present) and all(fields.values()),
+    }
+
+
+def linear_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    prompt: str,
+    api_base: str,
+) -> int:
+    if not _container_exists(container):
+        print(f"ERROR: H20 linear-attn container not found: {container}", file=sys.stderr)
+        return 2
+
+    trigger = "/tmp/qwen38_h20l_linear.enable"
+    request_id_file = "/tmp/qwen38_h20l_request_id"
+    other_paths = (
+        "/tmp/qwen38_h20c_trace.enable",
+        "/tmp/qwen38_h20d_twin.enable",
+        "/tmp/qwen38_h20d_single.enable",
+        "/tmp/qwen38_h20u_layer0.enable",
+    )
+    try:
+        _docker_exec(
+            container,
+            "rm -f "
+            + " ".join((trigger, request_id_file, *other_paths))
+            + f"; touch {trigger}",
+        )
+        for request_id in (0, 1):
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(f"linear-attn request {request_id + 1}/2 completed")
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+
+    all_records = parse_linear_records(
+        (result.stdout + "\n" + result.stderr).splitlines()
+    )
+    by_id = {int(record.get("request_id", -1)): record for record in all_records}
+    records = [by_id[rid] for rid in (0, 1) if rid in by_id]
+    if len(records) != 2:
+        print(
+            f"ERROR: expected H20 linear-attn records for request ids 0 and 1; "
+            f"found {sorted(by_id)}",
+            file=sys.stderr,
+        )
+        return 2
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    summary = _linear_repeat_summary(records)
+    print(f"wrote 2 linear-attn records to {output}")
+    print(
+        f"linear_repeat: all_equal={summary.get('all_equal')} "
+        f"first_mismatch={summary.get('first_mismatch')} "
+        f"fields={summary.get('fields')}"
+    )
+    if summary.get("missing_left") or summary.get("missing_right"):
+        print(
+            "linear_path_missing: "
+            f"request0={summary.get('missing_left')} "
+            f"request1={summary.get('missing_right')}"
+        )
+    return 0
+
+
+def compare_linear(
+    ct_path: Path,
+    modelopt_path: Path,
+    output: Path | None,
+) -> int:
+    ct_records = load_jsonl(ct_path)
+    mo_records = load_jsonl(modelopt_path)
+    ct_repeat = _linear_repeat_summary(ct_records)
+    mo_repeat = _linear_repeat_summary(mo_records)
+    ct = {int(record["request_id"]): record for record in ct_records}
+    mo = {int(record["request_id"]): record for record in mo_records}
+    common = sorted(set(ct) & set(mo))
+    cross = []
+    for request_id in common:
+        ct_t = ct[request_id].get("tensors", {})
+        mo_t = mo[request_id].get("tensors", {})
+        present = [
+            name
+            for name in LINEAR_STAGE_NAMES
+            if name in ct_t and name in mo_t
+        ]
+        fields = {name: ct_t[name] == mo_t[name] for name in present}
+        cross.append(
+            {
+                "request_id": request_id,
+                "present_stages": present,
+                "fields": fields,
+                "first_mismatch": next(
+                    (name for name in present if not fields[name]), None
+                ),
+                "all_equal": bool(present) and all(fields.values()),
+            }
+        )
+
+    report = {
+        "schema": 1,
+        "ct_file": str(ct_path),
+        "modelopt_file": str(modelopt_path),
+        "ct_repeat": ct_repeat,
+        "modelopt_repeat": mo_repeat,
+        "cross": cross,
+    }
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote linear-attn comparison report to {output}")
+
+    for label, row in (("ct_repeat", ct_repeat), ("modelopt_repeat", mo_repeat)):
+        if row.get("comparable"):
+            print(
+                f"{label}: all_equal={row['all_equal']} "
+                f"first_mismatch={row['first_mismatch']} "
+                f"fields={row['fields']}"
+            )
+    for row in cross:
+        print(
+            f"cross request={row['request_id']} "
+            f"all_equal={row['all_equal']} "
+            f"first_mismatch={row['first_mismatch']} "
+            f"fields={row['fields']}"
+        )
+    return 0 if common else 2
 
 
 def parse_upstream_records(lines: list[str]) -> list[dict]:
@@ -1145,6 +1361,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_runtime_compare.add_argument("--modelopt", type=Path, required=True)
     p_runtime_compare.add_argument("--output", type=Path)
 
+    p_linear = sub.add_parser("linear-probe")
+    p_linear.add_argument("--container", required=True)
+    p_linear.add_argument("--model", required=True)
+    p_linear.add_argument("--output", type=Path, required=True)
+    p_linear.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_linear.add_argument("--api-base", default="http://127.0.0.1:8888")
+
+    p_linear_compare = sub.add_parser("linear-compare")
+    p_linear_compare.add_argument("--ct", type=Path, required=True)
+    p_linear_compare.add_argument("--modelopt", type=Path, required=True)
+    p_linear_compare.add_argument("--output", type=Path)
+
     p_upstream = sub.add_parser("upstream-probe")
     p_upstream.add_argument("--container", required=True)
     p_upstream.add_argument("--model", required=True)
@@ -1200,6 +1428,23 @@ def main() -> int:
             prompt=args.prompt,
             api_base=args.api_base,
         )
+    if args.command == "linear-probe":
+        return linear_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
+    if args.command == "linear-compare":
+        missing = [str(path) for path in (args.ct, args.modelopt) if not path.is_file()]
+        if missing:
+            print(
+                "ERROR: linear-attn probe file(s) missing: " + ", ".join(missing),
+                file=sys.stderr,
+            )
+            return 2
+        return compare_linear(args.ct, args.modelopt, args.output)
     if args.command == "upstream-probe":
         return upstream_probe(
             container=args.container,
