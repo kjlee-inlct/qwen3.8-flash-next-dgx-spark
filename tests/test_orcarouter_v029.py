@@ -489,10 +489,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v9", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v10", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
-        self.assertIn("modelopt-nvfp4-convert-diag-v9", mo)
+        self.assertIn("modelopt-nvfp4-convert-diag-v10", mo)
         self.assertIn("hybrid-h20-ct-convert-diag", runtime)
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
@@ -825,6 +825,91 @@ class AfterLayer:
             self.assertNotIn("\n@torch.compiler.disable\n", patched)
             self.assertIn("if 0 not in _QWEN38_H20U_PENDING", patched)
 
+    def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-h20-linear-attn-layer0.py"
+        source = """import os
+from typing import Literal
+import torch
+logger = init_logger(__name__)
+class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
+    def __init__(self, config, vllm_config, prefix=""):
+        super().__init__(config, vllm_config, prefix)
+
+        self.num_k_heads = config.linear_num_key_heads
+
+    def forward_cuda(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        num_tokens = hidden_states.size(0)
+        # ============================================================
+        # Part 1: Input Projection
+        # ============================================================
+        mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
+        ba, _ = self.in_proj_ba(hidden_states)
+
+        use_fused_gdn_decode = (
+            self.enable_fused_gdn_decode
+            and hidden_states.dtype == torch.bfloat16
+            and self.norm.weight.dtype in (torch.bfloat16, torch.float32)
+        )
+        if use_fused_gdn_decode:
+            core_attn_out = torch.zeros((num_tokens, 1, 128))
+            torch.ops.vllm.qwen_gdn_attention_core_fused_norm_packed(
+                mixed_qkvz,
+                ba,
+                core_attn_out,
+                layer_name=_encode_layer_name(self.prefix),
+            )
+            output, _ = self.out_proj(core_attn_out.flatten(-2))
+            return output
+
+        if self.gqa_interleaved_layout:
+            query, key, value, z, b, a = self.fix_query_key_value_ordering(
+                mixed_qkvz, ba
+            )
+            mixed_qkv = torch.cat((query, key, value), dim=-1)
+        else:
+            qkv_size = (self.key_dim * 2 + self.value_dim) // self.tp_size
+            z_size = self.value_dim // self.tp_size
+            mixed_qkv, z = mixed_qkvz.split([qkv_size, z_size], dim=-1)
+            z = z.reshape(z.size(0), -1, self.head_v_dim)
+            b, a = self.split_ba(ba)
+
+        # ============================================================
+        # Part 2: Core Attention (Custom Op)
+        # ============================================================
+        core_attn_out = torch.zeros((num_tokens, 1, 128))
+        torch.ops.vllm.qwen_gdn_attention_core(
+            mixed_qkv,
+            b.contiguous(),
+            a.contiguous(),
+            core_attn_out,
+            layer_name=_encode_layer_name(self.prefix),
+        )
+
+        # ============================================================
+        # Part 3: Output Projection
+        # ============================================================
+        return self._output_projection(core_attn_out, z)
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "qwen_gdn_linear_attn.py"
+            target.write_text(source, encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(patch), str(target)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patched = target.read_text(encoding="utf-8")
+            compile(patched, str(target), "exec")
+            self.assertIn("QWEN38_H20L_LINEAR ", patched)
+            self.assertIn('"qwen38_h20l::capture"', patched)
+            self.assertIn("_qwen38_h20l_capture(mixed_qkvz, 1", patched)
+            self.assertIn("_qwen38_h20l_capture(ba, 2", patched)
+            self.assertIn("_qwen38_h20l_capture(core_attn_out, 7", patched)
+            self.assertIn("_qwen38_h20l_capture(output, 8", patched)
+
     def test_h20_upstream_dockerfiles_smoke_fullgraph_custom_op(self) -> None:
         for name in (
             "Dockerfile.v029-h20-ct-convert-diag",
@@ -867,6 +952,12 @@ class AfterLayer:
         self.assertIn("entry_hidden", script)
         self.assertIn("attn_block_input", script)
         self.assertIn("mlp_block_input", script)
+        self.assertIn('sub.add_parser("linear-probe")', script)
+        self.assertIn('sub.add_parser("linear-compare")', script)
+        self.assertIn("/tmp/qwen38_h20l_linear.enable", script)
+        self.assertIn("QWEN38_H20L_LINEAR ", script)
+        self.assertIn("mixed_qkvz", script)
+        self.assertIn("core_attn_out", script)
 
 
 if __name__ == "__main__":
