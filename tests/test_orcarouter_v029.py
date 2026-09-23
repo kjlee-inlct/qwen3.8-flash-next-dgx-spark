@@ -836,6 +836,17 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         super().__init__(config, vllm_config, prefix)
 
         self.num_k_heads = config.linear_num_key_heads
+        self.hidden_size = 4096
+        self.key_dim = 1024
+        self.value_dim = 1024
+        self.quant_config = None
+        self.in_proj_qkvz = self.create_qkvz_proj(
+            hidden_size=self.hidden_size,
+            key_dim=self.key_dim,
+            value_dim=self.value_dim,
+            quant_config=self.quant_config,
+            prefix=f"{prefix}.in_proj_qkvz",
+        )
 
     def forward_cuda(self, hidden_states: torch.Tensor) -> torch.Tensor:
         num_tokens = hidden_states.size(0)
