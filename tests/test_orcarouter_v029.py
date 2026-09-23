@@ -503,6 +503,32 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("h20_image_ok()", runtime)
 
 
+    def test_h20_fp8_batch_invariant_repair_profile_is_diagnostic_free(self) -> None:
+        dockerfile = (
+            ROOT / "scripts" / "Dockerfile.v029-h20-fp8-bi-repair"
+        ).read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn(
+            "FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1",
+            dockerfile,
+        )
+        self.assertIn(
+            "patch-v029-h20-humming-fp8-batch-invariant.py",
+            dockerfile,
+        )
+        self.assertIn(
+            'LABEL qwen38.h20repair="ct-h12-humming-fp8-batch-invariant-v1"',
+            dockerfile,
+        )
+        self.assertNotIn("patch-v029-h20-linear-attn-layer0.py", dockerfile)
+        self.assertNotIn("patch-v029-h20c-runtime-moe-trace.py", dockerfile)
+        self.assertNotIn("patch-v029-h20-upstream-layer0.py", dockerfile)
+        self.assertIn("hybrid-h20-ct-fp8-bi-repair", runtime)
+        self.assertIn("qwen38-h20-ct-fp8-bi-repair-v029", runtime)
+        self.assertIn("vllm-orcarouter-v029-h20-fp8-bi-repair:v1", runtime)
+        self.assertIn("ct-h12-humming-fp8-batch-invariant-v1", runtime)
+        self.assertIn("runtime-repair-candidate", runtime)
+
     def test_h20_patcher_executes_on_v029_ct_and_modelopt_shapes(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py"
         ct_block = """import torch
