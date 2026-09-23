@@ -315,7 +315,7 @@ h20_image_ok() {
   case "${PROFILE_CASE}" in
     hybrid-h20-ct-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
-      [[ "${label}" == "ct-nvfp4-convert-diag-v13" ]]
+      [[ "${label}" == "ct-nvfp4-convert-diag-v14" ]]
       ;;
     hybrid-h20-modelopt-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
