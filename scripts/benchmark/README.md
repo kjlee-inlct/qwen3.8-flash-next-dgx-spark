@@ -2002,6 +2002,8 @@ a missing experiment/result is visible immediately.
 | repair candidate | completed / FAIL | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` reached READY, but 8192/128×5 produced 5 unique hashes. The 1K/2K/4K/8K/32K sweep also failed at every size (4,5,5,5,5 unique hashes). FP8-local batch-invariant is insufficient as an end-to-end repair. |
 | v15 end-to-end control | completed / FAIL | The v15 diagnostic image itself also failed 8192/128×5 with 3 unique hashes. QKVZ-local stability does not imply whole-model determinism; resume localization downstream of the now-stable QKVZ boundary. |
 | v15 downstream GDN probe | completed / stable | Reusing the existing layer-0 linear-attention probe on v15 gave `all_equal=true`: `input_hidden`, `mixed_qkvz`, `ba`, `core_attn_out`, and final attention `output` all matched across requests. The remaining end-to-end divergence is downstream of layer-0 attention. |
+| v15 upstream layer-0 probe | completed / stable | `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out` all matched across requests. Layer 0 is stable end-to-end under the v15 diagnostic image. |
+| v16 layer-1 upstream probe | pending | Extend the same fullgraph-safe upstream probe to layers 0 and 1, emit layer-indexed records, and print per-layer repeat summaries immediately. Goal: determine whether divergence is already present at layer-1 entry or first appears inside layer 1. |
 
 Current H20 conclusion: the observed layer-0 CT/H12 QKVZ instability follows
 the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
@@ -2854,12 +2856,29 @@ The two requests matched at every captured stage:
 - overall `all_equal=true`, with no first mismatch.
 
 The missing `mixed_qkv/z/b/a` split stages are expected because the active
-runtime uses the fused GDN decode path. This result moves the remaining
-end-to-end divergence beyond layer-0 attention. The next control should reuse
-the existing upstream layer-0 probe and compare `entry_hidden`,
-`attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out`.
-Do not create a v16 image unless that probe identifies a boundary that needs new
-instrumentation.
+runtime uses the fused GDN decode path. The existing upstream probe was then
+reused on the same v15 image and layer 0 also matched at every captured
+decoder boundary: `entry_hidden`, `attn_block_input`, `attn_out`,
+`mlp_block_input`, and `mlp_out` were all equal across the two requests.
+
+Therefore the remaining end-to-end divergence is strictly downstream of layer
+0 in this control. H20 v16 extends only the same upstream custom-op capture to
+layer 1. No new repair behavior is introduced. The collector now emits
+layer-indexed records and prints one repeat summary per captured layer:
+
+```text
+upstream_repeat layer=0 all_equal=...
+upstream_repeat layer=1 all_equal=...
+```
+
+Interpretation:
+
+- layer 0 stable, layer 1 `entry_hidden=false`: divergence was introduced
+  between layer 0 output handoff and layer 1 entry;
+- layer 1 entry stable but a later layer-1 field differs: localize within
+  layer 1 using the first mismatching boundary;
+- layers 0 and 1 both stable: extend the same pattern farther downstream rather
+  than adding another repair patch.
 
 Before introducing another repair patch, run the ordinary end-to-end
 determinism workload on the v15 diagnostic image itself. Use the same 8192/128

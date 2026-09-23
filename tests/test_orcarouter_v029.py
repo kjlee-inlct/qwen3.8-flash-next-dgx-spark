@@ -489,7 +489,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v15", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v16", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -849,7 +849,8 @@ class AfterLayer:
             self.assertIn("_qwen38_h20u_capture(block_input, 3, self.layer_idx)", patched)
             self.assertIn("_qwen38_h20u_capture(mlp_out, 4, self.layer_idx)", patched)
             self.assertNotIn("\n@torch.compiler.disable\n", patched)
-            self.assertIn("if 0 not in _QWEN38_H20U_PENDING", patched)
+            self.assertIn("self.layer_idx in (0, 1)", patched)
+            self.assertIn('"layer_idx": layer_idx', patched)
 
     def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-h20-linear-attn-layer0.py"
@@ -968,7 +969,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v15"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v16"', dockerfile)
         self.assertIn('class HummingFP8ScaledMMLinearKernel', patch)
         self.assertIn('_qwen38_h20_compute["use_batch_invariant"] = True', patch)
         self.assertIn('class HummingInt8ScaledMMLinearKernel', patch)
@@ -1019,6 +1020,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("shared_experts_input", script)
         self.assertIn("input {name}", script)
         self.assertIn('sub.add_parser("upstream-probe")', script)
+        self.assertIn("upstream_repeat layer=", script)
+        self.assertIn('record.get("layer_idx", 0)', script)
         self.assertIn('sub.add_parser("upstream-compare")', script)
         self.assertIn("/tmp/qwen38_h20u_layer0.enable", script)
         self.assertIn("QWEN38_H20U_LAYER0 ", script)

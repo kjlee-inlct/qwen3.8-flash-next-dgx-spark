@@ -628,12 +628,26 @@ def upstream_probe(
     records = parse_upstream_records(
         (result.stdout + "\n" + result.stderr).splitlines()
     )
-    by_id = {int(record.get("request_id", -1)): record for record in records}
-    wanted = [by_id[rid] for rid in (0, 1) if rid in by_id]
-    if len(wanted) != 2:
+    keyed = {
+        (int(record.get("layer_idx", 0)), int(record.get("request_id", -1))): record
+        for record in records
+    }
+    layers = sorted({layer for layer, _ in keyed})
+    wanted = [
+        keyed[(layer, rid)]
+        for layer in layers
+        for rid in (0, 1)
+        if (layer, rid) in keyed
+    ]
+    missing = [
+        (layer, rid)
+        for layer in layers
+        for rid in (0, 1)
+        if (layer, rid) not in keyed
+    ]
+    if not layers or missing:
         print(
-            f"ERROR: expected H20 upstream records for request ids 0 and 1; "
-            f"found {sorted(by_id)}",
+            f"ERROR: incomplete H20 upstream records; layers={layers} missing={missing}",
             file=sys.stderr,
         )
         return 2
@@ -643,7 +657,23 @@ def upstream_probe(
         "".join(json.dumps(record, sort_keys=True) + "\n" for record in wanted),
         encoding="utf-8",
     )
-    print(f"wrote 2 upstream records to {output}")
+    print(f"wrote {len(wanted)} upstream records to {output}")
+    names = (
+        "entry_hidden",
+        "attn_block_input",
+        "attn_out",
+        "mlp_block_input",
+        "mlp_out",
+    )
+    for layer in layers:
+        a = keyed[(layer, 0)].get("tensors", {})
+        b = keyed[(layer, 1)].get("tensors", {})
+        fields = {name: a.get(name) == b.get(name) for name in names}
+        first = next((name for name in names if not fields[name]), None)
+        print(
+            f"upstream_repeat layer={layer} all_equal={all(fields.values())} "
+            f"first_mismatch={first} fields={fields}"
+        )
     return 0
 
 
@@ -659,31 +689,43 @@ def compare_upstream(
         "mlp_block_input",
         "mlp_out",
     )
-    ct_records = {int(r["request_id"]): r for r in load_jsonl(ct_path)}
-    mo_records = {int(r["request_id"]): r for r in load_jsonl(modelopt_path)}
-    common = sorted(set(ct_records) & set(mo_records))
-
-    def repeat_fields(records: dict[int, dict]) -> dict:
-        if 0 not in records or 1 not in records:
-            return {"comparable": False}
-        a = records[0].get("tensors", {})
-        b = records[1].get("tensors", {})
-        fields = {name: a.get(name) == b.get(name) for name in names}
-        first = next((name for name in names if not fields[name]), None)
+    def key_records(path: Path) -> dict[tuple[int, int], dict]:
         return {
-            "comparable": True,
-            "fields": fields,
-            "first_mismatch": first,
-            "all_equal": all(fields.values()),
+            (int(r.get("layer_idx", 0)), int(r["request_id"])): r
+            for r in load_jsonl(path)
         }
 
+    ct_records = key_records(ct_path)
+    mo_records = key_records(modelopt_path)
+    common = sorted(set(ct_records) & set(mo_records))
+
+    def repeat_fields(records: dict[tuple[int, int], dict]) -> dict[int, dict]:
+        layers = sorted({layer for layer, _ in records})
+        result = {}
+        for layer in layers:
+            if (layer, 0) not in records or (layer, 1) not in records:
+                result[layer] = {"comparable": False}
+                continue
+            a = records[(layer, 0)].get("tensors", {})
+            b = records[(layer, 1)].get("tensors", {})
+            fields = {name: a.get(name) == b.get(name) for name in names}
+            first = next((name for name in names if not fields[name]), None)
+            result[layer] = {
+                "comparable": True,
+                "fields": fields,
+                "first_mismatch": first,
+                "all_equal": all(fields.values()),
+            }
+        return result
+
     cross = []
-    for request_id in common:
-        ct_t = ct_records[request_id].get("tensors", {})
-        mo_t = mo_records[request_id].get("tensors", {})
+    for layer_idx, request_id in common:
+        ct_t = ct_records[(layer_idx, request_id)].get("tensors", {})
+        mo_t = mo_records[(layer_idx, request_id)].get("tensors", {})
         fields = {name: ct_t.get(name) == mo_t.get(name) for name in names}
         cross.append(
             {
+                "layer_idx": layer_idx,
                 "request_id": request_id,
                 "fields": fields,
                 "first_mismatch": next(
@@ -711,15 +753,15 @@ def compare_upstream(
         print(f"wrote upstream comparison report to {output}")
 
     for label in ("ct_repeat", "modelopt_repeat"):
-        row = report[label]
-        if row.get("comparable"):
-            print(
-                f"{label}: all_equal={row['all_equal']} "
-                f"first_mismatch={row['first_mismatch']} fields={row['fields']}"
-            )
+        for layer_idx, row in sorted(report[label].items()):
+            if row.get("comparable"):
+                print(
+                    f"{label} layer={layer_idx}: all_equal={row['all_equal']} "
+                    f"first_mismatch={row['first_mismatch']} fields={row['fields']}"
+                )
     for row in cross:
         print(
-            f"cross request={row['request_id']} all_equal={row['all_equal']} "
+            f"cross layer={row['layer_idx']} request={row['request_id']} all_equal={row['all_equal']} "
             f"first_mismatch={row['first_mismatch']} fields={row['fields']}"
         )
     return 0 if common else 2
