@@ -905,10 +905,10 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             compile(patched, str(target), "exec")
             self.assertIn("QWEN38_H20L_LINEAR ", patched)
             self.assertIn('"qwen38_h20l::capture"', patched)
-            self.assertIn("_qwen38_h20l_capture(mixed_qkvz, 1", patched)
-            self.assertIn("_qwen38_h20l_capture(ba, 2", patched)
-            self.assertIn("_qwen38_h20l_capture(core_attn_out, 7", patched)
-            self.assertIn("_qwen38_h20l_capture(output, 8", patched)
+            self.assertIn("mixed_qkvz, 1, self._qwen38_h20_layer_idx", patched)
+            self.assertIn("_qwen38_h20l_capture(ba, 2, self._qwen38_h20_layer_idx)", patched)
+            self.assertIn("core_attn_out, 7, self._qwen38_h20_layer_idx", patched)
+            self.assertIn("output, 8, self._qwen38_h20_layer_idx", patched)
 
     def test_h20_upstream_dockerfiles_smoke_fullgraph_custom_op(self) -> None:
         for name in (
