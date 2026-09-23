@@ -16,6 +16,7 @@ TWIN_PREFIX = "QWEN38_H20D_TWIN "
 SINGLE_PREFIX = "QWEN38_H20D_SINGLE "
 UPSTREAM_PREFIX = "QWEN38_H20U_LAYER0 "
 LINEAR_PREFIX = "QWEN38_H20L_LINEAR "
+QKVZ_PREFIX = "QWEN38_H20P_QKVZ "
 RUNTIME_TENSOR_NAMES = (
     "x",
     "topk_weights",
@@ -212,6 +213,119 @@ LINEAR_STAGE_NAMES = (
     "core_attn_out",
     "output",
 )
+
+
+def parse_qkvz_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(QKVZ_PREFIX)
+        if pos < 0:
+            continue
+        records.append(json.loads(raw[pos + len(QKVZ_PREFIX) :].strip()))
+    return records
+
+
+def qkvz_twin_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    prompt: str,
+    api_base: str,
+) -> int:
+    if not _container_exists(container):
+        print(f"ERROR: H20 QKVZ container not found: {container}", file=sys.stderr)
+        return 2
+
+    trigger = "/tmp/qwen38_h20p_qkvz_twin.enable"
+    request_id_file = "/tmp/qwen38_h20p_request_id"
+    other_paths = (
+        "/tmp/qwen38_h20c_trace.enable",
+        "/tmp/qwen38_h20d_twin.enable",
+        "/tmp/qwen38_h20d_single.enable",
+        "/tmp/qwen38_h20u_layer0.enable",
+        "/tmp/qwen38_h20l_linear.enable",
+    )
+    try:
+        _docker_exec(
+            container,
+            "rm -f "
+            + " ".join((trigger, request_id_file, *other_paths))
+            + f"; touch {trigger}",
+        )
+        for request_id in (0, 1):
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(f"qkvz-twin request {request_id + 1}/2 completed")
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+    lines = (result.stdout + "\n" + result.stderr).splitlines()
+    all_records = parse_qkvz_records(lines)
+    by_id = {int(r.get("request_id", -1)): r for r in all_records}
+    records = [by_id[rid] for rid in (0, 1) if rid in by_id]
+    if len(records) != 2:
+        print(
+            f"ERROR: expected H20 QKVZ records for request ids 0 and 1; "
+            f"found {sorted(by_id)}",
+            file=sys.stderr,
+        )
+        return 2
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(r, sort_keys=True) + "\n" for r in records),
+        encoding="utf-8",
+    )
+    meta = [line for line in lines if "QWEN38_H20P_META " in line]
+    if meta:
+        print(meta[-1].strip())
+    for record in records:
+        print(
+            f"qkvz_twin request={record['request_id']} "
+            f"output_equal={record.get('output_equal')}"
+        )
+    left, right = records
+    print(
+        "qkvz_repeat: "
+        f"input_equal={left.get('input') == right.get('input')} "
+        f"output1_equal={left.get('output1') == right.get('output1')}"
+    )
+    print(f"wrote 2 QKVZ twin records to {output}")
+    return 0
 
 
 def parse_linear_records(lines: list[str]) -> list[dict]:
@@ -1361,6 +1475,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_runtime_compare.add_argument("--modelopt", type=Path, required=True)
     p_runtime_compare.add_argument("--output", type=Path)
 
+    p_qkvz = sub.add_parser("qkvz-twin-probe")
+    p_qkvz.add_argument("--container", required=True)
+    p_qkvz.add_argument("--model", required=True)
+    p_qkvz.add_argument("--output", type=Path, required=True)
+    p_qkvz.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_qkvz.add_argument("--api-base", default="http://127.0.0.1:8888")
+
     p_linear = sub.add_parser("linear-probe")
     p_linear.add_argument("--container", required=True)
     p_linear.add_argument("--model", required=True)
@@ -1425,6 +1546,14 @@ def main() -> int:
             model=args.model,
             output=args.output,
             repeats=args.repeats,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
+    if args.command == "qkvz-twin-probe":
+        return qkvz_twin_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
             prompt=args.prompt,
             api_base=args.api_base,
         )
