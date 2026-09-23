@@ -2712,39 +2712,61 @@ The Humming linear wrapper derives its compute config from
 the Humming backend. The repository did not set this environment variable, so
 the preceding H20 runs used the default non-batch-invariant Humming mode.
 
-##### H20 Humming batch-invariant control
+##### H20 Humming batch-invariant controls
 
-The v14 CT diagnostic image differs from the v13 CT image only by:
+Observed v14 startup result on 2026-09-23:
 
-```text
-VLLM_BATCH_INVARIANT=1
+- the CT v14 image built successfully and carried
+  `VLLM_BATCH_INVARIANT=1`;
+- EngineCore loaded the model but failed before READY;
+- the root cause was
+  `RuntimeError: VLLM batch_invariant mode is not supported for GDN_ATTN.`;
+- therefore no v14 QKVZ probe result exists.
+
+This is a control-design failure rather than an H20 runtime result. The global
+environment variable affects the GDN attention backend selector in addition to
+the Humming FP8 linear kernel, so it cannot be used for this model.
+
+##### H20 Humming FP8-local batch-invariant control
+
+The v15 CT image removes the global `VLLM_BATCH_INVARIANT=1` setting. Instead,
+it patches only
+`HummingFP8ScaledMMLinearKernel.process_weights_after_loading()` after the
+normal Humming FP8 compute config is created. The patch parses that config,
+sets only:
+
+```json
+{"use_batch_invariant": true}
 ```
 
-The same H12 checkpoint, H20 patches, QKVZ probe, max sequence count, MTP
-configuration, and runtime arguments remain unchanged. This is intentionally a
-global Humming compute-mode control because the Humming compute config is
-constructed during post-load initialization.
+and serializes it back into the FP8 linear kernel's `self.compute_config`.
+The GDN attention selector continues to see the default global
+batch-invariant setting and should therefore start normally.
 
-Run the existing QKVZ probe after rebuilding and starting the v14 CT image:
+The patch intentionally does not modify
+`HummingInt8ScaledMMLinearKernel`, the Humming MoE backend, the H12
+checkpoint, or any H20 probe logic. Startup emits
+`QWEN38_H20Q_FP8_BATCH_INVARIANT` with the resulting FP8 compute config.
+
+Run the existing QKVZ probe after rebuilding and starting the v15 CT image:
 
 ```bash
 python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
   --container qwen38-h20-ct-convert-diag-v029 \
   --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
-  --output scripts/benchmark/results/local/h20p-v14-ct.jsonl
+  --output scripts/benchmark/results/local/h20p-v15-ct.jsonl
 ```
 
 Interpretation:
 
-- same-input eager outputs become stable under v14: the Humming
-  batch-invariant compute mode is strongly implicated and should be promoted
-  to a repair candidate, followed by the normal determinism suite;
-- eager outputs remain unstable: batch-invariant mode is insufficient and the
-  next H20 probe should move into the Humming GEMM implementation/algorithm
-  path or test an alternate W8A16 FP8 backend;
-- production compiled output becomes repeat-stable while eager remains
-  unstable: retain the distinction between the production path and diagnostic
-  eager calls before adopting a repair.
+- READY succeeds and same-input eager outputs become stable: Humming FP8
+  batch-invariant compute mode is strongly implicated and becomes a repair
+  candidate for the W8A16 QKVZ path;
+- READY succeeds but eager outputs remain unstable: batch-invariant mode is
+  insufficient, so continue into Humming GEMM internals or an alternate FP8
+  backend control;
+- startup still reports a GDN batch-invariant rejection: the local patch leaked
+  into the global selector and must be fixed before interpreting any probe.
 
 Interpretation:
 
