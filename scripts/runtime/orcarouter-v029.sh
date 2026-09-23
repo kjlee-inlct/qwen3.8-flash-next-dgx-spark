@@ -17,7 +17,7 @@ REMOVE_AFTER_STOP=0
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, hybrid-h19-ct-combined-lifecycle, hybrid-h20-ct-convert-diag, or hybrid-h20-modelopt-convert-diag\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
+    --profile) [[ $# -ge 2 ]] || { printf 'ERROR: --profile requires orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, hybrid-h19-ct-combined-lifecycle, hybrid-h20-ct-convert-diag, hybrid-h20-ct-fp8-bi-repair, or hybrid-h20-modelopt-convert-diag\n' >&2; exit 2; }; PROFILE_CASE="$2"; shift ;;
     --remove) REMOVE_AFTER_STOP=1 ;;
     -h|--help) ACTION=help ;;
     *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -49,17 +49,18 @@ case "${PROFILE_CASE}" in
   hybrid-h18-ct-input-scale-lifecycle) NAME="qwen38-h18-ct-input-scale-lifecycle-v029"; IMAGE="vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1" ;;
   hybrid-h19-ct-combined-lifecycle) NAME="qwen38-h19-ct-combined-lifecycle-v029"; IMAGE="vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1" ;;
   hybrid-h20-ct-convert-diag) NAME="qwen38-h20-ct-convert-diag-v029"; IMAGE="vllm-orcarouter-v029-h20-ct-convert-diag:v1" ;;
+  hybrid-h20-ct-fp8-bi-repair) NAME="qwen38-h20-ct-fp8-bi-repair-v029"; IMAGE="vllm-orcarouter-v029-h20-fp8-bi-repair:v1" ;;
   hybrid-h20-modelopt-convert-diag) NAME="qwen38-h20-modelopt-convert-diag-v029"; IMAGE="vllm-orcarouter-v029-h20-modelopt-convert-diag:v1" ;;
-  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, hybrid-h19-ct-combined-lifecycle, hybrid-h20-ct-convert-diag, or hybrid-h20-modelopt-convert-diag\n' >&2; exit 2 ;;
+  *) printf 'ERROR: --profile must be orcarouter, mazinb, hybrid-residual, hybrid-group0, hybrid-quant-layout, hybrid-h4-down, hybrid-h4-gate-up, hybrid-h4-all, hybrid-h5-neutral-input, hybrid-h6-w4a16, hybrid-h7-group-metadata, hybrid-h8-ct-block, hybrid-h9-ct-modelweight, hybrid-h10-ct-global-scale, hybrid-h11-ct-packed-modelweight, hybrid-h12-ct-postload-preserve, hybrid-h13-ct-input-scale, hybrid-h14-ct-input-scale-postload, hybrid-h15-mtp-off, hybrid-h16-single-seq, hybrid-h17-ct-weight-scale2-postload, hybrid-h18-ct-input-scale-lifecycle, hybrid-h19-ct-combined-lifecycle, hybrid-h20-ct-convert-diag, hybrid-h20-ct-fp8-bi-repair, or hybrid-h20-modelopt-convert-diag\n' >&2; exit 2 ;;
 esac
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag]
-  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag]
-  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag] [--remove]
-  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-modelopt-convert-diag]
+  ./scripts/runtime/orcarouter-v029.sh preflight [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-ct-fp8-bi-repair|hybrid-h20-modelopt-convert-diag]
+  ./scripts/runtime/orcarouter-v029.sh start [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-ct-fp8-bi-repair|hybrid-h20-modelopt-convert-diag]
+  ./scripts/runtime/orcarouter-v029.sh stop [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-ct-fp8-bi-repair|hybrid-h20-modelopt-convert-diag] [--remove]
+  ./scripts/runtime/orcarouter-v029.sh status [--profile orcarouter|mazinb|hybrid-residual|hybrid-group0|hybrid-quant-layout|hybrid-h4-down|hybrid-h4-gate-up|hybrid-h4-all|hybrid-h5-neutral-input|hybrid-h6-w4a16|hybrid-h7-group-metadata|hybrid-h8-ct-block|hybrid-h9-ct-modelweight|hybrid-h10-ct-global-scale|hybrid-h11-ct-packed-modelweight|hybrid-h12-ct-postload-preserve|hybrid-h13-ct-input-scale|hybrid-h14-ct-input-scale-postload|hybrid-h15-mtp-off|hybrid-h16-single-seq|hybrid-h17-ct-weight-scale2-postload|hybrid-h18-ct-input-scale-lifecycle|hybrid-h19-ct-combined-lifecycle|hybrid-h20-ct-convert-diag|hybrid-h20-ct-fp8-bi-repair|hybrid-h20-modelopt-convert-diag]
 
 Experiment controls:
   checkpoint        installed OrcaRouter, downloaded mazinb, or local BF16 hybrid
@@ -110,7 +111,7 @@ load_manifest() {
 load_source() {
   BASE_MODEL_DIR=""
   BASE_MODEL_REVISION=""
-  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle || "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
+  if [[ "${PROFILE_CASE}" == orcarouter || "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle || "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag || "${PROFILE_CASE}" == hybrid-h20-ct-fp8-bi-repair ]]; then
     load_manifest || return 1
     BASE_MODEL_DIR="${MODEL_DIR}"
     BASE_MODEL_REVISION="${MODEL_REVISION}"
@@ -179,6 +180,11 @@ load_source() {
       SERVED_NAME="hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       MODEL_REPO="local/h20-ct-convert-diag-over-h12"
       MODEL_REVISION="runtime-diagnostic"
+    elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-fp8-bi-repair ]]; then
+      MODEL_PROFILE="hybrid-h20-ct-fp8-bi-repair"
+      SERVED_NAME="hybrid-h20-ct-fp8-bi-repair/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      MODEL_REPO="local/h20-ct-fp8-bi-repair-over-h12"
+      MODEL_REVISION="runtime-repair-candidate"
     fi
     return 0
   fi
@@ -317,6 +323,10 @@ h20_image_ok() {
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
       [[ "${label}" == "ct-nvfp4-convert-diag-v15" ]]
       ;;
+    hybrid-h20-ct-fp8-bi-repair)
+      label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20repair" }}' 2>/dev/null || true)"
+      [[ "${label}" == "ct-h12-humming-fp8-batch-invariant-v1" ]]
+      ;;
     hybrid-h20-modelopt-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
       [[ "${label}" == "modelopt-nvfp4-convert-diag-v13" ]]
@@ -335,7 +345,7 @@ h9_image_ok() {
 }
 
 source_manifest_ok() {
-  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle || "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h8-ct-block || "${PROFILE_CASE}" == hybrid-h9-ct-modelweight || "${PROFILE_CASE}" == hybrid-h10-ct-global-scale || "${PROFILE_CASE}" == hybrid-h11-ct-packed-modelweight || "${PROFILE_CASE}" == hybrid-h12-ct-postload-preserve || "${PROFILE_CASE}" == hybrid-h13-ct-input-scale || "${PROFILE_CASE}" == hybrid-h14-ct-input-scale-postload || "${PROFILE_CASE}" == hybrid-h15-mtp-off || "${PROFILE_CASE}" == hybrid-h16-single-seq || "${PROFILE_CASE}" == hybrid-h17-ct-weight-scale2-postload || "${PROFILE_CASE}" == hybrid-h18-ct-input-scale-lifecycle || "${PROFILE_CASE}" == hybrid-h19-ct-combined-lifecycle || "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag || "${PROFILE_CASE}" == hybrid-h20-ct-fp8-bi-repair ]]; then
     return 0
   fi
 
@@ -561,6 +571,8 @@ preflight() {
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h19-ct-combined-lifecycle scripts/\n' "${IMAGE}"
     elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag ]]; then
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h20-ct-convert-diag scripts/\n' "${IMAGE}"
+    elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-fp8-bi-repair ]]; then
+      printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h20-fp8-bi-repair scripts/\n' "${IMAGE}"
     elif [[ "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
       printf '    build with    : docker build --no-cache -t %s -f scripts/Dockerfile.v029-h20-modelopt-convert-diag scripts/\n' "${IMAGE}"
     else

@@ -1,0 +1,24 @@
+# H20 repair candidate: H12 CT + local batch-invariant Humming FP8 linear.
+FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG HUM=${SP}/vllm/model_executor/kernels/linear/scaled_mm/humming.py
+
+COPY patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py
+RUN cp ${HUM} ${HUM}.h20-fp8-bi.orig \
+ && python3 /tmp/patch-v029-h20-humming-fp8-batch-invariant.py ${HUM} \
+ && rm /tmp/patch-v029-h20-humming-fp8-batch-invariant.py \
+ && python3 - <<'PY'
+import ast
+p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm/humming.py"
+s=open(p, encoding="utf-8").read()
+ast.parse(s)
+fp8=s[s.index("class HummingFP8ScaledMMLinearKernel"):s.index("class HummingInt8ScaledMMLinearKernel")]
+int8=s[s.index("class HummingInt8ScaledMMLinearKernel"):]
+assert 'QWEN38_H20Q_FP8_BATCH_INVARIANT' in fp8
+assert '_qwen38_h20_compute["use_batch_invariant"] = True' in fp8
+assert 'QWEN38_H20Q_FP8_BATCH_INVARIANT' not in int8
+print("H20 local batch-invariant Humming FP8 repair installed")
+PY
+
+LABEL qwen38.h20repair="ct-h12-humming-fp8-batch-invariant-v1"

@@ -2757,6 +2757,83 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py qkvz-twin-probe \
   --output scripts/benchmark/results/local/h20p-v15-ct.jsonl
 ```
 
+Observed H20 v15 result on 2026-09-23:
+
+- the v15 image started successfully and reached READY;
+- startup logged the local FP8 compute config as
+  `{"use_batch_invariant": true, "use_f16_accum": false, "gemm_type": "dense"}`;
+- request 0 and request 1 both reported
+  `compiled_vs_natural_equal=true`;
+- both requests reported `natural_vs_zeroed_equal=true`;
+- both requests reported `zeroed_repeat_equal=true`;
+- request-to-request comparison reported
+  `input_equal=true compiled_output_equal=true zeroed_eager1_equal=true`.
+
+This closes the H20 localization loop: the same layer-0 QKVZ projection that
+was unstable with the default Humming FP8 compute mode becomes stable when
+batch-invariant mode is enabled only for
+`HummingFP8ScaledMMLinearKernel`. The global batch-invariant mode remains
+disabled, so GDN attention is unaffected.
+
+##### H20 FP8 batch-invariant repair candidate
+
+The next validation removes all H20 runtime instrumentation. The repair image
+is built directly on H12 and applies only the local Humming FP8
+batch-invariant patch. Use profile `hybrid-h20-ct-fp8-bi-repair`.
+
+Build:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-fp8-bi-repair:v1 \
+  -f scripts/Dockerfile.v029-h20-fp8-bi-repair \
+  scripts/
+```
+
+Start:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-fp8-bi-repair
+
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-fp8-bi-repair
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-fp8-bi-repair-v029 \
+  --model hybrid-h20-ct-fp8-bi-repair/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Primary repair validation:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h20-ct-fp8-bi-repair/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 8192 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h20-fp8-bi-repair-determinism.json
+```
+
+If that passes, run the wider prompt-size sweep:
+
+```bash
+python3 scripts/benchmark/run.py qsa-determinism \
+  --model hybrid-h20-ct-fp8-bi-repair/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h20-fp8-bi-repair-qsa.json
+```
+
+Pass criteria:
+
+- primary determinism: `status=pass`, `all_equal=true`,
+  `unique_hashes=1`;
+- wider sweep: every size `status=pass`, every `unique_hashes=1`;
+- no H20 diagnostic custom-op or twin-call instrumentation is present in this
+  repair image.
+
 Interpretation:
 
 - READY succeeds and same-input eager outputs become stable: Humming FP8
