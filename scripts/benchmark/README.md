@@ -2151,6 +2151,15 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
 The image label should print `ct-nvfp4-convert-diag-v19`. The probe should
 emit 16 records: two requests for each selected layer `0,1,3,7,14,15,31,47`.
 
+If startup fails with an asynchronous CUDA illegal-memory-access error,
+preserve the failed container logs before removing it, then rerun this H20
+profile with `QWEN38_H20_CUDA_LAUNCH_BLOCKING=1` set on the host for
+synchronous CUDA error reporting. The runtime helper passes this flag into
+the container only for H20 diagnostic profiles; it is off by default and can
+make startup substantially slower. This is a debugging run, not a production
+setting. After the server reaches READY, run the same `upstream-probe`
+command above.
+
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
 `convert_to_nvfp4_moe_kernel_format()`.
