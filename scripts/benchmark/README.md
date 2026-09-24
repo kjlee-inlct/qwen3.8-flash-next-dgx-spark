@@ -2005,7 +2005,12 @@ a missing experiment/result is visible immediately.
 | v15 upstream layer-0 probe | completed / stable | `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out` all matched across requests. Layer 0 is stable end-to-end under the v15 diagnostic image. |
 | v16 layer-1 upstream probe | completed / stable | Repeated v16 probes showed both layer 0 and layer 1 fully stable at `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out`. The remaining divergence is downstream of layer 1. |
 | v17 sparse-layer search | completed / localized | Layers 0,1,3,7 were fully stable. Layer 15 kept `entry_hidden=true` but first diverged at `attn_block_input`; layers 31 and 47 were already divergent at entry. This localizes the next mismatch to the layer-15 pre-attention handoff/HC preparation boundary. |
-| v18 layer-15 pending-state probe | pending | Capture layer-15 `prev_block_output`, `prev_injection`, post-PLE/pre-HC hidden state, post-HC hidden state, and attention injection in addition to the existing boundaries. Goal: distinguish an upstream pending-state mismatch from PLE/materialization or the attention HC itself. |
+| v18 layer-15 pending-state probe | completed / Case A reproduced | Two unchanged v18 probes completed successfully. Both kept layers 0,1,3,7 stable and reported layer 15 `entry_hidden=true`, `prev_block_output=false`, and `prev_injection=true`, with pre/post-HC hidden state and attention injection equal. The first observed mismatch consistently enters at the layer-14 `mlp_out` → layer-15 `prev_block_output` handoff; v19 adds layer 14 to locate its producer boundary. |
+| v19 layer-14 producer boundary | implemented / runtime pending | Reuse the v18 fullgraph-safe sparse probe and late fingerprinting, add layer 14 pending inputs plus attention/MLP HC outputs, `mlp_block_input`, and `mlp_out`, while retaining layer 15 as the downstream edge witness. Focused tests and Python compilation pass; a DGX v19 run remains pending. This is localization only; no repair is introduced. |
+
+The repeated v18 run on 2026-09-24 reused the already-built v18 image and
+running container, with no additional model startup. The DGX saved its output
+at `scripts/benchmark/results/local/h20u-v18-layer15-pending-r2.jsonl`.
 
 Current H20 conclusion: the original layer-0 CT/H12 QKVZ instability follows
 the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
@@ -2037,7 +2042,7 @@ while preparing the layer-15 attention input. However,
 and modify `hidden_states` before the HC mix. Therefore v18 must check those
 inputs before attributing the mismatch to the HC implementation itself.
 
-H20 v18 retains the sparse-layer capture and adds layer-15-only fingerprints
+H20 v18 retained the sparse-layer capture and added layer-15-only fingerprints
 for `prev_block_output`, `prev_injection`, the hidden state immediately
 before the attention HC, the post-HC hidden state, and the newly produced
 attention injection. Pending inputs are captured at decoder-layer entry before
@@ -2049,6 +2054,102 @@ any PLE handling. This separates three cases:
   pending-state materialization;
 - all HC inputs match but `attn_block_input` differs: inspect the
   GatedResidual HC pipeline itself.
+
+Initial H20 v18 observation on 2026-09-24:
+
+- the CT diagnostic image built with label `ct-nvfp4-convert-diag-v18`,
+  passed preflight, reached READY after 732 seconds, and emitted all 14
+  expected sparse-layer records after both requests completed;
+- layers 0, 1, 3, and 7 matched at every recorded boundary;
+- layer 15 reported `first_mismatch=prev_block_output` with
+  `entry_hidden=true`, `prev_block_output=false`, `prev_injection=true`,
+  `pre_attn_hc_hidden=true`, `post_attn_hc_hidden=true`, and
+  `attn_injection=true`;
+- `attn_block_input` and all later layer-15 boundaries differed, while layers
+  31 and 47 were already different at entry;
+- the mRoPE-key, Triton deprecation, and Qwen3VL video pixel-cap messages were
+  non-fatal warnings; they are not evidence for this tensor mismatch.
+
+This was the initial v18 Case A observation. The layer-15 pending `prev_block_output` is the
+`mlp_out` returned by layer 14, so the earliest captured unstable edge in this
+run is upstream of the layer-15 attention HC. It does not yet identify a
+layer-14 kernel: layer 14 was not captured, and router, dispatch, routed/shared
+expert computation, accumulation, an earlier pending input, or an intermittent
+effect remain possible. The stable layer-15 `entry_hidden` and
+`prev_injection` only establish that the other two layer-14 return edges
+matched in this request pair.
+
+The v18 `upstream-probe` was then repeated unchanged, using the same image and
+container without rebuilding. The second run again completed both requests,
+kept layers 0, 1, 3, and 7 stable, and reported layer 15
+`entry_hidden=true`, `prev_block_output=false`, and `prev_injection=true`; the
+pre/post-HC hidden state and attention injection also matched. The repeated
+signature confirms the layer-14 output handoff is a stable first observed
+mismatch boundary under v18.
+
+H20 v19 extends the same sparse capture with layer 14, preserving the v18
+custom-op path, GPU snapshots, and CPU fingerprinting only after request 1
+reaches layer 47. Its emitted record schema increments from 5 to 6. At layer 14
+it records the entry hidden/pending tuple, the
+attention HC input/output and injection, `attn_block_input`, `attn_out`, the
+MLP HC output/injection, `mlp_block_input`, and `mlp_out`. Layer 15 retains all
+v18 fields as the downstream handoff witness. The layer-14 causal order is:
+
+1. `entry_hidden`, `prev_block_output`, `prev_injection`;
+2. `pre_attn_hc_hidden`, `post_attn_hc_hidden`, `attn_injection`,
+   `attn_block_input`;
+3. `attn_out`;
+4. `post_mlp_hc_hidden`, `post_mlp_hc_injection`, `mlp_block_input`,
+   `mlp_out`.
+
+Interpret the first mismatch conservatively. A mismatch in the layer-14 entry
+tuple means the source is earlier than layer 14. Stable entry and differing
+`attn_block_input` points to its attention HC boundary; stable block input and
+differing `attn_out` points into its linear-attention path. Stable inputs to
+the MLP HC with differing `mlp_block_input` points to that HC boundary.
+Matching `mlp_block_input` with differing `mlp_out`, reproduced together with
+layer-15 `prev_block_output` mismatch, localizes the first observed mismatch
+inside layer 14's MLP/MoE call, but does not identify router, dispatch, expert
+math, or accumulation as the specific source. If layer-14 `mlp_out` matches
+while layer-15 `prev_block_output` differs, treat that as a capture/aliasing
+inconsistency and investigate before drawing a model conclusion.
+
+After this change is merged, rebuild and run the v19 CT diagnostic on the DGX:
+
+```bash
+cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-ct-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-ct-convert-diag \
+  scripts/
+
+docker inspect \
+  --format '{{ index .Config.Labels "qwen38.h20" }}' \
+  vllm-orcarouter-v029-h20-ct-convert-diag:v1
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20u-v19-layer14-producer.jsonl
+```
+
+The image label should print `ct-nvfp4-convert-diag-v19`. The probe should
+emit 16 records: two requests for each selected layer `0,1,3,7,14,15,31,47`.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of

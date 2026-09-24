@@ -684,8 +684,33 @@ def upstream_probe(
         "mlp_block_input",
         "mlp_out",
     )
+    layer14_causal_names = (
+        "entry_hidden",
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+        "attn_block_input",
+        "attn_out",
+        "post_mlp_hc_hidden",
+        "post_mlp_hc_injection",
+        "mlp_block_input",
+        "mlp_out",
+    )
+    layer14_extra_names = (
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+        "post_mlp_hc_hidden",
+        "post_mlp_hc_injection",
+    )
 
     def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
+        if layer == 14 and any(name in a or name in b for name in layer14_extra_names):
+            return layer14_causal_names
         if layer == 15 and any(
             name in a or name in b for name in layer15_extra_names
         ):
@@ -735,8 +760,33 @@ def compare_upstream(
         "mlp_block_input",
         "mlp_out",
     )
+    layer14_compare_extra_names = (
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+        "post_mlp_hc_hidden",
+        "post_mlp_hc_injection",
+    )
+    layer14_causal_names = (
+        "entry_hidden",
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+        "attn_block_input",
+        "attn_out",
+        "post_mlp_hc_hidden",
+        "post_mlp_hc_injection",
+        "mlp_block_input",
+        "mlp_out",
+    )
 
     def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
+        if layer == 14 and any(name in a or name in b for name in layer14_compare_extra_names):
+            return layer14_causal_names
         if layer == 15 and any(
             name in a or name in b for name in layer15_extra_names
         ):
