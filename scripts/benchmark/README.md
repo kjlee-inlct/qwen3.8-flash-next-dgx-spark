@@ -2114,7 +2114,7 @@ math, or accumulation as the specific source. If layer-14 `mlp_out` matches
 while layer-15 `prev_block_output` differs, treat that as a capture/aliasing
 inconsistency and investigate before drawing a model conclusion.
 
-After this change is merged, rebuild and run the v19 CT diagnostic on the DGX:
+After this change is merged, rebuild and run the v20 CT diagnostic on the DGX:
 
 ```bash
 cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
@@ -2145,11 +2145,12 @@ docker inspect \
 python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --container qwen38-h20-ct-convert-diag-v029 \
   --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
-  --output scripts/benchmark/results/local/h20u-v19-layer14-producer.jsonl
+  --output scripts/benchmark/results/local/h20u-v20-layer14-all.jsonl
 ```
 
-The image label should print `ct-nvfp4-convert-diag-v19`. The probe should
-emit 16 records: two requests for each selected layer `0,1,3,7,14,15,31,47`.
+The image label should print `ct-nvfp4-convert-diag-v20`. With the default
+`QWEN38_H20U_LAYER14_GROUP=all`, the probe emits 16 records: two requests for
+each selected layer `0,1,3,7,14,15,31,47`.
 
 If startup fails with an asynchronous CUDA illegal-memory-access error,
 preserve the failed container logs before removing it, then rerun this H20
@@ -2160,13 +2161,66 @@ make startup substantially slower. This is a debugging run, not a production
 setting. After the server reaches READY, run the same `upstream-probe`
 command above.
 
-To test whether the added layer-14 capture graph causes the startup failure,
-rebuild the same v19 image and start with
-`QWEN38_H20U_CAPTURE_LAYER14=0`. This omits layer 14 from the probe while
-keeping the layer-15 handoff witness and the other sparse layers. If this
-control reaches READY, the v19 layer-14 graph additions are implicated; if it
-fails the same way, the fault is not isolated to those capture call sites.
-The default is `1`.
+To isolate which layer-14 graph group is associated with the startup fault,
+use one of these runtime values without rebuilding between groups:
+
+- `entry`: `entry_hidden`, `prev_block_output`, `prev_injection`;
+- `attention`: pre/post attention HC state and injection, `attn_block_input`,
+  and `attn_out`;
+- `mlp`: post-MLP-HC state and injection, `mlp_block_input`, and `mlp_out`;
+- `all`: the complete v19 layer-14 capture (default);
+- `none`: v18-equivalent sparse graph without layer 14 (14 records).
+
+Each non-`none` group emits a partial layer-14 record plus the unchanged
+layer-15 witness. The JSONL lists only tensors captured by the selected group;
+repeat summaries compare only those fields. The older
+`QWEN38_H20U_CAPTURE_LAYER14=0` switch remains an alias for `none`.
+
+Observed v19 startup ablation on 2026-09-24:
+
+- two full layer-14 runs failed during vLLM dummy-run AOT/Inductor compilation
+  with CUDA illegal-memory access; `CUDA_LAUNCH_BLOCKING=1` was confirmed in
+  the container but did not move the reported failure from RNG-state restore;
+- the `none` control, with the same blocking flag, reached READY after 691 s
+  and completed its two-request probe, emitting 14 records;
+- layers 0, 1, 3, and 7 were fully stable. Layer 15 matched at
+  `entry_hidden`, both pending tensors, both HC hidden states, attention
+  injection, `attn_block_input`, and `attn_out`, then first differed at
+  `mlp_out`. Layers 31 and 47 already differed at entry;
+- available RAM at checkpoint loading differed between failed and successful
+  starts (about 30 GiB versus 41 GiB), so the ablation strongly implicates
+  layer-14 graph additions but does not prove causation. The v19
+  `prev_block_output` mismatch was not reproduced in this control.
+
+For a controlled group run, preserve logs from the previous container, remove
+it, then start with one group (begin with `entry`):
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+QWEN38_H20_CUDA_LAUNCH_BLOCKING=1 \
+QWEN38_H20U_LAYER14_GROUP=entry \
+  ./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20u-v20-layer14-entry.jsonl
+```
+
+Repeat with `attention` and `mlp` as separate runs, keeping the same
+`CUDA_LAUNCH_BLOCKING=1` setting and recording `MemAvailable` before each
+start. A group that fails while `none` succeeds narrows the problematic
+compiled capture region; if all groups start individually but `all` fails,
+the combined graph size/interaction is the remaining distinction.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of

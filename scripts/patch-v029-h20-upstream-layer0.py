@@ -77,9 +77,28 @@ _QWEN38_H20U_LAYER14_EXTRA_STAGE_NAMES = (
 _QWEN38_H20U_CAPTURE_LAYER14 = os.environ.get(
     "QWEN38_H20U_CAPTURE_LAYER14", "1"
 ) == "1"
+_QWEN38_H20U_LAYER14_GROUP = os.environ.get(
+    "QWEN38_H20U_LAYER14_GROUP", "all"
+).strip().lower()
+if _QWEN38_H20U_LAYER14_GROUP not in {
+    "none", "entry", "attention", "mlp", "all"
+}:
+    raise ValueError(
+        "QWEN38_H20U_LAYER14_GROUP must be none, entry, attention, mlp, or all"
+    )
+if not _QWEN38_H20U_CAPTURE_LAYER14:
+    _QWEN38_H20U_LAYER14_GROUP = "none"
+_QWEN38_H20U_LAYER14_GROUPS = (
+    {"entry", "attention", "mlp"}
+    if _QWEN38_H20U_LAYER14_GROUP == "all"
+    else ({_QWEN38_H20U_LAYER14_GROUP} - {"none"})
+)
+_QWEN38_H20U_LAYER14_ENTRY = "entry" in _QWEN38_H20U_LAYER14_GROUPS
+_QWEN38_H20U_LAYER14_ATTENTION = "attention" in _QWEN38_H20U_LAYER14_GROUPS
+_QWEN38_H20U_LAYER14_MLP = "mlp" in _QWEN38_H20U_LAYER14_GROUPS
 _QWEN38_H20U_LAYERS = (
     (0, 1, 3, 7, 14, 15, 31, 47)
-    if _QWEN38_H20U_CAPTURE_LAYER14
+    if _QWEN38_H20U_LAYER14_GROUPS
     else (0, 1, 3, 7, 15, 31, 47)
 )
 _QWEN38_H20U_LAST_LAYER = _QWEN38_H20U_LAYERS[-1]
@@ -134,10 +153,25 @@ def _qwen38_h20u_required_names(layer_idx: int) -> tuple[str, ...]:
             + _QWEN38_H20U_LAYER15_EXTRA_STAGE_NAMES
         )
     if layer_idx == 14:
-        return (
-            _QWEN38_H20U_BASE_STAGE_NAMES
-            + _QWEN38_H20U_LAYER14_EXTRA_STAGE_NAMES
-        )
+        names = []
+        if "entry" in _QWEN38_H20U_LAYER14_GROUPS:
+            names.extend(("entry_hidden", "prev_block_output", "prev_injection"))
+        if "attention" in _QWEN38_H20U_LAYER14_GROUPS:
+            names.extend((
+                "pre_attn_hc_hidden",
+                "post_attn_hc_hidden",
+                "attn_injection",
+                "attn_block_input",
+                "attn_out",
+            ))
+        if "mlp" in _QWEN38_H20U_LAYER14_GROUPS:
+            names.extend((
+                "post_mlp_hc_hidden",
+                "post_mlp_hc_injection",
+                "mlp_block_input",
+                "mlp_out",
+            ))
+        return tuple(names)
     return _QWEN38_H20U_BASE_STAGE_NAMES
 
 
@@ -231,10 +265,12 @@ suffix = text[next_class:]
 start_anchor = """        attn_hc = self.attn_hyper_connection
         if self.ple is not None:
 """
-start_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
+start_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS and (
+            self.layer_idx != 14 or _QWEN38_H20U_LAYER14_ENTRY
+        ):
             _qwen38_h20u_capture(hidden_states, 0, self.layer_idx)
         if self.layer_idx == 15 or (
-            _QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14
+            self.layer_idx == 14 and _QWEN38_H20U_LAYER14_ENTRY
         ):
             if prev_block_output is not None:
                 _qwen38_h20u_capture(prev_block_output, 5, self.layer_idx)
@@ -259,7 +295,7 @@ pending_anchor = """        # Fuse a pending combine with this HC module's mix w
 """
 pending_repl = """        # Fuse a pending combine with this HC module's mix when possible.
         if self.layer_idx == 15 or (
-            _QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14
+            self.layer_idx == 14 and _QWEN38_H20U_LAYER14_ATTENTION
         ):
             _qwen38_h20u_capture(hidden_states, 7, self.layer_idx)
 
@@ -271,7 +307,7 @@ pending_repl = """        # Fuse a pending combine with this HC module's mix whe
             hidden_states, block_input, injection = attn_hc.mix(hidden_states)
 
         if self.layer_idx == 15 or (
-            _QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14
+            self.layer_idx == 14 and _QWEN38_H20U_LAYER14_ATTENTION
         ):
             _qwen38_h20u_capture(hidden_states, 8, self.layer_idx)
             if injection is not None:
@@ -285,7 +321,9 @@ body = body.replace(pending_anchor, pending_repl, 1)
 attn_anchor = """        if self.layer_type == "linear_attention":
             attn_out = self.linear_attn(hidden_states=block_input)
 """
-attn_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
+attn_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS and (
+            self.layer_idx != 14 or _QWEN38_H20U_LAYER14_ATTENTION
+        ):
             _qwen38_h20u_capture(block_input, 1, self.layer_idx)
 
         if self.layer_type == "linear_attention":
@@ -302,21 +340,27 @@ mlp_anchor = """        mlp_hc = self.mlp_hyper_connection
         mlp_out = self.mlp(block_input)
         return hidden_states, mlp_out, injection
 """
-mlp_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
+mlp_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS and (
+            self.layer_idx != 14 or _QWEN38_H20U_LAYER14_ATTENTION
+        ):
             _qwen38_h20u_capture(attn_out, 2, self.layer_idx)
 
         mlp_hc = self.mlp_hyper_connection
         hidden_states, block_input, injection = mlp_hc.combine_and_mix(
             hidden_states, attn_out, injection
         )
-        if self.layer_idx == 14 and _QWEN38_H20U_CAPTURE_LAYER14:
+        if self.layer_idx == 14 and _QWEN38_H20U_LAYER14_MLP:
             _qwen38_h20u_capture(hidden_states, 12, self.layer_idx)
             if injection is not None:
                 _qwen38_h20u_capture(injection, 13, self.layer_idx)
-        if self.layer_idx in _QWEN38_H20U_LAYERS:
+        if self.layer_idx in _QWEN38_H20U_LAYERS and (
+            self.layer_idx != 14 or _QWEN38_H20U_LAYER14_MLP
+        ):
             _qwen38_h20u_capture(block_input, 3, self.layer_idx)
         mlp_out = self.mlp(block_input)
-        if self.layer_idx in _QWEN38_H20U_LAYERS:
+        if self.layer_idx in _QWEN38_H20U_LAYERS and (
+            self.layer_idx != 14 or _QWEN38_H20U_LAYER14_MLP
+        ):
             _qwen38_h20u_capture(mlp_out, 4, self.layer_idx)
         return hidden_states, mlp_out, injection
 """
