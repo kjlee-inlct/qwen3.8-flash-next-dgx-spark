@@ -658,16 +658,31 @@ def upstream_probe(
         encoding="utf-8",
     )
     print(f"wrote {len(wanted)} upstream records to {output}")
-    names = (
+    base_names = (
         "entry_hidden",
         "attn_block_input",
         "attn_out",
         "mlp_block_input",
         "mlp_out",
     )
+    layer15_extra_names = (
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+    )
+
+    def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
+        if layer == 15 and any(
+            name in a or name in b for name in layer15_extra_names
+        ):
+            return base_names + layer15_extra_names
+        return base_names
     for layer in layers:
         a = keyed[(layer, 0)].get("tensors", {})
         b = keyed[(layer, 1)].get("tensors", {})
+        names = names_for(layer, a, b)
         fields = {name: a.get(name) == b.get(name) for name in names}
         first = next((name for name in names if not fields[name]), None)
         print(
@@ -682,13 +697,27 @@ def compare_upstream(
     modelopt_path: Path,
     output: Path | None,
 ) -> int:
-    names = (
+    base_names = (
         "entry_hidden",
         "attn_block_input",
         "attn_out",
         "mlp_block_input",
         "mlp_out",
     )
+    layer15_extra_names = (
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+    )
+
+    def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
+        if layer == 15 and any(
+            name in a or name in b for name in layer15_extra_names
+        ):
+            return base_names + layer15_extra_names
+        return base_names
     def key_records(path: Path) -> dict[tuple[int, int], dict]:
         return {
             (int(r.get("layer_idx", 0)), int(r["request_id"])): r
@@ -708,6 +737,7 @@ def compare_upstream(
                 continue
             a = records[(layer, 0)].get("tensors", {})
             b = records[(layer, 1)].get("tensors", {})
+            names = names_for(layer, a, b)
             fields = {name: a.get(name) == b.get(name) for name in names}
             first = next((name for name in names if not fields[name]), None)
             result[layer] = {
@@ -722,6 +752,7 @@ def compare_upstream(
     for layer_idx, request_id in common:
         ct_t = ct_records[(layer_idx, request_id)].get("tensors", {})
         mo_t = mo_records[(layer_idx, request_id)].get("tensors", {})
+        names = names_for(layer_idx, ct_t, mo_t)
         fields = {name: ct_t.get(name) == mo_t.get(name) for name in names}
         cross.append(
             {
