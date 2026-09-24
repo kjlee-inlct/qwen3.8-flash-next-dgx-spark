@@ -672,12 +672,24 @@ def upstream_probe(
         "post_attn_hc_hidden",
         "attn_injection",
     )
+    layer15_causal_names = (
+        "entry_hidden",
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+        "attn_block_input",
+        "attn_out",
+        "mlp_block_input",
+        "mlp_out",
+    )
 
     def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
         if layer == 15 and any(
             name in a or name in b for name in layer15_extra_names
         ):
-            return base_names + layer15_extra_names
+            return layer15_causal_names
         return base_names
     for layer in layers:
         a = keyed[(layer, 0)].get("tensors", {})
@@ -711,12 +723,24 @@ def compare_upstream(
         "post_attn_hc_hidden",
         "attn_injection",
     )
+    layer15_causal_names = (
+        "entry_hidden",
+        "prev_block_output",
+        "prev_injection",
+        "pre_attn_hc_hidden",
+        "post_attn_hc_hidden",
+        "attn_injection",
+        "attn_block_input",
+        "attn_out",
+        "mlp_block_input",
+        "mlp_out",
+    )
 
     def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
         if layer == 15 and any(
             name in a or name in b for name in layer15_extra_names
         ):
-            return base_names + layer15_extra_names
+            return layer15_causal_names
         return base_names
     def key_records(path: Path) -> dict[tuple[int, int], dict]:
         return {
