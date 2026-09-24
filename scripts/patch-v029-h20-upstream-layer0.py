@@ -216,6 +216,40 @@ if body.count(start_anchor) != 1:
     raise SystemExit("expected layer forward start anchor exactly once")
 body = body.replace(start_anchor, start_repl, 1)
 
+pending_anchor = """        # Fuse a pending combine with this HC module's mix when possible.
+        if prev_block_output is not None and prev_injection is not None:
+            hidden_states, block_input, injection = attn_hc.combine_and_mix(
+                hidden_states, prev_block_output, prev_injection
+            )
+        else:
+            hidden_states, block_input, injection = attn_hc.mix(hidden_states)
+
+"""
+pending_repl = """        # Fuse a pending combine with this HC module's mix when possible.
+        if self.layer_idx == 15:
+            if prev_block_output is not None:
+                _qwen38_h20u_capture(prev_block_output, 5, self.layer_idx)
+            if prev_injection is not None:
+                _qwen38_h20u_capture(prev_injection, 6, self.layer_idx)
+            _qwen38_h20u_capture(hidden_states, 7, self.layer_idx)
+
+        if prev_block_output is not None and prev_injection is not None:
+            hidden_states, block_input, injection = attn_hc.combine_and_mix(
+                hidden_states, prev_block_output, prev_injection
+            )
+        else:
+            hidden_states, block_input, injection = attn_hc.mix(hidden_states)
+
+        if self.layer_idx == 15:
+            _qwen38_h20u_capture(hidden_states, 8, self.layer_idx)
+            if injection is not None:
+                _qwen38_h20u_capture(injection, 9, self.layer_idx)
+
+"""
+if body.count(pending_anchor) != 1:
+    raise SystemExit("expected pending HC anchor exactly once")
+body = body.replace(pending_anchor, pending_repl, 1)
+
 attn_anchor = """        if self.layer_type == "linear_attention":
             attn_out = self.linear_attn(hidden_states=block_input)
 """
@@ -256,4 +290,4 @@ body = body.replace(mlp_anchor, mlp_repl, 1)
 
 text = prefix + body + suffix
 path.write_text(text, encoding="utf-8")
-print("installed H20 sparse-layer Qwen4Exp upstream custom-op diagnostics")
+print("installed H20 sparse-layer + layer-15 pending-state diagnostics")
