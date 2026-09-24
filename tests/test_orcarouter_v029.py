@@ -490,7 +490,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v19", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v20", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -501,6 +501,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0', runtime)
         self.assertIn('h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )', runtime)
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
+        self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts", runtime)
@@ -867,8 +868,9 @@ class AfterLayer:
             self.assertIn('"attn_injection"', patched)
             self.assertIn('"post_mlp_hc_hidden"', patched)
             self.assertIn('"post_mlp_hc_injection"', patched)
-            self.assertIn("_QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14", patched)
-            self.assertIn("if self.layer_idx == 14 and _QWEN38_H20U_CAPTURE_LAYER14:", patched)
+            self.assertIn('"attention" in _QWEN38_H20U_LAYER14_GROUPS', patched)
+            self.assertIn('"mlp" in _QWEN38_H20U_LAYER14_GROUPS', patched)
+            self.assertIn("if self.layer_idx == 14 and _QWEN38_H20U_LAYER14_MLP:", patched)
             self.assertIn('"schema": 6', patched)
 
     def test_h20_upstream_probe_summarizes_layer14_causally_and_keeps_legacy_layers(self) -> None:
@@ -975,9 +977,39 @@ class AfterLayer:
                 stderr="",
             )
             stream = io.StringIO()
+            partial_stream = io.StringIO()
             try:
                 with contextlib.redirect_stdout(stream):
                     result = module.upstream_probe(
+                        container="container",
+                        model="model",
+                        output=output,
+                        prompt="probe",
+                        api_base="http://127.0.0.1:8888",
+                    )
+                records[:] = []
+                for request_id in (0, 1):
+                    tensors = {
+                        name: fingerprint(name)
+                        for name in (
+                            "entry_hidden",
+                            "prev_block_output",
+                            "prev_injection",
+                        )
+                    }
+                    if request_id == 1:
+                        tensors["prev_block_output"] = fingerprint("changed")
+                    records.append(
+                        {
+                            "schema": 6,
+                            "phase": "sparse-layer-upstream",
+                            "layer_idx": 14,
+                            "request_id": request_id,
+                            "tensors": tensors,
+                        }
+                    )
+                with contextlib.redirect_stdout(partial_stream):
+                    partial_result = module.upstream_probe(
                         container="container",
                         model="model",
                         output=output,
@@ -1005,6 +1037,13 @@ class AfterLayer:
                     f"upstream_repeat layer={layer} all_equal=True",
                     summary,
                 )
+            self.assertEqual(partial_result, 0)
+            self.assertIn(
+                "upstream_repeat layer=14 all_equal=False "
+                "first_mismatch=prev_block_output "
+                "fields={'entry_hidden': True, 'prev_block_output': False, 'prev_injection': True}",
+                partial_stream.getvalue(),
+            )
 
     def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-h20-linear-attn-layer0.py"
@@ -1123,7 +1162,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v19"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v20"', dockerfile)
         self.assertIn('class HummingFP8ScaledMMLinearKernel', patch)
         self.assertIn('_qwen38_h20_compute["use_batch_invariant"] = True', patch)
         self.assertIn('class HummingInt8ScaledMMLinearKernel', patch)

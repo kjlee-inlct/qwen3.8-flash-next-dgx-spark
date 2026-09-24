@@ -710,7 +710,9 @@ def upstream_probe(
 
     def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
         if layer == 14 and any(name in a or name in b for name in layer14_extra_names):
-            return layer14_causal_names
+            return tuple(
+                name for name in layer14_causal_names if name in a or name in b
+            )
         if layer == 15 and any(
             name in a or name in b for name in layer15_extra_names
         ):
@@ -786,7 +788,9 @@ def compare_upstream(
 
     def names_for(layer: int, a: dict, b: dict) -> tuple[str, ...]:
         if layer == 14 and any(name in a or name in b for name in layer14_compare_extra_names):
-            return layer14_causal_names
+            return tuple(
+                name for name in layer14_causal_names if name in a or name in b
+            )
         if layer == 15 and any(
             name in a or name in b for name in layer15_extra_names
         ):
