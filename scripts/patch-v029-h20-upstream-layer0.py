@@ -41,7 +41,26 @@ _QWEN38_H20U_STAGE_NAMES = {
     2: "attn_out",
     3: "mlp_block_input",
     4: "mlp_out",
+    5: "prev_block_output",
+    6: "prev_injection",
+    7: "pre_attn_hc_hidden",
+    8: "post_attn_hc_hidden",
+    9: "attn_injection",
 }
+_QWEN38_H20U_BASE_STAGE_NAMES = (
+    "entry_hidden",
+    "attn_block_input",
+    "attn_out",
+    "mlp_block_input",
+    "mlp_out",
+)
+_QWEN38_H20U_LAYER15_EXTRA_STAGE_NAMES = (
+    "prev_block_output",
+    "prev_injection",
+    "pre_attn_hc_hidden",
+    "post_attn_hc_hidden",
+    "attn_injection",
+)
 _QWEN38_H20U_LAYERS = (0, 1, 3, 7, 15, 31, 47)
 _QWEN38_H20U_LAST_LAYER = _QWEN38_H20U_LAYERS[-1]
 _QWEN38_H20U_PENDING: dict[tuple[int, int], dict[str, torch.Tensor]] = {}
@@ -88,8 +107,16 @@ def _qwen38_h20u_fingerprint(tensor: torch.Tensor) -> dict:
     return result
 
 
+def _qwen38_h20u_required_names(layer_idx: int) -> tuple[str, ...]:
+    if layer_idx == 15:
+        return (
+            _QWEN38_H20U_BASE_STAGE_NAMES
+            + _QWEN38_H20U_LAYER15_EXTRA_STAGE_NAMES
+        )
+    return _QWEN38_H20U_BASE_STAGE_NAMES
+
+
 def _qwen38_h20u_emit_if_complete() -> None:
-    required = set(_QWEN38_H20U_STAGE_NAMES.values())
     keys = [
         (layer_idx, request_id)
         for layer_idx in _QWEN38_H20U_LAYERS
@@ -97,13 +124,18 @@ def _qwen38_h20u_emit_if_complete() -> None:
     ]
     if any(key not in _QWEN38_H20U_PENDING for key in keys):
         return
-    if any(set(_QWEN38_H20U_PENDING[key]) != required for key in keys):
-        return
     for layer_idx in _QWEN38_H20U_LAYERS:
+        required = set(_qwen38_h20u_required_names(layer_idx))
+        for request_id in (0, 1):
+            key = (layer_idx, request_id)
+            if set(_QWEN38_H20U_PENDING[key]) != required:
+                return
+    for layer_idx in _QWEN38_H20U_LAYERS:
+        names = _qwen38_h20u_required_names(layer_idx)
         for request_id in (0, 1):
             key = (layer_idx, request_id)
             record = {
-                "schema": 4,
+                "schema": 5,
                 "phase": "sparse-layer-upstream",
                 "layer_idx": layer_idx,
                 "request_id": request_id,
@@ -111,7 +143,7 @@ def _qwen38_h20u_emit_if_complete() -> None:
                     name: _qwen38_h20u_fingerprint(
                         _QWEN38_H20U_PENDING[key][name]
                     )
-                    for name in _QWEN38_H20U_STAGE_NAMES.values()
+                    for name in names
                 },
             }
             print(
