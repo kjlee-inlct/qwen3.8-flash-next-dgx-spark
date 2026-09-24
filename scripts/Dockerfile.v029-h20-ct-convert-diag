@@ -50,7 +50,9 @@ assert '@torch.library.custom_op(' in q4s
 assert '"qwen38_h20u::capture"' in q4s
 assert 'mutates_args={"tensor"}' in q4s
 assert "_qwen38_h20u_capture(hidden_states, 0, self.layer_idx)" in q4s
-assert "_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 14, 15, 31, 47)" in q4s
+assert '_QWEN38_H20U_CAPTURE_LAYER14 = os.environ.get(' in q4s
+assert '(0, 1, 3, 7, 14, 15, 31, 47)' in q4s
+assert '(0, 1, 3, 7, 15, 31, 47)' in q4s
 assert '_QWEN38_H20U_LAYER14_EXTRA_STAGE_NAMES = (' in q4s
 assert "\"prev_block_output\"" in q4s
 assert "\"prev_injection\"" in q4s
