@@ -799,6 +799,7 @@ class Qwen4ExpDecoderLayer(nn.Module):
         if self.ple is not None:
             pass
 
+        # Fuse a pending combine with this HC module's mix when possible.
         if prev_block_output is not None and prev_injection is not None:
             hidden_states, block_input, injection = attn_hc.combine_and_mix(
                 hidden_states, prev_block_output, prev_injection
