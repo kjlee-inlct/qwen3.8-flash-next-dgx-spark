@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -489,7 +490,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v18", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v19", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -831,7 +832,7 @@ class AfterLayer:
             target = Path(tmp) / "model.py"
             target.write_text(fixture, encoding="utf-8")
             result = subprocess.run(
-                ["python3", str(patch), str(target)],
+                [sys.executable, str(patch), str(target)],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -850,7 +851,7 @@ class AfterLayer:
             self.assertIn("_qwen38_h20u_capture(block_input, 3, self.layer_idx)", patched)
             self.assertIn("_qwen38_h20u_capture(mlp_out, 4, self.layer_idx)", patched)
             self.assertNotIn("\n@torch.compiler.disable\n", patched)
-            self.assertIn("_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 15, 31, 47)", patched)
+            self.assertIn("_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 14, 15, 31, 47)", patched)
             self.assertIn('"layer_idx": layer_idx', patched)
             self.assertIn("_QWEN38_H20U_LAST_LAYER", patched)
             self.assertIn("_qwen38_h20u_emit_if_complete()", patched)
@@ -859,7 +860,146 @@ class AfterLayer:
             self.assertIn('"pre_attn_hc_hidden"', patched)
             self.assertIn('"post_attn_hc_hidden"', patched)
             self.assertIn('"attn_injection"', patched)
-            self.assertIn("if self.layer_idx == 15:", patched)
+            self.assertIn('"post_mlp_hc_hidden"', patched)
+            self.assertIn('"post_mlp_hc_injection"', patched)
+            self.assertIn("if self.layer_idx in (14, 15):", patched)
+            self.assertIn("if self.layer_idx == 14:", patched)
+            self.assertIn('"schema": 6', patched)
+
+    def test_h20_upstream_probe_summarizes_layer14_causally_and_keeps_legacy_layers(self) -> None:
+        import contextlib
+        import importlib.util
+        import io
+        import json
+        import tempfile
+
+        diagnostic = ROOT / "scripts" / "diagnostics" / "h20-nvfp4-moe.py"
+        spec = importlib.util.spec_from_file_location("h20_nvfp4_moe", diagnostic)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        def fingerprint(value: str) -> dict[str, str]:
+            return {"sha256": value}
+
+        records = []
+        layer14_names = (
+            "entry_hidden",
+            "prev_block_output",
+            "prev_injection",
+            "pre_attn_hc_hidden",
+            "post_attn_hc_hidden",
+            "attn_injection",
+            "attn_block_input",
+            "attn_out",
+            "post_mlp_hc_hidden",
+            "post_mlp_hc_injection",
+            "mlp_block_input",
+            "mlp_out",
+        )
+        layer15_names = (
+            "entry_hidden",
+            "prev_block_output",
+            "prev_injection",
+            "pre_attn_hc_hidden",
+            "post_attn_hc_hidden",
+            "attn_injection",
+            "attn_block_input",
+            "attn_out",
+            "mlp_block_input",
+            "mlp_out",
+        )
+        for layer in (14, 15):
+            names = layer14_names if layer == 14 else layer15_names
+            for request_id in (0, 1):
+                tensors = {name: fingerprint(name) for name in names}
+                if layer == 14 and request_id == 1:
+                    tensors["mlp_out"] = fingerprint("changed")
+                if layer == 15 and request_id == 1:
+                    tensors["prev_block_output"] = fingerprint("changed")
+                records.append(
+                    {
+                        "schema": 6,
+                        "phase": "sparse-layer-upstream",
+                        "layer_idx": layer,
+                        "request_id": request_id,
+                        "tensors": tensors,
+                    }
+                )
+        for layer in (0, 1, 3, 7, 31, 47):
+            for request_id in (0, 1):
+                records.append(
+                    {
+                        "schema": 6,
+                        "phase": "sparse-layer-upstream",
+                        "layer_idx": layer,
+                        "request_id": request_id,
+                        "tensors": {name: fingerprint(name) for name in (
+                            "entry_hidden", "attn_block_input", "attn_out",
+                            "mlp_block_input", "mlp_out",
+                        )},
+                    }
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "probe.jsonl"
+            module._container_exists = lambda _: True
+            module._docker_exec = lambda *_: None
+
+            class Response:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_):
+                    return False
+
+                def read(self):
+                    return b"{}"
+
+            original_urlopen = module.urllib.request.urlopen
+            original_run = module.subprocess.run
+            module.urllib.request.urlopen = lambda *args, **kwargs: Response()
+            module.subprocess.run = lambda *args, **kwargs: subprocess.CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout="\n".join(
+                    "QWEN38_H20U_LAYER0 " + json.dumps(record)
+                    for record in records
+                ),
+                stderr="",
+            )
+            stream = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(stream):
+                    result = module.upstream_probe(
+                        container="container",
+                        model="model",
+                        output=output,
+                        prompt="probe",
+                        api_base="http://127.0.0.1:8888",
+                    )
+            finally:
+                module.urllib.request.urlopen = original_urlopen
+                module.subprocess.run = original_run
+
+            self.assertEqual(result, 0)
+            summary = stream.getvalue()
+            self.assertIn(
+                "upstream_repeat layer=14 all_equal=False "
+                "first_mismatch=mlp_out",
+                summary,
+            )
+            self.assertIn(
+                "upstream_repeat layer=15 all_equal=False "
+                "first_mismatch=prev_block_output",
+                summary,
+            )
+            for layer in (0, 1, 3, 7, 31, 47):
+                self.assertIn(
+                    f"upstream_repeat layer={layer} all_equal=True",
+                    summary,
+                )
 
     def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-h20-linear-attn-layer0.py"
@@ -978,7 +1118,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v18"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v19"', dockerfile)
         self.assertIn('class HummingFP8ScaledMMLinearKernel', patch)
         self.assertIn('_qwen38_h20_compute["use_batch_invariant"] = True', patch)
         self.assertIn('class HummingInt8ScaledMMLinearKernel', patch)
@@ -1042,6 +1182,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("pre_attn_hc_hidden", script)
         self.assertIn("post_attn_hc_hidden", script)
         self.assertIn("attn_injection", script)
+        self.assertIn("post_mlp_hc_hidden", script)
+        self.assertIn("post_mlp_hc_injection", script)
         self.assertIn('"entry_hidden",\n        "prev_block_output",', script)
         self.assertIn('"prev_injection",\n        "pre_attn_hc_hidden",', script)
         self.assertIn('"attn_injection",\n        "attn_block_input",', script)

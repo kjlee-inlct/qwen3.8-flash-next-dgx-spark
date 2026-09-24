@@ -46,6 +46,10 @@ _QWEN38_H20U_STAGE_NAMES = {
     7: "pre_attn_hc_hidden",
     8: "post_attn_hc_hidden",
     9: "attn_injection",
+    10: "mlp_hc_hidden",
+    11: "mlp_injection",
+    12: "post_mlp_hc_hidden",
+    13: "post_mlp_hc_injection",
 }
 _QWEN38_H20U_BASE_STAGE_NAMES = (
     "entry_hidden",
@@ -61,7 +65,16 @@ _QWEN38_H20U_LAYER15_EXTRA_STAGE_NAMES = (
     "post_attn_hc_hidden",
     "attn_injection",
 )
-_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 15, 31, 47)
+_QWEN38_H20U_LAYER14_EXTRA_STAGE_NAMES = (
+    "prev_block_output",
+    "prev_injection",
+    "pre_attn_hc_hidden",
+    "post_attn_hc_hidden",
+    "attn_injection",
+    "post_mlp_hc_hidden",
+    "post_mlp_hc_injection",
+)
+_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 14, 15, 31, 47)
 _QWEN38_H20U_LAST_LAYER = _QWEN38_H20U_LAYERS[-1]
 _QWEN38_H20U_PENDING: dict[tuple[int, int], dict[str, torch.Tensor]] = {}
 
@@ -113,6 +126,11 @@ def _qwen38_h20u_required_names(layer_idx: int) -> tuple[str, ...]:
             _QWEN38_H20U_BASE_STAGE_NAMES
             + _QWEN38_H20U_LAYER15_EXTRA_STAGE_NAMES
         )
+    if layer_idx == 14:
+        return (
+            _QWEN38_H20U_BASE_STAGE_NAMES
+            + _QWEN38_H20U_LAYER14_EXTRA_STAGE_NAMES
+        )
     return _QWEN38_H20U_BASE_STAGE_NAMES
 
 
@@ -135,7 +153,7 @@ def _qwen38_h20u_emit_if_complete() -> None:
         for request_id in (0, 1):
             key = (layer_idx, request_id)
             record = {
-                "schema": 5,
+                "schema": 6,
                 "phase": "sparse-layer-upstream",
                 "layer_idx": layer_idx,
                 "request_id": request_id,
@@ -208,7 +226,7 @@ start_anchor = """        attn_hc = self.attn_hyper_connection
 """
 start_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(hidden_states, 0, self.layer_idx)
-        if self.layer_idx == 15:
+        if self.layer_idx in (14, 15):
             if prev_block_output is not None:
                 _qwen38_h20u_capture(prev_block_output, 5, self.layer_idx)
             if prev_injection is not None:
@@ -231,7 +249,7 @@ pending_anchor = """        # Fuse a pending combine with this HC module's mix w
 
 """
 pending_repl = """        # Fuse a pending combine with this HC module's mix when possible.
-        if self.layer_idx == 15:
+        if self.layer_idx in (14, 15):
             _qwen38_h20u_capture(hidden_states, 7, self.layer_idx)
 
         if prev_block_output is not None and prev_injection is not None:
@@ -241,7 +259,7 @@ pending_repl = """        # Fuse a pending combine with this HC module's mix whe
         else:
             hidden_states, block_input, injection = attn_hc.mix(hidden_states)
 
-        if self.layer_idx == 15:
+        if self.layer_idx in (14, 15):
             _qwen38_h20u_capture(hidden_states, 8, self.layer_idx)
             if injection is not None:
                 _qwen38_h20u_capture(injection, 9, self.layer_idx)
@@ -278,6 +296,10 @@ mlp_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
         hidden_states, block_input, injection = mlp_hc.combine_and_mix(
             hidden_states, attn_out, injection
         )
+        if self.layer_idx == 14:
+            _qwen38_h20u_capture(hidden_states, 12, self.layer_idx)
+            if injection is not None:
+                _qwen38_h20u_capture(injection, 13, self.layer_idx)
         if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(block_input, 3, self.layer_idx)
         mlp_out = self.mlp(block_input)
@@ -291,4 +313,4 @@ body = body.replace(mlp_anchor, mlp_repl, 1)
 
 text = prefix + body + suffix
 path.write_text(text, encoding="utf-8")
-print("installed H20 sparse-layer + layer-15 pending-state diagnostics")
+print("installed H20 v19 sparse-layer + layer-14 producer diagnostics")
