@@ -696,6 +696,7 @@ start_runtime() {
       -e QWEN38_H20C_FULL_HASH_MAX_BYTES=1048576
       -e QWEN38_H20C_SAMPLE_ELEMS=1024
       -e QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts
+      -e QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"
     )
     if [[ "${QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0}" == 1 ]]; then
       h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )

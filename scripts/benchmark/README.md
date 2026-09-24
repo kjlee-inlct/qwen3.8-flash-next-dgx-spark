@@ -2160,6 +2160,14 @@ make startup substantially slower. This is a debugging run, not a production
 setting. After the server reaches READY, run the same `upstream-probe`
 command above.
 
+To test whether the added layer-14 capture graph causes the startup failure,
+rebuild the same v19 image and start with
+`QWEN38_H20U_CAPTURE_LAYER14=0`. This omits layer 14 from the probe while
+keeping the layer-15 handoff witness and the other sparse layers. If this
+control reaches READY, the v19 layer-14 graph additions are implicated; if it
+fails the same way, the fault is not isolated to those capture call sites.
+The default is `1`.
+
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
 `convert_to_nvfp4_moe_kernel_format()`.

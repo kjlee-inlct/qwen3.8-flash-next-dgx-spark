@@ -74,7 +74,14 @@ _QWEN38_H20U_LAYER14_EXTRA_STAGE_NAMES = (
     "post_mlp_hc_hidden",
     "post_mlp_hc_injection",
 )
-_QWEN38_H20U_LAYERS = (0, 1, 3, 7, 14, 15, 31, 47)
+_QWEN38_H20U_CAPTURE_LAYER14 = os.environ.get(
+    "QWEN38_H20U_CAPTURE_LAYER14", "1"
+) == "1"
+_QWEN38_H20U_LAYERS = (
+    (0, 1, 3, 7, 14, 15, 31, 47)
+    if _QWEN38_H20U_CAPTURE_LAYER14
+    else (0, 1, 3, 7, 15, 31, 47)
+)
 _QWEN38_H20U_LAST_LAYER = _QWEN38_H20U_LAYERS[-1]
 _QWEN38_H20U_PENDING: dict[tuple[int, int], dict[str, torch.Tensor]] = {}
 
@@ -226,7 +233,9 @@ start_anchor = """        attn_hc = self.attn_hyper_connection
 """
 start_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(hidden_states, 0, self.layer_idx)
-        if self.layer_idx in (14, 15):
+        if self.layer_idx == 15 or (
+            _QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14
+        ):
             if prev_block_output is not None:
                 _qwen38_h20u_capture(prev_block_output, 5, self.layer_idx)
             if prev_injection is not None:
@@ -249,7 +258,9 @@ pending_anchor = """        # Fuse a pending combine with this HC module's mix w
 
 """
 pending_repl = """        # Fuse a pending combine with this HC module's mix when possible.
-        if self.layer_idx in (14, 15):
+        if self.layer_idx == 15 or (
+            _QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14
+        ):
             _qwen38_h20u_capture(hidden_states, 7, self.layer_idx)
 
         if prev_block_output is not None and prev_injection is not None:
@@ -259,7 +270,9 @@ pending_repl = """        # Fuse a pending combine with this HC module's mix whe
         else:
             hidden_states, block_input, injection = attn_hc.mix(hidden_states)
 
-        if self.layer_idx in (14, 15):
+        if self.layer_idx == 15 or (
+            _QWEN38_H20U_CAPTURE_LAYER14 and self.layer_idx == 14
+        ):
             _qwen38_h20u_capture(hidden_states, 8, self.layer_idx)
             if injection is not None:
                 _qwen38_h20u_capture(injection, 9, self.layer_idx)
@@ -296,7 +309,7 @@ mlp_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
         hidden_states, block_input, injection = mlp_hc.combine_and_mix(
             hidden_states, attn_out, injection
         )
-        if self.layer_idx == 14:
+        if self.layer_idx == 14 and _QWEN38_H20U_CAPTURE_LAYER14:
             _qwen38_h20u_capture(hidden_states, 12, self.layer_idx)
             if injection is not None:
                 _qwen38_h20u_capture(injection, 13, self.layer_idx)
