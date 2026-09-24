@@ -208,6 +208,11 @@ start_anchor = """        attn_hc = self.attn_hyper_connection
 """
 start_repl = """        if self.layer_idx in _QWEN38_H20U_LAYERS:
             _qwen38_h20u_capture(hidden_states, 0, self.layer_idx)
+        if self.layer_idx == 15:
+            if prev_block_output is not None:
+                _qwen38_h20u_capture(prev_block_output, 5, self.layer_idx)
+            if prev_injection is not None:
+                _qwen38_h20u_capture(prev_injection, 6, self.layer_idx)
 
         attn_hc = self.attn_hyper_connection
         if self.ple is not None:
@@ -227,10 +232,6 @@ pending_anchor = """        # Fuse a pending combine with this HC module's mix w
 """
 pending_repl = """        # Fuse a pending combine with this HC module's mix when possible.
         if self.layer_idx == 15:
-            if prev_block_output is not None:
-                _qwen38_h20u_capture(prev_block_output, 5, self.layer_idx)
-            if prev_injection is not None:
-                _qwen38_h20u_capture(prev_injection, 6, self.layer_idx)
             _qwen38_h20u_capture(hidden_states, 7, self.layer_idx)
 
         if prev_block_output is not None and prev_injection is not None:
