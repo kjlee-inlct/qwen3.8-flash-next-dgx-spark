@@ -2004,7 +2004,8 @@ a missing experiment/result is visible immediately.
 | v15 downstream GDN probe | completed / stable | Reusing the existing layer-0 linear-attention probe on v15 gave `all_equal=true`: `input_hidden`, `mixed_qkvz`, `ba`, `core_attn_out`, and final attention `output` all matched across requests. The remaining end-to-end divergence is downstream of layer-0 attention. |
 | v15 upstream layer-0 probe | completed / stable | `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out` all matched across requests. Layer 0 is stable end-to-end under the v15 diagnostic image. |
 | v16 layer-1 upstream probe | completed / stable | Repeated v16 probes showed both layer 0 and layer 1 fully stable at `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out`. The remaining divergence is downstream of layer 1. |
-| v17 sparse-layer search | pending | Capture layers 0,1,3,7,15,31,47 with the same fullgraph-safe boundaries, defer CPU fingerprinting until request 1 reaches layer 47, and identify the first layer interval containing the remaining divergence. |
+| v17 sparse-layer search | completed / localized | Layers 0,1,3,7 were fully stable. Layer 15 kept `entry_hidden=true` but first diverged at `attn_block_input`; layers 31 and 47 were already divergent at entry. This localizes the next mismatch to the layer-15 pre-attention handoff/HC preparation boundary. |
+| v18 layer-15 pending-state probe | pending | Capture layer-15 `prev_block_output`, `prev_injection`, post-PLE/pre-HC hidden state, post-HC hidden state, and attention injection in addition to the existing boundaries. Goal: distinguish an upstream pending-state mismatch from PLE/materialization or the attention HC itself. |
 
 Current H20 conclusion: the original layer-0 CT/H12 QKVZ instability follows
 the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
@@ -2013,12 +2014,41 @@ not the only source of end-to-end nondeterminism. The diagnostic-free repair
 still fails broadly, and the v15 diagnostic image also fails end-to-end.
 
 Subsequent probes show that layer 0 is fully stable and v16 shows layer 1 is
-also fully stable across every captured decoder boundary. Continuing one layer
-per image would create unnecessary version churn. H20 v17 therefore performs a
-sparse decoder search at layers 0, 1, 3, 7, 15, 31, and 47. Request-0 and
-request-1 snapshots stay on GPU until the final selected layer is reached so
-intermediate CPU hashing does not perturb the search. Once the first unstable
-interval is found, only that interval will be bisected.
+also fully stable across every captured decoder boundary. H20 v17 then sampled
+layers 0, 1, 3, 7, 15, 31, and 47 while deferring CPU fingerprinting until
+request 1 reached layer 47.
+
+Observed v17 result on 2026-09-24:
+
+- layers 0, 1, 3, and 7 were fully repeat-stable at all five decoder
+  boundaries;
+- layer 15 had `entry_hidden=true` but
+  `attn_block_input=false`, and all later boundaries in that layer also
+  differed;
+- layers 31 and 47 were already different at `entry_hidden`, consistent with
+  propagation of an earlier mismatch.
+
+This is stronger than a simple 8-15 interval result. The layer-15
+`entry_hidden` tensor itself is still equal, so the next divergence appears
+while preparing the layer-15 attention input. However,
+`attn_hyper_connection.combine_and_mix()` consumes three logical inputs:
+`hidden_states`, the previous layer's pending `prev_block_output`, and
+`prev_injection`. In addition, a PLE layer may materialize the pending state
+and modify `hidden_states` before the HC mix. Therefore v18 must check those
+inputs before attributing the mismatch to the HC implementation itself.
+
+H20 v18 retains the sparse-layer capture and adds layer-15-only fingerprints
+for `prev_block_output`, `prev_injection`, the hidden state immediately
+before the attention HC, the post-HC hidden state, and the newly produced
+attention injection. Pending inputs are captured at decoder-layer entry before
+any PLE handling. This separates three cases:
+
+- pending state already differs: move localization upstream to layer 14 MLP /
+  injection production;
+- pending state matches but pre-HC hidden differs: inspect layer-15 PLE or
+  pending-state materialization;
+- all HC inputs match but `attn_block_input` differs: inspect the
+  GatedResidual HC pipeline itself.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
