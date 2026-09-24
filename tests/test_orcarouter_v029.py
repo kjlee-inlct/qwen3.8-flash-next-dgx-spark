@@ -498,6 +498,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("hybrid-h20-modelopt-convert-diag", runtime)
         self.assertIn("QWEN38_H20_DIAG_MAX_CALLS=4", runtime)
         self.assertIn("QWEN38_H20_DIAG_SAMPLE_ELEMS=1024", runtime)
+        self.assertIn('QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0', runtime)
+        self.assertIn('h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts", runtime)
