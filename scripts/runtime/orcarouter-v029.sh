@@ -698,6 +698,7 @@ start_runtime() {
       -e QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts
       -e QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"
       -e QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-layer14-${QWEN38_H20U_LAYER14_GROUP:-all}"
     )
     if [[ "${QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0}" == 1 ]]; then
       h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )
