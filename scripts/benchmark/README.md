@@ -2114,7 +2114,7 @@ math, or accumulation as the specific source. If layer-14 `mlp_out` matches
 while layer-15 `prev_block_output` differs, treat that as a capture/aliasing
 inconsistency and investigate before drawing a model conclusion.
 
-After this change is merged, rebuild and run the v20 CT diagnostic on the DGX:
+After this change is merged, rebuild and run the v21 CT diagnostic on the DGX:
 
 ```bash
 cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
@@ -2148,7 +2148,7 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --output scripts/benchmark/results/local/h20u-v20-layer14-all.jsonl
 ```
 
-The image label should print `ct-nvfp4-convert-diag-v20`. With the default
+The image label should print `ct-nvfp4-convert-diag-v21`. With the default
 `QWEN38_H20U_LAYER14_GROUP=all`, the probe emits 16 records: two requests for
 each selected layer `0,1,3,7,14,15,31,47`.
 
@@ -2173,7 +2173,9 @@ use one of these runtime values without rebuilding between groups:
 
 Each non-`none` group emits a partial layer-14 record plus the unchanged
 layer-15 witness. The JSONL lists only tensors captured by the selected group;
-repeat summaries compare only those fields. The older
+repeat summaries compare only those fields. If any selected capture stage is
+not observed, records include `missing_tensors` instead of suppressing the
+entire probe output. The older
 `QWEN38_H20U_CAPTURE_LAYER14=0` switch remains an alias for `none`.
 
 Observed v19 startup ablation on 2026-09-24:
@@ -2191,6 +2193,12 @@ Observed v19 startup ablation on 2026-09-24:
   starts (about 30 GiB versus 41 GiB), so the ablation strongly implicates
   layer-14 graph additions but does not prove causation. The v19
   `prev_block_output` mismatch was not reproduced in this control.
+- the v20 `attention`-only run reached READY after 661 s, but its probe found
+  no records. The configured group and launch-blocking flag were confirmed;
+  because the recorder previously required an exact set of all expected
+  capture names before emitting any records, a missing attention stage could
+  suppress the whole probe. v21 emits partial records with `missing_tensors`
+  so the next run can identify any absent stage.
 
 For a controlled group run, preserve logs from the previous container, remove
 it, then start with one group (begin with `entry`):

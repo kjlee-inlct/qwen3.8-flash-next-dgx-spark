@@ -184,15 +184,11 @@ def _qwen38_h20u_emit_if_complete() -> None:
     if any(key not in _QWEN38_H20U_PENDING for key in keys):
         return
     for layer_idx in _QWEN38_H20U_LAYERS:
-        required = set(_qwen38_h20u_required_names(layer_idx))
-        for request_id in (0, 1):
-            key = (layer_idx, request_id)
-            if set(_QWEN38_H20U_PENDING[key]) != required:
-                return
-    for layer_idx in _QWEN38_H20U_LAYERS:
         names = _qwen38_h20u_required_names(layer_idx)
         for request_id in (0, 1):
             key = (layer_idx, request_id)
+            captured = _QWEN38_H20U_PENDING[key]
+            present_names = tuple(name for name in names if name in captured)
             record = {
                 "schema": 6,
                 "phase": "sparse-layer-upstream",
@@ -200,10 +196,11 @@ def _qwen38_h20u_emit_if_complete() -> None:
                 "request_id": request_id,
                 "tensors": {
                     name: _qwen38_h20u_fingerprint(
-                        _QWEN38_H20U_PENDING[key][name]
+                        captured[name]
                     )
-                    for name in names
+                    for name in present_names
                 },
+                "missing_tensors": [name for name in names if name not in captured],
             }
             print(
                 "QWEN38_H20U_LAYER0 " + json.dumps(record, sort_keys=True),
