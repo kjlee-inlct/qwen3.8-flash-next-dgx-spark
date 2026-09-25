@@ -2175,7 +2175,9 @@ Each non-`none` group emits a partial layer-14 record plus the unchanged
 layer-15 witness. The JSONL lists only tensors captured by the selected group;
 repeat summaries compare only those fields. If any selected capture stage is
 not observed, records include `missing_tensors` instead of suppressing the
-entire probe output. The older
+entire probe output. Each group uses a separate `VLLM_CACHE_ROOT` beneath the
+mounted vLLM cache so torch.compile/AOT artifacts built for one Python-global
+capture selection cannot be reused by another group. The older
 `QWEN38_H20U_CAPTURE_LAYER14=0` switch remains an alias for `none`.
 
 Observed v19 startup ablation on 2026-09-24:
@@ -2199,6 +2201,12 @@ Observed v19 startup ablation on 2026-09-24:
   capture names before emitting any records, a missing attention stage could
   suppress the whole probe. v21 emits partial records with `missing_tensors`
   so the next run can identify any absent stage.
+- v21 `attention`, `mlp`, and `all` starts initially reused identical AOT cache
+  paths (`6d7a81...` and `0114e1...`) despite different capture groups. The
+  `mlp` records had empty tensors; `all` contained only attention captures and
+  listed the other seven layer-14 fields as missing. These runs are invalid
+  group comparisons. The runtime now namespaces `VLLM_CACHE_ROOT` by capture
+  group; rerun each group to compile an isolated graph before comparing.
 
 For a controlled group run, preserve logs from the previous container, remove
 it, then start with one group (begin with `entry`):
