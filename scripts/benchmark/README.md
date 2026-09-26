@@ -2232,11 +2232,14 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --output scripts/benchmark/results/local/h20u-v20-layer14-entry.jsonl
 ```
 
-Repeat with `attention` and `mlp` as separate runs, keeping the same
-`CUDA_LAUNCH_BLOCKING=1` setting and recording `MemAvailable` before each
-start. A group that fails while `none` succeeds narrows the problematic
-compiled capture region; if all groups start individually but `all` fails,
-the combined graph size/interaction is the remaining distinction.
+Repeat with `attention`, `mlp_hc`, and `mlp_block` as separate runs, keeping
+the same `CUDA_LAUNCH_BLOCKING=1` setting and recording `MemAvailable` before
+each start. `mlp_hc` captures only `post_mlp_hc_hidden` and
+`post_mlp_hc_injection`; `mlp_block` captures only `mlp_block_input` and
+`mlp_out`. The legacy `mlp` group still enables both subgroups. A subgroup
+that fails while `none` succeeds narrows the problematic compiled capture
+region; if all groups start individually but `all` fails, combined graph
+size/interaction remains the distinction.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
