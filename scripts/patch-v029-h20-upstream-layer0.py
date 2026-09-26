@@ -155,6 +155,59 @@ def _qwen38_h20u_fingerprint(tensor: torch.Tensor) -> dict:
     return result
 
 
+def _qwen38_h20u_rowwise_compare(
+    reference: torch.Tensor,
+    candidate: torch.Tensor,
+) -> dict:
+    a = reference.detach()
+    b = candidate.detach()
+    if tuple(a.shape) != tuple(b.shape):
+        return {
+            "shape_match": False,
+            "reference_shape": list(a.shape),
+            "candidate_shape": list(b.shape),
+        }
+    if a.ndim == 0:
+        changed = bool((a != b).item())
+        max_abs_diff = float((a.float() - b.float()).abs().item())
+        return {
+            "shape_match": True,
+            "equal": not changed,
+            "row_count": 1,
+            "changed_rows": [0] if changed else [],
+            "changed_elements_by_row": {"0": 1} if changed else {},
+            "max_abs_diff": max_abs_diff,
+            "max_abs_diff_by_row": {"0": max_abs_diff} if changed else {},
+            "first_mismatch_index": [] if changed else None,
+        }
+
+    diff = a != b
+    flat_diff = diff.reshape(diff.shape[0], -1)
+    counts = flat_diff.sum(dim=1).cpu().tolist()
+    changed_rows = [idx for idx, count in enumerate(counts) if count]
+    row_max = (a.float() - b.float()).abs().reshape(a.shape[0], -1).amax(dim=1)
+    changed_max = row_max.cpu().tolist()
+    mismatch_indices = torch.nonzero(diff, as_tuple=False)
+    first_mismatch = (
+        mismatch_indices[0].cpu().tolist() if mismatch_indices.numel() else None
+    )
+    max_abs_diff = float(row_max.max().item()) if row_max.numel() else 0.0
+    return {
+        "shape_match": True,
+        "equal": not changed_rows,
+        "row_count": int(a.shape[0]),
+        "changed_rows": changed_rows,
+        "changed_elements_by_row": {
+            str(idx): int(counts[idx]) for idx in changed_rows
+        },
+        "max_abs_diff": max_abs_diff,
+        "max_abs_diff_by_row": {
+            str(idx): float(changed_max[idx]) for idx in changed_rows
+        },
+        "first_mismatch_index": first_mismatch,
+    }
+
+
 def _qwen38_h20u_required_names(layer_idx: int) -> tuple[str, ...]:
     if layer_idx == 15:
         return (
@@ -202,7 +255,7 @@ def _qwen38_h20u_emit_if_complete() -> None:
             captured = _QWEN38_H20U_PENDING[key]
             present_names = tuple(name for name in names if name in captured)
             record = {
-                "schema": 6,
+                "schema": 7,
                 "phase": "sparse-layer-upstream",
                 "layer_idx": layer_idx,
                 "request_id": request_id,
@@ -214,6 +267,17 @@ def _qwen38_h20u_emit_if_complete() -> None:
                 },
                 "missing_tensors": [name for name in names if name not in captured],
             }
+            if layer_idx == 14 and request_id == 1:
+                repeat_comparison = {
+                    name: _qwen38_h20u_rowwise_compare(
+                        _QWEN38_H20U_PENDING[(14, 0)][name],
+                        captured[name],
+                    )
+                    for name in ("mlp_block_input", "mlp_out")
+                    if name in captured and name in _QWEN38_H20U_PENDING[(14, 0)]
+                }
+                if repeat_comparison:
+                    record["repeat_comparison"] = repeat_comparison
             print(
                 "QWEN38_H20U_LAYER0 " + json.dumps(record, sort_keys=True),
                 flush=True,
