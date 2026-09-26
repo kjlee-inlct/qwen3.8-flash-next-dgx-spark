@@ -2153,7 +2153,7 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --output scripts/benchmark/results/local/h20u-v20-layer14-all.jsonl
 ```
 
-The image label should print `ct-nvfp4-convert-diag-v21`. With the default
+The image label should print `ct-nvfp4-convert-diag-v22`. With the default
 `QWEN38_H20U_LAYER14_GROUP=all`, the probe emits 16 records: two requests for
 each selected layer `0,1,3,7,14,15,31,47`.
 

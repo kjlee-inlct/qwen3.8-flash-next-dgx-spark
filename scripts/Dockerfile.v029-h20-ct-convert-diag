@@ -135,4 +135,4 @@ assert "output = self.moe_kernel.apply(" in body
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v21"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v22"
