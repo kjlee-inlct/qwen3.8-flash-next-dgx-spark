@@ -507,6 +507,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts", runtime)
         self.assertIn("h20_image_ok()", runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v22" ]]', runtime)
 
 
     def test_h20_fp8_batch_invariant_repair_profile_is_diagnostic_free(self) -> None:
