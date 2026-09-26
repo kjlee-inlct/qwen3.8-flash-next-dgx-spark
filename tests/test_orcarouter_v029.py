@@ -871,8 +871,10 @@ class AfterLayer:
             self.assertIn('"post_mlp_hc_hidden"', patched)
             self.assertIn('"post_mlp_hc_injection"', patched)
             self.assertIn('"attention" in _QWEN38_H20U_LAYER14_GROUPS', patched)
-            self.assertIn('"mlp" in _QWEN38_H20U_LAYER14_GROUPS', patched)
-            self.assertIn("if self.layer_idx == 14 and _QWEN38_H20U_LAYER14_MLP:", patched)
+            self.assertIn('"mlp_hc"', patched)
+            self.assertIn('"mlp_block"', patched)
+            self.assertIn("_QWEN38_H20U_LAYER14_MLP_HC", patched)
+            self.assertIn("_QWEN38_H20U_LAYER14_MLP_BLOCK", patched)
             self.assertIn('"schema": 6', patched)
 
     def test_h20_upstream_probe_summarizes_layer14_causally_and_keeps_legacy_layers(self) -> None:
