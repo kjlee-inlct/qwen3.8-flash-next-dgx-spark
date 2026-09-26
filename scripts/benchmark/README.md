@@ -2110,11 +2110,16 @@ the MLP HC with differing `mlp_block_input` points to that HC boundary.
 Matching `mlp_block_input` with differing `mlp_out`, reproduced together with
 layer-15 `prev_block_output` mismatch, localizes the first observed mismatch
 inside layer 14's MLP/MoE call, but does not identify router, dispatch, expert
-math, or accumulation as the specific source. If layer-14 `mlp_out` matches
-while layer-15 `prev_block_output` differs, treat that as a capture/aliasing
-inconsistency and investigate before drawing a model conclusion.
+math, or accumulation as the specific source. Schema 7 adds a
+`repeat_comparison` summary to layer-14 request 1: changed row indices,
+changed element counts and maximum absolute differences per row, plus the
+first mismatching multidimensional index. It compares activations on-device
+and emits only the compact summary, not tensor values. If layer-14 `mlp_out`
+matches while layer-15 `prev_block_output` differs, treat that as a
+capture/aliasing inconsistency and investigate before drawing a model
+conclusion.
 
-After this change is merged, rebuild and run the v21 CT diagnostic on the DGX:
+After this comparison update is merged, rebuild the v22 CT diagnostic image and rerun the isolated `mlp_block` probe on the DGX:
 
 ```bash
 cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark

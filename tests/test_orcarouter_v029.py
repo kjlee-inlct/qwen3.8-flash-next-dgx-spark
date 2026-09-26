@@ -875,7 +875,10 @@ class AfterLayer:
             self.assertIn('"mlp_block"', patched)
             self.assertIn("_QWEN38_H20U_LAYER14_MLP_HC", patched)
             self.assertIn("_QWEN38_H20U_LAYER14_MLP_BLOCK", patched)
-            self.assertIn('"schema": 6', patched)
+            self.assertIn('"schema": 7', patched)
+            self.assertIn('def _qwen38_h20u_rowwise_compare(', patched)
+            self.assertIn('"changed_elements_by_row"', patched)
+            self.assertIn('"first_mismatch_index"', patched)
 
     def test_h20_upstream_probe_summarizes_layer14_causally_and_keeps_legacy_layers(self) -> None:
         import contextlib

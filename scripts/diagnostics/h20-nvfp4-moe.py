@@ -728,6 +728,12 @@ def upstream_probe(
             f"upstream_repeat layer={layer} all_equal={all(fields.values())} "
             f"first_mismatch={first} fields={fields}"
         )
+        row_comparison = keyed[(layer, 1)].get("repeat_comparison")
+        if row_comparison:
+            print(
+                f"upstream_row_repeat layer={layer} "
+                f"comparison={json.dumps(row_comparison, sort_keys=True)}"
+            )
     return 0
 
 
