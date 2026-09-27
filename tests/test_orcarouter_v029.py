@@ -1229,6 +1229,21 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             self.assertIn('"lock_pre"', patched)
             self.assertIn("locks.zero_()", patched)
 
+    def test_h20_v26_humming_patcher_scopes_indexed_class(self) -> None:
+        patch = (
+            ROOT / "scripts" / "patch-v029-h20-humming-indexed-boundary.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('class_start = text.index("class HummingIndexedExperts")', patch)
+        self.assertIn(
+            'class_end = text.index("\\n\\nclass HummingGroupedExperts", class_start)',
+            patch,
+        )
+        self.assertIn(
+            'indexed_body = replace_once(indexed_body, quant13_old, quant13_new, "w13 quant boundary")',
+            patch,
+        )
+        self.assertIn("text = prefix + indexed_body + suffix", patch)
+
     def test_h20_v15_ct_image_localizes_batch_invariant_to_fp8(self) -> None:
         dockerfile = (
             ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag"
