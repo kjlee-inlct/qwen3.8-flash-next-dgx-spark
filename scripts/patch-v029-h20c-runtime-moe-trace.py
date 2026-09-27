@@ -252,8 +252,16 @@ new_apply = f'''    def apply(
         shared_experts: SharedExperts | None,
         shared_experts_input: torch.Tensor | None,
     ) -> torch.Tensor:
-{assert_line}        self.moe_kernel.impl._qwen38_h20_layer_name = str(getattr(layer, "layer_name", ""))
-        self.moe_kernel.impl.fused_experts._qwen38_h20_layer_name = str(getattr(layer, "layer_name", ""))
+{assert_line}        h20_layer_name = str(getattr(layer, "layer_name", ""))
+        self.moe_kernel.impl._qwen38_h20_layer_name = h20_layer_name
+        self.moe_kernel.impl.fused_experts._qwen38_h20_layer_name = h20_layer_name
+        try:
+            h20_layer_idx = int(
+                h20_layer_name.split(".layers.", 1)[1].split(".", 1)[0]
+            )
+        except (IndexError, ValueError):
+            h20_layer_idx = -1
+        self.moe_kernel.impl.fused_experts._qwen38_h20_layer_idx = h20_layer_idx
         global _QWEN38_H20C_CALL
         h20d_single_request_id = _qwen38_h20d_single_request_id(layer)
         if h20d_single_request_id >= 0:

@@ -162,6 +162,8 @@ humming_moe="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/
 humming_moe_s=open(humming_moe, encoding="utf-8").read()
 ast.parse(humming_moe_s)
 assert "QWEN38_H20W_EXPERT " in humming_moe_s
+assert '"qwen38_h20w::capture"' in humming_moe_s
+assert 'mutates_args={"tensor"}' in humming_moe_s
 assert '"aligned_sorted_ids"' in humming_moe_s
 assert '"w13_output"' in humming_moe_s
 assert '"w2_output"' in humming_moe_s

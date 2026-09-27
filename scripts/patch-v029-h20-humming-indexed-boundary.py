@@ -36,49 +36,42 @@ _QWEN38_H20W_TARGET_LAYER = os.getenv(
     "QWEN38_H20W_TARGET_LAYER",
     "language_model.model.layers.15.mlp.experts",
 )
+try:
+    _QWEN38_H20W_TARGET_LAYER_IDX = int(
+        _QWEN38_H20W_TARGET_LAYER.split(".layers.", 1)[1].split(".", 1)[0]
+    )
+except (IndexError, ValueError):
+    _QWEN38_H20W_TARGET_LAYER_IDX = -1
+
 _QWEN38_H20W_PENDING: dict[int, dict[str, torch.Tensor | None]] = {}
+_QWEN38_H20W_STAGE_NAMES = {
+    0: "entry_hidden_states",
+    1: "entry_topk_weights",
+    2: "entry_topk_ids",
+    3: "entry_a1q_scale",
+    4: "entry_expert_psum",
+    5: "aligned_sorted_ids",
+    6: "aligned_expert_ids",
+    7: "aligned_num_tokens_padded",
+    8: "w13_input",
+    9: "w13_input_scale",
+    10: "w13_output",
+    11: "w2_input",
+    12: "w2_input_scale",
+    13: "w2_output",
+    14: "final_output",
+}
 
 
-def _qwen38_h20w_clone(tensor: torch.Tensor | None) -> torch.Tensor | None:
-    return None if tensor is None else tensor.clone()
-
-
-@torch.compiler.disable
-def _qwen38_h20w_request_id(experts) -> int:
-    if not os.path.exists(_QWEN38_H20W_TRIGGER):
-        return -1
-    if str(getattr(experts, "_qwen38_h20_layer_name", "")) != _QWEN38_H20W_TARGET_LAYER:
-        return -1
-    try:
-        with open(_QWEN38_H20W_REQUEST_FILE, encoding="utf-8") as handle:
-            return int(handle.read().strip())
-    except (OSError, ValueError):
-        return -1
-
-
-@torch.compiler.disable
 def _qwen38_h20w_commit(
     *,
     request_id: int,
     layer_name: str,
     snapshots: dict[str, torch.Tensor | None],
 ) -> None:
-    field_order = (
-        "entry_hidden_states",
-        "entry_topk_weights",
-        "entry_topk_ids",
-        "entry_a1q_scale",
-        "entry_expert_psum",
-        "aligned_sorted_ids",
-        "aligned_expert_ids",
-        "aligned_num_tokens_padded",
-        "w13_input",
-        "w13_input_scale",
-        "w13_output",
-        "w2_input",
-        "w2_input_scale",
-        "w2_output",
-        "final_output",
+    field_order = tuple(
+        _QWEN38_H20W_STAGE_NAMES[index]
+        for index in sorted(_QWEN38_H20W_STAGE_NAMES)
     )
 
     def compare(a: torch.Tensor | None, b: torch.Tensor | None) -> dict:
@@ -112,7 +105,7 @@ def _qwen38_h20w_commit(
             None,
         )
         record = {
-            "schema": 1,
+            "schema": 2,
             "phase": "humming-indexed-repeat",
             "layer_name": layer_name,
             "request0": previous_id,
@@ -158,6 +151,38 @@ def _qwen38_h20w_commit(
     while len(_QWEN38_H20W_PENDING) > 16:
         oldest = min(_QWEN38_H20W_PENDING)
         del _QWEN38_H20W_PENDING[oldest]
+
+
+@torch.library.custom_op(
+    "qwen38_h20w::capture",
+    mutates_args={"tensor"},
+)
+def _qwen38_h20w_capture(
+    tensor: torch.Tensor,
+    stage: int,
+    layer_idx: int,
+) -> None:
+    if layer_idx != _QWEN38_H20W_TARGET_LAYER_IDX:
+        return
+    if not os.path.exists(_QWEN38_H20W_TRIGGER):
+        return
+    stage_name = _QWEN38_H20W_STAGE_NAMES.get(stage)
+    if stage_name is None:
+        return
+    try:
+        with open(_QWEN38_H20W_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return
+
+    snapshots = _QWEN38_H20W_PENDING.setdefault(request_id, {})
+    snapshots[stage_name] = tensor.detach().clone()
+    if stage == 14:
+        _qwen38_h20w_commit(
+            request_id=request_id,
+            layer_name=_QWEN38_H20W_TARGET_LAYER,
+            snapshots=snapshots,
+        )
 '''
 
 text = replace_once(
@@ -176,16 +201,18 @@ suffix = text[class_end:]
 entry_old = '''        hidden_states = hidden_states.view(-1, hidden_states.size(-1))
         buffers = self.prepare_buffers(
 '''
-entry_new = '''        h20w_request_id = _qwen38_h20w_request_id(self)
-        if h20w_request_id >= 0:
-            h20w_entry_hidden_states = _qwen38_h20w_clone(hidden_states)
-            h20w_entry_topk_weights = _qwen38_h20w_clone(topk_weights)
-            h20w_entry_topk_ids = _qwen38_h20w_clone(topk_ids)
-            h20w_entry_a1q_scale = _qwen38_h20w_clone(a1q_scale)
-            h20w_entry_expert_psum = _qwen38_h20w_clone(
-                None
-                if expert_tokens_meta is None
-                else expert_tokens_meta.psum_recv_per_rank
+entry_new = '''        h20w_layer_idx = int(getattr(self, "_qwen38_h20_layer_idx", -1))
+        _qwen38_h20w_capture(hidden_states, 0, h20w_layer_idx)
+        _qwen38_h20w_capture(topk_weights, 1, h20w_layer_idx)
+        _qwen38_h20w_capture(topk_ids, 2, h20w_layer_idx)
+        if a1q_scale is not None:
+            _qwen38_h20w_capture(a1q_scale, 3, h20w_layer_idx)
+        if (
+            expert_tokens_meta is not None
+            and expert_tokens_meta.psum_recv_per_rank is not None
+        ):
+            _qwen38_h20w_capture(
+                expert_tokens_meta.psum_recv_per_rank, 4, h20w_layer_idx
             )
 
         hidden_states = hidden_states.view(-1, hidden_states.size(-1))
@@ -206,16 +233,15 @@ kwargs_new = '''        moe_kwargs1, moe_kwargs2 = self.prepare_humming_moe_kwar
             expert_map=expert_map,
             expert_tokens_meta=expert_tokens_meta,
         )
-        if h20w_request_id >= 0:
-            h20w_aligned_sorted_ids = _qwen38_h20w_clone(
-                moe_kwargs1.get("sorted_ids")
-            )
-            h20w_aligned_expert_ids = _qwen38_h20w_clone(
-                moe_kwargs1.get("expert_ids")
-            )
-            h20w_aligned_num_tokens_padded = _qwen38_h20w_clone(
-                moe_kwargs1.get("num_tokens_padded")
-            )
+        _qwen38_h20w_capture(
+            moe_kwargs1["sorted_ids"], 5, h20w_layer_idx
+        )
+        _qwen38_h20w_capture(
+            moe_kwargs1["expert_ids"], 6, h20w_layer_idx
+        )
+        _qwen38_h20w_capture(
+            moe_kwargs1["num_tokens_padded"], 7, h20w_layer_idx
+        )
 
         inputs, input_scale = self.quantize_input(
 '''
@@ -236,9 +262,9 @@ quant13_new = '''        inputs, input_scale = self.quantize_input(
             input_scale=a1q_scale,
             quanted_input=buffers.get("quanted_gate_up_input", None),
         )
-        if h20w_request_id >= 0:
-            h20w_w13_input = _qwen38_h20w_clone(inputs)
-            h20w_w13_input_scale = _qwen38_h20w_clone(input_scale)
+        _qwen38_h20w_capture(inputs, 8, h20w_layer_idx)
+        if input_scale is not None:
+            _qwen38_h20w_capture(input_scale, 9, h20w_layer_idx)
 
         self.humming_forward(
 '''
@@ -263,8 +289,9 @@ w13_new = '''        self.humming_forward(
             outputs=buffers["gate_up_output"],
             **moe_kwargs1,
         )
-        if h20w_request_id >= 0:
-            h20w_w13_output = _qwen38_h20w_clone(buffers["gate_up_output"])
+        _qwen38_h20w_capture(
+            buffers["gate_up_output"], 10, h20w_layer_idx
+        )
 
         # psum[-1:] is the DeepEP valid *token* count as a zero-cost int32 view.
 '''
@@ -281,9 +308,9 @@ w2_forward_old = '''        self.humming_forward(
 
         # expert_map masks any non-local id; num_valid_tokens bounds the
 '''
-w2_forward_new = '''        if h20w_request_id >= 0:
-            h20w_w2_input = _qwen38_h20w_clone(inputs)
-            h20w_w2_input_scale = _qwen38_h20w_clone(input_scale)
+w2_forward_new = '''        _qwen38_h20w_capture(inputs, 11, h20w_layer_idx)
+        if input_scale is not None:
+            _qwen38_h20w_capture(input_scale, 12, h20w_layer_idx)
 
         self.humming_forward(
             "w2",
@@ -293,8 +320,9 @@ w2_forward_new = '''        if h20w_request_id >= 0:
             outputs=buffers["down_output"].view(-1, hidden_states.size(-1)),
             **moe_kwargs2,
         )
-        if h20w_request_id >= 0:
-            h20w_w2_output = _qwen38_h20w_clone(buffers["down_output"])
+        _qwen38_h20w_capture(
+            buffers["down_output"], 13, h20w_layer_idx
+        )
 
         # expert_map masks any non-local id; num_valid_tokens bounds the
 '''
@@ -316,29 +344,7 @@ reduce_new = '''        moe_fused_mul_sum(
             outputs=output,
             num_valid_tokens=valid_tokens,
         )
-        if h20w_request_id >= 0:
-            h20w_final_output = _qwen38_h20w_clone(output)
-            _qwen38_h20w_commit(
-                request_id=h20w_request_id,
-                layer_name=str(getattr(self, "_qwen38_h20_layer_name", "")),
-                snapshots={
-                    "entry_hidden_states": h20w_entry_hidden_states,
-                    "entry_topk_weights": h20w_entry_topk_weights,
-                    "entry_topk_ids": h20w_entry_topk_ids,
-                    "entry_a1q_scale": h20w_entry_a1q_scale,
-                    "entry_expert_psum": h20w_entry_expert_psum,
-                    "aligned_sorted_ids": h20w_aligned_sorted_ids,
-                    "aligned_expert_ids": h20w_aligned_expert_ids,
-                    "aligned_num_tokens_padded": h20w_aligned_num_tokens_padded,
-                    "w13_input": h20w_w13_input,
-                    "w13_input_scale": h20w_w13_input_scale,
-                    "w13_output": h20w_w13_output,
-                    "w2_input": h20w_w2_input,
-                    "w2_input_scale": h20w_w2_input_scale,
-                    "w2_output": h20w_w2_output,
-                    "final_output": h20w_final_output,
-                },
-            )'''
+        _qwen38_h20w_capture(output, 14, h20w_layer_idx)'''
 indexed_body = replace_once(indexed_body, reduce_old, reduce_new, "indexed reduce boundary")
 
 text = prefix + indexed_body + suffix
