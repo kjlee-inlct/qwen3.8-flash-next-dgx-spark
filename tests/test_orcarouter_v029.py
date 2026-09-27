@@ -1243,6 +1243,10 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             patch,
         )
         self.assertIn("text = prefix + indexed_body + suffix", patch)
+        self.assertIn('"qwen38_h20w::capture"', patch)
+        self.assertIn('mutates_args={"tensor"}', patch)
+        self.assertNotIn("@torch.compiler.disable\ndef _qwen38_h20w_request_id", patch)
+        self.assertIn("_qwen38_h20_layer_idx", patch)
         self.assertIn(
             "reduce_old = '''        moe_fused_mul_sum(",
             patch,
@@ -1277,6 +1281,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn('"w13_output"', humming_expert_patch)
         self.assertIn('"w2_output"', humming_expert_patch)
         self.assertIn("self.moe_kernel.impl.fused_experts._qwen38_h20_layer_name", h20c_patch)
+        self.assertIn("self.moe_kernel.impl.fused_experts._qwen38_h20_layer_idx", h20c_patch)
         self.assertIn("QWEN38_H20V_BOUNDARY ", dockerfile)
         self.assertIn('"entry_hidden_states"', modular_patch)
         self.assertIn('"entry_shared_experts_input"', modular_patch)
