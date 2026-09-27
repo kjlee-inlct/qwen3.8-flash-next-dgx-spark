@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-M v28 single-pass Marlin alignment-aware capture in vLLM v0.29."""
+"""Install H20-M v29 semantic Marlin alignment capture in vLLM v0.29."""
 
 from __future__ import annotations
 
@@ -160,6 +160,126 @@ def _qwen38_h20m_sorted_detail(
     return result
 
 
+def _qwen38_h20m_expert_layout_detail(
+    left_sorted: object,
+    right_sorted: object,
+    left_experts: object,
+    right_experts: object,
+    left_num_tokens: object,
+    right_num_tokens: object,
+    left_topk_ids: object,
+    right_topk_ids: object,
+    left_block_size: object,
+    right_block_size: object,
+) -> dict:
+    result = {
+        "membership_equal": False,
+        "order_equal": False,
+        "padding_layout_equal": False,
+        "mismatching_membership_experts": [],
+        "mismatching_order_experts": [],
+    }
+    tensors = (
+        left_sorted,
+        right_sorted,
+        left_experts,
+        right_experts,
+        left_topk_ids,
+        right_topk_ids,
+    )
+    if not all(isinstance(value, torch.Tensor) for value in tensors):
+        return result
+    assert isinstance(left_sorted, torch.Tensor)
+    assert isinstance(right_sorted, torch.Tensor)
+    assert isinstance(left_experts, torch.Tensor)
+    assert isinstance(right_experts, torch.Tensor)
+    assert isinstance(left_topk_ids, torch.Tensor)
+    assert isinstance(right_topk_ids, torch.Tensor)
+
+    n0 = _qwen38_h20m_scalar_int(left_num_tokens)
+    n1 = _qwen38_h20m_scalar_int(right_num_tokens)
+    if (
+        n0 is None
+        or n1 is None
+        or n0 != n1
+        or not isinstance(left_block_size, int)
+        or not isinstance(right_block_size, int)
+        or left_block_size != right_block_size
+        or left_block_size <= 0
+    ):
+        return result
+
+    block_size = left_block_size
+    if n0 % block_size != 0:
+        result["invalid_block_geometry"] = True
+        return result
+    if n0 > left_sorted.numel() or n0 > right_sorted.numel():
+        result["invalid_sorted_length"] = True
+        return result
+
+    num_blocks = n0 // block_size
+    if num_blocks > left_experts.numel() or num_blocks > right_experts.numel():
+        result["invalid_expert_length"] = True
+        return result
+
+    total0 = left_topk_ids.numel()
+    total1 = right_topk_ids.numel()
+    if total0 != total1:
+        result["routed_token_count_match"] = False
+        return result
+
+    left_sorted_cpu = left_sorted[:n0].detach().cpu().tolist()
+    right_sorted_cpu = right_sorted[:n0].detach().cpu().tolist()
+    left_experts_cpu = left_experts[:num_blocks].detach().cpu().tolist()
+    right_experts_cpu = right_experts[:num_blocks].detach().cpu().tolist()
+
+    result["routed_token_count_match"] = True
+    result["routed_token_count"] = total0
+    result["valid_length"] = n0
+    result["block_size_m"] = block_size
+    result["num_blocks"] = num_blocks
+    result["expert_ids_equal"] = left_experts_cpu == right_experts_cpu
+
+    left_padding = [value >= total0 for value in left_sorted_cpu]
+    right_padding = [value >= total0 for value in right_sorted_cpu]
+    result["padding_layout_equal"] = left_padding == right_padding
+
+    def group(
+        sorted_ids: list[int],
+        expert_ids: list[int],
+        total_tokens: int,
+    ) -> dict[int, list[int]]:
+        grouped: dict[int, list[int]] = {}
+        for block_idx, expert_id in enumerate(expert_ids):
+            start = block_idx * block_size
+            block = sorted_ids[start : start + block_size]
+            valid = [token for token in block if 0 <= token < total_tokens]
+            grouped.setdefault(int(expert_id), []).extend(valid)
+        return grouped
+
+    left_grouped = group(left_sorted_cpu, left_experts_cpu, total0)
+    right_grouped = group(right_sorted_cpu, right_experts_cpu, total0)
+    expert_keys = sorted(set(left_grouped) | set(right_grouped))
+
+    membership_mismatch: list[int] = []
+    order_mismatch: list[int] = []
+    for expert_id in expert_keys:
+        left_tokens = left_grouped.get(expert_id, [])
+        right_tokens = right_grouped.get(expert_id, [])
+        if sorted(left_tokens) != sorted(right_tokens):
+            membership_mismatch.append(expert_id)
+        if left_tokens != right_tokens:
+            order_mismatch.append(expert_id)
+
+    result["membership_equal"] = not membership_mismatch
+    result["order_equal"] = not order_mismatch
+    result["mismatching_membership_expert_count"] = len(membership_mismatch)
+    result["mismatching_order_expert_count"] = len(order_mismatch)
+    result["mismatching_membership_experts"] = membership_mismatch[:16]
+    result["mismatching_order_experts"] = order_mismatch[:16]
+    return result
+
+
 def _qwen38_h20m_commit(
     *,
     request_id: int,
@@ -198,6 +318,18 @@ def _qwen38_h20m_commit(
             previous.get("aligned_num_tokens_post_padded"),
             snapshots.get("aligned_num_tokens_post_padded"),
         )
+        expert_layout = _qwen38_h20m_expert_layout_detail(
+            previous.get("aligned_sorted_token_ids"),
+            snapshots.get("aligned_sorted_token_ids"),
+            previous.get("aligned_expert_ids"),
+            snapshots.get("aligned_expert_ids"),
+            previous.get("aligned_num_tokens_post_padded"),
+            snapshots.get("aligned_num_tokens_post_padded"),
+            previous.get("entry_topk_ids"),
+            snapshots.get("entry_topk_ids"),
+            previous.get("alignment_block_size_m"),
+            snapshots.get("alignment_block_size_m"),
+        )
         semantic_checks = (
             ("entry_hidden_states", fields["entry_hidden_states"]["equal"]),
             ("entry_topk_weights", fields["entry_topk_weights"]["equal"]),
@@ -228,7 +360,7 @@ def _qwen38_h20m_commit(
             None,
         )
         record = {
-            "schema": 4,
+            "schema": 5,
             "phase": "marlin-repeat",
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
@@ -245,6 +377,28 @@ def _qwen38_h20m_commit(
             "valid_sorted_mismatch_count": sorted_detail[
                 "valid_mismatch_count"
             ],
+            "expert_layout": expert_layout,
+            "expert_membership_equal": expert_layout["membership_equal"],
+            "expert_order_equal": expert_layout["order_equal"],
+            "padding_layout_equal": expert_layout["padding_layout_equal"],
+            "aligned_expert_ids_equal": fields["aligned_expert_ids"]["equal"],
+            "aligned_num_tokens_post_padded_equal": fields[
+                "aligned_num_tokens_post_padded"
+            ]["equal"],
+            "alignment_order_only_divergence": (
+                not sorted_detail["valid_equal"]
+                and expert_layout["membership_equal"]
+                and fields["aligned_expert_ids"]["equal"]
+                and fields["aligned_num_tokens_post_padded"]["equal"]
+                and all(
+                    fields[name]["equal"]
+                    for name in (
+                        "alignment_block_size_m",
+                        "alignment_global_num_experts",
+                        "alignment_expert_map",
+                    )
+                )
+            ),
             "first_mismatch": first_mismatch,
             "entry_equal": all(
                 fields[name]["equal"]
