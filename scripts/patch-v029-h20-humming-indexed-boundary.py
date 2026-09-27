@@ -167,6 +167,12 @@ text = replace_once(
     "logger anchor",
 )
 
+class_start = text.index("class HummingIndexedExperts")
+class_end = text.index("\n\nclass HummingGroupedExperts", class_start)
+prefix = text[:class_start]
+indexed_body = text[class_start:class_end]
+suffix = text[class_end:]
+
 entry_old = '''        hidden_states = hidden_states.view(-1, hidden_states.size(-1))
         buffers = self.prepare_buffers(
 '''
@@ -185,7 +191,7 @@ entry_new = '''        h20w_request_id = _qwen38_h20w_request_id(self)
         hidden_states = hidden_states.view(-1, hidden_states.size(-1))
         buffers = self.prepare_buffers(
 '''
-text = replace_once(text, entry_old, entry_new, "HummingIndexedExperts entry")
+indexed_body = replace_once(indexed_body, entry_old, entry_new, "HummingIndexedExperts entry")
 
 kwargs_old = '''        moe_kwargs1, moe_kwargs2 = self.prepare_humming_moe_kwargs(
             topk_ids=topk_ids,
@@ -213,7 +219,7 @@ kwargs_new = '''        moe_kwargs1, moe_kwargs2 = self.prepare_humming_moe_kwar
 
         inputs, input_scale = self.quantize_input(
 '''
-text = replace_once(text, kwargs_old, kwargs_new, "indexed alignment boundary")
+indexed_body = replace_once(indexed_body, kwargs_old, kwargs_new, "indexed alignment boundary")
 
 quant13_old = '''        inputs, input_scale = self.quantize_input(
             "w13",
@@ -236,7 +242,7 @@ quant13_new = '''        inputs, input_scale = self.quantize_input(
 
         self.humming_forward(
 '''
-text = replace_once(text, quant13_old, quant13_new, "w13 quant boundary")
+indexed_body = replace_once(indexed_body, quant13_old, quant13_new, "w13 quant boundary")
 
 w13_old = '''        self.humming_forward(
             "w13",
@@ -262,7 +268,7 @@ w13_new = '''        self.humming_forward(
 
         # psum[-1:] is the DeepEP valid *token* count as a zero-cost int32 view.
 '''
-text = replace_once(text, w13_old, w13_new, "w13 output boundary")
+indexed_body = replace_once(indexed_body, w13_old, w13_new, "w13 output boundary")
 
 w2_forward_old = '''        self.humming_forward(
             "w2",
@@ -292,7 +298,7 @@ w2_forward_new = '''        if h20w_request_id >= 0:
 
         # expert_map masks any non-local id; num_valid_tokens bounds the
 '''
-text = replace_once(text, w2_forward_old, w2_forward_new, "w2 boundaries")
+indexed_body = replace_once(indexed_body, w2_forward_old, w2_forward_new, "w2 boundaries")
 
 reduce_old = '''        moe_fused_mul_sum(
             inputs=buffers["down_output"].view(*topk_ids.shape, -1),
@@ -339,7 +345,9 @@ reduce_new = '''        moe_fused_mul_sum(
 
 
 class HummingGroupedExperts'''
-text = replace_once(text, reduce_old, reduce_new, "indexed reduce boundary")
+indexed_body = replace_once(indexed_body, reduce_old, reduce_new, "indexed reduce boundary")
+
+text = prefix + indexed_body + suffix
 
 path.write_text(text, encoding="utf-8")
 print("installed H20-W Humming indexed-expert boundary capture")
