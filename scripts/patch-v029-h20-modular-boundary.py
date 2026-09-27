@@ -71,6 +71,10 @@ def _qwen38_h20v_boundary_commit(
     snapshots: dict[str, torch.Tensor | None],
 ) -> None:
     field_order = (
+        "entry_hidden_states",
+        "entry_topk_weights",
+        "entry_topk_ids",
+        "entry_shared_experts_input",
         "prepared_a1q",
         "prepared_a1q_scale",
         "prepared_topk_ids",
@@ -110,13 +114,22 @@ def _qwen38_h20v_boundary_commit(
             None,
         )
         record = {
-            "schema": 1,
+            "schema": 2,
             "phase": "modular-boundary-repeat",
             "layer_name": layer_name,
             "request0": previous_id,
             "request1": request_id,
             "fields": fields,
             "first_mismatch": first_mismatch,
+            "entry_equal": all(
+                fields[name]["equal"]
+                for name in (
+                    "entry_hidden_states",
+                    "entry_topk_weights",
+                    "entry_topk_ids",
+                    "entry_shared_experts_input",
+                )
+            ),
             "prepared_equal": all(
                 fields[name]["equal"]
                 for name in (
@@ -156,8 +169,16 @@ prepare_old = '''        a1q, a1q_scale, expert_tokens_meta, topk_ids, topk_weig
             apply_router_weight_on_input,
         )
 '''
-prepare_new = prepare_old + '''
-        h20v_request_id = _qwen38_h20v_boundary_request_id(self)
+prepare_new = '''        h20v_request_id = _qwen38_h20v_boundary_request_id(self)
+        if h20v_request_id >= 0:
+            h20v_entry_hidden_states = _qwen38_h20v_boundary_clone(hidden_states)
+            h20v_entry_topk_weights = _qwen38_h20v_boundary_clone(topk_weights)
+            h20v_entry_topk_ids = _qwen38_h20v_boundary_clone(topk_ids)
+            h20v_entry_shared_input = _qwen38_h20v_boundary_clone(
+                shared_experts_input
+            )
+
+''' + prepare_old + '''
         if h20v_request_id >= 0:
             h20v_prepared_a1q = _qwen38_h20v_boundary_clone(a1q)
             h20v_prepared_a1q_scale = _qwen38_h20v_boundary_clone(a1q_scale)
@@ -226,6 +247,10 @@ final_new = '''        final_output = self._finalize(
                 request_id=h20v_request_id,
                 layer_name=str(getattr(self, "_qwen38_h20_layer_name", "")),
                 snapshots={
+                    "entry_hidden_states": h20v_entry_hidden_states,
+                    "entry_topk_weights": h20v_entry_topk_weights,
+                    "entry_topk_ids": h20v_entry_topk_ids,
+                    "entry_shared_experts_input": h20v_entry_shared_input,
                     "prepared_a1q": h20v_prepared_a1q,
                     "prepared_a1q_scale": h20v_prepared_a1q_scale,
                     "prepared_topk_ids": h20v_prepared_topk_ids,

@@ -1006,6 +1006,7 @@ def boundary_probe(
         print(
             f"boundary_repeat requests=[{record.get('request0')}, "
             f"{record.get('request1')}] "
+            f"entry_equal={record.get('entry_equal')} "
             f"prepared_equal={record.get('prepared_equal')} "
             f"fused_out_equal={record.get('fused_out_equal')} "
             f"final_output_equal={record.get('final_output_equal')} "
