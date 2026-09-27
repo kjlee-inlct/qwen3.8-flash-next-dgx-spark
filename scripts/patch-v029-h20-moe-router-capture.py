@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install opt-in layer-14 MoE routing repeat diagnostics."""
+"""Install opt-in layer-14/15 MoE routing repeat diagnostics."""
 
 from __future__ import annotations
 
@@ -32,13 +32,32 @@ router = replace_once(
 
 route_helper = r'''
 
+
 _QWEN38_H20U_ROUTE_TRIGGER = os.getenv(
     "QWEN38_H20U_TRIGGER", "/tmp/qwen38_h20u_layer0.enable"
 )
 _QWEN38_H20U_ROUTE_REQUEST_FILE = os.getenv(
     "QWEN38_H20U_REQUEST_FILE", "/tmp/qwen38_h20u_request_id"
 )
-_QWEN38_H20U_ROUTE_PENDING: dict[int, tuple[torch.Tensor, torch.Tensor, str]] = {}
+_QWEN38_H20U_ROUTE_LAYERS = tuple(
+    sorted(
+        {
+            int(value)
+            for value in os.getenv("QWEN38_H20U_ROUTE_LAYERS", "14,15").split(",")
+            if value.strip()
+        }
+    )
+)
+_QWEN38_H20U_ROUTE_PENDING: dict[
+    int, dict[int, tuple[torch.Tensor, torch.Tensor, str]]
+] = {}
+
+
+def _qwen38_h20u_route_layer_idx(layer_name: str) -> int | None:
+    for layer_idx in _QWEN38_H20U_ROUTE_LAYERS:
+        if f".layers.{layer_idx}.mlp" in layer_name:
+            return layer_idx
+    return None
 
 
 @torch.library.custom_op(
@@ -52,7 +71,8 @@ def _qwen38_h20u_route_capture(
 ) -> None:
     if not os.path.exists(_QWEN38_H20U_ROUTE_TRIGGER):
         return
-    if ".layers.14.mlp" not in layer_name:
+    layer_idx = _qwen38_h20u_route_layer_idx(layer_name)
+    if layer_idx is None:
         return
     try:
         with open(_QWEN38_H20U_ROUTE_REQUEST_FILE, encoding="utf-8") as handle:
@@ -61,22 +81,30 @@ def _qwen38_h20u_route_capture(
         return
     if request_id not in (0, 1):
         return
-    if request_id == 0:
-        # A new probe starts by assigning request 0. Clear any incomplete
-        # capture left by an interrupted earlier probe.
+
+    if (
+        request_id == 0
+        and _QWEN38_H20U_ROUTE_LAYERS
+        and layer_idx == _QWEN38_H20U_ROUTE_LAYERS[0]
+    ):
+        # A new probe starts at the lowest selected layer. Clear any incomplete
+        # captures left by an interrupted earlier probe without clearing again
+        # when a later selected layer is reached by the same request.
         _QWEN38_H20U_ROUTE_PENDING.clear()
-    elif request_id in _QWEN38_H20U_ROUTE_PENDING:
+
+    layer_pending = _QWEN38_H20U_ROUTE_PENDING.setdefault(layer_idx, {})
+    if request_id in layer_pending:
         return
-    _QWEN38_H20U_ROUTE_PENDING[request_id] = (
+    layer_pending[request_id] = (
         topk_ids.detach().clone(),
         topk_weights.detach().clone(),
         layer_name,
     )
-    if request_id != 1 or 0 not in _QWEN38_H20U_ROUTE_PENDING:
+    if request_id != 1 or 0 not in layer_pending:
         return
 
-    ids0, weights0, name0 = _QWEN38_H20U_ROUTE_PENDING[0]
-    ids1, weights1, name1 = _QWEN38_H20U_ROUTE_PENDING[1]
+    ids0, weights0, name0 = layer_pending[0]
+    ids1, weights1, name1 = layer_pending[1]
 
     def compare_rows(a: torch.Tensor, b: torch.Tensor) -> dict:
         if tuple(a.shape) != tuple(b.shape):
@@ -110,8 +138,9 @@ def _qwen38_h20u_route_capture(
         return result
 
     record = {
-        "schema": 1,
+        "schema": 2,
         "phase": "moe-router-repeat",
+        "layer_idx": layer_idx,
         "layer_name": name1,
         "layer_name_match": name0 == name1,
         "request0_shape": list(ids0.shape),
@@ -126,7 +155,7 @@ def _qwen38_h20u_route_capture(
         },
     }
     print("QWEN38_H20U_ROUTE " + json.dumps(record, sort_keys=True), flush=True)
-    _QWEN38_H20U_ROUTE_PENDING.clear()
+    _QWEN38_H20U_ROUTE_PENDING.pop(layer_idx, None)
 '''
 router = replace_once(
     router,
@@ -163,4 +192,4 @@ layer = replace_once(
 
 router_path.write_text(router, encoding="utf-8")
 layer_path.write_text(layer, encoding="utf-8")
-print("installed opt-in H20 layer-14 MoE route capture")
+print("installed opt-in H20 layer-14/15 MoE route capture")
