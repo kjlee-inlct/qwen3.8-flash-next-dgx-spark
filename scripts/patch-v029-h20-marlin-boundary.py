@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-M single-pass Marlin expert boundary capture in vLLM v0.29."""
+"""Install H20-M v28 single-pass Marlin alignment-aware capture in vLLM v0.29."""
 
 from __future__ import annotations
 
@@ -50,8 +50,8 @@ try:
 except (IndexError, ValueError):
     _QWEN38_H20M_TARGET_LAYER_IDX = -1
 
-_QWEN38_H20M_ACTIVE: dict[int, dict[str, torch.Tensor | None]] = {}
-_QWEN38_H20M_COMPLETED: dict[int, dict[str, torch.Tensor | None]] = {}
+_QWEN38_H20M_ACTIVE: dict[int, dict[str, object]] = {}
+_QWEN38_H20M_COMPLETED: dict[int, dict[str, object]] = {}
 _QWEN38_H20M_STAGE_NAMES = {
     0: "entry_hidden_states",
     1: "entry_topk_weights",
@@ -67,18 +67,27 @@ _QWEN38_H20M_STAGE_NAMES = {
     11: "w2_input_scale",
     12: "w2_output",
     13: "final_output",
+    14: "alignment_expert_map",
 }
 
 
-def _qwen38_h20m_compare(
-    left: torch.Tensor | None,
-    right: torch.Tensor | None,
-) -> dict:
+def _qwen38_h20m_compare(left: object, right: object) -> dict:
     if left is None or right is None:
         return {
             "equal": left is None and right is None,
             "shape_match": left is None and right is None,
         }
+    if isinstance(left, int) or isinstance(right, int):
+        return {
+            "equal": isinstance(left, int)
+            and isinstance(right, int)
+            and left == right,
+            "shape_match": isinstance(left, int) and isinstance(right, int),
+            "request0": left,
+            "request1": right,
+        }
+    assert isinstance(left, torch.Tensor)
+    assert isinstance(right, torch.Tensor)
     if tuple(left.shape) != tuple(right.shape):
         return {
             "equal": False,
@@ -94,14 +103,86 @@ def _qwen38_h20m_compare(
     }
 
 
+def _qwen38_h20m_scalar_int(value: object) -> int | None:
+    if not isinstance(value, torch.Tensor) or value.numel() != 1:
+        return None
+    return int(value.item())
+
+
+def _qwen38_h20m_sorted_detail(
+    left: object,
+    right: object,
+    left_num_tokens: object,
+    right_num_tokens: object,
+) -> dict:
+    full = _qwen38_h20m_compare(left, right)
+    result = {
+        "full_equal": full["equal"],
+        "valid_equal": False,
+        "tail_equal": False,
+        "valid_first_mismatch": None,
+        "valid_mismatch_count": None,
+    }
+    if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
+        return result
+    if tuple(left.shape) != tuple(right.shape):
+        return result
+
+    n0 = _qwen38_h20m_scalar_int(left_num_tokens)
+    n1 = _qwen38_h20m_scalar_int(right_num_tokens)
+    result["request0_num_tokens_post_padded"] = n0
+    result["request1_num_tokens_post_padded"] = n1
+    if n0 is None or n1 is None or n0 != n1:
+        return result
+    if n0 < 0 or n0 > left.numel() or n0 > right.numel():
+        result["valid_range_error"] = True
+        return result
+
+    left_valid = left[:n0]
+    right_valid = right[:n0]
+    valid_equal = bool(torch.equal(left_valid, right_valid))
+    result["valid_equal"] = valid_equal
+
+    left_tail = left[n0:]
+    right_tail = right[n0:]
+    result["tail_equal"] = bool(torch.equal(left_tail, right_tail))
+    result["valid_length"] = n0
+    result["tail_length"] = left.numel() - n0
+
+    if valid_equal:
+        result["valid_mismatch_count"] = 0
+        return result
+
+    mismatches = torch.nonzero(left_valid != right_valid, as_tuple=False).flatten()
+    result["valid_mismatch_count"] = int(mismatches.numel())
+    if mismatches.numel():
+        result["valid_first_mismatch"] = int(mismatches[0].item())
+    return result
+
+
 def _qwen38_h20m_commit(
     *,
     request_id: int,
-    snapshots: dict[str, torch.Tensor | None],
+    snapshots: dict[str, object],
 ) -> None:
-    field_order = tuple(
-        _QWEN38_H20M_STAGE_NAMES[index]
-        for index in sorted(_QWEN38_H20M_STAGE_NAMES)
+    field_order = (
+        "entry_hidden_states",
+        "entry_topk_weights",
+        "entry_topk_ids",
+        "alignment_block_size_m",
+        "alignment_global_num_experts",
+        "alignment_expert_map",
+        "aligned_sorted_token_ids",
+        "aligned_expert_ids",
+        "aligned_num_tokens_post_padded",
+        "w13_input",
+        "w13_input_scale",
+        "w13_output",
+        "activation_output",
+        "w2_input",
+        "w2_input_scale",
+        "w2_output",
+        "final_output",
     )
     for previous_id in sorted(_QWEN38_H20M_COMPLETED):
         if previous_id == request_id:
@@ -111,18 +192,59 @@ def _qwen38_h20m_commit(
             name: _qwen38_h20m_compare(previous.get(name), snapshots.get(name))
             for name in field_order
         }
+        sorted_detail = _qwen38_h20m_sorted_detail(
+            previous.get("aligned_sorted_token_ids"),
+            snapshots.get("aligned_sorted_token_ids"),
+            previous.get("aligned_num_tokens_post_padded"),
+            snapshots.get("aligned_num_tokens_post_padded"),
+        )
+        semantic_checks = (
+            ("entry_hidden_states", fields["entry_hidden_states"]["equal"]),
+            ("entry_topk_weights", fields["entry_topk_weights"]["equal"]),
+            ("entry_topk_ids", fields["entry_topk_ids"]["equal"]),
+            ("alignment_block_size_m", fields["alignment_block_size_m"]["equal"]),
+            (
+                "alignment_global_num_experts",
+                fields["alignment_global_num_experts"]["equal"],
+            ),
+            ("alignment_expert_map", fields["alignment_expert_map"]["equal"]),
+            ("aligned_sorted_token_ids_valid", sorted_detail["valid_equal"]),
+            ("aligned_expert_ids", fields["aligned_expert_ids"]["equal"]),
+            (
+                "aligned_num_tokens_post_padded",
+                fields["aligned_num_tokens_post_padded"]["equal"],
+            ),
+            ("w13_input", fields["w13_input"]["equal"]),
+            ("w13_input_scale", fields["w13_input_scale"]["equal"]),
+            ("w13_output", fields["w13_output"]["equal"]),
+            ("activation_output", fields["activation_output"]["equal"]),
+            ("w2_input", fields["w2_input"]["equal"]),
+            ("w2_input_scale", fields["w2_input_scale"]["equal"]),
+            ("w2_output", fields["w2_output"]["equal"]),
+            ("final_output", fields["final_output"]["equal"]),
+        )
         first_mismatch = next(
-            (name for name in field_order if not fields[name]["equal"]),
+            (name for name, equal in semantic_checks if not equal),
             None,
         )
         record = {
-            "schema": 3,
+            "schema": 4,
             "phase": "marlin-repeat",
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
             "request0": previous_id,
             "request1": request_id,
             "fields": fields,
+            "sorted_token_ids": sorted_detail,
+            "full_sorted_equal": sorted_detail["full_equal"],
+            "valid_sorted_equal": sorted_detail["valid_equal"],
+            "tail_sorted_equal": sorted_detail["tail_equal"],
+            "valid_sorted_first_mismatch": sorted_detail[
+                "valid_first_mismatch"
+            ],
+            "valid_sorted_mismatch_count": sorted_detail[
+                "valid_mismatch_count"
+            ],
             "first_mismatch": first_mismatch,
             "entry_equal": all(
                 fields[name]["equal"]
@@ -132,12 +254,25 @@ def _qwen38_h20m_commit(
                     "entry_topk_ids",
                 )
             ),
-            "alignment_equal": all(
+            "alignment_static_equal": all(
                 fields[name]["equal"]
                 for name in (
-                    "aligned_sorted_token_ids",
-                    "aligned_expert_ids",
-                    "aligned_num_tokens_post_padded",
+                    "alignment_block_size_m",
+                    "alignment_global_num_experts",
+                    "alignment_expert_map",
+                )
+            ),
+            "alignment_equal": (
+                sorted_detail["valid_equal"]
+                and fields["aligned_expert_ids"]["equal"]
+                and fields["aligned_num_tokens_post_padded"]["equal"]
+                and all(
+                    fields[name]["equal"]
+                    for name in (
+                        "alignment_block_size_m",
+                        "alignment_global_num_experts",
+                        "alignment_expert_map",
+                    )
                 )
             ),
             "w13_input_equal": all(
@@ -187,7 +322,7 @@ def _qwen38_h20m_capture(
         return
 
     if stage == 0:
-        snapshots: dict[str, torch.Tensor | None] = {}
+        snapshots: dict[str, object] = {}
         _QWEN38_H20M_ACTIVE[request_id] = snapshots
     else:
         snapshots = _QWEN38_H20M_ACTIVE.setdefault(request_id, {})
@@ -195,6 +330,31 @@ def _qwen38_h20m_capture(
     if stage == 13:
         snapshots = _QWEN38_H20M_ACTIVE.pop(request_id)
         _qwen38_h20m_commit(request_id=request_id, snapshots=snapshots)
+
+
+@torch.library.custom_op(
+    "qwen38_h20m::capture_alignment_static",
+    mutates_args={"tensor"},
+)
+def _qwen38_h20m_capture_alignment_static(
+    tensor: torch.Tensor,
+    block_size_m: int,
+    global_num_experts: int,
+    layer_idx: int,
+) -> None:
+    if layer_idx != _QWEN38_H20M_TARGET_LAYER_IDX:
+        return
+    if not os.path.exists(_QWEN38_H20M_TRIGGER):
+        return
+    try:
+        with open(_QWEN38_H20M_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return
+
+    snapshots = _QWEN38_H20M_ACTIVE.setdefault(request_id, {})
+    snapshots["alignment_block_size_m"] = int(block_size_m)
+    snapshots["alignment_global_num_experts"] = int(global_num_experts)
 
 
 '''
@@ -312,7 +472,16 @@ align_old = '''    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_al
 
     assert activation is not None
 '''
-align_new = '''    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_align_block_size(
+align_new = '''    _qwen38_h20m_capture_alignment_static(
+        topk_ids,
+        block_size_m,
+        global_num_experts,
+        h20m_layer_idx,
+    )
+    if expert_map is not None:
+        _qwen38_h20m_capture(expert_map, 14, h20m_layer_idx)
+
+    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_align_block_size(
         topk_ids,
         block_size_m,
         global_num_experts,
