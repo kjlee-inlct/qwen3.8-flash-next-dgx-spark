@@ -1216,9 +1216,27 @@ def marlin_probe(
     if existing.returncode != 0:
         print(existing.stderr, file=sys.stderr)
         return existing.returncode
-    prior = parse_marlin_records(
-        (existing.stdout + "\n" + existing.stderr).splitlines()
-    )
+    log_text = existing.stdout + "\n" + existing.stderr
+    backend_marker = "Using 'MARLIN' NvFp4 MoE backend"
+    if backend_marker not in log_text:
+        _write_new_json(
+            status_output,
+            {
+                "schema": 1,
+                "phase": "marlin-probe-status",
+                "status": "backend_mismatch",
+                "backend_expected": "MARLIN",
+                "backend_marker": backend_marker,
+            },
+        )
+        print(
+            f"ERROR: H20 v27 requires the MARLIN NvFp4 MoE backend; "
+            f"startup marker not found; wrote {status_output}",
+            file=sys.stderr,
+        )
+        return 2
+
+    prior = parse_marlin_records(log_text.splitlines())
     start_id = 0
     if prior:
         start_id = max(
