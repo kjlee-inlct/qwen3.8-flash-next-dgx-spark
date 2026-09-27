@@ -1278,7 +1278,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn('"w13 GEMM input"', patch)
         self.assertIn('"w2 GEMM input"', patch)
 
-    def test_h20_v15_ct_image_localizes_batch_invariant_to_fp8(self) -> None:
+    def test_h20_ct_image_keeps_fp8_local_patch_and_uses_v27_marlin(self) -> None:
         dockerfile = (
             ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag"
         ).read_text(encoding="utf-8")
@@ -1368,7 +1368,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("marlin_repeat requests=", script)
         self.assertIn("/tmp/qwen38_h20m_marlin.enable", script)
         self.assertIn("instrumentation_failure", script)
-        self.assertIn('with path.open("x", encoding="utf-8")', script)
+        self.assertIn("backend_mismatch", script)\n        self.assertIn("Using \'MARLIN\' NvFp4 MoE backend", script)\n        self.assertIn('with path.open("x", encoding="utf-8")', script)
         self.assertIn("self_pairs", script)
         self.assertIn("alignment_equal=", script)
         self.assertIn("w13_output_equal=", script)
