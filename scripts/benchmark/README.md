@@ -2259,6 +2259,105 @@ W13 numerical differences when semantically equivalent within-expert token
 orders differ. Those upstream observations are supporting context, not proof
 that the DGX Spark case is identical.
 
+##### H20 v29 r1 observed result
+
+Observed on 2026-09-28 with image label
+`ct-nvfp4-convert-diag-v29` and the normal PIECEWISE runtime:
+
+- main was `aae5224` (PR #188);
+- the v29 image built successfully with image ID
+  `sha256:c52f84551287b79360cebd5075cd9a36035a8d6edb9e6abf4e8abd029784d438`;
+- preflight passed and the runtime reached READY after 742 seconds;
+- startup explicitly selected the `MARLIN` NVFP4 MoE backend;
+- eight requests completed and exactly 28 pair records were written;
+- four pairs qualified with `entry_equal=true`:
+  `[0,2]`, `[0,5]`, `[2,5]`, and `[6,7]`.
+
+All four qualifying pairs had the same semantic alignment pattern:
+
+```text
+alignment_static_equal=true
+valid_sorted_equal=false
+tail_sorted_equal=true
+
+expert_membership_equal=true
+expert_order_equal=false
+padding_layout_equal=true
+
+aligned_expert_ids_equal=true
+aligned_num_tokens_post_padded_equal=true
+alignment_order_only_divergence=true
+
+w13_input_equal=true
+w13_output_equal=false
+first_mismatch=aligned_sorted_token_ids_valid
+```
+
+Their valid-prefix mismatch counts were 445, 421, 487, and 448.
+The first mismatching valid sorted-token position was index 8 in all four
+qualifying pairs.
+
+This closes the ambiguity left by v28. For the qualifying same-entry samples,
+the physical valid `sorted_token_ids` layout changes while:
+
+- the same routed token membership is preserved for each expert;
+- the same expert block IDs are preserved;
+- the same post-padding token count is preserved;
+- the same padding-position layout is preserved;
+- the same captured W13 activation input is preserved.
+
+Therefore the first observed divergence is an **order-only physical alignment
+difference** produced by `moe_align_block_size()`, not a semantic
+token-to-expert routing change.
+
+The immediately following W13 output differs in every qualifying pair. This is
+strong evidence that the selected Marlin execution is sensitive to the
+physical within-expert routed-token ordering under this probe context.
+
+This pattern is structurally consistent with upstream vLLM issue #52525,
+which reports Marlin WNA16 output changes under semantically equivalent
+within-expert token orderings. That upstream report is supporting context only;
+the DGX Spark result above is independently observed.
+
+Do not yet call the Marlin kernel the root cause. v29 still does not compare all
+W13 static/state inputs such as packed weights/scales, zeros/g_idx/sort indices,
+quantization type, dimensions, and workspace state. The next diagnostic must
+close those remaining inputs before making a kernel-level causality claim.
+
+##### H20 v30: first-Marlin-GEMM state audit
+
+v30 keeps the v29 single-pass execution and semantic alignment analysis. It
+adds passive capture/comparison of the remaining first W13 Marlin GEMM
+arguments/state where feasible:
+
+- packed W13 weights;
+- W13 scales and optional global/input scales;
+- optional W13 zeros;
+- optional W13 `g_idx`;
+- W13 `sort_indices`;
+- `topk_weights`;
+- `block_size_m`;
+- `num_topk`;
+- `quant_type`;
+- `M`, `N`, and `K`;
+- `is_k_full`;
+- workspace identity/shape and any stable metadata that can be observed without
+  a second kernel invocation.
+
+Large immutable tensors may be compared by passive fingerprints captured after
+normal execution rather than cloning entire tensors into every request record.
+The diagnostic must not invoke a second Marlin GEMM.
+
+Interpretation:
+
+- all W13 state equal except order-only `sorted_token_ids`, followed by
+  `w13_output_equal=false`: the first Marlin GEMM region becomes the
+  strongest causal source and an ordering canonicalization control is justified;
+- any W13 static/state input differs: explain that difference before attributing
+  the output change to token ordering;
+- all captured W13 state including physical ordering matches but output differs:
+  investigate workspace/kernel execution nondeterminism directly.
+
 ##### H20 v29: expert-membership versus ordering split
 
 v29 keeps the v28 single-pass captures and adds a semantic comparison of the

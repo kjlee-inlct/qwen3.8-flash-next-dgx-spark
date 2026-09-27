@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-M v29 semantic Marlin alignment capture in vLLM v0.29."""
+"""Install H20-M v30 Marlin W13 state-audit capture in vLLM v0.29."""
 
 from __future__ import annotations
 
@@ -68,6 +68,14 @@ _QWEN38_H20M_STAGE_NAMES = {
     12: "w2_output",
     13: "final_output",
     14: "alignment_expert_map",
+    15: "w13_weight_scale",
+    16: "w13_global_scale",
+    17: "w13_zeros",
+    18: "w13_g_idx",
+    19: "w13_sort_indices",
+    20: "w13_workspace_pre",
+    21: "w13_output_buffer_pre",
+    22: "w13_bias",
 }
 
 
@@ -280,6 +288,19 @@ def _qwen38_h20m_expert_layout_detail(
     return result
 
 
+def _qwen38_h20m_tensor_meta(value: object) -> dict | None:
+    if not isinstance(value, torch.Tensor):
+        return None
+    return {
+        "data_ptr": int(value.data_ptr()),
+        "shape": list(value.shape),
+        "stride": list(value.stride()),
+        "dtype": str(value.dtype),
+        "storage_offset": int(value.storage_offset()),
+        "version": int(value._version),
+    }
+
+
 def _qwen38_h20m_commit(
     *,
     request_id: int,
@@ -292,6 +313,14 @@ def _qwen38_h20m_commit(
         "alignment_block_size_m",
         "alignment_global_num_experts",
         "alignment_expert_map",
+        "w13_weight_scale",
+        "w13_global_scale",
+        "w13_zeros",
+        "w13_g_idx",
+        "w13_sort_indices",
+        "w13_workspace_pre",
+        "w13_output_buffer_pre",
+        "w13_bias",
         "aligned_sorted_token_ids",
         "aligned_expert_ids",
         "aligned_num_tokens_post_padded",
@@ -330,6 +359,36 @@ def _qwen38_h20m_commit(
             previous.get("alignment_block_size_m"),
             snapshots.get("alignment_block_size_m"),
         )
+        w13_weight_meta_equal = (
+            previous.get("w13_weight_meta") == snapshots.get("w13_weight_meta")
+        )
+        w13_scalar_meta_equal = (
+            previous.get("w13_scalar_meta") == snapshots.get("w13_scalar_meta")
+        )
+        w13_buffer_meta_equal = (
+            previous.get("w13_output_buffer_meta")
+            == snapshots.get("w13_output_buffer_meta")
+            and previous.get("w13_workspace_meta")
+            == snapshots.get("w13_workspace_meta")
+        )
+        w13_state_equal = (
+            w13_weight_meta_equal
+            and w13_scalar_meta_equal
+            and w13_buffer_meta_equal
+            and all(
+                fields[name]["equal"]
+                for name in (
+                    "w13_weight_scale",
+                    "w13_global_scale",
+                    "w13_zeros",
+                    "w13_g_idx",
+                    "w13_sort_indices",
+                    "w13_workspace_pre",
+                    "w13_output_buffer_pre",
+                    "w13_bias",
+                )
+            )
+        )
         semantic_checks = (
             ("entry_hidden_states", fields["entry_hidden_states"]["equal"]),
             ("entry_topk_weights", fields["entry_topk_weights"]["equal"]),
@@ -348,6 +407,7 @@ def _qwen38_h20m_commit(
             ),
             ("w13_input", fields["w13_input"]["equal"]),
             ("w13_input_scale", fields["w13_input_scale"]["equal"]),
+            ("w13_state", w13_state_equal),
             ("w13_output", fields["w13_output"]["equal"]),
             ("activation_output", fields["activation_output"]["equal"]),
             ("w2_input", fields["w2_input"]["equal"]),
@@ -360,7 +420,7 @@ def _qwen38_h20m_commit(
             None,
         )
         record = {
-            "schema": 5,
+            "schema": 6,
             "phase": "marlin-repeat",
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
@@ -385,6 +445,12 @@ def _qwen38_h20m_commit(
             "aligned_num_tokens_post_padded_equal": fields[
                 "aligned_num_tokens_post_padded"
             ]["equal"],
+            "w13_weight_meta": snapshots.get("w13_weight_meta"),
+            "w13_scalar_meta": snapshots.get("w13_scalar_meta"),
+            "w13_weight_meta_equal": w13_weight_meta_equal,
+            "w13_scalar_meta_equal": w13_scalar_meta_equal,
+            "w13_buffer_meta_equal": w13_buffer_meta_equal,
+            "w13_state_equal": w13_state_equal,
             "alignment_order_only_divergence": (
                 not sorted_detail["valid_equal"]
                 and expert_layout["membership_equal"]
@@ -487,6 +553,49 @@ def _qwen38_h20m_capture(
 
 
 @torch.library.custom_op(
+    "qwen38_h20m::capture_w13_meta",
+    mutates_args={"anchor"},
+)
+def _qwen38_h20m_capture_w13_meta(
+    anchor: torch.Tensor,
+    weight: torch.Tensor,
+    output_buffer: torch.Tensor,
+    workspace: torch.Tensor,
+    num_topk: int,
+    block_size_m: int,
+    size_m: int,
+    size_n: int,
+    size_k: int,
+    apply_router_weight_on_input: bool,
+    is_k_full: bool,
+    layer_idx: int,
+) -> None:
+    if layer_idx != _QWEN38_H20M_TARGET_LAYER_IDX:
+        return
+    if not os.path.exists(_QWEN38_H20M_TRIGGER):
+        return
+    try:
+        with open(_QWEN38_H20M_REQUEST_FILE, encoding="utf-8") as handle:
+            request_id = int(handle.read().strip())
+    except (OSError, ValueError):
+        return
+
+    snapshots = _QWEN38_H20M_ACTIVE.setdefault(request_id, {})
+    snapshots["w13_weight_meta"] = _qwen38_h20m_tensor_meta(weight)
+    snapshots["w13_output_buffer_meta"] = _qwen38_h20m_tensor_meta(output_buffer)
+    snapshots["w13_workspace_meta"] = _qwen38_h20m_tensor_meta(workspace)
+    snapshots["w13_scalar_meta"] = {
+        "num_topk": int(num_topk),
+        "block_size_m": int(block_size_m),
+        "size_m": int(size_m),
+        "size_n": int(size_n),
+        "size_k": int(size_k),
+        "apply_router_weight_on_input": bool(apply_router_weight_on_input),
+        "is_k_full": bool(is_k_full),
+    }
+
+
+@torch.library.custom_op(
     "qwen38_h20m::capture_alignment_static",
     mutates_args={"tensor"},
 )
@@ -538,6 +647,33 @@ w13_gemm_old = '''    intermediate_cache1 = ops.moe_wna16_marlin_gemm(
 w13_gemm_new = '''    _qwen38_h20m_capture(gate_up_input, 6, h20m_layer_idx)
     if a_scales1 is not None:
         _qwen38_h20m_capture(a_scales1, 7, h20m_layer_idx)
+    _qwen38_h20m_capture(w1_scale, 15, h20m_layer_idx)
+    if global_scale1 is not None:
+        _qwen38_h20m_capture(global_scale1, 16, h20m_layer_idx)
+    if w1_zeros is not None:
+        _qwen38_h20m_capture(w1_zeros, 17, h20m_layer_idx)
+    if g_idx1 is not None:
+        _qwen38_h20m_capture(g_idx1, 18, h20m_layer_idx)
+    if sort_indices1 is not None:
+        _qwen38_h20m_capture(sort_indices1, 19, h20m_layer_idx)
+    _qwen38_h20m_capture(workspace, 20, h20m_layer_idx)
+    _qwen38_h20m_capture(intermediate_cache1, 21, h20m_layer_idx)
+    if bias1 is not None:
+        _qwen38_h20m_capture(bias1, 22, h20m_layer_idx)
+    _qwen38_h20m_capture_w13_meta(
+        gate_up_input,
+        w1,
+        intermediate_cache1,
+        workspace,
+        num_topk,
+        block_size_m,
+        M,
+        w13_num_shards * N,
+        K,
+        apply_router_weight_on_input,
+        is_k_full,
+        h20m_layer_idx,
+    )
 
     intermediate_cache1 = ops.moe_wna16_marlin_gemm(
         gate_up_input,
