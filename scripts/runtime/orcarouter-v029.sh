@@ -700,7 +700,8 @@ start_runtime() {
       -e QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"
       -e QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"
       -e QWEN38_H20V_BOUNDARY_TARGET_LAYER="${QWEN38_H20V_BOUNDARY_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"
-      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20v-v25-modular-boundary-${QWEN38_H20U_LAYER14_GROUP:-all}"
+      -e QWEN38_H20W_TARGET_LAYER="${QWEN38_H20W_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20w-v26-humming-indexed-${QWEN38_H20U_LAYER14_GROUP:-all}"
     )
     if [[ "${QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0}" == 1 ]]; then
       h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )
