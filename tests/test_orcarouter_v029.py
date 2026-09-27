@@ -1229,6 +1229,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         dockerfile = (
             ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag"
         ).read_text(encoding="utf-8")
+        h20c_patch = (
+            ROOT / "scripts" / "patch-v029-h20c-runtime-moe-trace.py"
+        ).read_text(encoding="utf-8")
         patch = (
             ROOT / "scripts" / "patch-v029-h20-humming-fp8-batch-invariant.py"
         ).read_text(encoding="utf-8")
@@ -1236,6 +1239,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("patch-v029-h20-modular-boundary.py", dockerfile)
         self.assertIn("QWEN38_H20V_BOUNDARY ", dockerfile)
+        self.assertIn("self.moe_kernel.impl._qwen38_h20_layer_name", h20c_patch)
+        self.assertNotIn("self.moe_kernel._qwen38_h20_layer_name =", h20c_patch)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
         self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v25"', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE " in router_s', dockerfile)
