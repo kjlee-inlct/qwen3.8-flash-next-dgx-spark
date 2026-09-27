@@ -2153,7 +2153,7 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
   --output scripts/benchmark/results/local/h20u-v20-layer14-all.jsonl
 ```
 
-The image label should print `ct-nvfp4-convert-diag-v22`. With the default
+The image label should print `ct-nvfp4-convert-diag-v23`. With the default
 `QWEN38_H20U_LAYER14_GROUP=all`, the probe emits 16 records: two requests for
 each selected layer `0,1,3,7,14,15,31,47`.
 
@@ -2245,6 +2245,40 @@ each start. `mlp_hc` captures only `post_mlp_hc_hidden` and
 that fails while `none` succeeds narrows the problematic compiled capture
 region; if all groups start individually but `all` fails, combined graph
 size/interaction remains the distinction.
+
+The v22 rowwise repeat probe localized the first reproduced layer-14 output
+drift to `mlp_out`: `mlp_block_input` matched exactly, while only rows 15, 16,
+and 22 differed. v23 adds an opt-in capture at the normal
+`FusedMoERouter.select_experts` return boundary. It records the actual
+layer-14 top-k expert IDs and weights for request 0 and request 1, then emits
+one `QWEN38_H20U_ROUTE` JSON record with exact ID/weight row comparisons. It
+does not rerun the gate or top-k computation. If IDs differ, investigate route
+selection; if IDs match but weights differ, investigate gate scores or
+normalization; if both match, focus on expert execution or output accumulation.
+The route record is written to container logs, independently of the existing
+upstream JSONL records. No route record means the selected MoE execution path
+bypassed this router method or the diagnostic trigger was not active, so that
+absence is not evidence of stable routing.
+
+After rebuilding the v23 diagnostic image and starting the `mlp_block` group,
+use a new output filename, then run:
+
+```bash
+OUT="scripts/benchmark/results/local/h20u-v23-layer14-router.jsonl"
+test ! -e "$OUT" || { echo "already exists: $OUT"; exit 1; }
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output "$OUT"
+
+docker logs --timestamps qwen38-h20-ct-convert-diag-v029 2>&1 \
+  | grep 'QWEN38_H20U_ROUTE '
+```
+
+Before rebuilding, save the current container logs and preserve all v22 result
+files. v23 uses a version-specific `VLLM_CACHE_ROOT` namespace as well as the
+per-group suffix, so its AOT artifacts cannot be reused from v22. Confirm the
+image label is `ct-nvfp4-convert-diag-v23` before starting.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of

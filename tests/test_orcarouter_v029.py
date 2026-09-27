@@ -490,7 +490,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v22", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v23", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -502,12 +502,13 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )', runtime)
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
         self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
-        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-layer14-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
+        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-v23-layer14-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts", runtime)
         self.assertIn("h20_image_ok()", runtime)
-        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v22" ]]', runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v23" ]]', runtime)
+        self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
 
 
     def test_h20_fp8_batch_invariant_repair_profile_is_diagnostic_free(self) -> None:
@@ -1053,6 +1054,59 @@ class AfterLayer:
                 partial_stream.getvalue(),
             )
 
+    def test_h20_moe_router_capture_patches_actual_route_outputs(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-h20-moe-router-capture.py"
+        router_fixture = """from abc import ABC, abstractmethod
+from collections.abc import Callable
+
+import torch
+
+from vllm.model_executor.layers.fused_moe.config import RoutingMethodType
+
+class FusedMoERouter(ABC):
+    def select_experts(self, hidden_states, router_logits):
+        topk_weights, topk_ids = self._select_experts(
+            hidden_states,
+            router_logits,
+        )
+
+        # Write routing data for non-monolithic path (Triton, etc.)
+        if self._routing_replay_out is not None:
+            self._routing_replay_out[: topk_ids.shape[0]].copy_(topk_ids)
+        return topk_weights, topk_ids
+"""
+        layer_fixture = """import torch
+
+def FusedMoEFactory(prefix, router):
+    layer_name = prefix
+    if params_dtype is None:
+        params_dtype = torch.get_default_dtype()
+    return runner
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            router_path = Path(tmp) / "fused_moe_router.py"
+            layer_path = Path(tmp) / "layer.py"
+            router_path.write_text(router_fixture, encoding="utf-8")
+            layer_path.write_text(layer_fixture, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(patch), str(router_path), str(layer_path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            router = router_path.read_text(encoding="utf-8")
+            layer = layer_path.read_text(encoding="utf-8")
+            compile(router, str(router_path), "exec")
+            compile(layer, str(layer_path), "exec")
+            self.assertIn('"qwen38_h20u::route_capture"', router)
+            self.assertIn("QWEN38_H20U_ROUTE ", router)
+            self.assertIn("topk_ids_row_comparison", router)
+            self.assertIn("topk_weights_row_comparison", router)
+            self.assertIn("_qwen38_h20u_route_capture(", router)
+            self.assertIn("router._qwen38_h20_layer_name = layer_name", layer)
+
     def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-h20-linear-attn-layer0.py"
         source = """import os
@@ -1170,7 +1224,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v22"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v23"', dockerfile)
         self.assertIn('class HummingFP8ScaledMMLinearKernel', patch)
         self.assertIn('_qwen38_h20_compute["use_batch_invariant"] = True', patch)
         self.assertIn('class HummingInt8ScaledMMLinearKernel', patch)

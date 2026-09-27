@@ -7,19 +7,23 @@ ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compress
 ARG Q4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
 ARG GDN=${SP}/vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py
 ARG HUM=${SP}/vllm/model_executor/kernels/linear/scaled_mm/humming.py
+ARG MOE_ROUTER=${SP}/vllm/model_executor/layers/fused_moe/router/fused_moe_router.py
+ARG MOE_LAYER=${SP}/vllm/model_executor/layers/fused_moe/layer.py
 
 COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
 COPY patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20c-runtime-moe-trace.py
 COPY patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-upstream-layer0.py
 COPY patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py
 COPY patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py
+COPY patch-v029-h20-moe-router-capture.py /tmp/patch-v029-h20-moe-router-capture.py
 RUN cp ${CT} ${CT}.h20.orig \
  && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${CT} ct \
  && python3 /tmp/patch-v029-h20c-runtime-moe-trace.py ${CT} ct \
  && python3 /tmp/patch-v029-h20-upstream-layer0.py ${Q4} \
  && python3 /tmp/patch-v029-h20-linear-attn-layer0.py ${GDN} \
  && python3 /tmp/patch-v029-h20-humming-fp8-batch-invariant.py ${HUM} \
- && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py \
+ && python3 /tmp/patch-v029-h20-moe-router-capture.py ${MOE_ROUTER} ${MOE_LAYER} \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-moe-router-capture.py \
  && python3 - <<'PY'
 import ast
 p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
@@ -132,7 +136,17 @@ assert '_qwen38_h20_compute["use_batch_invariant"] = True' in fp8
 assert 'QWEN38_H20Q_FP8_BATCH_INVARIANT' not in int8
 assert '_QWEN38_H20C_SOURCE = "ct"' in s
 assert "output = self.moe_kernel.apply(" in body
+router="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/router/fused_moe_router.py"
+router_s=open(router, encoding="utf-8").read()
+ast.parse(router_s)
+assert '"qwen38_h20u::route_capture"' in router_s
+assert "QWEN38_H20U_ROUTE " in router_s
+assert "_qwen38_h20u_route_capture(" in router_s
+moe_layer="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/layer.py"
+moe_layer_s=open(moe_layer, encoding="utf-8").read()
+ast.parse(moe_layer_s)
+assert "router._qwen38_h20_layer_name = layer_name" in moe_layer_s
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v22"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v23"
