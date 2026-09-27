@@ -2017,10 +2017,67 @@ a missing experiment/result is visible immediately.
 | v25 corrected runtime r3 | instrumentation valid / root-cause qualification incomplete | Four requests produced all six modular-boundary pair records. Every pair first differed at `prepared_a1q`, with `prepared_equal=false`, `fused_out_equal=false`, and `final_output_equal=false`. Because this schema did not yet record the pre-`_prepare()` hidden/routing inputs, it cannot distinguish nondeterministic `_prepare()` from already-different entry inputs. This is localization evidence only, not proof that `_prepare()` is the source. The schema was extended to capture entry hidden states, top-k IDs/weights, and shared-expert input. |
 | v25 corrected runtime r4 | instrumentation valid / no qualifying same-entry pair | Four requests produced all six pair records with the extended entry schema. Every pair had `entry_equal=false`, `prepared_equal=false`, `fused_out_equal=false`, and `final_output_equal=false`; the first mismatch was `entry_hidden_states` in all six pairs. Therefore this run does not implicate `_prepare()` or expert execution: divergence was already present before the modular MoE entry for every observed pair. A qualifying `entry_equal=true` pair is still required before attributing any later boundary. |
 | v25 corrected runtime r5 | qualifying same-entry/same-prepare pair found | Eight requests produced 28 pair records. Pair `[4,9]` had `entry_equal=true`, `prepared_equal=true`, `fused_out_equal=false`, and `final_output_equal=false`; its first mismatch was `fused_out`. Under the v25 boundary-probe context, the first observed divergence for this qualifying pair is therefore inside `_fused_experts()`, not in the modular `_prepare()` path. This does not yet identify a specific Humming/CUDA/Triton sub-kernel; the next split must instrument the expert execution stages. |
-| v26 Humming indexed-expert stages | implemented / runtime pending | Adds passive single-pass GPU snapshots inside v0.29 `HummingIndexedExperts.apply()` at expert entry, `moe_align_block_size` outputs, post-`quantize_input("w13")`, post-`humming_forward("w13")`, post activation/quantization w2 input, post-`humming_forward("w2")`, and post-`moe_fused_mul_sum`. Pairwise comparisons use full `torch.equal` only after normal execution finishes. No router recomputation or repeated expert/kernel invocation is introduced. |
+| v26 Humming indexed-expert stages | historical wrong-backend probe | Added passive single-pass GPU snapshots inside v0.29 `HummingIndexedExperts.apply()`. Later runtime backend inspection proved that the target NVFP4 routed experts actually select `MARLIN` / `MarlinExperts`, so these Humming-internal stages were never on the target execution path. Keep v26 only as historical instrumentation; do not use it for further localization. |
 | v26 first build attempt | instrumentation build-validation failure | The patcher searched the full `fused_humming_moe.py` for the `quantize_input("w13")` block and found three matches across indexed/grouped implementations, so image construction stopped before runtime. The existing v25 image remained in place and preflight correctly rejected it as stale. This is not a model result. The patcher was narrowed to the `HummingIndexedExperts` class body before retrying v26. |
 | v26 second build attempt | instrumentation build-validation failure | After scoping the patcher to `HummingIndexedExperts`, image construction reached the final reduce patch but found zero `indexed reduce boundary` matches. The scoped class body intentionally ended before `class HummingGroupedExperts`, while the reduce anchor still included that next-class declaration. No runtime/model execution occurred. The reduce replacement was narrowed to the `moe_fused_mul_sum(...)` block itself. |
-| v26 first runtime attempt | instrumentation coverage failure | The corrected v26 image built successfully with label `ct-nvfp4-convert-diag-v26`, passed preflight, reached READY after 692 seconds, and completed eight `expert-probe` requests, but emitted zero `QWEN38_H20W_EXPERT` pair records. Because no Humming stage records were observed, this is not a model result. Source review showed the Humming stage trigger lived inside compiled/CUDA-graph execution while the trigger file was enabled only after READY. The stage capture was therefore converted to the same mutable `torch.library.custom_op` pattern already used by the successful upstream fullgraph probes, with a pre-tagged layer index carried into the compiled graph. |
+| v26 r1 | zero-record / non-model result | The corrected v26 image built successfully with label `ct-nvfp4-convert-diag-v26`, reached READY after 692 seconds, and completed eight `expert-probe` requests, but emitted zero `QWEN38_H20W_EXPERT` pair records. The initial hypothesis was that post-READY file triggers were hidden by compiled/CUDA-graph replay. |
+| v26 r2 after compile-safe custom-op | zero-record / non-model result | The mutable `torch.library.custom_op` implementation and pre-tagged layer index were present, eight requests completed, and zero Humming expert records were still observed. |
+| v26 r3 | zero-record / non-model result | A fresh v26 runtime again completed eight requests with zero Humming expert records. Repeating the same graph-mode probe no longer added evidence about model numerics. |
+| v26 eager-c1 | invalid control | The run was named as an eager control, but container inspection still showed `-cc.cudagraph_mode=PIECEWISE` and no `--enforce-eager`; startup also loaded AOT compilation artifacts. Treat this run as another graph-mode zero-record run, not an eager result. |
+| v26 eager-c2 | valid eager control / zero-record | Container arguments contained `--enforce-eager`; vLLM reported `CompilationMode.NONE` and `CUDAGraphMode.NONE`. Eight requests still produced zero Humming expert records. This falsifies the hypothesis that CUDA graph / torch.compile replay was the reason the Humming probe saw no records. |
+| v26 backend correction | root-cause of zero records identified | Runtime backend selection reported `Using 'MARLIN' NvFp4 MoE backend`. The v0.29 oracle maps `NvFp4MoeBackend.MARLIN` to `MarlinExperts`, whose path is `MarlinExperts.apply() -> fused_marlin_moe() -> _fused_marlin_moe()`. Therefore v26 instrumented the wrong routed-expert backend. The zero-record runs do not localize model nondeterminism. |
+| v27 Marlin boundary stages | implemented / runtime pending | Replaces the routed-expert Humming instrumentation in the CT diagnostic image with single-pass capture on the actual `MarlinExperts` path: entry, `moe_align_block_size` outputs, first Marlin W13 GEMM input/output, activation output, W2 GEMM input/output, and final top-k reduction output. Pairing uses separate ACTIVE/COMPLETED request state so the current request cannot self-pair. |
+
+### H20 v27: MARLIN boundary localization
+
+The v25 r5 witness remains the strongest valid boundary result: for request
+pair `[4,9]`, the full modular entry tensors and full `_prepare()` outputs
+were equal while `fused_out` differed. The next split must therefore stay
+inside the normal single-pass `_fused_experts()` execution.
+
+Before v27, backend-specific runtime inspection corrected an earlier assumption:
+the OrcaRouter NVFP4 routed experts select `MARLIN`, not
+`HummingIndexedExperts`. Humming FP8 log messages seen elsewhere belong to
+the separate FP8 linear/QKVZ path and must not be used to infer the routed-MoE
+backend.
+
+v27 instruments the actual standard Marlin path with these tensor stages:
+
+1. `entry_hidden_states`, `entry_topk_weights`, `entry_topk_ids`;
+2. `aligned_sorted_token_ids`, `aligned_expert_ids`,
+   `aligned_num_tokens_post_padded`;
+3. `w13_input`, optional `w13_input_scale`, and `w13_output`;
+4. `activation_output`;
+5. `w2_input`, optional `w2_input_scale`, and per-expert `w2_output`;
+6. `final_output` after the normal top-k reduction.
+
+The probe never invokes either Marlin GEMM twice. It observes the existing
+execution only. Full `torch.equal` comparisons are performed after normal
+execution through the custom-op capture context, so conclusions must still be
+phrased as being under the v27 boundary-probe context.
+
+Interpret only qualifying `entry_equal=true` pairs:
+
+- alignment differs first: localize to/through `moe_align_block_size` and
+  verify its scalar/context inputs before going deeper;
+- alignment and W13 input match but W13 output differs: localize to the first
+  Marlin GEMM region, then verify static weights/scales/configuration before
+  making any kernel-nondeterminism claim;
+- W13 output matches but activation output differs: localize to the activation
+  region;
+- activation/W2 input match but W2 output differs: localize to the second
+  Marlin GEMM region;
+- W2 output matches but final output differs: localize to the final top-k
+  reduction/output region.
+
+For backend-specific instrumentation, first prove the selected runtime backend
+and concrete `FusedMoEExperts` implementation class. Do not infer a routed-MoE
+backend from unrelated linear-kernel log messages.
+
+The canonical v27 command is `marlin-probe`. It refuses to overwrite an
+existing result. If the expected pair set is incomplete or contains a self-pair,
+it writes a sibling `.status.json` instrumentation-failure artifact instead
+of silently losing the failed run.
 
 ### H20 v24: layer-14/15 router repeat result
 
