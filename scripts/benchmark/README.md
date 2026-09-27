@@ -2276,7 +2276,9 @@ docker logs --timestamps qwen38-h20-ct-convert-diag-v029 2>&1 \
 ```
 
 Before rebuilding, save the current container logs and preserve all v22 result
-files. Confirm the image label is `ct-nvfp4-convert-diag-v23` before starting.
+files. v23 uses a version-specific `VLLM_CACHE_ROOT` namespace as well as the
+per-group suffix, so its AOT artifacts cannot be reused from v22. Confirm the
+image label is `ct-nvfp4-convert-diag-v23` before starting.
 
 H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
 path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
