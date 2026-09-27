@@ -321,7 +321,7 @@ h20_image_ok() {
   case "${PROFILE_CASE}" in
     hybrid-h20-ct-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
-      [[ "${label}" == "ct-nvfp4-convert-diag-v24" ]]
+      [[ "${label}" == "ct-nvfp4-convert-diag-v25" ]]
       ;;
     hybrid-h20-ct-fp8-bi-repair)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20repair" }}' 2>/dev/null || true)"
@@ -699,7 +699,8 @@ start_runtime() {
       -e QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"
       -e QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"
       -e QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"
-      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-v24-layer14-15-${QWEN38_H20U_LAYER14_GROUP:-all}"
+      -e QWEN38_H20V_BOUNDARY_TARGET_LAYER="${QWEN38_H20V_BOUNDARY_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20v-v25-modular-boundary-${QWEN38_H20U_LAYER14_GROUP:-all}"
     )
     if [[ "${QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0}" == 1 ]]; then
       h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )
