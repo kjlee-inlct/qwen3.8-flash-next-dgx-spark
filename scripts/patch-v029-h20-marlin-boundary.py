@@ -424,7 +424,6 @@ class_body = replace_once(
 text = (
     text[:fused_start]
     + fused_body
-    + text[public_start:public_start]
     + public_body
     + text[public_end:class_start]
     + class_body
