@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 16658)
+Total output lines: 1315
+
 from __future__ import annotations
 
 import subprocess
@@ -490,7 +493,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v22", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v23", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -507,7 +510,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts", runtime)
         self.assertIn("h20_image_ok()", runtime)
-        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v22" ]]', runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v23" ]]', runtime)
+        self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
 
 
     def test_h20_fp8_batch_invariant_repair_profile_is_diagnostic_free(self) -> None:
@@ -529,73 +533,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         )
         self.assertNotIn("patch-v029-h20-linear-attn-layer0.py", dockerfile)
         self.assertNotIn("patch-v029-h20c-runtime-moe-trace.py", dockerfile)
-        self.assertNotIn("patch-v029-h20-upstream-layer0.py", dockerfile)
-        self.assertIn("hybrid-h20-ct-fp8-bi-repair", runtime)
-        self.assertIn("qwen38-h20-ct-fp8-bi-repair-v029", runtime)
-        self.assertIn("vllm-orcarouter-v029-h20-fp8-bi-repair:v1", runtime)
-        self.assertIn("ct-h12-humming-fp8-batch-invariant-v1", runtime)
-        self.assertIn("runtime-repair-candidate", runtime)
-
-    def test_h20_patcher_executes_on_v029_ct_and_modelopt_shapes(self) -> None:
-        patch = ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py"
-        ct_block = """import torch
-logger = init_logger(__name__)
-class CompressedTensorsW4A4Nvfp4MoEMethod:
-    def process_weights_after_loading(self, layer):
-        # Shuffle weights into the NvFp4 kernel format.
-        (
-            w13,
-            w13_scale,
-            w13_scale_2,
-            a13_scale,
-            w2,
-            w2_scale,
-            w2_scale_2,
-            a2_scale,
-        ) = convert_to_nvfp4_moe_kernel_format(
-            nvfp4_backend=self.nvfp4_backend,
-            layer=layer,
-            w13=layer.w13_weight,
-            w13_scale=layer.w13_weight_scale,
-            w13_scale_2=(1.0 / w13_weight_global_scale),
-            a13_scale=(1.0 / layer.w13_input_global_scale),
-            w2=layer.w2_weight,
-            w2_scale=layer.w2_weight_scale,
-            w2_scale_2=(1.0 / layer.w2_weight_global_scale),
-            a2_scale=(1.0 / layer.w2_input_global_scale),
-            is_act_and_mul=self.moe.is_act_and_mul,
-            use_a16=self.use_a16,
-        )
-        self.moe_quant_config = self.get_fused_moe_quant_config(layer)
-        assert self.experts_cls is not None
-        self.moe_kernel = make_nvfp4_moe_kernel(
-            moe_quant_config=self.moe_quant_config,
-            moe_config=self.moe,
-            experts_cls=self.experts_cls,
-            backend=self.nvfp4_backend,
-            routing_tables=layer._expert_routing_tables(),
-        )
-        self.moe_kernel.fused_experts.process_weights_after_loading(layer)
-"""
-        mo_block = """import torch
-logger = init_logger(__name__)
-class ModelOptNvFp4FusedMoE:
-    def process_weights_after_loading(self, layer):
-        (
-            w13,
-            w13_scale,
-            w13_scale_2,
-            a13_scale,
-            w2,
-            w2_scale,
-            w2_scale_2,
-            a2_scale,
-        ) = convert_to_nvfp4_moe_kernel_format(
-            nvfp4_backend=self.nvfp4_backend,
-            layer=layer,
-            w13=layer.w13_weight,
-            w13_scale=layer.w13_weight_scale,
-            w13_scale_2=w13_weight_scale_2,
+        self.assertNotIn("patch-v029-h20-upstream-layer0.p…658 tokens truncated…cale_2,
             a13_scale=layer.w13_input_scale,
             w2=layer.w2_weight,
             w2_scale=layer.w2_weight_scale,
@@ -1053,6 +991,59 @@ class AfterLayer:
                 partial_stream.getvalue(),
             )
 
+    def test_h20_moe_router_capture_patches_actual_route_outputs(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-h20-moe-router-capture.py"
+        router_fixture = """from abc import ABC, abstractmethod
+from collections.abc import Callable
+
+import torch
+
+from vllm.model_executor.layers.fused_moe.config import RoutingMethodType
+
+class FusedMoERouter(ABC):
+    def select_experts(self, hidden_states, router_logits):
+        topk_weights, topk_ids = self._select_experts(
+            hidden_states,
+            router_logits,
+        )
+
+        # Write routing data for non-monolithic path (Triton, etc.)
+        if self._routing_replay_out is not None:
+            self._routing_replay_out[: topk_ids.shape[0]].copy_(topk_ids)
+        return topk_weights, topk_ids
+"""
+        layer_fixture = """import torch
+
+def FusedMoEFactory(prefix, router):
+    layer_name = prefix
+    if params_dtype is None:
+        params_dtype = torch.get_default_dtype()
+    return runner
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            router_path = Path(tmp) / "fused_moe_router.py"
+            layer_path = Path(tmp) / "layer.py"
+            router_path.write_text(router_fixture, encoding="utf-8")
+            layer_path.write_text(layer_fixture, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(patch), str(router_path), str(layer_path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            router = router_path.read_text(encoding="utf-8")
+            layer = layer_path.read_text(encoding="utf-8")
+            compile(router, str(router_path), "exec")
+            compile(layer, str(layer_path), "exec")
+            self.assertIn('"qwen38_h20u::route_capture"', router)
+            self.assertIn("QWEN38_H20U_ROUTE ", router)
+            self.assertIn("topk_ids_row_comparison", router)
+            self.assertIn("topk_weights_row_comparison", router)
+            self.assertIn("_qwen38_h20u_route_capture(", router)
+            self.assertIn("router._qwen38_h20_layer_name = layer_name", layer)
+
     def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-h20-linear-attn-layer0.py"
         source = """import os
@@ -1170,7 +1161,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v22"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v23"', dockerfile)
         self.assertIn('class HummingFP8ScaledMMLinearKernel', patch)
         self.assertIn('_qwen38_h20_compute["use_batch_invariant"] = True', patch)
         self.assertIn('class HummingInt8ScaledMMLinearKernel', patch)
@@ -1258,3 +1249,4 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
 
 if __name__ == "__main__":
     unittest.main()
+
