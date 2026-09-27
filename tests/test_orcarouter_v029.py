@@ -1104,7 +1104,11 @@ def FusedMoEFactory(prefix, router):
             self.assertIn('"qwen38_h20u::route_capture"', router)
             self.assertIn("QWEN38_H20U_ROUTE ", router)
             self.assertIn("topk_ids_row_comparison", router)
-            self.assertIn("topk_weights_row_comparison", router)\n            self.assertIn("QWEN38_H20U_ROUTE_LAYERS", router)\n            self.assertIn('"layer_idx": layer_idx', router)\n            self.assertIn('".layers.{layer_idx}.mlp"', router)\n            self.assertIn("_qwen38_h20u_route_capture(", router)
+            self.assertIn("topk_weights_row_comparison", router)
+            self.assertIn("QWEN38_H20U_ROUTE_LAYERS", router)
+            self.assertIn('"layer_idx": layer_idx', router)
+            self.assertIn('".layers.{layer_idx}.mlp"', router)
+            self.assertIn("_qwen38_h20u_route_capture(", router)
             self.assertIn("router._qwen38_h20_layer_name = layer_name", layer)
 
     def test_h20_linear_attn_patcher_installs_boundaries(self) -> None:
