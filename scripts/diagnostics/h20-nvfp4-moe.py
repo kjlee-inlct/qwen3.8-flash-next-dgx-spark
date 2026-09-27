@@ -1198,13 +1198,13 @@ def marlin_probe(
     status_output = _marlin_status_path(output)
     if output.exists() or status_output.exists():
         print(
-            f"ERROR: refusing to overwrite existing H20 v27 output: "
+            f"ERROR: refusing to overwrite existing H20 v28 output: "
             f"{output if output.exists() else status_output}",
             file=sys.stderr,
         )
         return 2
     if not _container_exists(container):
-        print(f"ERROR: H20 v27 container not found: {container}", file=sys.stderr)
+        print(f"ERROR: H20 v28 container not found: {container}", file=sys.stderr)
         return 2
 
     existing = subprocess.run(
@@ -1230,7 +1230,7 @@ def marlin_probe(
             },
         )
         print(
-            f"ERROR: H20 v27 requires the MARLIN NvFp4 MoE backend; "
+            f"ERROR: H20 v28 requires the MARLIN NvFp4 MoE backend; "
             f"startup marker not found; wrote {status_output}",
             file=sys.stderr,
         )
@@ -1348,6 +1348,14 @@ def marlin_probe(
             f"marlin_repeat requests=[{record.get('request0')}, "
             f"{record.get('request1')}] "
             f"entry_equal={record.get('entry_equal')} "
+            f"alignment_static_equal={record.get('alignment_static_equal')} "
+            f"full_sorted_equal={record.get('full_sorted_equal')} "
+            f"valid_sorted_equal={record.get('valid_sorted_equal')} "
+            f"tail_sorted_equal={record.get('tail_sorted_equal')} "
+            f"valid_sorted_first_mismatch="
+            f"{record.get('valid_sorted_first_mismatch')} "
+            f"valid_sorted_mismatch_count="
+            f"{record.get('valid_sorted_mismatch_count')} "
             f"alignment_equal={record.get('alignment_equal')} "
             f"w13_input_equal={record.get('w13_input_equal')} "
             f"w13_output_equal={record.get('w13_output_equal')} "
