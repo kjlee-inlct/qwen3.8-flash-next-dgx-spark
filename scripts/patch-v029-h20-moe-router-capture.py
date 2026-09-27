@@ -164,4 +164,3 @@ layer = replace_once(
 router_path.write_text(router, encoding="utf-8")
 layer_path.write_text(layer, encoding="utf-8")
 print("installed opt-in H20 layer-14 MoE route capture")
-

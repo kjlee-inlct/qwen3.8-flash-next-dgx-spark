@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 37407)
-Total output lines: 3306
-
 # Benchmark harness
 
 This directory contains the repository's canonical read-only benchmark harness for the managed Qwen3.8 Flash Next runtime.
@@ -787,7 +784,1814 @@ one unique hash at every point. No first failing size was observed.
 
 Decode also passed on the same boot:
 
-- median deco…21407 tokens truncated…E kernel execution
+- median decode: 26.6382 tok/s (max 26.6634 tok/s);
+- warm TTFT after the first request: about 0.222-0.230 s;
+- engine steps: 11.917/s;
+- speculative draft acceptance: 0.600733;
+- accepted tokens per draft: 1.201465.
+
+This wider result makes the H2->H3 routed-expert representation/config delta a
+strong root-cause region rather than a single-size coincidence. Further
+subdivision must preserve one coherent loader representation; mixing OrcaRouter
+packed expert tensors with a mazinb ModelOpt quantization config is not a valid
+isolation by itself.
+
+### H1-H20 experiment ledger
+
+This ledger is the canonical compact history for the checkpoint/loader
+determinism isolation. Startup/build failures are explicitly separated from
+valid determinism results.
+
+| ID | Isolated change | Valid result | Key interpretation |
+|---|---|---|---|
+| H1 | Replace 96 residual-writer group-0 FP8 modules with mazinb BF16; MTP unchanged | FAIL, 3 unique hashes / 5 | Residual-writer subset is insufficient. |
+| H2 | Replace all 300 main-model group-0 FP8 modules with mazinb BF16; MTP unchanged | FAIL, 3 / 5 | Main-model group-0 values are insufficient. |
+| H3 | H2 + replace routed experts with mazinb ModelOpt NVFP4 representation/config | PASS, 1 / 5; wider 1024-32768 sweep also PASS | H2->H3 routed-expert representation/config delta is the decisive region. |
+| H4a | H3 + restore OrcaRouter down-proj expert values | PASS, 1 / 5 | Down-proj values alone are insufficient. |
+| H4b | H3 + restore OrcaRouter gate/up expert values | PASS, 1 / 5 | Gate/up values alone are insufficient. |
+| H4c | H3 + restore all OrcaRouter expert weight/group/global-scale values | PASS, 1 / 5 | OrcaRouter expert numeric values themselves are insufficient under ModelOpt representation. |
+| H5 | H4c + set all 73728 ModelOpt input_scale tensors to 1.0 | PASS, 1 / 5 | Specific mazinb input-scale values are not required. |
+| H6 | H5 bytes unchanged; ModelOpt quant_algo NVFP4 -> W4A16_NVFP4 | PASS, 1 / 5 | W4A4 activation quantization is not required; representation/loader path remains. |
+| H7 | H6 derivative intended to change ModelOpt weight_scale metadata BLOCK -> GROUP | FAIL, 3 / 5, but causal attribution inconclusive | Later source review showed this is not a clean metadata-only proof. |
+| H8 | Original Orca CT path; weight_scale metadata GROUP -> BLOCK | FAIL, 3 / 5 | BLOCK metadata alone cannot repair CT. |
+| H9 | H8 + weight_scale objects -> ModelWeightParameter + BLOCK | FAIL, 5 / 5 | weight_scale parameter/loader representation alone is insufficient. |
+| H10 | H9 + weight_global_scale objects -> PerTensorScaleParameter | FAIL, 5 / 5 | global-scale object representation alone is insufficient. |
+| H11 | H10 + packed expert weights -> ModelWeightParameter before post-load processing | FAIL, 5 / 5 | Pre-load packed-weight object representation alone is insufficient. |
+| H12 | H11 + preserve loaded ModelWeightParameter objects across packed->weight rename | FAIL, 2 / 5; 4 runs matched H6 stable hash | Post-load object replacement is a strong interaction signal, not yet a standalone root-cause proof. |
+| H13 | H12 + input-global-scale checkpoint objects -> PerTensorScaleParameter | FAIL, 4 / 5 | Input-global-scale parameter representation is not the missing repair; regression versus H12. |
+| H14 | H12 + register converted post-load input scales as Parameters | FAIL, 5 / 5 | Final post-load input-scale Tensor/Parameter ownership is insufficient. |
+| H15 | H14 runtime/image with MTP speculative decoding disabled | FAIL, 4 / 5 | MTP is not sufficient to explain the remaining nondeterminism; one pair of repeats matched, but the gate still failed. |
+| H16 | H15 runtime with max_num_seqs 3 -> 1 | FAIL, 4 / 5 | Single-sequence scheduling is not sufficient; run 1 matched the H6 stable reference and runs 2-3 matched each other, but the gate failed. |
+| H17 | H12 + rename loaded weight_global_scale parameters to final weight_scale_2 names before conversion | FAIL, 4 / 5 | Final weight_scale_2 name/object lifecycle alone is insufficient; two runs matched each other and one matched the H6 stable hash. |
+| H18 | H12 + rename loaded input_global_scale parameters to final input_scale names before conversion and replace converted scales on those names | FAIL, 5 / 5 | Input-scale final-name/object lifecycle alone is insufficient; all five repeats diverged. |
+| H19 | H12 + apply both H17 weight_scale_2 lifecycle and H18 input_scale lifecycle | FAIL, 5 / 5 | Combined final-name/object lifecycle alignment is insufficient; wrapper/object lifecycle isolation is closed. |
+| H20 | Instrument H12 CT and deterministic H6 ModelOpt around convert_to_nvfp4_moe_kernel_format() with normalized tensor fingerprints | PENDING diagnostic | Locates the first CT-vs-ModelOpt divergence before or after kernel-format conversion without changing checkpoint bytes. |
+
+Important invalid/non-result events:
+
+- H9 had two startup-only failures before the corrected valid run: first missing
+  quant_method metadata, then an attempted overwrite of the constructor-owned
+  weight_loader. Neither is a determinism result.
+- H10 initially had a startup-only loader failure because the new
+  PerTensorScaleParameter global-scale objects lacked TENSOR quant_method
+  metadata. The corrected H10 run is the valid determinism result.
+- The first H17 image build failed before runtime because the patch script
+  incorrectly required `layer.w13_weight_global_scale[:, 0]` to occur exactly
+  once even though H12 uses it in both the `allclose` check and the contiguous
+  extraction. This is a patch-application failure, not a determinism result.
+- A missing image/container, build failure, or readiness failure is never
+  classified as a determinism FAIL.
+- H4a/H4b were disposable thin controls and may no longer exist on disk; H4c is
+  the retained H4 checkpoint.
+
+Validation still worth doing independently of the H20 conversion diagnostic:
+
+- repeat H12 with a larger same-boot sample (for example 20 repeats) to estimate
+  whether the observed 4/5 stable pattern is reproducible;
+- repeat H12 after a fresh runtime start. If the 4/5 pattern disappears, do not
+  use its apparent improvement as evidence of effect size;
+- preserve the stable H6 hash as a reference marker, but do not equate matching
+  one output hash with proof that the internal execution path is identical.
+
+### H4 partial routed-expert A/B
+
+The read-only conversion feasibility gate passed on the local OrcaRouter/mazinb
+pair:
+
+- 73728 routed-expert projection modules matched between checkpoints;
+- sampled packed weights are U8 on both sides after name normalization;
+- sampled group scales are F8_E4M3 on both sides with no shape mismatches;
+- OrcaRouter exposes no routed-expert input-global-scale tensors, while mazinb
+  provides 73728 `input_scale` tensors;
+- `weight_global_scale` can be mapped to ModelOpt `weight_scale_2` by
+  reciprocal;
+- gate/up global scales are validated as a pair before an H4 build.
+
+Therefore H4 keeps the H3 ModelOpt loader contract and mazinb `input_scale`
+fixed while replacing only normalized OrcaRouter weight/group/global-scale
+values. The first split follows the fused-MoE loader boundary:
+
+- `orca-down`: all 24576 `down_proj` expert modules;
+- `orca-gate-up`: all 49152 `gate_proj + up_proj` expert modules together.
+
+Both are thin delta checkpoints over H3; unchanged tensors/files are referenced
+through the read-only `/h3-model` mount instead of copying the 73-GiB parent.
+
+Plan both variants before stopping H3:
+
+```bash
+bash scripts/model/prepare-h4-expert-ab.sh plan orca-down
+bash scripts/model/prepare-h4-expert-ab.sh plan orca-gate-up
+```
+
+Build one variant at a time only after checking its reported delta size:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-quant-layout
+
+bash scripts/model/prepare-h4-expert-ab.sh build orca-down
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h4-down
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h4-down
+
+./scripts/wait-ready.sh \
+  --container qwen38-h4-down-v029 \
+  --model hybrid-h4-down/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Run the 1024/128 seeded gate first. If `orca-down` fails while H3 passes, the
+down-projection expert values are sufficient to reintroduce nondeterminism. If it
+passes, test `orca-gate-up` next under the same H3 parent and runtime controls.
+
+Observed on 2026-09-21:
+
+- H4 `orca-down` built successfully as a 22-GiB thin delta over H3;
+- 24576 OrcaRouter `down_proj` expert modules / 73728 normalized tensors were
+  substituted while mazinb/H3 `input_scale` and ModelOpt quantization config
+  remained fixed;
+- runtime reached READY after 952 seconds;
+- the 1024/128 seeded determinism gate passed all five repeats with exactly one
+  unique output hash.
+
+Therefore restoring all OrcaRouter routed-expert `down_proj` values is not
+sufficient to reproduce the original nondeterminism. The next discriminating
+experiment is `orca-gate-up`.
+
+Observed next on 2026-09-21:
+
+- H4 `orca-gate-up` built successfully as a 43-GiB thin delta over H3;
+- 49152 OrcaRouter `gate_proj + up_proj` expert modules / 147456 normalized
+  tensors were substituted while mazinb/H3 `input_scale` and ModelOpt
+  quantization config remained fixed;
+- runtime reached READY after 1013 seconds;
+- the 1024/128 seeded determinism gate passed all five repeats with exactly one
+  unique output hash.
+
+With both `orca-down` and `orca-gate-up` passing independently, neither
+projection family alone is sufficient to reproduce the original instability.
+
+Observed next on 2026-09-21 with `orca-all`:
+
+- all 73728 OrcaRouter routed-expert projection modules / 221184 normalized
+  expert weight/group/global-scale tensors were restored together;
+- mazinb/H3 `input_scale` and ModelOpt quantization config remained fixed;
+- the thin delta occupied about 64 GiB;
+- runtime reached READY after 1212 seconds;
+- the 1024/128 seeded determinism gate passed all five repeats with one unique
+  output hash.
+
+Therefore neither individual projection families nor their combined OrcaRouter
+weight/group/global-scale values are sufficient to reproduce the original
+nondeterminism. The leading remaining checkpoint/runtime difference is the
+ModelOpt activation-input-scale path versus the original compressed-tensors
+expert loader path.
+
+The next isolation is H5 `neutral-input-scale`: keep the proven H4-all Orca
+expert payload and ModelOpt config fixed, but replace all 73728 routed-expert
+`input_scale` tensors with scalar 1.0 values. This distinguishes the mazinb
+input-scale values from the ModelOpt loader/config path itself.
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h4-all
+
+bash scripts/model/prepare-h5-input-scale.sh plan
+bash scripts/model/prepare-h5-input-scale.sh build
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h5-neutral-input
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h5-neutral-input
+
+./scripts/wait-ready.sh \
+  --container qwen38-h5-neutral-input-v029 \
+  --model hybrid-h5-neutral-input/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- FAIL: the mazinb expert input-scale values are a material part of the
+  determinism fix;
+- PASS: neutralizing the values is still stable, so the remaining distinction is
+  primarily the ModelOpt activation-quantization/loader representation rather
+  than the specific mazinb input-scale values.
+
+Observed on 2026-09-21:
+
+- H5 `neutral-input-scale` reached READY after 421 seconds;
+- all 73728 routed-expert `input_scale` tensors were replaced with scalar 1.0;
+- OrcaRouter expert weight/group/global-scale values from H4-all and the
+  mazinb/ModelOpt quantization config were retained;
+- the 1024/128 seeded determinism gate passed all five repeats with one unique
+  output hash;
+- the output hash matched the H4-all result.
+
+Therefore the specific mazinb input-scale values are not required for
+determinism. The remaining high-value distinction is the expert
+representation/loader contract itself: ModelOpt NVFP4 versus the original
+compressed-tensors packed expert path.
+
+H6 isolates the activation-quantization mode inside the ModelOpt representation.
+It reuses the H5 checkpoint byte-for-byte and changes only the ModelOpt
+`quant_algo` from `NVFP4` (W4A4) to `W4A16_NVFP4`. No safetensor bytes,
+expert payloads, neutral input scales, MTP tensors, or other model config fields
+are changed.
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h5-neutral-input
+
+bash scripts/model/prepare-h6-w4a16.sh plan
+bash scripts/model/prepare-h6-w4a16.sh build
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h6-w4a16
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h6-w4a16
+
+./scripts/wait-ready.sh \
+  --container qwen38-h6-w4a16-v029 \
+  --model hybrid-h6-w4a16/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- FAIL: switching from W4A4 activation quantization to the W4A16 path is
+  sufficient to reintroduce instability. The activation/backend path becomes
+  the primary root-cause region;
+- PASS: the ModelOpt representation remains stable even in W4A16 mode, so the
+  remaining difference is more specifically the ModelOpt versus
+  compressed-tensors loader/parameter representation.
+
+Observed on 2026-09-21:
+
+- H6 `modelopt-w4a16` reached READY after 712 seconds;
+- no safetensor bytes changed relative to H5;
+- the only intended checkpoint change was
+  `quant_algo: NVFP4 -> W4A16_NVFP4`;
+- the 1024/128 seeded determinism gate passed all five repeats with one unique
+  output hash.
+
+Therefore W4A4 activation quantization is not required for determinism. The
+remaining leading difference is the checkpoint loader/parameter representation
+and its weight-processing path: ModelOpt versus compressed-tensors.
+
+H7 isolates one explicit loader metadata difference while reusing the H6
+checkpoint unchanged. vLLM v0.29 registers the routed-expert NVFP4
+`weight_scale` parameter as `BLOCK` in the ModelOpt loader but as `GROUP`
+in the compressed-tensors loader. H7 patches only the ModelOpt MoE metadata
+assignment from `BLOCK` to `GROUP`; checkpoint tensors, W4A16 mode, QSA, MTP,
+and all runtime controls stay fixed.
+
+Build the tiny derivative image and run the H6 checkpoint through it:
+
+```bash
+docker build -t vllm-orcarouter-v029-h7-group:v1 \
+  -f scripts/Dockerfile.v029-h7-modelopt-group scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h6-w4a16
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h7-group-metadata
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h7-group-metadata
+
+./scripts/wait-ready.sh \
+  --container qwen38-h7-group-metadata-v029 \
+  --model hybrid-h7-group-metadata/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- FAIL: the GROUP/BLOCK scale metadata and the weight-loading path it selects
+  becomes a strong root-cause candidate;
+- PASS: that metadata difference is also insufficient, leaving the
+  compressed-tensors parameter naming/processing path itself as the next target.
+
+Observed on 2026-09-21:
+
+- H7 `group-metadata` reused the H6 checkpoint unchanged;
+- the derivative image changed only the ModelOpt routed-expert `weight_scale`
+  metadata from `BLOCK` to `GROUP`;
+- runtime reached READY after 722 seconds;
+- the 1024/128 seeded determinism gate failed with 3 unique hashes across 5
+  repeats;
+- runs 1, 2, and 4 matched the stable H6 hash, while runs 3 and 5 diverged.
+
+H7 failed determinism, but later source review showed that ModelOpt
+`ModelWeightParameter` does not consume the modified `extra_weight_attrs`
+through the compressed-tensors generic scale-loading branch. Therefore H7 must
+not be treated as a clean causal `BLOCK -> GROUP` proof. It remains evidence
+that the derived runtime was unstable, but the specific metadata attribution is
+inconclusive.
+
+H8 is the reciprocal confirmation test on the original OrcaRouter
+compressed-tensors checkpoint. It leaves the checkpoint and compressed-tensors
+loader intact and changes only the routed-expert `weight_scale` metadata from
+`GROUP` to `BLOCK` for both w13 and w2.
+
+```bash
+docker build -t vllm-orcarouter-v029-h8-ct-block:v1 \
+  -f scripts/Dockerfile.v029-h8-ct-block scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h7-group-metadata
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h8-ct-block
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h8-ct-block
+
+./scripts/wait-ready.sh \
+  --container qwen38-h8-ct-block-v029 \
+  --model hybrid-h8-ct-block/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: the reciprocal change restores determinism on the original
+  compressed-tensors checkpoint, strongly confirming GROUP/BLOCK metadata
+  handling as the root-cause region;
+- FAIL: BLOCK metadata alone is insufficient to repair compressed-tensors.
+  Because later source review showed H7 is not a clean GROUP-metadata causal
+  proof, the combined H7/H8 result only justifies moving to the
+  compressed-tensors-specific parameter/loader and post-load processing path.
+
+Observed on 2026-09-21:
+
+- H8 reused the original OrcaRouter compressed-tensors checkpoint unchanged;
+- only the routed-expert `weight_scale` metadata changed `GROUP -> BLOCK`;
+- runtime reached READY after 742 seconds;
+- the 1024/128 seeded determinism gate still failed with 3 unique hashes across
+  5 repeats;
+- runs 1-3 matched the stable H6 hash while runs 4-5 diverged;
+- startup selected the weight-only FP4 Marlin path.
+
+H8 shows that explicitly changing the compressed-tensors scale metadata to
+`BLOCK` is insufficient to restore determinism. Combined with the H7 caveat
+above, the next valid isolation target is the compressed-tensors-specific
+parameter/weight-loader representation and post-load conversion path.
+
+H9 isolates the first of those representation differences. It keeps the
+original OrcaRouter compressed-tensors checkpoint and H8's `BLOCK` metadata,
+but changes only the routed-expert w13/w2 `weight_scale` parameters from plain
+`torch.nn.Parameter + set_weight_attrs` to the ModelOpt-style
+`ModelWeightParameter(input_dim=1, output_dim=2, weight_loader=...)`.
+Packed weights, global scales, quantization config, post-load rename/conversion,
+and the W4A16/Marlin runtime path remain unchanged.
+
+```bash
+docker build -t vllm-orcarouter-v029-h9-ct-modelweight:v1 \
+  -f scripts/Dockerfile.v029-h9-ct-modelweight-scale scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h8-ct-block
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h9-ct-modelweight
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h9-ct-modelweight
+
+./scripts/wait-ready.sh \
+  --container qwen38-h9-ct-modelweight-v029 \
+  --model hybrid-h9-ct-modelweight/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: the expert scale parameter/loader representation is the missing repair
+  beyond BLOCK metadata and becomes the primary root-cause candidate;
+- FAIL: scale parameter representation is still insufficient, leaving packed
+  weight/global-scale parameter handling or compressed-tensors post-load
+  conversion as the next isolation target.
+
+## OrcaRouter stability candidate
+
+After stock, skinny, MTP-off, deterministic-QSA, and exact-QSA all reproduced
+greedy-output non-determinism, the next stability candidate combines the exact QSA
+selection path with two correctness fixes that current DGX Spark recipes apply
+unconditionally:
+
+- GB10 Flash Linear Attention shared-memory/num-warps workaround, including the
+  Blackwell `tl.dot` race workaround;
+- guarded Mamba state-copy implementation containing the vLLM overlapping-copy race
+  fix plus bounds checks.
+
+This is still an experiment, not the installer default.
+
+Build it on top of the existing exact-QSA image:
+
+```bash
+docker build -t vllm-skinny-stable-candidate:v1 \
+  -f scripts/Dockerfile.stable-candidate scripts/
+```
+
+Run it with the managed runtime stopped:
+
+```bash
+bash scripts/runtime/orcarouter-stock-skinny.sh start STABLE-CANDIDATE
+
+./scripts/wait-ready.sh \
+  --container qwen38-orca-stable-candidate \
+  --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Then run the 1024-token correctness gate first:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-stable-candidate-det-1024.json
+```
+
+The benchmark metadata must show:
+
+```json
+"qsa_exact_topk": "1",
+"gb10_fla_fix": "1",
+"mamba_state_fix": "1"
+```
+
+Only if the 1024 gate passes should the wider QSA determinism sweep and decode
+benchmark be run. Restore the canonical runtime through the managed service path after
+the experiment.
+
+## OrcaRouter on vLLM v0.29
+
+If the seeded stability candidate still produces multiple greedy output hashes, keep
+the OrcaRouter checkpoint fixed and move only the runtime base from the Qwen preview
+image to the official vLLM v0.29 release line.
+
+The v0.29 experiment is deliberately minimal:
+
+- OrcaRouter checkpoint from the active install manifest;
+- vLLM `v0.29.0`;
+- compatibility backport for newer checkpoints that use the explicit
+  `qwen_sparse_attention` layer type;
+- PLE mmap so the large n-gram table does not have to remain resident in unified RAM;
+- exact QSA top-k;
+- GB10 FLA shared-memory/num-warps workaround;
+- MTP k=2;
+- prefix cache disabled;
+- no hybrid quantization, draft-vocab reduction, or other throughput patches.
+
+Build and run:
+
+```bash
+docker build -t vllm-orcarouter-v029:v1 \
+  -f scripts/Dockerfile.v029-orcarouter scripts/
+
+sudo systemctl stop qwen38-flash-next.service
+./scripts/runtime/orcarouter-v029.sh preflight
+./scripts/runtime/orcarouter-v029.sh start
+
+./scripts/wait-ready.sh \
+  --container qwen38-orca-v029 \
+  --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Run the seeded determinism gate first:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/orcarouter-v029-seeded-det-1024.json
+```
+
+The report must show `vllm_base="v0.29"`, `ple_mmap="1"`,
+`qsa_exact_topk="1"`, and the explicit seeded sampling controls before the result is
+used for diagnosis.
+
+Restore the canonical runtime through the managed service path after the experiment.
+
+## QSA determinism diagnostic
+
+Qwen3.8 Flash Next uses a sparse QSA indexer. On the NVIDIA checkpoint used by
+this project, the model config currently reports `indexer_budget=2048` and
+`indexer_compress_ratio=4`. A correctness sweep should therefore include
+prompt sizes on both sides of the sparse-selection boundary.
+
+Run:
+
+```bash
+python3 scripts/benchmark/run.py qsa-determinism \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 3 \
+  --output scripts/benchmark/results/local/qsa-determinism.json
+```
+
+The mode reports the first observed failing prompt size and the number of unique
+greedy-output hashes at each size. This diagnostic is intentionally separate
+from the `tuning` performance mode: a tuning run may produce useful engine
+metrics even when the correctness gate fails, but such numbers must not be
+treated as a validated production configuration.
+
+Runtime metadata also records `mtp_index_share` explicitly. A false value is
+recorded as `false` rather than inferred from an absent speculative-config
+field, so A/B/C/D results remain self-describing.
+
+## Reusable operator helpers
+
+Long model boots should use `./scripts/wait-ready.sh` rather than copied polling loops. Model inventory and stale checkpoint cleanup should use `./scripts/manage-models.sh`; the command refuses to delete the active installation model.
+
+
+## Determinism sampling controls
+
+Determinism requests explicitly pin `temperature=0`, `top_p=1.0`, `seed=0`, and disable thinking. The report records these controls so a failure cannot be attributed to an implicit sampler default.
+
+### H9 loader correction
+
+The first H9 image failed before inference because converting the
+compressed-tensors expert `weight_scale` objects to `ModelWeightParameter`
+dropped the `quant_method` attribute required by the generic
+`RoutedExperts.weight_loader`. That startup failure is not a determinism
+result. The corrected H9 patch keeps the ModelWeightParameter representation but
+reapplies `set_weight_attrs(..., quant_method=BLOCK)` to both w13 and w2 scale
+parameters before rerunning the control.
+
+### H9 loader correction 2
+
+The second H9 boot also failed before weight loading completed. The corrected
+ModelWeightParameter objects already own their `weight_loader` attribute, so
+passing the full `extra_weight_attrs` dict into `set_weight_attrs()` tried to
+overwrite `weight_loader` and tripped vLLM's safety assertion. This is not a
+determinism result.
+
+The corrected control now applies only
+`{"quant_method": "block"}` through `set_weight_attrs()`, while the
+ModelWeightParameter retains its constructor-provided weight loader.
+
+### H9 corrected result: FAIL
+
+Observed on 2026-09-21:
+
+- the corrected H9 image built successfully with the expected v2 image label;
+- the runtime reached READY after 621 seconds;
+- the original OrcaRouter compressed-tensors checkpoint was unchanged;
+- routed-expert w13/w2 `weight_scale` parameters used
+  `ModelWeightParameter(input_dim=1, output_dim=2)` with
+  `quant_method=BLOCK`;
+- the 1024/128 seeded determinism gate failed with 5 unique hashes across 5
+  repeats.
+
+Therefore the expert weight-scale parameter/loader representation is not
+sufficient to repair the compressed-tensors path. The next isolation target is
+the remaining compressed-tensors-specific expert representation: packed expert
+weights, global-scale parameters, and post-load conversion.
+
+### H10: compressed-tensors global-scale parameter control
+
+H9 showed that changing only routed-expert `weight_scale` parameters to
+ModelWeightParameter + BLOCK is insufficient: the corrected H9 runtime reached
+READY but still produced 5 unique hashes in 5 deterministic repeats.
+
+H10 keeps the corrected H9 image as its parent and changes only the routed-expert
+weight-global-scale parameter representation:
+
+- H9: plain `torch.nn.Parameter` + TENSOR attrs;
+- H10: `PerTensorScaleParameter(weight_loader=...)`.
+
+The original OrcaRouter checkpoint values and on-disk parameter names remain
+unchanged. The compressed-tensors reciprocal conversion
+`1 / weight_global_scale`, packed expert weights, input-global-scale handling,
+post-load rename, W4A16/Marlin backend, QSA, and MTP controls are unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h10-ct-global-scale:v1 \
+  -f scripts/Dockerfile.v029-h10-ct-global-scale \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop --profile hybrid-h9-ct-modelweight
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h10-ct-global-scale
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h10-ct-global-scale
+
+./scripts/wait-ready.sh \
+  --container qwen38-h10-ct-global-scale-v029 \
+  --model hybrid-h10-ct-global-scale/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: global-scale parameter/loader representation is the missing difference
+  beyond H9 and becomes the primary root-cause candidate;
+- FAIL: global-scale parameter representation is also insufficient, leaving the
+  packed expert-weight parameter representation and compressed-tensors
+  post-load rename/conversion as the next isolation target.
+
+
+### H10 result: FAIL
+
+Observed on 2026-09-22:
+
+- corrected H10 reached READY after 672 seconds;
+- original OrcaRouter checkpoint values and names were unchanged;
+- H9 expert `weight_scale` used `ModelWeightParameter + BLOCK`;
+- H10 expert `weight_global_scale` used
+  `PerTensorScaleParameter(weight_loader=...)` with TENSOR metadata;
+- the 1024/128 seeded determinism gate failed with 5 unique hashes across 5
+  repeats;
+- one repeat matched the previously stable H6 hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`,
+  while other repeats matched hashes previously seen in H9.
+
+Therefore the global-scale parameter/loader representation is also insufficient
+to repair the compressed-tensors path.
+
+### H11: compressed-tensors packed expert weight parameter control
+
+H11 starts from the corrected H10 image and changes only the pre-load packed
+expert weight parameter objects:
+
+- H10: plain `torch.nn.Parameter` for `w13_weight_packed` /
+  `w2_weight_packed`;
+- H11: `ModelWeightParameter(input_dim=1, output_dim=2,
+  weight_loader=...)` for those same on-disk names.
+
+The OrcaRouter checkpoint, packed weight bytes, H9 scale representation, H10
+global-scale representation, reciprocal scale conversion, and the existing
+compressed-tensors post-load `weight_packed -> weight` wrapping/rename are
+unchanged.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h11-ct-packed-modelweight:v1 \
+  -f scripts/Dockerfile.v029-h11-ct-packed-modelweight \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h11-ct-packed-modelweight
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h11-ct-packed-modelweight
+
+./scripts/wait-ready.sh \
+  --container qwen38-h11-ct-packed-modelweight-v029 \
+  --model hybrid-h11-ct-packed-modelweight/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: the packed-weight parameter/loader representation becomes the strongest
+  remaining root-cause candidate;
+- FAIL: pre-load packed-weight parameter representation is insufficient, making
+  the compressed-tensors post-load `weight_packed -> weight` rename/wrapping
+  the next isolation target.
+
+
+### H11 result: FAIL
+
+Observed on 2026-09-22:
+
+- H11 reached READY after 622 seconds;
+- packed expert weights used `ModelWeightParameter(input_dim=1, output_dim=2,
+  weight_loader=...)` while retaining the original
+  `w13_weight_packed` / `w2_weight_packed` checkpoint names;
+- the existing compressed-tensors post-load wrapping/rename path remained
+  unchanged;
+- the 1024/128 seeded determinism gate failed with 5 unique hashes across 5
+  repeats.
+
+Therefore the packed expert pre-load parameter/loader representation is also
+insufficient.
+
+### H12: preserve packed expert parameter objects across post-load rename
+
+H12 starts from H11 and changes only the compressed-tensors post-load rename:
+
+- H11 creates new plain `torch.nn.Parameter` objects from
+  `layer.w*_weight_packed.data`, then deletes the packed names;
+- H12 re-registers the already-loaded `ModelWeightParameter` objects directly
+  as `w13_weight` / `w2_weight`, then deletes the packed names.
+
+Checkpoint bytes/names, H9/H10 scale representations, kernel-format conversion,
+backend selection, QSA, and MTP are unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h12-ct-postload-preserve:v1 \
+  -f scripts/Dockerfile.v029-h12-ct-postload-preserve \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h12-ct-postload-preserve
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h12-ct-postload-preserve
+
+./scripts/wait-ready.sh \
+  --container qwen38-h12-ct-postload-preserve-v029 \
+  --model hybrid-h12-ct-postload-preserve/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: post-load packed-weight re-wrapping/object replacement is the strongest
+  remaining root-cause candidate;
+- FAIL: even preserving the loaded packed weight objects is insufficient, so the
+  next target is the broader compressed-tensors post-load scale/input-scale
+  assignment/conversion path rather than the packed-weight object identity alone.
+
+
+### H12 result: FAIL, but strongly improved
+
+Observed on 2026-09-22:
+
+- H12 reached READY after 611 seconds;
+- the 1024/128 seeded determinism gate still failed;
+- however only 2 unique hashes were observed across 5 repeats;
+- 4 of 5 repeats matched the stable H6 hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- the fifth repeat produced
+  `973e217f93f585dac5b8a11275d5329716a672fc268f682b884b53d18c53ca0a`.
+
+In this five-repeat run, preserving the loaded packed-weight parameter objects
+was associated with a strong reduction from five unique hashes to two, but it
+was not sufficient for a PASS. Treat the apparent improvement as a high-value
+signal rather than a quantified effect until it reproduces across additional
+same-boot repeats and fresh runtime starts.
+
+### H13: input-global-scale parameter representation
+
+H13 starts from H12 and changes only the input-global-scale parameter objects:
+
+- H12: plain `torch.nn.Parameter` for
+  `w13_input_global_scale` / `w2_input_global_scale`;
+- H13: `PerTensorScaleParameter(weight_loader=...)` for the same on-disk names.
+
+The CT reciprocal conversion `1 / input_global_scale`, post-load assignments,
+checkpoint values/names, H12 packed-weight preservation, weight scale/global
+scale paths, backend selection, QSA, and MTP remain unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h13-ct-input-scale:v1 \
+  -f scripts/Dockerfile.v029-h13-ct-input-scale \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight --profile hybrid-h13-ct-input-scale
+./scripts/runtime/orcarouter-v029.sh start --profile hybrid-h13-ct-input-scale
+
+./scripts/wait-ready.sh \
+  --container qwen38-h13-ct-input-scale-v029 \
+  --model hybrid-h13-ct-input-scale/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: input-scale parameter/loader representation is the remaining difference
+  needed on top of H12;
+- FAIL with the same 4/5 stable pattern: move next to the input-scale post-load
+  assignment/name conversion itself;
+- broader regression: reassess interaction between H12 object preservation and
+  scale object semantics.
+
+
+### H13 result: FAIL and regression versus H12
+
+Observed on 2026-09-22:
+
+- H13 reached READY after 621 seconds;
+- changing only the input-global-scale checkpoint parameter objects to
+  `PerTensorScaleParameter(weight_loader=...)` did not restore determinism;
+- the 1024/128 seeded gate produced 4 unique hashes across 5 repeats;
+- only runs 2 and 5 matched the H6 stable reference hash;
+- this is worse than H12's single observed 5-repeat run (2 unique hashes, 4/5
+  matching the H6 reference).
+
+Therefore the H13 input-global-scale object representation is not the missing
+repair and should not be carried forward as the next parent.
+
+### H14: post-load input-scale parameter registration
+
+H14 deliberately branches from H12, not H13. It changes only the final
+compressed-tensors input-scale assignment after kernel-format conversion:
+
+- H12: `layer.w13_input_scale = a13_scale` and
+  `layer.w2_input_scale = a2_scale` leave plain Tensor attributes;
+- H14: register the converted `a13_scale/a2_scale` as
+  `torch.nn.Parameter` objects under the same final names.
+
+The original `w*_input_global_scale` checkpoint objects and values, reciprocal
+conversion, H12 packed-weight object preservation, all weight/global-scale
+paths, backend, QSA, and MTP remain unchanged.
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h14-ct-input-scale-postload:v1 \
+  -f scripts/Dockerfile.v029-h14-ct-input-scale-postload \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h14-ct-input-scale-postload
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h14-ct-input-scale-postload
+
+./scripts/wait-ready.sh \
+  --container qwen38-h14-ct-input-scale-postload-v029 \
+  --model hybrid-h14-ct-input-scale-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+Interpretation:
+
+- PASS: final post-load input-scale registration/parameter semantics, together
+  with H12 weight-object preservation, are sufficient for the 1024 gate;
+- H12-like partial improvement: repeat with a larger same-boot sample before
+  attribution;
+- broad FAIL/regression: move to the remaining post-load scale_2/global-scale
+  conversion and replacement semantics rather than carrying H13 forward.
+
+### H14 result: FAIL
+
+Observed on 2026-09-22:
+
+- H14 reached READY after 641 seconds;
+- registering the converted post-load `w13_input_scale` /
+  `w2_input_scale` tensors as `torch.nn.Parameter` objects did not restore
+  determinism;
+- the seeded 1024/128 gate produced 5 unique hashes across 5 repeats;
+- all five repeats produced different outputs;
+- the runtime controls remained PLE mmap, exact QSA, prefix caching disabled,
+  max_num_seqs=3, and MTP k=2.
+
+Therefore the final post-load input-scale Tensor-vs-Parameter representation is
+insufficient to explain the remaining nondeterminism. H14 is a clean negative
+result and its post-load registration change must not be treated as an assumed
+repair.
+
+### H15: MTP-off runtime control
+
+H15 is a runtime-only A/B against H14. It reuses the exact H14 image and
+checkpoint and changes only speculative decoding:
+
+- H14: MTP speculative decoding enabled with k=2;
+- H15: no `--speculative-config` argument, so MTP speculative decoding is off.
+
+Checkpoint bytes, H12/H14 compressed-tensors post-load changes, PLE mmap, exact
+QSA, GB10 FLA fix, context length, prefix-cache setting, batching limits, and
+container image remain unchanged. No H15 Docker image is built.
+
+Run the control:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \\
+  --profile hybrid-h14-ct-input-scale-postload
+
+./scripts/runtime/orcarouter-v029.sh preflight \\
+  --profile hybrid-h15-mtp-off
+./scripts/runtime/orcarouter-v029.sh start \\
+  --profile hybrid-h15-mtp-off
+
+./scripts/wait-ready.sh \\
+  --container qwen38-h15-mtp-off-v029 \\
+  --model hybrid-h15-mtp-off/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \\
+  --model hybrid-h15-mtp-off/Qwen3.8-Flash-Next-Uncensored-NVFP4 \\
+  --determinism-prompt-tokens 1024 \\
+  --determinism-output-tokens 128 \\
+  --determinism-repeats 5 \\
+  --output scripts/benchmark/results/local/h15-mtp-off-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: MTP participation is strongly implicated in the H14 nondeterminism and
+  should be isolated further before additional CT object-semantics patches;
+- FAIL with multiple hashes: MTP is not sufficient to explain the remaining
+  nondeterminism; proceed to a single-sequence/runtime-scheduling control or the
+  remaining CT/MoE post-load scale conversion path;
+- do not compare H15 to a rebuilt or modified H14 image: the control is valid
+  only when the same H14 image ID is reused.
+
+### H15 result: FAIL
+
+Observed on 2026-09-22:
+
+- H15 reused `vllm-orcarouter-v029-h14-ct-input-scale-postload:v1`;
+- benchmark metadata recorded `speculative_config=null`, confirming MTP was
+  disabled for the measured run;
+- PLE mmap, exact QSA, prefix caching disabled, max_num_seqs=3, and the H14
+  checkpoint/image path remained unchanged;
+- the seeded 1024/128 gate produced 4 unique hashes across 5 repeats;
+- runs 1 and 2 matched each other; runs 3, 4, and 5 diverged;
+- run 5 produced a hash previously observed in H14, but cross-experiment hash
+  reuse is only a marker and is not proof of an identical internal path.
+
+Therefore disabling MTP speculative decoding is not sufficient to restore
+determinism. The apparent reduction from H14's 5 unique hashes to H15's 4 is
+not treated as an effect-size claim from a single five-repeat sample.
+
+The H15 boot also showed a readiness-observation anomaly: `/health` returned
+ready before the waiter accepted the exact served model, while rerunning the
+waiter later returned READY immediately. This is recorded as an operational
+observation only and is not classified as a determinism result.
+
+### H16: single-sequence runtime control
+
+H16 is a runtime-only A/B against H15. It reuses the same H14 image/checkpoint,
+keeps MTP disabled, and changes only:
+
+- H15: `max_num_seqs=3`;
+- H16: `max_num_seqs=1`.
+
+All other H15 controls remain unchanged, including PLE mmap, exact QSA, GB10 FLA
+fix, context length, prefix-cache setting, max batched tokens, and the container
+image. No H16 Docker image is built.
+
+Run the control:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h15-mtp-off
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h16-single-seq
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h16-single-seq
+
+./scripts/wait-ready.sh \
+  --container qwen38-h16-single-seq-v029 \
+  --model hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h16-single-seq/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h16-single-seq-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: scheduler/batching concurrency becomes strongly implicated; follow with
+  a focused runtime scheduling/cudagraph control before returning to CT patches;
+- FAIL with multiple hashes: max_num_seqs is not sufficient to explain the
+  nondeterminism; return to the remaining CT/MoE post-load scale conversion or
+  lower-level kernel/runtime isolation;
+- the control is valid only if H15 and H16 reuse the same H14 image ID and H16
+  metadata records both `speculative_config=null` and `max_num_seqs=1`.
+
+### H16 result: FAIL
+
+Observed on 2026-09-22:
+
+- H16 reused `vllm-orcarouter-v029-h14-ct-input-scale-postload:v1`;
+- benchmark metadata recorded `speculative_config=null` and
+  `max_num_seqs=1`, confirming both intended runtime controls;
+- PLE mmap, exact QSA, prefix caching disabled, and the H14 checkpoint/image
+  remained unchanged;
+- the seeded 1024/128 gate produced 4 unique hashes across 5 repeats;
+- run 1 matched the H6 stable reference hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- runs 2 and 3 matched each other; runs 4 and 5 diverged;
+- run 5 matched the non-stable hash previously observed as H12's fifth repeat.
+
+Therefore reducing `max_num_seqs` to one is not sufficient to restore
+determinism. The repeated hashes are retained as diagnostic markers only; this
+single five-repeat sample does not establish that single-sequence scheduling
+improved stability.
+
+### H17: post-load weight_scale_2 lifecycle control
+
+The first H17 build attempt failed in the patch script before an image was
+created. The failure came from an overlapping text-replacement assertion, not
+from vLLM startup or inference. The corrected patch now matches the `allclose`
+and contiguous-extraction blocks independently, and CI executes the patch
+against an H12-shaped fixture to guard this exact failure mode.
+
+H17 returns to H12 as the parent because H12 is the strongest observed CT-side
+signal and H13-H16 did not establish a repair. H17 changes only the lifecycle of
+the loaded weight-global-scale parameter objects after checkpoint loading.
+
+The vLLM v0.29 ModelOpt path creates `w13_weight_scale_2` /
+`w2_weight_scale_2` parameters under their final names before post-load kernel
+conversion, then calls `replace_parameter()` on those same names. The CT path
+loads the corresponding values as `w13_weight_global_scale` /
+`w2_weight_global_scale`, computes reciprocal kernel scales, and only then
+creates/replaces `w*_weight_scale_2`.
+
+H17 keeps H10's loaded `PerTensorScaleParameter` objects and H12's packed-weight
+object preservation, but after loading:
+
+- moves the loaded `w13_weight_global_scale` object to
+  `w13_weight_scale_2`;
+- moves the loaded `w2_weight_global_scale` object to
+  `w2_weight_scale_2`;
+- keeps the exact reciprocal conversion values unchanged;
+- lets the existing CT `replace_parameter()` calls operate on final-name
+  parameters that already exist;
+- leaves the input-global-scale/input-scale path unchanged.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h17-ct-weight-scale2-postload:v1 \
+  -f scripts/Dockerfile.v029-h17-ct-weight-scale2-postload \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h16-single-seq
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h17-ct-weight-scale2-postload
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h17-ct-weight-scale2-postload
+
+./scripts/wait-ready.sh \
+  --container qwen38-h17-ct-weight-scale2-postload-v029 \
+  --model hybrid-h17-ct-weight-scale2-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h17-ct-weight-scale2-postload/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h17-ct-weight-scale2-postload-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: post-load weight-scale2 object/name lifecycle becomes a strong
+  root-cause candidate and should be followed by a reproduction run before
+  combining it with input-scale lifecycle changes;
+- FAIL with an H12-like partial pattern: repeat H12/H17 with larger same-boot
+  samples before attributing an effect;
+- broad FAIL: weight-scale2 lifecycle alone is insufficient; the next clean CT
+  isolation target is the analogous input_global_scale -> input_scale canonical
+  lifecycle, while preserving reciprocal values.
+
+### H17 result: FAIL
+
+Observed on 2026-09-22:
+
+- the corrected H17 image built successfully and reached READY after 692 seconds;
+- runtime metadata recorded vLLM v0.29, PLE mmap, exact QSA, prefix caching
+  disabled, max_num_seqs=3, and MTP k=2;
+- the seeded 1024/128 gate produced 4 unique hashes across 5 repeats;
+- runs 1 and 5 matched each other at
+  `910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee`;
+- run 4 matched the H6 stable reference hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- the remaining runs produced distinct hashes.
+
+Therefore canonicalizing only the post-load
+`weight_global_scale -> weight_scale_2` object/name lifecycle is not
+sufficient to restore determinism. The repeated hashes are retained as
+diagnostic markers only and are not interpreted as an effect-size estimate.
+
+### H18: post-load input_scale lifecycle control
+
+H18 returns to H12 as its parent and does not carry H17 forward. It isolates the
+analogous input-scale lifecycle while keeping checkpoint bytes and reciprocal
+conversion values unchanged.
+
+After checkpoint loading H18:
+
+- moves the loaded `w13_input_global_scale` parameter object to the final
+  `w13_input_scale` name;
+- moves the loaded `w2_input_global_scale` parameter object to the final
+  `w2_input_scale` name;
+- keeps `1 / input_scale` conversion semantics unchanged;
+- replaces the converted `a13_scale` / `a2_scale` tensors through
+  `replace_parameter()` on those existing final names;
+- leaves the H12 weight/global-scale path unchanged, including the original
+  `weight_global_scale -> weight_scale_2` behavior.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1 \
+  -f scripts/Dockerfile.v029-h18-ct-input-scale-lifecycle \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h17-ct-weight-scale2-postload
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h18-ct-input-scale-lifecycle
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h18-ct-input-scale-lifecycle
+
+./scripts/wait-ready.sh \
+  --container qwen38-h18-ct-input-scale-lifecycle-v029 \
+  --model hybrid-h18-ct-input-scale-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h18-ct-input-scale-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h18-ct-input-scale-lifecycle-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: post-load input-scale lifecycle becomes a strong root-cause candidate;
+  reproduce H18 before combining it with the H17 weight-scale2 lifecycle;
+- H12-like partial convergence: repeat H12/H18 with larger same-boot samples
+  before making a causal claim;
+- broad FAIL: input-scale lifecycle alone is also insufficient, leaving a
+  combined post-load lifecycle control or lower-level kernel-format conversion
+  as the next isolation target.
+
+### H18 result: FAIL
+
+Observed on 2026-09-22:
+
+- H18 built successfully and reached READY after 641 seconds;
+- runtime metadata recorded vLLM v0.29, PLE mmap, exact QSA, prefix caching
+  disabled, max_num_seqs=3, and MTP k=2;
+- the seeded 1024/128 determinism gate produced 5 unique hashes across 5
+  repeats;
+- no repeat matched the H6 stable reference hash;
+- hashes previously observed in other experiments reappeared, but cross-run
+  hash reuse remains only a diagnostic marker.
+
+Therefore canonicalizing only the post-load
+`input_global_scale -> input_scale` final-name/object lifecycle is not
+sufficient to restore determinism. H18 is a clean broad negative result.
+
+### H19: combined post-load scale lifecycle control
+
+H19 returns to H12 and combines exactly the already-tested H17 and H18
+post-load lifecycle changes. It does not introduce a new checkpoint transform
+or a new numerical scale conversion.
+
+The H19 image applies the two existing patches sequentially to the H12 parent:
+
+1. H17 canonicalizes `weight_global_scale -> weight_scale_2` before kernel
+   conversion and lets the converted weight scale_2 tensors replace those
+   existing final-name parameters.
+2. H18 canonicalizes `input_global_scale -> input_scale` before kernel
+   conversion and lets the converted input-scale tensors replace those existing
+   final-name parameters.
+
+Checkpoint bytes, reciprocal values, H12 packed-weight preservation, backend,
+QSA, MTP, batching, and cache controls remain unchanged.
+
+Build and run:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1 \
+  -f scripts/Dockerfile.v029-h19-ct-combined-lifecycle \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h18-ct-input-scale-lifecycle
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h19-ct-combined-lifecycle
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h19-ct-combined-lifecycle
+
+./scripts/wait-ready.sh \
+  --container qwen38-h19-ct-combined-lifecycle-v029 \
+  --model hybrid-h19-ct-combined-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h19-ct-combined-lifecycle/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h19-ct-combined-lifecycle-v029-det-1024.json
+```
+
+Interpretation:
+
+- PASS: the weight-scale2 and input-scale lifecycle changes have a meaningful
+  interaction; reproduce H19 before any broader attribution;
+- H12-like partial convergence: expand same-boot repeats and compare directly
+  against a fresh H12 run before calling it an interaction effect;
+- broad FAIL: final-name/object lifecycle alignment is insufficient even in
+  combination. Stop adding wrapper-only CT patches and move to tensor-level
+  diagnostics around `convert_to_nvfp4_moe_kernel_format()` to locate the
+  first CT-vs-ModelOpt divergence.
+
+### H19 result: FAIL
+
+Observed on 2026-09-22:
+
+- H19 built successfully and reached READY after 621 seconds;
+- runtime metadata recorded vLLM v0.29, PLE mmap, exact QSA, prefix caching
+  disabled, max_num_seqs=3, and MTP k=2;
+- the seeded 1024/128 determinism gate produced 5 unique hashes across 5
+  repeats;
+- run 3 matched the H6 stable reference hash
+  `44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670`;
+- all five H19 repeats were mutually distinct.
+
+Therefore combining the H17 weight-scale2 lifecycle and H18 input-scale
+lifecycle changes is also insufficient. H17-H19 close the wrapper/final-name
+object-lifecycle branch: do not add further wrapper-only CT patches without new
+tensor-level evidence.
+
+### H20: NVFP4 MoE kernel-format conversion diagnostics
+
+#### H20 experiment ledger
+
+This table is the canonical continuity check for H20. Detailed evidence remains
+in the sections below; every new H20 control must add or update one row here so
+a missing experiment/result is visible immediately.
+
+| Step | Status | Observed result / disposition |
+|---|---|---|
+| H20-A | completed | CT vs ModelOpt converter post tensors matched except discarded pre activation-scale differences; comparator `None == None` bug corrected. |
+| H20-B | completed | Quant config, kernel creation, and fused post-load state matched apart from the same pre activation-scale differences. |
+| H20-C | completed, instrumentation caveat | Runtime tracing first showed CT divergence at layer-0 post, but heavy CPU hashing also perturbed H6; result used only to motivate lighter controls. |
+| H20-D v5/v6 | completed, perturbing twin control | Immediate twin MoE calls were internally stable, but the added second call could perturb later request state. |
+| H20-D v7 | completed | Single-pass control proved CT/H12 was already request-unstable before the layer-0 MoE kernel while H6 remained stable. |
+| v8 | instrumentation failure | Upstream layer-0 probe failed during fullgraph compilation because a `torch.compiler.disable` helper was called from the compiled path. No model result. |
+| v9 | completed | Fullgraph-safe custom-op probe: CT first diverged at layer-0 `attn_out`; H6 remained stable. |
+| v10 | completed | Layer-0 GDN probe localized the first CT mismatch to `mixed_qkvz`; `input_hidden` and `ba` remained equal. |
+| v11 | completed, interpretation refined | QKVZ twin showed compiled-vs-eager differences, but mixed execution contexts prevented same-kernel attribution. |
+| v12 | completed | Two eager same-input QKVZ calls also differed; backend identified as `CompressedTensorsW8A16Fp8` + `HummingFP8ScaledMMLinearKernel`. |
+| v13 | completed | Explicit Humming `locks.zero_()` did not restore determinism; lock fingerprints were unchanged pre/post. Persistent locks deprioritized. |
+| v14 | startup/control-design failure | Global `VLLM_BATCH_INVARIANT=1` was rejected by GDN attention before READY. No QKVZ result. |
+| v15 | completed / localization success | FP8-linear-local `use_batch_invariant=true` reached READY and made compiled, eager-repeat, and cross-request QKVZ outputs all equal. |
+| repair candidate | completed / FAIL | Diagnostic-free H12-based `hybrid-h20-ct-fp8-bi-repair` reached READY, but 8192/128×5 produced 5 unique hashes. The 1K/2K/4K/8K/32K sweep also failed at every size (4,5,5,5,5 unique hashes). FP8-local batch-invariant is insufficient as an end-to-end repair. |
+| v15 end-to-end control | completed / FAIL | The v15 diagnostic image itself also failed 8192/128×5 with 3 unique hashes. QKVZ-local stability does not imply whole-model determinism; resume localization downstream of the now-stable QKVZ boundary. |
+| v15 downstream GDN probe | completed / stable | Reusing the existing layer-0 linear-attention probe on v15 gave `all_equal=true`: `input_hidden`, `mixed_qkvz`, `ba`, `core_attn_out`, and final attention `output` all matched across requests. The remaining end-to-end divergence is downstream of layer-0 attention. |
+| v15 upstream layer-0 probe | completed / stable | `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out` all matched across requests. Layer 0 is stable end-to-end under the v15 diagnostic image. |
+| v16 layer-1 upstream probe | completed / stable | Repeated v16 probes showed both layer 0 and layer 1 fully stable at `entry_hidden`, `attn_block_input`, `attn_out`, `mlp_block_input`, and `mlp_out`. The remaining divergence is downstream of layer 1. |
+| v17 sparse-layer search | completed / localized | Layers 0,1,3,7 were fully stable. Layer 15 kept `entry_hidden=true` but first diverged at `attn_block_input`; layers 31 and 47 were already divergent at entry. This localizes the next mismatch to the layer-15 pre-attention handoff/HC preparation boundary. |
+| v18 layer-15 pending-state probe | completed / Case A reproduced | Two unchanged v18 probes completed successfully. Both kept layers 0,1,3,7 stable and reported layer 15 `entry_hidden=true`, `prev_block_output=false`, and `prev_injection=true`, with pre/post-HC hidden state and attention injection equal. The first observed mismatch consistently enters at the layer-14 `mlp_out` → layer-15 `prev_block_output` handoff; v19 adds layer 14 to locate its producer boundary. |
+| v19 layer-14 producer boundary | implemented / runtime pending | Reuse the v18 fullgraph-safe sparse probe and late fingerprinting, add layer 14 pending inputs plus attention/MLP HC outputs, `mlp_block_input`, and `mlp_out`, while retaining layer 15 as the downstream edge witness. Focused tests and Python compilation pass; a DGX v19 run remains pending. This is localization only; no repair is introduced. |
+
+The repeated v18 run on 2026-09-24 reused the already-built v18 image and
+running container, with no additional model startup. The DGX saved its output
+at `scripts/benchmark/results/local/h20u-v18-layer15-pending-r2.jsonl`.
+
+Current H20 conclusion: the original layer-0 CT/H12 QKVZ instability follows
+the default non-batch-invariant `HummingFP8ScaledMMLinearKernel` path and
+disappears at that boundary in the local batch-invariant control, but this is
+not the only source of end-to-end nondeterminism. The diagnostic-free repair
+still fails broadly, and the v15 diagnostic image also fails end-to-end.
+
+Subsequent probes show that layer 0 is fully stable and v16 shows layer 1 is
+also fully stable across every captured decoder boundary. H20 v17 then sampled
+layers 0, 1, 3, 7, 15, 31, and 47 while deferring CPU fingerprinting until
+request 1 reached layer 47.
+
+Observed v17 result on 2026-09-24:
+
+- layers 0, 1, 3, and 7 were fully repeat-stable at all five decoder
+  boundaries;
+- layer 15 had `entry_hidden=true` but
+  `attn_block_input=false`, and all later boundaries in that layer also
+  differed;
+- layers 31 and 47 were already different at `entry_hidden`, consistent with
+  propagation of an earlier mismatch.
+
+This is stronger than a simple 8-15 interval result. The layer-15
+`entry_hidden` tensor itself is still equal, so the next divergence appears
+while preparing the layer-15 attention input. However,
+`attn_hyper_connection.combine_and_mix()` consumes three logical inputs:
+`hidden_states`, the previous layer's pending `prev_block_output`, and
+`prev_injection`. In addition, a PLE layer may materialize the pending state
+and modify `hidden_states` before the HC mix. Therefore v18 must check those
+inputs before attributing the mismatch to the HC implementation itself.
+
+H20 v18 retained the sparse-layer capture and added layer-15-only fingerprints
+for `prev_block_output`, `prev_injection`, the hidden state immediately
+before the attention HC, the post-HC hidden state, and the newly produced
+attention injection. Pending inputs are captured at decoder-layer entry before
+any PLE handling. This separates three cases:
+
+- pending state already differs: move localization upstream to layer 14 MLP /
+  injection production;
+- pending state matches but pre-HC hidden differs: inspect layer-15 PLE or
+  pending-state materialization;
+- all HC inputs match but `attn_block_input` differs: inspect the
+  GatedResidual HC pipeline itself.
+
+Initial H20 v18 observation on 2026-09-24:
+
+- the CT diagnostic image built with label `ct-nvfp4-convert-diag-v18`,
+  passed preflight, reached READY after 732 seconds, and emitted all 14
+  expected sparse-layer records after both requests completed;
+- layers 0, 1, 3, and 7 matched at every recorded boundary;
+- layer 15 reported `first_mismatch=prev_block_output` with
+  `entry_hidden=true`, `prev_block_output=false`, `prev_injection=true`,
+  `pre_attn_hc_hidden=true`, `post_attn_hc_hidden=true`, and
+  `attn_injection=true`;
+- `attn_block_input` and all later layer-15 boundaries differed, while layers
+  31 and 47 were already different at entry;
+- the mRoPE-key, Triton deprecation, and Qwen3VL video pixel-cap messages were
+  non-fatal warnings; they are not evidence for this tensor mismatch.
+
+This was the initial v18 Case A observation. The layer-15 pending `prev_block_output` is the
+`mlp_out` returned by layer 14, so the earliest captured unstable edge in this
+run is upstream of the layer-15 attention HC. It does not yet identify a
+layer-14 kernel: layer 14 was not captured, and router, dispatch, routed/shared
+expert computation, accumulation, an earlier pending input, or an intermittent
+effect remain possible. The stable layer-15 `entry_hidden` and
+`prev_injection` only establish that the other two layer-14 return edges
+matched in this request pair.
+
+The v18 `upstream-probe` was then repeated unchanged, using the same image and
+container without rebuilding. The second run again completed both requests,
+kept layers 0, 1, 3, and 7 stable, and reported layer 15
+`entry_hidden=true`, `prev_block_output=false`, and `prev_injection=true`; the
+pre/post-HC hidden state and attention injection also matched. The repeated
+signature confirms the layer-14 output handoff is a stable first observed
+mismatch boundary under v18.
+
+H20 v19 extends the same sparse capture with layer 14, preserving the v18
+custom-op path, GPU snapshots, and CPU fingerprinting only after request 1
+reaches layer 47. Its emitted record schema increments from 5 to 6. At layer 14
+it records the entry hidden/pending tuple, the
+attention HC input/output and injection, `attn_block_input`, `attn_out`, the
+MLP HC output/injection, `mlp_block_input`, and `mlp_out`. Layer 15 retains all
+v18 fields as the downstream handoff witness. The layer-14 causal order is:
+
+1. `entry_hidden`, `prev_block_output`, `prev_injection`;
+2. `pre_attn_hc_hidden`, `post_attn_hc_hidden`, `attn_injection`,
+   `attn_block_input`;
+3. `attn_out`;
+4. `post_mlp_hc_hidden`, `post_mlp_hc_injection`, `mlp_block_input`,
+   `mlp_out`.
+
+Interpret the first mismatch conservatively. A mismatch in the layer-14 entry
+tuple means the source is earlier than layer 14. Stable entry and differing
+`attn_block_input` points to its attention HC boundary; stable block input and
+differing `attn_out` points into its linear-attention path. Stable inputs to
+the MLP HC with differing `mlp_block_input` points to that HC boundary.
+Matching `mlp_block_input` with differing `mlp_out`, reproduced together with
+layer-15 `prev_block_output` mismatch, localizes the first observed mismatch
+inside layer 14's MLP/MoE call, but does not identify router, dispatch, expert
+math, or accumulation as the specific source. Schema 7 adds a
+`repeat_comparison` summary to layer-14 request 1: changed row indices,
+changed element counts and maximum absolute differences per row, plus the
+first mismatching multidimensional index. It compares activations on-device
+and emits only the compact summary, not tensor values. If layer-14 `mlp_out`
+matches while layer-15 `prev_block_output` differs, treat that as a
+capture/aliasing inconsistency and investigate before drawing a model
+conclusion.
+
+After this comparison update is merged, rebuild the v22 CT diagnostic image and rerun the isolated `mlp_block` probe on the DGX:
+
+```bash
+cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-ct-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-ct-convert-diag \
+  scripts/
+
+docker inspect \
+  --format '{{ index .Config.Labels "qwen38.h20" }}' \
+  vllm-orcarouter-v029-h20-ct-convert-diag:v1
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20u-v20-layer14-all.jsonl
+```
+
+The image label should print `ct-nvfp4-convert-diag-v23`. With the default
+`QWEN38_H20U_LAYER14_GROUP=all`, the probe emits 16 records: two requests for
+each selected layer `0,1,3,7,14,15,31,47`.
+
+If startup fails with an asynchronous CUDA illegal-memory-access error,
+preserve the failed container logs before removing it, then rerun this H20
+profile with `QWEN38_H20_CUDA_LAUNCH_BLOCKING=1` set on the host for
+synchronous CUDA error reporting. The runtime helper passes this flag into
+the container only for H20 diagnostic profiles; it is off by default and can
+make startup substantially slower. This is a debugging run, not a production
+setting. After the server reaches READY, run the same `upstream-probe`
+command above.
+
+To isolate which layer-14 graph group is associated with the startup fault,
+use one of these runtime values without rebuilding between groups:
+
+- `entry`: `entry_hidden`, `prev_block_output`, `prev_injection`;
+- `attention`: pre/post attention HC state and injection, `attn_block_input`,
+  and `attn_out`;
+- `mlp`: post-MLP-HC state and injection, `mlp_block_input`, and `mlp_out`;
+- `all`: the complete v19 layer-14 capture (default);
+- `none`: v18-equivalent sparse graph without layer 14 (14 records).
+
+Each non-`none` group emits a partial layer-14 record plus the unchanged
+layer-15 witness. The JSONL lists only tensors captured by the selected group;
+repeat summaries compare only those fields. If any selected capture stage is
+not observed, records include `missing_tensors` instead of suppressing the
+entire probe output. Each group uses a separate `VLLM_CACHE_ROOT` beneath the
+mounted vLLM cache so torch.compile/AOT artifacts built for one Python-global
+capture selection cannot be reused by another group. The older
+`QWEN38_H20U_CAPTURE_LAYER14=0` switch remains an alias for `none`.
+
+Observed v19 startup ablation on 2026-09-24:
+
+- two full layer-14 runs failed during vLLM dummy-run AOT/Inductor compilation
+  with CUDA illegal-memory access; `CUDA_LAUNCH_BLOCKING=1` was confirmed in
+  the container but did not move the reported failure from RNG-state restore;
+- the `none` control, with the same blocking flag, reached READY after 691 s
+  and completed its two-request probe, emitting 14 records;
+- layers 0, 1, 3, and 7 were fully stable. Layer 15 matched at
+  `entry_hidden`, both pending tensors, both HC hidden states, attention
+  injection, `attn_block_input`, and `attn_out`, then first differed at
+  `mlp_out`. Layers 31 and 47 already differed at entry;
+- available RAM at checkpoint loading differed between failed and successful
+  starts (about 30 GiB versus 41 GiB), so the ablation strongly implicates
+  layer-14 graph additions but does not prove causation. The v19
+  `prev_block_output` mismatch was not reproduced in this control.
+- the v20 `attention`-only run reached READY after 661 s, but its probe found
+  no records. The configured group and launch-blocking flag were confirmed;
+  because the recorder previously required an exact set of all expected
+  capture names before emitting any records, a missing attention stage could
+  suppress the whole probe. v21 emits partial records with `missing_tensors`
+  so the next run can identify any absent stage.
+- v21 `attention`, `mlp`, and `all` starts initially reused identical AOT cache
+  paths (`6d7a81...` and `0114e1...`) despite different capture groups. The
+  `mlp` records had empty tensors; `all` contained only attention captures and
+  listed the other seven layer-14 fields as missing. These runs are invalid
+  group comparisons. The runtime now namespaces `VLLM_CACHE_ROOT` by capture
+  group; rerun each group to compile an isolated graph before comparing.
+
+For a controlled group run, preserve logs from the previous container, remove
+it, then start with one group (begin with `entry`):
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+QWEN38_H20_CUDA_LAUNCH_BLOCKING=1 \
+QWEN38_H20U_LAYER14_GROUP=entry \
+  ./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output scripts/benchmark/results/local/h20u-v20-layer14-entry.jsonl
+```
+
+Repeat with `attention`, `mlp_hc`, and `mlp_block` as separate runs, keeping
+the same `CUDA_LAUNCH_BLOCKING=1` setting and recording `MemAvailable` before
+each start. `mlp_hc` captures only `post_mlp_hc_hidden` and
+`post_mlp_hc_injection`; `mlp_block` captures only `mlp_block_input` and
+`mlp_out`. The legacy `mlp` group still enables both subgroups. A subgroup
+that fails while `none` succeeds narrows the problematic compiled capture
+region; if all groups start individually but `all` fails, combined graph
+size/interaction remains the distinction.
+
+The v22 rowwise repeat probe localized the first reproduced layer-14 output
+drift to `mlp_out`: `mlp_block_input` matched exactly, while only rows 15, 16,
+and 22 differed. v23 adds an opt-in capture at the normal
+`FusedMoERouter.select_experts` return boundary. It records the actual
+layer-14 top-k expert IDs and weights for request 0 and request 1, then emits
+one `QWEN38_H20U_ROUTE` JSON record with exact ID/weight row comparisons. It
+does not rerun the gate or top-k computation. If IDs differ, investigate route
+selection; if IDs match but weights differ, investigate gate scores or
+normalization; if both match, focus on expert execution or output accumulation.
+The route record is written to container logs, independently of the existing
+upstream JSONL records. No route record means the selected MoE execution path
+bypassed this router method or the diagnostic trigger was not active, so that
+absence is not evidence of stable routing.
+
+After rebuilding the v23 diagnostic image and starting the `mlp_block` group,
+use a new output filename, then run:
+
+```bash
+OUT="scripts/benchmark/results/local/h20u-v23-layer14-router.jsonl"
+test ! -e "$OUT" || { echo "already exists: $OUT"; exit 1; }
+python3 scripts/diagnostics/h20-nvfp4-moe.py upstream-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --output "$OUT"
+
+docker logs --timestamps qwen38-h20-ct-convert-diag-v029 2>&1 \
+  | grep 'QWEN38_H20U_ROUTE '
+```
+
+Before rebuilding, save the current container logs and preserve all v22 result
+files. Confirm the image label is `ct-nvfp4-convert-diag-v23` before starting.
+
+H20 is a diagnostic, not another determinism-fix patch. It compares the H12 CT
+path against the deterministic H6 ModelOpt/W4A16 path at the boundary of
+`convert_to_nvfp4_moe_kernel_format()`.
+
+Two images are used:
+
+- `vllm-orcarouter-v029-h20-ct-convert-diag:v1`: H12 CT parent plus
+  conversion fingerprint instrumentation;
+- `vllm-orcarouter-v029-h20-modelopt-convert-diag:v1`: the shared v0.29 base
+  plus the same normalized instrumentation in `ModelOptNvFp4FusedMoE`, run
+  against the H6 checkpoint.
+
+For each of the first four routed-expert conversion calls, H20 records both
+`pre` and `post` phases using the same tensor names:
+
+- `w13`, `w13_scale`, `w13_scale_2`, `a13_scale`;
+- `w2`, `w2_scale`, `w2_scale_2`, `a2_scale`.
+
+Each fingerprint includes shape, dtype, stride, contiguous state, numel, byte
+size, device, storage offset, and a SHA-256 digest. Tensors up to 1 MiB are
+hashed in full. Larger contiguous tensors use a deterministic
+head/middle/tail sample (1024 elements per window) so diagnostics do not copy
+entire expert weights back to the CPU. Large non-contiguous tensors are
+metadata-only. A matching sampled digest is useful evidence but is not proof
+that every byte of a large tensor is identical.
+
+Build both diagnostic images:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-ct-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-ct-convert-diag \
+  scripts/
+
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-modelopt-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-modelopt-convert-diag \
+  scripts/
+```
+
+Collect the CT side first:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h19-ct-combined-lifecycle
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py collect \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --output scripts/benchmark/results/local/h20-ct-convert-diag.jsonl
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag
+```
+
+Then collect the deterministic ModelOpt/H6 side:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-modelopt-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-modelopt-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py collect \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --output scripts/benchmark/results/local/h20-modelopt-convert-diag.jsonl
+```
+
+Compare the normalized records:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py compare \
+  --ct scripts/benchmark/results/local/h20-ct-convert-diag.jsonl \
+  --modelopt scripts/benchmark/results/local/h20-modelopt-convert-diag.jsonl \
+  --output scripts/benchmark/results/local/h20-ct-vs-modelopt.json
+```
+
+Interpretation:
+
+- first mismatch in `pre`: the normalized values/layout entering conversion
+  still differ; focus on checkpoint normalization, loader semantics, or the
+  exact reciprocal/global-scale representation before the kernel converter;
+- `pre` matches but the first mismatch appears in `post`: isolate
+  `convert_to_nvfp4_moe_kernel_format()`, backend selection, or hidden
+  layout/state used by that conversion;
+- both `pre` and `post` match for the sampled calls: inspect the H20-B
+  `quant_config`, `kernel_created`, and `fused_postload` records before
+  creating another numbered experiment.
+
+#### H20-A observed result and comparator correction
+
+The first local H20-A run collected 8 records on each side (calls 0-3,
+pre/post). The original comparator incorrectly classified `None` vs `None`
+activation-scale outputs as mismatches, so its reported
+`first_mismatch=... phase=post tensor=a13_scale` was a tooling bug.
+
+Direct record inspection showed:
+
+- CT and ModelOpt used `NvFp4MoeBackend.MARLIN` with `use_a16=true`;
+- sampled/full hashes for `w13`, `w2`, `w13_scale`, `w2_scale`,
+  `w13_scale_2`, and `w2_scale_2` matched after conversion for the observed
+  calls;
+- the pre-conversion activation-scale hashes differed, but W4A16/Marlin
+  returned `a13_scale=None` and `a2_scale=None` on both sides.
+
+The comparator now treats `None` vs `None` as equal. Existing H20-A JSONL
+files can therefore be re-compared after pulling the fix; no re-run is required
+for that correction.
+
+#### H20-B post-conversion localization
+
+The first H20-B ModelOpt v2 build attempt failed before runtime because the
+patcher searched the entire `ModelOptNvFp4FusedMoE` class for
+`routing_tables=layer._expert_routing_tables()` and incorrectly required that
+text to occur exactly once. v0.29 contains additional routed-expert methods
+with the same expression. This is a patch-application/build failure, not an
+H20 diagnostic result. The corrected patcher scopes all kernel-creation
+replacements to `process_weights_after_loading()` only, and the regression
+fixture includes an additional method with the same routing-table expression.
+
+The same H20 image/profile names are retained, but the image label is bumped to
+v2 so stale H20-A images are rejected. Rebuild both images and repeat the
+collection. Each call now emits three additional state records:
+
+- `quant_config`: normalized snapshot of the fused-MoE quant config, MoE
+  config, experts class, and routing tables;
+- `kernel_created`: normalized kernel and fused-experts state immediately
+  after `make_nvfp4_moe_kernel()`;
+- `fused_postload`: state plus final layer tensor fingerprints after
+  `fused_experts.process_weights_after_loading()`.
+
+The snapshot recursion depth and collection sizes are bounded. Large tensors
+continue to use the existing bounded fingerprint policy.
+
+Because experimental `stop` intentionally preserves stopped containers for
+diagnostics, remove an old H20 container before starting a rebuilt image:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-modelopt-convert-diag \
+  --remove
+```
+
+It is safe for either command to report that the corresponding container is
+already absent. Do not delete collected JSONL files when removing containers.
+
+After rebuilding/rerunning both sides, use the same compare command. The first
+real mismatch now localizes the remaining search:
+
+- `quant_config`: config/routing/expert-class construction differs;
+- `kernel_created`: kernel/backend internal setup diverges despite matching
+  converter outputs;
+- `fused_postload`: downstream expert post-load processing creates the first
+  observable difference;
+- no material mismatch through `fused_postload`: move next to a single
+  first-token MoE input/output trace inside H20 rather than creating H21.
+
+#### H20-B observed result
+
+Observed on 2026-09-22 after the scoped-anchor hotfix:
+
+- both v3-predecessor H20-B images built successfully;
+- CT/H12 reached READY and produced 20 records:
+  4 calls x 5 phases (`pre`, `post`, `quant_config`,
+  `kernel_created`, `fused_postload`);
+- ModelOpt/H6 reached READY and produced the same 20-record shape;
+- comparison reported `common_records=20`, `only_ct=0`,
+  `only_modelopt=0`;
+- the only 8 tensor mismatches were the four calls' pre-conversion
+  `a13_scale` / `a2_scale` fingerprints;
+- no additional state mismatch appeared in `quant_config`,
+  `kernel_created`, or `fused_postload`.
+
+This keeps the activation-scale representation difference as a known
+pre-conversion difference, but it does not survive the W4A16/Marlin conversion
+boundary and no downstream load-time state divergence was observed. The next
+localization step therefore remains inside H20 and moves to actual runtime MoE
+execution.
+
+#### H20-C runtime first-token MoE trace
+
+H20-C keeps the same H20 profile/image names. The initial v3 implementation
+patched `FusedMoEModularMethod.apply()`, but the v0.29 NVFP4 paths under test
+already own an internal modular kernel (`supports_internal_mk=True`) and call
+their quant-method `apply()` directly. Both CT and ModelOpt v3 requests
+completed successfully but emitted zero `QWEN38_H20C_RUNTIME` records. This
+was an instrumentation-location failure, not a model/runtime comparison result.
+
+The corrected v4 images patch the actual runtime methods instead:
+
+- CT: `CompressedTensorsW4A4Nvfp4MoEMethod.apply()`;
+- ModelOpt: `ModelOptNvFp4FusedMoE.apply()`.
+
+Both methods receive the already-selected expert routing tensors and directly
+call `moe_kernel.apply()`. The READY-time trigger test is isolated behind
+`torch.compiler.disable` so the file-existence condition is re-evaluated at
+runtime instead of being frozen during torch.compile/warmup.
+
+The runtime trace is disabled during startup/warmup. The `trace` command
+enables it only after READY via a container-local trigger file, then sends the
+same fixed request twice. Each traced MoE call records:
+
+- `layer_name`;
+- request id and call index;
+- pre-call `x`, `topk_weights`, `topk_ids`,
+  `shared_experts_input`;
+- post-call MoE `output`;
+- the same bounded full/sample SHA-256 fingerprint policy used by H20-A/B.
+
+Rebuild both H20 images after pulling the H20-C internal-MK hotfix because the image labels are v4.
+
+
+The failed v3 trace attempt also exposed a CLI rough edge: because neither
+runtime JSONL existed, `runtime-compare` raised `FileNotFoundError`.
+The CLI now reports missing trace files cleanly and instructs the operator to
+run both trace commands successfully before comparing.
+
+
+The first v4 rerun proved the corrected CT hook is live: two fixed requests
+produced 192 runtime records across 48 layers. The ModelOpt v4 image build then
+failed before runtime because the trace patcher sliced from
+`ModelOptNvFp4FusedMoE` to end-of-file and required the target `apply()`
+shape to occur exactly once; later ModelOpt classes contain the same apply
+shape. This is another patch-application failure, not a runtime comparison
+result. The hotfix now scopes replacement to the target class body only.
+The regression fixture intentionally includes a later class with the same
+`apply()` body and verifies it remains untouched.
+
+The `trace` command also now checks container existence before trying
+`docker exec`, so a failed preflight/start produces a concise error instead
+of a Python traceback.
+
+CT/H12 runtime trace:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py trace \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20c-ct-runtime.jsonl
+```
+
+Then stop/remove CT and run the same trace on ModelOpt/H6:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-modelopt-convert-diag
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-modelopt-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4
+
+python3 scripts/diagnostics/h20-nvfp4-moe.py trace \
+  --container qwen38-h20-modelopt-convert-diag-v029 \
+  --model hybrid-h20-modelopt-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 2 \
+  --output scripts/benchmark/results/local/h20c-modelopt-runtime.jsonl
+```
+
+Compare both runtime traces:
+
+```bash
+python3 scripts/diagnostics/h20-nvfp4-moe.py runtime-compare \
+  --ct scripts/benchmark/results/local/h20c-ct-runtime.jsonl \
+  --modelopt scripts/benchmark/results/local/h20c-modelopt-runtime.jsonl \
+  --output scripts/benchmark/results/local/h20c-ct-vs-modelopt.json
+```
+
+The comparator normalizes each source by request id and per-request MoE-call
+ordinal, rather than assuming global call indices match across boots. It also
+reports repeat stability independently for CT and ModelOpt.
+
+Interpretation:
+
+- first mismatch in pre `x`: divergence already exists before that MoE call;
+  the previous layer/residual/attention path becomes the next boundary;
+- `x` matches but `topk_weights` or `topk_ids` differs: the router path is
+  the first observed runtime divergence;
+- all pre tensors match but `output` differs: the routed MoE kernel execution
   itself is the first observed divergence;
 - CT request 0 vs 1 diverges before the CT-vs-H6 comparison point: prioritize
   that within-CT first mismatch because it directly localizes nondeterminism;
@@ -1499,4 +3303,3 @@ Interpretation:
 - both twin outputs and cross-source outputs match: H20-C's layer-0 divergence
   was instrumentation/request-sequencing induced; move the next minimal probe
   downstream without creating H21.
-

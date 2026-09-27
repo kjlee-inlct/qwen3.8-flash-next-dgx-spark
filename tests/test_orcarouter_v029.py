@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 16658)
-Total output lines: 1315
-
 from __future__ import annotations
 
 import subprocess
@@ -533,7 +530,73 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         )
         self.assertNotIn("patch-v029-h20-linear-attn-layer0.py", dockerfile)
         self.assertNotIn("patch-v029-h20c-runtime-moe-trace.py", dockerfile)
-        self.assertNotIn("patch-v029-h20-upstream-layer0.p…658 tokens truncated…cale_2,
+        self.assertNotIn("patch-v029-h20-upstream-layer0.py", dockerfile)
+        self.assertIn("hybrid-h20-ct-fp8-bi-repair", runtime)
+        self.assertIn("qwen38-h20-ct-fp8-bi-repair-v029", runtime)
+        self.assertIn("vllm-orcarouter-v029-h20-fp8-bi-repair:v1", runtime)
+        self.assertIn("ct-h12-humming-fp8-batch-invariant-v1", runtime)
+        self.assertIn("runtime-repair-candidate", runtime)
+
+    def test_h20_patcher_executes_on_v029_ct_and_modelopt_shapes(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py"
+        ct_block = """import torch
+logger = init_logger(__name__)
+class CompressedTensorsW4A4Nvfp4MoEMethod:
+    def process_weights_after_loading(self, layer):
+        # Shuffle weights into the NvFp4 kernel format.
+        (
+            w13,
+            w13_scale,
+            w13_scale_2,
+            a13_scale,
+            w2,
+            w2_scale,
+            w2_scale_2,
+            a2_scale,
+        ) = convert_to_nvfp4_moe_kernel_format(
+            nvfp4_backend=self.nvfp4_backend,
+            layer=layer,
+            w13=layer.w13_weight,
+            w13_scale=layer.w13_weight_scale,
+            w13_scale_2=(1.0 / w13_weight_global_scale),
+            a13_scale=(1.0 / layer.w13_input_global_scale),
+            w2=layer.w2_weight,
+            w2_scale=layer.w2_weight_scale,
+            w2_scale_2=(1.0 / layer.w2_weight_global_scale),
+            a2_scale=(1.0 / layer.w2_input_global_scale),
+            is_act_and_mul=self.moe.is_act_and_mul,
+            use_a16=self.use_a16,
+        )
+        self.moe_quant_config = self.get_fused_moe_quant_config(layer)
+        assert self.experts_cls is not None
+        self.moe_kernel = make_nvfp4_moe_kernel(
+            moe_quant_config=self.moe_quant_config,
+            moe_config=self.moe,
+            experts_cls=self.experts_cls,
+            backend=self.nvfp4_backend,
+            routing_tables=layer._expert_routing_tables(),
+        )
+        self.moe_kernel.fused_experts.process_weights_after_loading(layer)
+"""
+        mo_block = """import torch
+logger = init_logger(__name__)
+class ModelOptNvFp4FusedMoE:
+    def process_weights_after_loading(self, layer):
+        (
+            w13,
+            w13_scale,
+            w13_scale_2,
+            a13_scale,
+            w2,
+            w2_scale,
+            w2_scale_2,
+            a2_scale,
+        ) = convert_to_nvfp4_moe_kernel_format(
+            nvfp4_backend=self.nvfp4_backend,
+            layer=layer,
+            w13=layer.w13_weight,
+            w13_scale=layer.w13_weight_scale,
+            w13_scale_2=w13_weight_scale_2,
             a13_scale=layer.w13_input_scale,
             w2=layer.w2_weight,
             w2_scale=layer.w2_weight_scale,
@@ -1249,4 +1312,3 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
 
 if __name__ == "__main__":
     unittest.main()
-
