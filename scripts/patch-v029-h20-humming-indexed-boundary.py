@@ -347,5 +347,7 @@ reduce_new = '''        moe_fused_mul_sum(
 class HummingGroupedExperts'''
 indexed_body = replace_once(indexed_body, reduce_old, reduce_new, "indexed reduce boundary")
 
-text = prefix + indexed_body + suffix\n\npath.write_text(text, encoding="utf-8")
+text = prefix + indexed_body + suffix
+
+path.write_text(text, encoding="utf-8")
 print("installed H20-W Humming indexed-expert boundary capture")
