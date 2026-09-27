@@ -14,6 +14,7 @@ PREFIX = "QWEN38_H20_MOE_DIAG "
 RUNTIME_PREFIX = "QWEN38_H20C_RUNTIME "
 TWIN_PREFIX = "QWEN38_H20D_TWIN "
 SINGLE_PREFIX = "QWEN38_H20D_SINGLE "
+BOUNDARY_PREFIX = "QWEN38_H20V_BOUNDARY "
 UPSTREAM_PREFIX = "QWEN38_H20U_LAYER0 "
 LINEAR_PREFIX = "QWEN38_H20L_LINEAR "
 QKVZ_PREFIX = "QWEN38_H20P_QKVZ "
@@ -882,6 +883,137 @@ def compare_upstream(
     return 0 if common else 2
 
 
+def parse_boundary_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(BOUNDARY_PREFIX)
+        if pos < 0:
+            continue
+        payload = raw[pos + len(BOUNDARY_PREFIX) :].strip()
+        records.append(json.loads(payload))
+    return records
+
+
+def boundary_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    repeats: int,
+    prompt: str,
+    api_base: str,
+) -> int:
+    if not _container_exists(container):
+        print(f"ERROR: H20 v25 container not found: {container}", file=sys.stderr)
+        return 2
+
+    existing = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if existing.returncode != 0:
+        print(existing.stderr, file=sys.stderr)
+        return existing.returncode
+    prior = parse_boundary_records(
+        (existing.stdout + "\n" + existing.stderr).splitlines()
+    )
+    start_id = 0
+    if prior:
+        start_id = max(
+            max(int(record.get("request0", -1)), int(record.get("request1", -1)))
+            for record in prior
+        ) + 1
+
+    trigger = "/tmp/qwen38_h20v_boundary.enable"
+    request_id_file = "/tmp/qwen38_h20v_boundary_request_id"
+    try:
+        _docker_exec(
+            container,
+            f"rm -f {trigger} {request_id_file}; touch {trigger}",
+        )
+        for offset in range(repeats):
+            request_id = start_id + offset
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(
+                f"boundary request {offset + 1}/{repeats} completed id={request_id}"
+            )
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+
+    all_records = parse_boundary_records(
+        (result.stdout + "\n" + result.stderr).splitlines()
+    )
+    wanted_ids = set(range(start_id, start_id + repeats))
+    records = [
+        record
+        for record in all_records
+        if int(record.get("request0", -1)) in wanted_ids
+        and int(record.get("request1", -1)) in wanted_ids
+    ]
+    expected = repeats * (repeats - 1) // 2
+    if len(records) != expected:
+        print(
+            f"ERROR: expected {expected} {BOUNDARY_PREFIX.strip()} pair records, "
+            f"found {len(records)} for request ids {sorted(wanted_ids)}",
+            file=sys.stderr,
+        )
+        return 2
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    print(f"wrote {len(records)} modular-boundary pair records to {output}")
+    for record in records:
+        print(
+            f"boundary_repeat requests=[{record.get('request0')}, "
+            f"{record.get('request1')}] "
+            f"prepared_equal={record.get('prepared_equal')} "
+            f"fused_out_equal={record.get('fused_out_equal')} "
+            f"final_output_equal={record.get('final_output_equal')} "
+            f"first_mismatch={record.get('first_mismatch')}"
+        )
+    return 0
+
+
 def parse_single_records(lines: list[str]) -> list[dict]:
     records: list[dict] = []
     for raw in lines:
@@ -1746,6 +1878,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_upstream_compare.add_argument("--modelopt", type=Path, required=True)
     p_upstream_compare.add_argument("--output", type=Path)
 
+    p_boundary = sub.add_parser("boundary-probe")
+    p_boundary.add_argument("--container", required=True)
+    p_boundary.add_argument("--model", required=True)
+    p_boundary.add_argument("--output", type=Path, required=True)
+    p_boundary.add_argument("--repeats", type=int, default=4)
+    p_boundary.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_boundary.add_argument("--api-base", default="http://127.0.0.1:8888")
+
     p_single = sub.add_parser("single-probe")
     p_single.add_argument("--container", required=True)
     p_single.add_argument("--model", required=True)
@@ -1835,6 +1975,15 @@ def main() -> int:
             )
             return 2
         return compare_upstream(args.ct, args.modelopt, args.output)
+    if args.command == "boundary-probe":
+        return boundary_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
+            repeats=args.repeats,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
     if args.command == "single-probe":
         return single_probe(
             container=args.container,
