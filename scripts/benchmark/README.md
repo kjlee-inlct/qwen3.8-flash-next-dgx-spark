@@ -2011,6 +2011,8 @@ a missing experiment/result is visible immediately.
 | v23 repeats r2-r4 | completed / intermittent layer onset | Reusing the same running v23 container, r2 and r4 again kept layer-14 `mlp_block_input` equal but differed at `mlp_out`; r3 kept layer 14 fully equal and first differed at layer-15 `mlp_out`. The last three captured layer-14 router records all had identical expert IDs and top-k weights (`max_abs_diff=0.0`). Therefore the unstable MLP/MoE onset is not fixed to layer 14. |
 | v24 layer-14/15 router capture | completed / same-input same-route layer-15 witness | Image `ct-nvfp4-convert-diag-v24` built successfully after the Docker self-check fix and reached READY after 721 s. Across four pairs, r1/r2/r4 first differed at layer-14 `mlp_out`; r3 kept layer 14 fully stable, then first differed at layer-15 `mlp_out` while layer-15 `mlp_block_input`, expert IDs, and top-k weights were all identical (`max_abs_diff=0.0`). This reproduces the same-input/same-route MoE output divergence at a second layer and justifies probing the already-existing single-pass MoE kernel boundary before adding deeper kernel instrumentation. |
 | v24 first build attempt | instrumentation/build validation failure | The DGX build applied all v24 patch scripts, then failed in the Dockerfile inline Python self-check because three router `assert` statements contained literal `\\n` text. No image/runtime/model result was produced. The Dockerfile validation block was corrected before rerunning v24. |
+| v24 layer-15 single-pass kernel boundary | completed / kernel-input equal, kernel-output divergent | Four layer-15 H20-D single-pass requests produced one qualifying pair, request 0↔1: `x`, `topk_weights`, `topk_ids`, and `shared_experts_input` were all exactly equal while final `moe_kernel.apply(...)` output differed. Other pairs already had different inputs. This localizes the qualifying divergence inside the modular MoE kernel call or its internal finalization path; it still does not identify a specific CUDA/Triton/Humming kernel. |
+| v25 modular MoE boundary capture | implemented / runtime pending | Adds an opt-in single-pass capture at the vLLM v0.29 modular-kernel `prepare` output, `fused_experts` output, and finalized output for the target layer. The probe compares all request pairs after each normal one-pass execution. No router recomputation, twin expert call, repair, or expert-internal kernel instrumentation is introduced. |
 
 ### H20 v24: layer-14/15 router repeat result
 
@@ -2049,20 +2051,32 @@ been observed at layers 14 and 15. Routing selection and route-weight variation
 are lower-priority explanations for the qualifying same-input samples. This
 still does not identify a specific CUDA/Triton/Humming expert kernel.
 
-Before adding new expert-internal instrumentation, reuse the existing H20-D
-single-pass probe at layer 15. The committed diagnostic now prints an all-pairs
-repeat summary automatically after collection and also provides `single-repeat`
-for re-analysis of an existing JSONL file, so no ad-hoc Python comparison block
-is required. It already snapshots `x`, `topk_weights`,
-`topk_ids`, `shared_experts_input`, and final MoE kernel `output` around
-the normal `self.moe_kernel.apply(...)` call. The snapshots are cloned before
-or immediately after the normal kernel call and fingerprinted only after the
-current kernel output exists, so the probe can test the exact kernel boundary
-without recomputing the router or invoking the expert kernel twice. The runtime
-must allow `QWEN38_H20D_TARGET_LAYER` to override its historical layer-0
-default. A qualifying result is: identical `x`, top-k tensors, and shared
-expert input across the pair, but different final kernel output. Only then
-should H20 add a deeper prepare/expert/finalize boundary capture.
+The existing H20-D single-pass probe was then retargeted to layer 15 and run
+four times. Request pair 0↔1 is the qualifying witness:
+
+- `x=true`;
+- `topk_weights=true`;
+- `topk_ids=true`;
+- `shared_experts_input=true`;
+- `output=false`.
+
+The other five pairings already had different inputs and therefore are not
+same-input kernel evidence. The qualifying 0↔1 pair establishes that the
+observable inputs passed to the normal `self.moe_kernel.apply(...)` call are
+identical while its returned output differs. This moves H20 inside that call,
+but does not yet distinguish dispatch/prepare, Humming expert compute, or
+finalize/combine.
+
+vLLM v0.29.0 source inspection shows the modular kernel sequence is
+`_prepare(...) → _fused_experts(...) → _finalize(...)`. For the default
+Humming MoE configuration, the selected expert implementation defaults to the
+indexed path unless `VLLM_HUMMING_MOE_GEMM_TYPE` overrides it. H20 v25
+therefore captures those three modular boundaries first. It snapshots prepared
+activation/routing tensors, the fused-expert output, and the finalized output
+without recomputing routing or invoking the expert kernel twice. If prepared
+state is identical but `fused_out` differs, the next localization target is
+inside expert execution; if `fused_out` is identical and final output differs,
+the finalize/combine path becomes the target.
 
 ### H20 v23: layer-14 MoE router repeat result
 

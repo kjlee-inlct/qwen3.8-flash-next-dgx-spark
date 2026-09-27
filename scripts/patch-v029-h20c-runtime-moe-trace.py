@@ -252,7 +252,8 @@ new_apply = f'''    def apply(
         shared_experts: SharedExperts | None,
         shared_experts_input: torch.Tensor | None,
     ) -> torch.Tensor:
-{assert_line}        global _QWEN38_H20C_CALL
+{assert_line}        self.moe_kernel._qwen38_h20_layer_name = str(getattr(layer, "layer_name", ""))
+        global _QWEN38_H20C_CALL
         h20d_single_request_id = _qwen38_h20d_single_request_id(layer)
         if h20d_single_request_id >= 0:
             h20d_single_x_ref = x.clone()
