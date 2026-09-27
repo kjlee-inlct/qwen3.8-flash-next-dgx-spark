@@ -165,6 +165,13 @@ assert "QWEN38_H20M_MARLIN " in marlin_moe_s
 assert '"qwen38_h20m::capture"' in marlin_moe_s
 assert 'mutates_args={"tensor"}' in marlin_moe_s
 assert '"aligned_sorted_token_ids"' in marlin_moe_s
+assert '"qwen38_h20m::capture_alignment_static"' in marlin_moe_s
+assert '"alignment_block_size_m"' in marlin_moe_s
+assert '"alignment_global_num_experts"' in marlin_moe_s
+assert '"alignment_expert_map"' in marlin_moe_s
+assert '"valid_sorted_equal"' in marlin_moe_s
+assert '"tail_sorted_equal"' in marlin_moe_s
+assert '"valid_sorted_mismatch_count"' in marlin_moe_s
 assert '"w13_output"' in marlin_moe_s
 assert '"activation_output"' in marlin_moe_s
 assert '"w2_output"' in marlin_moe_s
@@ -178,4 +185,4 @@ assert "router._qwen38_h20_layer_name = layer_name" in moe_layer_s
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v27"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v28"
