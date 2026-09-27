@@ -2221,6 +2221,75 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py marlin-probe \
 
 Never overwrite the v27 r1 artifact.
 
+##### H20 v28 r1 observed result
+
+Observed on 2026-09-28 with image label
+`ct-nvfp4-convert-diag-v28` and the normal PIECEWISE runtime:
+
+- preflight passed and API port 8888 was free;
+- the runtime reached READY after 742 seconds;
+- startup explicitly selected the `MARLIN` NVFP4 MoE backend;
+- the running container image ID matched the freshly built v28 image;
+- eight requests completed and exactly 28 pair records were written;
+- four pairs qualified with `entry_equal=true`:
+  `[1,2]`, `[1,6]`, `[2,6]`, and `[4,7]`;
+- every qualifying pair reported `alignment_static_equal=true`;
+- every qualifying pair reported
+  `full_sorted_equal=false`, `valid_sorted_equal=false`, and
+  `tail_sorted_equal=true`;
+- the first valid-prefix mismatch was index 8 for all four qualifying pairs;
+- valid-prefix mismatch counts were 481, 439, 426, and 405 respectively;
+- every qualifying pair kept `w13_input_equal=true` and then had
+  `w13_output_equal=false`;
+- `first_mismatch` was
+  `aligned_sorted_token_ids_valid` for every qualifying pair.
+
+This falsifies the v27 unused-tail explanation for the qualifying samples.
+The differing values are inside the prefix consumed by Marlin, while the
+unused tail is equal. Because `entry_equal=true` includes identical
+`topk_ids` and `alignment_static_equal=true` includes identical
+`block_size_m`, `global_num_experts`, and `expert_map`, the first
+observed physical execution-state divergence is now localized to the valid
+`sorted_token_ids` output of `moe_align_block_size()`.
+
+Do not yet call this an incorrect route assignment. Upstream vLLM tests allow
+token order inside an expert region to vary as long as the same routed token
+membership is preserved, and a recent upstream Marlin report describes small
+W13 numerical differences when semantically equivalent within-expert token
+orders differ. Those upstream observations are supporting context, not proof
+that the DGX Spark case is identical.
+
+##### H20 v29: expert-membership versus ordering split
+
+v29 keeps the v28 single-pass captures and adds a semantic comparison of the
+valid alignment layout. For every pair it must group valid flattened routed
+token IDs by the `expert_ids` block mapping and distinguish:
+
+- exact valid-prefix order equality;
+- per-expert token membership equality after ignoring padding and order;
+- per-expert token order equality after ignoring padding;
+- padding-position equality inside the valid prefix;
+- explicit `aligned_expert_ids_equal` and
+  `aligned_num_tokens_post_padded_equal`;
+- whether the observed alignment difference is an order-only divergence.
+
+Interpretation:
+
+- membership equal + expert IDs equal + padded count equal + valid order
+  different: the alignment kernel produced different legal physical ordering
+  for the same semantic routing; then the already-observed W13 difference
+  becomes evidence of Marlin sensitivity to physical routed-token ordering
+  under this probe context;
+- membership differs: the alignment output changes semantic token-to-expert
+  membership and the investigation stays inside `moe_align_block_size()`;
+- expert IDs or padded count differ: localize that alignment output difference
+  before making an ordering-only claim;
+- all semantic and physical alignment fields match but W13 differs: resume the
+  static/state audit of the first Marlin GEMM.
+
+v29 remains passive: no second alignment call, no second Marlin GEMM, and no
+canonicalization workaround is applied during this localization step.
+
 ### H20 v24: layer-14/15 router repeat result
 
 After PR #175 fixed the Docker inline-Python self-check, the v24 image built
