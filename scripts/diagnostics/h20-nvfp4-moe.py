@@ -1000,7 +1000,70 @@ def single_probe(
             f"layer={record.get('layer_name')!r}"
         )
     print(f"wrote {len(records)} single-pass records to {output}")
+    summarize_single_repeats(records)
     return 0
+
+
+def summarize_single_repeats(
+    records: list[dict],
+    output: Path | None = None,
+) -> int:
+    names = ("x", "topk_weights", "topk_ids", "shared_experts_input", "output")
+    ordered = sorted(records, key=lambda record: int(record.get("request_id", -1)))
+    comparisons = []
+    qualifying = []
+    for i, left in enumerate(ordered):
+        for right in ordered[i + 1 :]:
+            left_tensors = left.get("tensors", {})
+            right_tensors = right.get("tensors", {})
+            fields = {
+                name: left_tensors.get(name) == right_tensors.get(name)
+                for name in names
+            }
+            inputs_equal = all(fields[name] for name in names[:-1])
+            output_equal = fields["output"]
+            row = {
+                "requests": [
+                    int(left.get("request_id", -1)),
+                    int(right.get("request_id", -1)),
+                ],
+                "fields": fields,
+                "inputs_equal": inputs_equal,
+                "output_equal": output_equal,
+                "qualifying_same_input_output_divergence": (
+                    inputs_equal and not output_equal
+                ),
+            }
+            comparisons.append(row)
+            if row["qualifying_same_input_output_divergence"]:
+                qualifying.append(row["requests"])
+
+    report = {
+        "schema": 1,
+        "records": len(ordered),
+        "comparisons": comparisons,
+        "qualifying_pairs": qualifying,
+    }
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote single-pass repeat summary to {output}")
+
+    print(
+        f"single_repeat records={len(ordered)} pairs={len(comparisons)} "
+        f"qualifying_pairs={qualifying}"
+    )
+    for row in comparisons:
+        print(
+            f"single_repeat requests={row['requests']} "
+            f"inputs_equal={row['inputs_equal']} "
+            f"output_equal={row['output_equal']} "
+            f"fields={row['fields']}"
+        )
+    return 0 if len(ordered) >= 2 else 2
 
 
 def compare_single(
@@ -1696,6 +1759,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_single_compare.add_argument("--modelopt", type=Path, required=True)
     p_single_compare.add_argument("--output", type=Path)
 
+    p_single_repeat = sub.add_parser("single-repeat")
+    p_single_repeat.add_argument("--input", type=Path, required=True)
+    p_single_repeat.add_argument("--output", type=Path)
+
     p_twin = sub.add_parser("twin-probe")
     p_twin.add_argument("--container", required=True)
     p_twin.add_argument("--model", required=True)
@@ -1786,6 +1853,14 @@ def main() -> int:
             )
             return 2
         return compare_single(args.ct, args.modelopt, args.output)
+    if args.command == "single-repeat":
+        if not args.input.is_file():
+            print(
+                f"ERROR: single-pass probe file missing: {args.input}",
+                file=sys.stderr,
+            )
+            return 2
+        return summarize_single_repeats(load_jsonl(args.input), args.output)
     if args.command == "twin-probe":
         return twin_probe(
             container=args.container,
