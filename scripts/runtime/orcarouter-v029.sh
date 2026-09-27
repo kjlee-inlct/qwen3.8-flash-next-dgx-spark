@@ -321,7 +321,7 @@ h20_image_ok() {
   case "${PROFILE_CASE}" in
     hybrid-h20-ct-convert-diag)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20" }}' 2>/dev/null || true)"
-      [[ "${label}" == "ct-nvfp4-convert-diag-v26" ]]
+      [[ "${label}" == "ct-nvfp4-convert-diag-v27" ]]
       ;;
     hybrid-h20-ct-fp8-bi-repair)
       label="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.h20repair" }}' 2>/dev/null || true)"
@@ -700,15 +700,23 @@ start_runtime() {
       -e QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"
       -e QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"
       -e QWEN38_H20V_BOUNDARY_TARGET_LAYER="${QWEN38_H20V_BOUNDARY_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"
-      -e QWEN38_H20W_TARGET_LAYER="${QWEN38_H20W_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"
-      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20w-v26-humming-indexed-${QWEN38_H20U_LAYER14_GROUP:-all}"
+      -e QWEN38_H20M_TARGET_LAYER="${QWEN38_H20M_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h20m-v27-marlin-${QWEN38_H20U_LAYER14_GROUP:-all}"
     )
     if [[ "${QWEN38_H20_CUDA_LAUNCH_BLOCKING:-0}" == 1 ]]; then
       h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )
     fi
   fi
 
-  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${h20_env[@]}"     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs "${max_num_seqs}"       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       -cc.cudagraph_mode=PIECEWISE       "-cc.splitting_ops=${split}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       "${speculative_args[@]}"
+  local compile_args=(
+    -cc.cudagraph_mode=PIECEWISE
+    "-cc.splitting_ops=${split}"
+  )
+  if [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag && "${QWEN38_H20_ENFORCE_EAGER:-0}" == 1 ]]; then
+    compile_args=(--enforce-eager)
+  fi
+
+  docker run -d     --name "${NAME}"     --init     --user root     --restart no     --gpus all     --ipc host     --shm-size=32g     --ulimit memlock=-1:-1     --ulimit stack=67108864     -p "127.0.0.1:${PORT}:8000"     -e VLLM_TARGET_DEVICE=cuda     -e CUTE_DSL_ARCH=sm_121a     -e VLLM_PLE_MMAP=1     -e VLLM_PLE_MMAP_DIR=/model     -e VLLM_PLE_MMAP_WORKERS=32     -e VLLM_PLE_MMAP_PREWARM=0     -e VLLM_PLE_MMAP_MADVISE=random     -e VLLM_PLE_MMAP_FAST_ROWS=0     -e VLLM_QSA_EXACT_TOPK=1     -e QWEN38_VLLM_BASE=v0.29     -e QWEN38_GB10_FLA_FIX=1     -e QWEN38_PLE_MMAP=1     -e FLASHINFER_DISABLE_VERSION_CHECK=1     "${h20_env[@]}"     "${extra_mount[@]}"     -v "${MODEL_DIR}:/model:ro"     -v "${HOME}/.cache/vllm-qwen38-v029:/root/.cache/vllm"     -v "${HOME}/.cache/flashinfer-v029:/root/.cache/flashinfer"     "${IMAGE}"     /model       --served-model-name "${SERVED_NAME}"       --host 0.0.0.0       --port 8000       --load-format safetensors       --max-model-len 262144       --max-num-seqs "${max_num_seqs}"       --gpu-memory-utilization 0.80       --kv-cache-memory-bytes 25769803776       --kv-cache-dtype auto       --no-enable-prefix-caching       --enable-chunked-prefill       --max-num-batched-tokens 8192       "${compile_args[@]}"       --no-enable-flashinfer-autotune       --enable-auto-tool-choice       --tool-call-parser qwen3_coder       --reasoning-parser qwen3       "${speculative_args[@]}"
 
   sleep 8
   local state

@@ -490,7 +490,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v26", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v27", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -503,7 +503,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
         self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn('QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"', runtime)
-        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20w-v26-humming-indexed-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
+        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20m-v27-marlin-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn(
@@ -515,11 +515,13 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             runtime,
         )
         self.assertIn(
-            'QWEN38_H20W_TARGET_LAYER="${QWEN38_H20W_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"',
+            'QWEN38_H20M_TARGET_LAYER="${QWEN38_H20M_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"',
             runtime,
         )
         self.assertIn("h20_image_ok()", runtime)
-        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v26" ]]', runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v27" ]]', runtime)
+        self.assertIn('QWEN38_H20_ENFORCE_EAGER:-0', runtime)
+        self.assertIn('compile_args=(--enforce-eager)', runtime)
         self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
 
 
@@ -1256,7 +1258,27 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             patch,
         )
 
-    def test_h20_v15_ct_image_localizes_batch_invariant_to_fp8(self) -> None:
+    def test_h20_v27_marlin_patcher_is_single_pass_and_non_self_pairing(self) -> None:
+        patch = (
+            ROOT / "scripts" / "patch-v029-h20-marlin-boundary.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('text.index("def _fused_marlin_moe(")', patch)
+        self.assertIn('text.index("\\n\\ndef fused_marlin_moe(", fused_start)', patch)
+        self.assertIn('text.index("class MarlinExperts(")', patch)
+        self.assertIn('"qwen38_h20m::capture"', patch)
+        self.assertIn('mutates_args={"tensor"}', patch)
+        self.assertIn('"aligned_sorted_token_ids"', patch)
+        self.assertIn('"activation_output"', patch)
+        self.assertIn('"w13_output"', patch)
+        self.assertIn('"w2_output"', patch)
+        self.assertIn('"final_output"', patch)
+        self.assertIn("_QWEN38_H20M_ACTIVE.pop(request_id)", patch)
+        self.assertIn("_QWEN38_H20M_COMPLETED", patch)
+        self.assertIn("if previous_id == request_id:", patch)
+        self.assertIn('"w13 GEMM input"', patch)
+        self.assertIn('"w2 GEMM input"', patch)
+
+    def test_h20_ct_image_keeps_fp8_local_patch_and_uses_v27_marlin(self) -> None:
         dockerfile = (
             ROOT / "scripts" / "Dockerfile.v029-h20-ct-convert-diag"
         ).read_text(encoding="utf-8")
@@ -1266,8 +1288,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         modular_patch = (
             ROOT / "scripts" / "patch-v029-h20-modular-boundary.py"
         ).read_text(encoding="utf-8")
-        humming_expert_patch = (
-            ROOT / "scripts" / "patch-v029-h20-humming-indexed-boundary.py"
+        marlin_expert_patch = (
+            ROOT / "scripts" / "patch-v029-h20-marlin-boundary.py"
         ).read_text(encoding="utf-8")
         patch = (
             ROOT / "scripts" / "patch-v029-h20-humming-fp8-batch-invariant.py"
@@ -1275,11 +1297,13 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("patch-v029-h20-modular-boundary.py", dockerfile)
-        self.assertIn("patch-v029-h20-humming-indexed-boundary.py", dockerfile)
-        self.assertIn("QWEN38_H20W_EXPERT ", dockerfile)
-        self.assertIn('"aligned_sorted_ids"', humming_expert_patch)
-        self.assertIn('"w13_output"', humming_expert_patch)
-        self.assertIn('"w2_output"', humming_expert_patch)
+        self.assertIn("patch-v029-h20-marlin-boundary.py", dockerfile)
+        self.assertNotIn("patch-v029-h20-humming-indexed-boundary.py", dockerfile)
+        self.assertIn("QWEN38_H20M_MARLIN ", dockerfile)
+        self.assertIn('"aligned_sorted_token_ids"', marlin_expert_patch)
+        self.assertIn('"activation_output"', marlin_expert_patch)
+        self.assertIn('"w13_output"', marlin_expert_patch)
+        self.assertIn('"w2_output"', marlin_expert_patch)
         self.assertIn("self.moe_kernel.impl.fused_experts._qwen38_h20_layer_name", h20c_patch)
         self.assertIn("self.moe_kernel.impl.fused_experts._qwen38_h20_layer_idx", h20c_patch)
         self.assertIn("QWEN38_H20V_BOUNDARY ", dockerfile)
@@ -1289,7 +1313,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("self.moe_kernel.impl._qwen38_h20_layer_name", h20c_patch)
         self.assertNotIn("self.moe_kernel._qwen38_h20_layer_name =", h20c_patch)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v26"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v27"', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE " in router_s', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE_LAYERS" in router_s', dockerfile)
         self.assertNotIn(r'router_s\nassert', dockerfile)
@@ -1339,6 +1363,15 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn('sub.add_parser("expert-probe")', script)
         self.assertIn("QWEN38_H20W_EXPERT ", script)
         self.assertIn("expert_repeat requests=", script)
+        self.assertIn('sub.add_parser("marlin-probe")', script)
+        self.assertIn("QWEN38_H20M_MARLIN ", script)
+        self.assertIn("marlin_repeat requests=", script)
+        self.assertIn("/tmp/qwen38_h20m_marlin.enable", script)
+        self.assertIn("instrumentation_failure", script)
+        self.assertIn("backend_mismatch", script)
+        self.assertIn("Using 'MARLIN' NvFp4 MoE backend", script)
+        self.assertIn('with path.open("x", encoding="utf-8")', script)
+        self.assertIn("self_pairs", script)
         self.assertIn("alignment_equal=", script)
         self.assertIn("w13_output_equal=", script)
         self.assertIn("w2_output_equal=", script)

@@ -1,4 +1,4 @@
-# H20 CT diagnostic: H12 + bounded NVFP4 MoE conversion fingerprints.
+# H20 CT diagnostic: H12 + bounded NVFP4 MoE conversion fingerprints + v27 Marlin boundaries.
 FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
 
@@ -10,7 +10,7 @@ ARG HUM=${SP}/vllm/model_executor/kernels/linear/scaled_mm/humming.py
 ARG MOE_ROUTER=${SP}/vllm/model_executor/layers/fused_moe/router/fused_moe_router.py
 ARG MOE_LAYER=${SP}/vllm/model_executor/layers/fused_moe/layer.py
 ARG MOE_MODULAR=${SP}/vllm/model_executor/layers/fused_moe/modular_kernel.py
-ARG HUM_MOE=${SP}/vllm/model_executor/layers/fused_moe/experts/fused_humming_moe.py
+ARG MARLIN_MOE=${SP}/vllm/model_executor/layers/fused_moe/experts/marlin_moe.py
 
 COPY patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py
 COPY patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20c-runtime-moe-trace.py
@@ -19,7 +19,7 @@ COPY patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-linear-attn-layer0
 COPY patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py
 COPY patch-v029-h20-moe-router-capture.py /tmp/patch-v029-h20-moe-router-capture.py
 COPY patch-v029-h20-modular-boundary.py /tmp/patch-v029-h20-modular-boundary.py
-COPY patch-v029-h20-humming-indexed-boundary.py /tmp/patch-v029-h20-humming-indexed-boundary.py
+COPY patch-v029-h20-marlin-boundary.py /tmp/patch-v029-h20-marlin-boundary.py
 RUN cp ${CT} ${CT}.h20.orig \
  && python3 /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py ${CT} ct \
  && python3 /tmp/patch-v029-h20c-runtime-moe-trace.py ${CT} ct \
@@ -28,8 +28,8 @@ RUN cp ${CT} ${CT}.h20.orig \
  && python3 /tmp/patch-v029-h20-humming-fp8-batch-invariant.py ${HUM} \
  && python3 /tmp/patch-v029-h20-moe-router-capture.py ${MOE_ROUTER} ${MOE_LAYER} \
  && python3 /tmp/patch-v029-h20-modular-boundary.py ${MOE_MODULAR} \
- && python3 /tmp/patch-v029-h20-humming-indexed-boundary.py ${HUM_MOE} \
- && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-moe-router-capture.py /tmp/patch-v029-h20-modular-boundary.py /tmp/patch-v029-h20-humming-indexed-boundary.py \
+ && python3 /tmp/patch-v029-h20-marlin-boundary.py ${MARLIN_MOE} \
+ && rm /tmp/patch-v029-nvfp4-moe-convert-diagnostics.py /tmp/patch-v029-h20c-runtime-moe-trace.py /tmp/patch-v029-h20-upstream-layer0.py /tmp/patch-v029-h20-linear-attn-layer0.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-moe-router-capture.py /tmp/patch-v029-h20-modular-boundary.py /tmp/patch-v029-h20-marlin-boundary.py \
  && python3 - <<'PY'
 import ast
 p="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
@@ -158,15 +158,19 @@ assert "_qwen38_h20v_boundary_request_id" in modular_s
 assert '"prepared_a1q"' in modular_s
 assert '"fused_out"' in modular_s
 assert '"final_output"' in modular_s
-humming_moe="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/fused_humming_moe.py"
-humming_moe_s=open(humming_moe, encoding="utf-8").read()
-ast.parse(humming_moe_s)
-assert "QWEN38_H20W_EXPERT " in humming_moe_s
-assert '"qwen38_h20w::capture"' in humming_moe_s
-assert 'mutates_args={"tensor"}' in humming_moe_s
-assert '"aligned_sorted_ids"' in humming_moe_s
-assert '"w13_output"' in humming_moe_s
-assert '"w2_output"' in humming_moe_s
+marlin_moe="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/marlin_moe.py"
+marlin_moe_s=open(marlin_moe, encoding="utf-8").read()
+ast.parse(marlin_moe_s)
+assert "QWEN38_H20M_MARLIN " in marlin_moe_s
+assert '"qwen38_h20m::capture"' in marlin_moe_s
+assert 'mutates_args={"tensor"}' in marlin_moe_s
+assert '"aligned_sorted_token_ids"' in marlin_moe_s
+assert '"w13_output"' in marlin_moe_s
+assert '"activation_output"' in marlin_moe_s
+assert '"w2_output"' in marlin_moe_s
+assert '"final_output"' in marlin_moe_s
+assert 'class MarlinExperts' in marlin_moe_s
+assert 'h20m_layer_idx = int(getattr(self, "_qwen38_h20_layer_idx", -1))' in marlin_moe_s
 moe_layer="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/layer.py"
 moe_layer_s=open(moe_layer, encoding="utf-8").read()
 ast.parse(moe_layer_s)
@@ -174,4 +178,4 @@ assert "router._qwen38_h20_layer_name = layer_name" in moe_layer_s
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v26"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v27"
