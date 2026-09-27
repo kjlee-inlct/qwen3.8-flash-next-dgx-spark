@@ -140,7 +140,9 @@ router="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused
 router_s=open(router, encoding="utf-8").read()
 ast.parse(router_s)
 assert '"qwen38_h20u::route_capture"' in router_s
-assert "QWEN38_H20U_ROUTE " in router_s\nassert "QWEN38_H20U_ROUTE_LAYERS" in router_s\nassert "\"layer_idx\": layer_idx" in router_s
+assert "QWEN38_H20U_ROUTE " in router_s
+assert "QWEN38_H20U_ROUTE_LAYERS" in router_s
+assert "\"layer_idx\": layer_idx" in router_s
 assert "_qwen38_h20u_route_capture(" in router_s
 moe_layer="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/layer.py"
 moe_layer_s=open(moe_layer, encoding="utf-8").read()
