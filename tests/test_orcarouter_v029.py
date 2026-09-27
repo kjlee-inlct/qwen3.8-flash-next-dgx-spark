@@ -1275,7 +1275,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("_QWEN38_H20M_ACTIVE.pop(request_id)", patch)
         self.assertIn("_QWEN38_H20M_COMPLETED", patch)
         self.assertIn("if previous_id == request_id:", patch)
-        self.assertEqual(patch.count("ops.moe_wna16_marlin_gemm("), 2)
+        self.assertIn('"w13 GEMM input"', patch)
+        self.assertIn('"w2 GEMM input"', patch)
 
     def test_h20_v15_ct_image_localizes_batch_invariant_to_fp8(self) -> None:
         dockerfile = (
