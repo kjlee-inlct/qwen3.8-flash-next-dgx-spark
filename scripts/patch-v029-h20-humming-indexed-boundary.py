@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-W single-pass Humming indexed-expert stage capture in vLLM v0.29."""
+"""Historical H20-W wrong-backend probe; retained for v26 reproducibility only."""
 
 from __future__ import annotations
 
