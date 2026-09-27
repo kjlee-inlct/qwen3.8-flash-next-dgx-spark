@@ -490,7 +490,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v25", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v26", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -503,7 +503,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
         self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn('QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"', runtime)
-        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20v-v25-modular-boundary-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
+        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20w-v26-humming-indexed-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn(
@@ -514,8 +514,12 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             'QWEN38_H20V_BOUNDARY_TARGET_LAYER="${QWEN38_H20V_BOUNDARY_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"',
             runtime,
         )
+        self.assertIn(
+            'QWEN38_H20W_TARGET_LAYER="${QWEN38_H20W_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"',
+            runtime,
+        )
         self.assertIn("h20_image_ok()", runtime)
-        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v25" ]]', runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v26" ]]', runtime)
         self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
 
 
@@ -1235,12 +1239,21 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         modular_patch = (
             ROOT / "scripts" / "patch-v029-h20-modular-boundary.py"
         ).read_text(encoding="utf-8")
+        humming_expert_patch = (
+            ROOT / "scripts" / "patch-v029-h20-humming-indexed-boundary.py"
+        ).read_text(encoding="utf-8")
         patch = (
             ROOT / "scripts" / "patch-v029-h20-humming-fp8-batch-invariant.py"
         ).read_text(encoding="utf-8")
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("patch-v029-h20-modular-boundary.py", dockerfile)
+        self.assertIn("patch-v029-h20-humming-indexed-boundary.py", dockerfile)
+        self.assertIn("QWEN38_H20W_EXPERT ", dockerfile)
+        self.assertIn('"aligned_sorted_ids"', humming_expert_patch)
+        self.assertIn('"w13_output"', humming_expert_patch)
+        self.assertIn('"w2_output"', humming_expert_patch)
+        self.assertIn("self.moe_kernel.impl.fused_experts._qwen38_h20_layer_name", h20c_patch)
         self.assertIn("QWEN38_H20V_BOUNDARY ", dockerfile)
         self.assertIn('"entry_hidden_states"', modular_patch)
         self.assertIn('"entry_shared_experts_input"', modular_patch)
@@ -1248,7 +1261,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("self.moe_kernel.impl._qwen38_h20_layer_name", h20c_patch)
         self.assertNotIn("self.moe_kernel._qwen38_h20_layer_name =", h20c_patch)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v25"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v26"', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE " in router_s', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE_LAYERS" in router_s', dockerfile)
         self.assertNotIn(r'router_s\nassert', dockerfile)
@@ -1295,6 +1308,12 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn('sub.add_parser("boundary-probe")', script)
         self.assertIn("QWEN38_H20V_BOUNDARY ", script)
         self.assertIn("boundary_repeat requests=", script)
+        self.assertIn('sub.add_parser("expert-probe")', script)
+        self.assertIn("QWEN38_H20W_EXPERT ", script)
+        self.assertIn("expert_repeat requests=", script)
+        self.assertIn("alignment_equal=", script)
+        self.assertIn("w13_output_equal=", script)
+        self.assertIn("w2_output_equal=", script)
         self.assertIn("entry_equal=", script)
         self.assertIn("summarize_single_repeats(records)", script)
         self.assertIn("qualifying_same_input_output_divergence", script)
