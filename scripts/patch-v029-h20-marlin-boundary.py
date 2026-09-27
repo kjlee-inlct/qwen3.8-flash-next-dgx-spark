@@ -365,9 +365,16 @@ def _qwen38_h20m_commit(
         w13_scalar_meta_equal = (
             previous.get("w13_scalar_meta") == snapshots.get("w13_scalar_meta")
         )
+        w13_buffer_meta_equal = (
+            previous.get("w13_output_buffer_meta")
+            == snapshots.get("w13_output_buffer_meta")
+            and previous.get("w13_workspace_meta")
+            == snapshots.get("w13_workspace_meta")
+        )
         w13_state_equal = (
             w13_weight_meta_equal
             and w13_scalar_meta_equal
+            and w13_buffer_meta_equal
             and all(
                 fields[name]["equal"]
                 for name in (
@@ -442,6 +449,7 @@ def _qwen38_h20m_commit(
             "w13_scalar_meta": snapshots.get("w13_scalar_meta"),
             "w13_weight_meta_equal": w13_weight_meta_equal,
             "w13_scalar_meta_equal": w13_scalar_meta_equal,
+            "w13_buffer_meta_equal": w13_buffer_meta_equal,
             "w13_state_equal": w13_state_equal,
             "alignment_order_only_divergence": (
                 not sorted_detail["valid_equal"]
