@@ -16,6 +16,7 @@ TWIN_PREFIX = "QWEN38_H20D_TWIN "
 SINGLE_PREFIX = "QWEN38_H20D_SINGLE "
 BOUNDARY_PREFIX = "QWEN38_H20V_BOUNDARY "
 EXPERT_PREFIX = "QWEN38_H20W_EXPERT "
+MARLIN_PREFIX = "QWEN38_H20M_MARLIN "
 UPSTREAM_PREFIX = "QWEN38_H20U_LAYER0 "
 LINEAR_PREFIX = "QWEN38_H20L_LINEAR "
 QKVZ_PREFIX = "QWEN38_H20P_QKVZ "
@@ -1157,6 +1158,190 @@ def expert_probe(
     return 0
 
 
+def parse_marlin_records(lines: list[str]) -> list[dict]:
+    records: list[dict] = []
+    for raw in lines:
+        pos = raw.find(MARLIN_PREFIX)
+        if pos < 0:
+            continue
+        payload = raw[pos + len(MARLIN_PREFIX) :].strip()
+        records.append(json.loads(payload))
+    return records
+
+
+def _marlin_status_path(output: Path) -> Path:
+    return output.with_name(output.name + ".status.json")
+
+
+def _write_new_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _write_new_jsonl(path: Path, records: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def marlin_probe(
+    *,
+    container: str,
+    model: str,
+    output: Path,
+    repeats: int,
+    prompt: str,
+    api_base: str,
+) -> int:
+    status_output = _marlin_status_path(output)
+    if output.exists() or status_output.exists():
+        print(
+            f"ERROR: refusing to overwrite existing H20 v27 output: "
+            f"{output if output.exists() else status_output}",
+            file=sys.stderr,
+        )
+        return 2
+    if not _container_exists(container):
+        print(f"ERROR: H20 v27 container not found: {container}", file=sys.stderr)
+        return 2
+
+    existing = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if existing.returncode != 0:
+        print(existing.stderr, file=sys.stderr)
+        return existing.returncode
+    prior = parse_marlin_records(
+        (existing.stdout + "\n" + existing.stderr).splitlines()
+    )
+    start_id = 0
+    if prior:
+        start_id = max(
+            max(int(record.get("request0", -1)), int(record.get("request1", -1)))
+            for record in prior
+        ) + 1
+
+    trigger = "/tmp/qwen38_h20m_marlin.enable"
+    request_id_file = "/tmp/qwen38_h20m_request_id"
+    other_paths = (
+        "/tmp/qwen38_h20w_expert.enable",
+        "/tmp/qwen38_h20v_boundary.enable",
+        "/tmp/qwen38_h20d_single.enable",
+        "/tmp/qwen38_h20d_twin.enable",
+        "/tmp/qwen38_h20c_trace.enable",
+    )
+    try:
+        _docker_exec(
+            container,
+            "rm -f "
+            + " ".join((trigger, request_id_file, *other_paths))
+            + f"; touch {trigger}",
+        )
+        for offset in range(repeats):
+            request_id = start_id + offset
+            _docker_exec(
+                container,
+                f"printf '%s' {request_id} > {request_id_file}",
+            )
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "top_p": 1.0,
+                    "seed": 0,
+                    "max_tokens": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                api_base.rstrip("/") + "/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                response.read()
+            print(
+                f"marlin request {offset + 1}/{repeats} completed id={request_id}"
+            )
+    finally:
+        try:
+            _docker_exec(container, f"rm -f {trigger} {request_id_file}")
+        except RuntimeError:
+            pass
+
+    result = subprocess.run(
+        ["docker", "logs", container],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return result.returncode
+
+    all_records = parse_marlin_records(
+        (result.stdout + "\n" + result.stderr).splitlines()
+    )
+    wanted_ids = set(range(start_id, start_id + repeats))
+    records = [
+        record
+        for record in all_records
+        if int(record.get("request0", -1)) in wanted_ids
+        and int(record.get("request1", -1)) in wanted_ids
+    ]
+    self_pairs = [
+        record
+        for record in records
+        if int(record.get("request0", -1)) == int(record.get("request1", -1))
+    ]
+    expected = repeats * (repeats - 1) // 2
+    if len(records) != expected or self_pairs:
+        status = {
+            "schema": 1,
+            "phase": "marlin-probe-status",
+            "status": "instrumentation_failure",
+            "backend_expected": "MARLIN",
+            "expected_pairs": expected,
+            "observed_pairs": len(records),
+            "self_pairs": len(self_pairs),
+            "request_ids": sorted(wanted_ids),
+        }
+        _write_new_json(status_output, status)
+        print(
+            f"ERROR: expected {expected} {MARLIN_PREFIX.strip()} pair records "
+            f"with no self-pairs; found {len(records)} records and "
+            f"{len(self_pairs)} self-pairs for request ids {sorted(wanted_ids)}; "
+            f"wrote {status_output}",
+            file=sys.stderr,
+        )
+        return 2
+
+    _write_new_jsonl(output, records)
+    print(f"wrote {len(records)} Marlin expert pair records to {output}")
+    for record in records:
+        print(
+            f"marlin_repeat requests=[{record.get('request0')}, "
+            f"{record.get('request1')}] "
+            f"entry_equal={record.get('entry_equal')} "
+            f"alignment_equal={record.get('alignment_equal')} "
+            f"w13_input_equal={record.get('w13_input_equal')} "
+            f"w13_output_equal={record.get('w13_output_equal')} "
+            f"activation_output_equal={record.get('activation_output_equal')} "
+            f"w2_input_equal={record.get('w2_input_equal')} "
+            f"w2_output_equal={record.get('w2_output_equal')} "
+            f"final_output_equal={record.get('final_output_equal')} "
+            f"first_mismatch={record.get('first_mismatch')}"
+        )
+    return 0
+
+
 def parse_single_records(lines: list[str]) -> list[dict]:
     records: list[dict] = []
     for raw in lines:
@@ -2037,6 +2222,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_expert.add_argument("--prompt", default="Return exactly the integer 7.")
     p_expert.add_argument("--api-base", default="http://127.0.0.1:8888")
 
+    p_marlin = sub.add_parser("marlin-probe")
+    p_marlin.add_argument("--container", required=True)
+    p_marlin.add_argument("--model", required=True)
+    p_marlin.add_argument("--output", type=Path, required=True)
+    p_marlin.add_argument("--repeats", type=int, default=8)
+    p_marlin.add_argument("--prompt", default="Return exactly the integer 7.")
+    p_marlin.add_argument("--api-base", default="http://127.0.0.1:8888")
+
     p_single = sub.add_parser("single-probe")
     p_single.add_argument("--container", required=True)
     p_single.add_argument("--model", required=True)
@@ -2137,6 +2330,15 @@ def main() -> int:
         )
     if args.command == "expert-probe":
         return expert_probe(
+            container=args.container,
+            model=args.model,
+            output=args.output,
+            repeats=args.repeats,
+            prompt=args.prompt,
+            api_base=args.api_base,
+        )
+    if args.command == "marlin-probe":
+        return marlin_probe(
             container=args.container,
             model=args.model,
             output=args.output,
