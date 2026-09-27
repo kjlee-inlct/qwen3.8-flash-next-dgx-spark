@@ -2026,7 +2026,7 @@ a missing experiment/result is visible immediately.
 | v26 eager-c1 | invalid control | The run was named as an eager control, but container inspection still showed `-cc.cudagraph_mode=PIECEWISE` and no `--enforce-eager`; startup also loaded AOT compilation artifacts. Treat this run as another graph-mode zero-record run, not an eager result. |
 | v26 eager-c2 | valid eager control / zero-record | Container arguments contained `--enforce-eager`; vLLM reported `CompilationMode.NONE` and `CUDAGraphMode.NONE`. Eight requests still produced zero Humming expert records. This falsifies the hypothesis that CUDA graph / torch.compile replay was the reason the Humming probe saw no records. |
 | v26 backend correction | root-cause of zero records identified | Runtime backend selection reported `Using 'MARLIN' NvFp4 MoE backend`. The v0.29 oracle maps `NvFp4MoeBackend.MARLIN` to `MarlinExperts`, whose path is `MarlinExperts.apply() -> fused_marlin_moe() -> _fused_marlin_moe()`. Therefore v26 instrumented the wrong routed-expert backend. The zero-record runs do not localize model nondeterminism. |
-| v27 Marlin boundary stages | implemented / runtime pending | Replaces the routed-expert Humming instrumentation in the CT diagnostic image with single-pass capture on the actual `MarlinExperts` path: entry, `moe_align_block_size` outputs, first Marlin W13 GEMM input/output, activation output, W2 GEMM input/output, and final top-k reduction output. Pairing uses separate ACTIVE/COMPLETED request state so the current request cannot self-pair. |
+| v27 Marlin boundary stages | valid runtime result / attribution corrected | r1 produced 28/28 pair records with 11 qualifying `entry_equal=true` pairs. All 11 had equal `aligned_expert_ids` and equal `aligned_num_tokens_post_padded` but unequal full `aligned_sorted_token_ids`. Source review then showed `sorted_ids` is allocated with `torch.empty(max_num_tokens_padded)`, so full-tensor inequality may come only from the unused tail. v27 therefore localizes only to an alignment-region candidate until the valid prefix is compared. |
 
 ### H20 v27: MARLIN boundary localization
 
@@ -2116,6 +2116,110 @@ python3 scripts/diagnostics/h20-nvfp4-moe.py marlin-probe \
 Use `QWEN38_H20_ENFORCE_EAGER=1` only for a deliberate eager control. The
 default v27 localization stays on the normal PIECEWISE runtime so the execution
 context remains as close as possible to the preceding v25 witness.
+
+#### H20 v27 r1 observed result and attribution correction
+
+Observed on 2026-09-27 with the normal PIECEWISE v27 image:
+
+- runtime backend marker confirmed `Using 'MARLIN' NvFp4 MoE backend`;
+- the running container image ID matched the freshly built
+  `ct-nvfp4-convert-diag-v27` image;
+- eight requests completed and exactly 28 pair records were produced;
+- there were no self-pairs or backend/instrumentation failures;
+- 11 of the 28 pairs had `entry_equal=true`;
+- all 11 qualifying pairs had equal `entry_hidden_states`,
+  `entry_topk_ids`, and `entry_topk_weights`;
+- all 11 had equal `aligned_expert_ids` and equal
+  `aligned_num_tokens_post_padded`;
+- all 11 had unequal full `aligned_sorted_token_ids`;
+- all 11 kept `w13_input_equal=true` while
+  `w13_output_equal=false`.
+
+The initial v27 classifier therefore reported
+`first_mismatch=aligned_sorted_token_ids` for all 11 qualifying pairs.
+
+Source inspection subsequently found that
+`moe_align_block_size()` allocates the full output capacity as:
+
+```python
+max_num_tokens_padded = topk_ids.numel() + num_experts * (block_size - 1)
+sorted_ids = torch.empty(
+    (max_num_tokens_padded,),
+    dtype=torch.int32,
+    device=topk_ids.device,
+)
+```
+
+and separately returns `num_tokens_post_pad`, which marks the aligned prefix
+that is valid for downstream processing. The v27 probe compared the entire
+`sorted_ids` capacity with `torch.equal`. Because the backing tensor comes
+from `torch.empty()`, bytes/values beyond the valid prefix can differ without
+changing the alignment consumed by Marlin.
+
+Therefore the v27 r1 interpretation is corrected to:
+
+```text
+same captured Marlin entry
+same aligned expert_ids
+same num_tokens_post_padded
+full sorted_token_ids differs
+→ alignment-region candidate only
+→ valid-prefix divergence not yet proven
+```
+
+Do not cite v27 r1 as proof that `moe_align_block_size` produced a different
+valid token mapping. The unused tail must be excluded first.
+
+#### H20 v28: valid-prefix Marlin alignment probe
+
+v28 preserves the same single-pass Marlin execution and the historical full
+`aligned_sorted_token_ids` comparison, but adds semantic alignment fields:
+
+- `full_sorted_equal`;
+- `valid_sorted_equal`, comparing only
+  `sorted_token_ids[:num_tokens_post_padded]`;
+- `tail_sorted_equal`, comparing only the unused suffix;
+- `valid_sorted_first_mismatch`;
+- `valid_sorted_mismatch_count`;
+- `alignment_static_equal` covering `block_size_m`,
+  `global_num_experts`, and `expert_map`.
+
+`topk_ids` remains part of the captured entry and is already required by
+`entry_equal=true`.
+
+The semantic `alignment_equal` and `first_mismatch` fields now use the
+valid sorted prefix rather than full-capacity equality. The old full comparison
+remains in the record so v27/v28 attribution can be audited.
+
+Interpretation:
+
+- `full_sorted_equal=false`, `valid_sorted_equal=true`,
+  `tail_sorted_equal=false`: v27 was a false attribution caused by the
+  unused `torch.empty` tail; continue to W13 or the next semantic boundary;
+- `valid_sorted_equal=false` with static alignment inputs equal: a real
+  `moe_align_block_size` valid-prefix divergence is observed;
+- any static alignment input differs: do not attribute the result to the
+  alignment kernel until that input difference is explained;
+- `valid_sorted_equal=true` and W13 output differs with all W13 inputs/state
+  proven equal: only then strengthen the first-Marlin-GEMM hypothesis.
+
+v28 remains passive and single-pass. It does not twin-call
+`moe_align_block_size` or either Marlin GEMM. Pairwise equality and mismatch
+detail are evaluated only after the normal request has reached the final
+captured boundary.
+
+The v28 result file must use a new name, for example:
+
+```bash
+OUT="scripts/benchmark/results/local/h20m-v28-layer15-marlin-valid-r1.jsonl"
+python3 scripts/diagnostics/h20-nvfp4-moe.py marlin-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 8 \
+  --output "$OUT"
+```
+
+Never overwrite the v27 r1 artifact.
 
 ### H20 v24: layer-14/15 router repeat result
 
