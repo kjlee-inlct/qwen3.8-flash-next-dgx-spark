@@ -510,6 +510,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             'QWEN38_H20D_TARGET_LAYER="${QWEN38_H20D_TARGET_LAYER:-language_model.model.layers.0.mlp.experts}"',
             runtime,
         )
+        self.assertIn(
+            'QWEN38_H20V_BOUNDARY_TARGET_LAYER="${QWEN38_H20V_BOUNDARY_TARGET_LAYER:-language_model.model.layers.15.mlp.experts}"',
+            runtime,
+        )
         self.assertIn("h20_image_ok()", runtime)
         self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v24" ]]', runtime)
         self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
@@ -1230,8 +1234,10 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         ).read_text(encoding="utf-8")
         self.assertNotIn("ENV VLLM_BATCH_INVARIANT=1", dockerfile)
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
+        self.assertIn("patch-v029-h20-modular-boundary.py", dockerfile)
+        self.assertIn("QWEN38_H20V_BOUNDARY ", dockerfile)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v24"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v25"', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE " in router_s', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE_LAYERS" in router_s', dockerfile)
         self.assertNotIn(r'router_s\nassert', dockerfile)
@@ -1275,6 +1281,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn('sub.add_parser("single-probe")', script)
         self.assertIn('sub.add_parser("single-compare")', script)
         self.assertIn('sub.add_parser("single-repeat")', script)
+        self.assertIn('sub.add_parser("boundary-probe")', script)
+        self.assertIn("QWEN38_H20V_BOUNDARY ", script)
+        self.assertIn("boundary_repeat requests=", script)
         self.assertIn("summarize_single_repeats(records)", script)
         self.assertIn("qualifying_same_input_output_divergence", script)
         self.assertIn("/tmp/qwen38_h20d_single.enable", script)
