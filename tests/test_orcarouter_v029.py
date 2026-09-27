@@ -503,7 +503,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
         self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn('QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"', runtime)
-        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-v24-layer14-15-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
+        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20v-v25-modular-boundary-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn(
