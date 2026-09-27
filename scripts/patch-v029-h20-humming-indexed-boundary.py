@@ -307,10 +307,7 @@ reduce_old = '''        moe_fused_mul_sum(
             expert_map=expert_map,
             outputs=output,
             num_valid_tokens=valid_tokens,
-        )
-
-
-class HummingGroupedExperts'''
+        )'''
 reduce_new = '''        moe_fused_mul_sum(
             inputs=buffers["down_output"].view(*topk_ids.shape, -1),
             topk_weights=topk_weights,
@@ -341,10 +338,7 @@ reduce_new = '''        moe_fused_mul_sum(
                     "w2_output": h20w_w2_output,
                     "final_output": h20w_final_output,
                 },
-            )
-
-
-class HummingGroupedExperts'''
+            )'''
 indexed_body = replace_once(indexed_body, reduce_old, reduce_new, "indexed reduce boundary")
 
 text = prefix + indexed_body + suffix

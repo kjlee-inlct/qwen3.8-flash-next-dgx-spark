@@ -1243,6 +1243,14 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             patch,
         )
         self.assertIn("text = prefix + indexed_body + suffix", patch)
+        self.assertIn(
+            "reduce_old = '''        moe_fused_mul_sum(",
+            patch,
+        )
+        self.assertNotIn(
+            "class HummingGroupedExperts'''\nreduce_new",
+            patch,
+        )
 
     def test_h20_v15_ct_image_localizes_batch_invariant_to_fp8(self) -> None:
         dockerfile = (
