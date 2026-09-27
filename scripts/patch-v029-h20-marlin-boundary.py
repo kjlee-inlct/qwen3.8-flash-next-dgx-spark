@@ -196,6 +196,10 @@ def _qwen38_h20m_capture(
 '''
 text = replace_once(text, helper_anchor, helper, "helper anchor")
 
+fused_start = text.index("def _fused_marlin_moe(")
+public_start = text.index("\n\ndef fused_marlin_moe(", fused_start)
+fused_body = text[fused_start:public_start]
+
 fused_sig_old = '''    activation_config: ApplyMoEActivationConfig | None = None,
 ) -> torch.Tensor:
 '''
@@ -203,24 +207,12 @@ fused_sig_new = '''    activation_config: ApplyMoEActivationConfig | None = None
     h20m_layer_idx: int = -1,
 ) -> torch.Tensor:
 '''
-text = replace_once(
-    text,
+fused_body = replace_once(
+    fused_body,
     fused_sig_old,
     fused_sig_new,
     "_fused_marlin_moe signature",
 )
-
-w13_input_old = '''    a_scales1 = None
-    gate_up_input = hidden_states
-    if input_dtype == torch.int8:
-'''
-w13_input_new = '''    a_scales1 = None
-    gate_up_input = hidden_states
-    if input_dtype == torch.int8:
-'''
-# Keep the quantization logic unchanged; capture immediately before GEMM.
-if text.count(w13_input_old) != 1:
-    raise SystemExit("unexpected w13 input anchor count")
 
 w13_gemm_old = '''    intermediate_cache1 = ops.moe_wna16_marlin_gemm(
         gate_up_input,
@@ -232,7 +224,9 @@ w13_gemm_new = '''    _qwen38_h20m_capture(gate_up_input, 6, h20m_layer_idx)
     intermediate_cache1 = ops.moe_wna16_marlin_gemm(
         gate_up_input,
 '''
-text = replace_once(text, w13_gemm_old, w13_gemm_new, "w13 GEMM input")
+fused_body = replace_once(
+    fused_body, w13_gemm_old, w13_gemm_new, "w13 GEMM input"
+)
 
 activation_old = '''    activation_input = intermediate_cache1.view(-1, w13_num_shards * N)
     if activation_func is None:
@@ -241,21 +235,28 @@ activation_new = '''    _qwen38_h20m_capture(intermediate_cache1, 8, h20m_layer_
     activation_input = intermediate_cache1.view(-1, w13_num_shards * N)
     if activation_func is None:
 '''
-text = replace_once(text, activation_old, activation_new, "w13 output")
+fused_body = replace_once(
+    fused_body, activation_old, activation_new, "w13 output"
+)
 
-w2_quant_old = '''    if output is None:
+activation_output_old = '''    if output is None:
         output = intermediate_cache3
 
     a_scales2 = None
 '''
-w2_quant_new = '''    _qwen38_h20m_capture(intermediate_cache2, 9, h20m_layer_idx)
+activation_output_new = '''    _qwen38_h20m_capture(intermediate_cache2, 9, h20m_layer_idx)
 
     if output is None:
         output = intermediate_cache3
 
     a_scales2 = None
 '''
-text = replace_once(text, w2_quant_old, w2_quant_new, "activation output")
+fused_body = replace_once(
+    fused_body,
+    activation_output_old,
+    activation_output_new,
+    "activation output",
+)
 
 w2_gemm_old = '''    output = ops.moe_wna16_marlin_gemm(
         intermediate_cache2,
@@ -267,33 +268,35 @@ w2_gemm_new = '''    _qwen38_h20m_capture(intermediate_cache2, 10, h20m_layer_id
     output = ops.moe_wna16_marlin_gemm(
         intermediate_cache2,
 '''
-text = replace_once(text, w2_gemm_old, w2_gemm_new, "w2 GEMM input")
+fused_body = replace_once(
+    fused_body, w2_gemm_old, w2_gemm_new, "w2 GEMM input"
+)
 
 fused_return_old = '''    return output
-
-
-def fused_marlin_moe(
 '''
 fused_return_new = '''    _qwen38_h20m_capture(output, 12, h20m_layer_idx)
     return output
-
-
-def fused_marlin_moe(
 '''
-text = replace_once(text, fused_return_old, fused_return_new, "w2 output")
+fused_body = replace_once(
+    fused_body, fused_return_old, fused_return_new, "w2 output"
+)
+
+public_end = text.index("\n\ndef batched_fused_marlin_moe(", public_start)
+public_body = text[public_start:public_end]
 
 public_sig_old = '''    activation_config: ApplyMoEActivationConfig | None = None,
 ) -> torch.Tensor:
-    """
-    This function computes a Mixture of Experts (MoE) layer using two sets of
 '''
 public_sig_new = '''    activation_config: ApplyMoEActivationConfig | None = None,
     h20m_layer_idx: int = -1,
 ) -> torch.Tensor:
-    """
-    This function computes a Mixture of Experts (MoE) layer using two sets of
 '''
-text = replace_once(text, public_sig_old, public_sig_new, "fused_marlin_moe signature")
+public_body = replace_once(
+    public_body,
+    public_sig_old,
+    public_sig_new,
+    "fused_marlin_moe signature",
+)
 
 align_old = '''    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_align_block_size(
         topk_ids,
@@ -318,22 +321,22 @@ align_new = '''    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_al
 
     assert activation is not None
 '''
-text = replace_once(text, align_old, align_new, "alignment outputs")
+public_body = replace_once(
+    public_body, align_old, align_new, "alignment outputs"
+)
 
 call_tail_old = '''        input_dtype=input_dtype,
         is_k_full=is_k_full,
     ).view(-1, topk, K)
-
-    if output is None:
 '''
 call_tail_new = '''        input_dtype=input_dtype,
         is_k_full=is_k_full,
         h20m_layer_idx=h20m_layer_idx,
     ).view(-1, topk, K)
-
-    if output is None:
 '''
-text = replace_once(text, call_tail_old, call_tail_new, "_fused_marlin_moe call")
+public_body = replace_once(
+    public_body, call_tail_old, call_tail_new, "_fused_marlin_moe call"
+)
 
 reduce_old = '''    if moe_sum is None:
         if expert_map is not None:
@@ -359,7 +362,13 @@ reduce_new = '''    if moe_sum is None:
     )
     return result
 '''
-text = replace_once(text, reduce_old, reduce_new, "final reduction")
+public_body = replace_once(
+    public_body, reduce_old, reduce_new, "final reduction"
+)
+
+class_start = text.index("class MarlinExperts(")
+class_end = text.index("\n\nclass BatchedMarlinExperts", class_start)
+class_body = text[class_start:class_end]
 
 apply_entry_old = '''        assert self.w1_scale is not None
         assert self.w2_scale is not None
@@ -376,7 +385,9 @@ apply_entry_new = '''        assert self.w1_scale is not None
 
         ctx = self._lora_context
 '''
-text = replace_once(text, apply_entry_old, apply_entry_new, "MarlinExperts apply entry")
+class_body = replace_once(
+    class_body, apply_entry_old, apply_entry_new, "MarlinExperts apply entry"
+)
 
 non_lora_tail_old = '''                is_k_full=self.is_k_full,
                 input_dtype=self.input_dtype,
@@ -389,7 +400,9 @@ non_lora_tail_new = '''                is_k_full=self.is_k_full,
             )
             return
 '''
-text = replace_once(text, non_lora_tail_old, non_lora_tail_new, "non-LoRA call")
+class_body = replace_once(
+    class_body, non_lora_tail_old, non_lora_tail_new, "non-LoRA call"
+)
 
 lora_tail_old = '''            is_k_full=self.is_k_full,
             input_dtype=self.input_dtype,
@@ -400,7 +413,19 @@ lora_tail_new = '''            is_k_full=self.is_k_full,
             h20m_layer_idx=h20m_layer_idx,
         )
 '''
-text = replace_once(text, lora_tail_old, lora_tail_new, "LoRA call")
+class_body = replace_once(
+    class_body, lora_tail_old, lora_tail_new, "LoRA call"
+)
+
+text = (
+    text[:fused_start]
+    + fused_body
+    + text[public_start:public_start]
+    + public_body
+    + text[public_end:class_start]
+    + class_body
+    + text[class_end:]
+)
 
 path.write_text(text, encoding="utf-8")
 print("installed H20-M Marlin boundary capture")
