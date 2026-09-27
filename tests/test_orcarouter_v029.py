@@ -1232,6 +1232,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         h20c_patch = (
             ROOT / "scripts" / "patch-v029-h20c-runtime-moe-trace.py"
         ).read_text(encoding="utf-8")
+        modular_patch = (
+            ROOT / "scripts" / "patch-v029-h20-modular-boundary.py"
+        ).read_text(encoding="utf-8")
         patch = (
             ROOT / "scripts" / "patch-v029-h20-humming-fp8-batch-invariant.py"
         ).read_text(encoding="utf-8")
@@ -1239,6 +1242,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("patch-v029-h20-humming-fp8-batch-invariant.py", dockerfile)
         self.assertIn("patch-v029-h20-modular-boundary.py", dockerfile)
         self.assertIn("QWEN38_H20V_BOUNDARY ", dockerfile)
+        self.assertIn('"entry_hidden_states"', modular_patch)
+        self.assertIn('"entry_shared_experts_input"', modular_patch)
+        self.assertIn('"entry_equal"', modular_patch)
         self.assertIn("self.moe_kernel.impl._qwen38_h20_layer_name", h20c_patch)
         self.assertNotIn("self.moe_kernel._qwen38_h20_layer_name =", h20c_patch)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
@@ -1289,6 +1295,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn('sub.add_parser("boundary-probe")', script)
         self.assertIn("QWEN38_H20V_BOUNDARY ", script)
         self.assertIn("boundary_repeat requests=", script)
+        self.assertIn("entry_equal=", script)
         self.assertIn("summarize_single_repeats(records)", script)
         self.assertIn("qualifying_same_input_output_divergence", script)
         self.assertIn("/tmp/qwen38_h20d_single.enable", script)
