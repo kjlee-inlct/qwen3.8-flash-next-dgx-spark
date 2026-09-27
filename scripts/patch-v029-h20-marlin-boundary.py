@@ -186,7 +186,11 @@ def _qwen38_h20m_capture(
     except (OSError, ValueError):
         return
 
-    snapshots = _QWEN38_H20M_ACTIVE.setdefault(request_id, {})
+    if stage == 0:
+        snapshots: dict[str, torch.Tensor | None] = {}
+        _QWEN38_H20M_ACTIVE[request_id] = snapshots
+    else:
+        snapshots = _QWEN38_H20M_ACTIVE.setdefault(request_id, {})
     snapshots[stage_name] = tensor.detach().clone()
     if stage == 13:
         snapshots = _QWEN38_H20M_ACTIVE.pop(request_id)
