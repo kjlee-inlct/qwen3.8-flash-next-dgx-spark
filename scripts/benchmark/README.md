@@ -2008,6 +2008,8 @@ a missing experiment/result is visible immediately.
 | v18 layer-15 pending-state probe | completed / Case A reproduced | Two unchanged v18 probes completed successfully. Both kept layers 0,1,3,7 stable and reported layer 15 `entry_hidden=true`, `prev_block_output=false`, and `prev_injection=true`, with pre/post-HC hidden state and attention injection equal. The first observed mismatch consistently enters at the layer-14 `mlp_out` → layer-15 `prev_block_output` handoff; v19 adds layer 14 to locate its producer boundary. |
 | v19 layer-14 producer boundary | implemented / runtime pending | Reuse the v18 fullgraph-safe sparse probe and late fingerprinting, add layer 14 pending inputs plus attention/MLP HC outputs, `mlp_block_input`, and `mlp_out`, while retaining layer 15 as the downstream edge witness. Focused tests and Python compilation pass; a DGX v19 run remains pending. This is localization only; no repair is introduced. |
 | v23 layer-14 router capture | completed / post-routing localization | Image `ct-nvfp4-convert-diag-v23` reached READY after 691 s and the upstream probe emitted 16 records. Layer 14 kept `mlp_block_input` identical, while `mlp_out` differed in 10 / 151040 elements on rows 16 and 22 (`max_abs_diff=6.103515625e-05`). Captured `FusedMoERouter.select_experts` outputs were identical across the two requests: expert IDs and top-k weights matched row-wise with `max_abs_diff=0.0`. This lowers routing selection/weight variation as the explanation for this pair and moves the next localization target downstream into expert execution / output accumulation; no specific CUDA kernel is identified. |
+| v23 repeats r2-r4 | completed / intermittent layer onset | Reusing the same running v23 container, r2 and r4 again kept layer-14 `mlp_block_input` equal but differed at `mlp_out`; r3 kept layer 14 fully equal and first differed at layer-15 `mlp_out`. The last three captured layer-14 router records all had identical expert IDs and top-k weights (`max_abs_diff=0.0`). Therefore the unstable MLP/MoE onset is not fixed to layer 14. |
+| v24 layer-14/15 router capture | implemented / runtime pending | Extends only the passive `select_experts` return-value capture to layers 14 and 15, keyed independently per layer, so a run like v23 r3 can test whether the layer-15 MLP mismatch also occurs with identical route IDs/weights. No router recomputation, repair, or expert-kernel instrumentation is added. |
 
 ### H20 v23: layer-14 MoE router repeat result
 
@@ -2047,16 +2049,43 @@ localize. This evidence does not identify a specific CUDA/Triton kernel and
 must not be used to claim a kernel root cause without proving identical inputs
 at the next internal boundary.
 
-Before adding another image, reuse v23 in the same running container and repeat
-this exact passive probe in separate output files. The purpose is to confirm
-that the signature itself is reproducible without introducing new
-instrumentation: `mlp_block_input` and route IDs/weights should remain equal
-while any `mlp_out` mismatch is recorded row-wise. If repeated pairs satisfy
-that condition, the next code change should add the smallest possible
-post-routing boundary capture inside the existing MoE execution path, keeping
-snapshots on GPU and deferring CPU fingerprinting until the end. If the route
-or input boundary becomes unstable on repeat, do not instrument deeper yet;
-that would invalidate a same-input kernel comparison.
+The same running v23 container was then reused for three more request pairs
+without rebuilding or restarting:
+
+- r2: layer 14 `mlp_block_input=true`; layer 14 `mlp_out=false` only on
+  row 22, 8 changed elements, first mismatch `[22,176]`,
+  `max_abs_diff=6.103515625e-05`; layer 15 first mismatch propagated through
+  `prev_block_output`;
+- r3: layer 14 was fully repeat-stable, including `mlp_out=true`; layer 15
+  kept its entry/pending/attention/MLP input boundaries equal and first
+  differed at layer-15 `mlp_out`;
+- r4: layer 14 again kept `mlp_block_input=true` but differed at `mlp_out`
+  on rows 16 and 22, 10 changed elements total, first mismatch
+  `[16,1838]`, `max_abs_diff=6.103515625e-05`; layer 15 again observed the
+  mismatch at `prev_block_output`;
+- for the three corresponding layer-14 router records, expert IDs and top-k
+  weights were row-wise identical in every pair; weights reported
+  `max_abs_diff=0.0`.
+
+This refines the earlier v23 interpretation. The same-input/same-route
+layer-14 MLP mismatch is reproducible, but it is intermittent: one repeated
+pair remained stable through layer 14 and first diverged at the equivalent
+layer-15 `mlp_out` boundary. Therefore H20 must not claim that the root cause
+is fixed specifically inside layer 14. The stronger current localization is
+that an MLP/MoE execution boundary can introduce the first observed numerical
+difference while its upstream block input is identical, with layer 14 route
+selection/weights already shown equal in the divergent layer-14 samples.
+
+The next minimal instrumentation is v24: reuse the same passive
+`FusedMoERouter.select_experts` return-value capture but enable it for both
+layers 14 and 15. This is required by the r3 observation; the v23 image cannot
+answer whether layer-15 route IDs/weights also remained equal when layer 15
+was the first divergent MLP. v24 does not add expert compute probes yet. It
+records already-computed route outputs independently per layer, keeping the
+same late comparison principle. Only after a v24 pair reproduces an
+`mlp_out` mismatch at a layer whose `mlp_block_input`, expert IDs, and
+route weights all match should H20 add a deeper post-routing expert/accumulation
+boundary probe.
 
 The repeated v18 run on 2026-09-24 reused the already-built v18 image and
 running container, with no additional model startup. The DGX saved its output
