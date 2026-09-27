@@ -502,12 +502,13 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('h20_env+=( -e CUDA_LAUNCH_BLOCKING=1 )', runtime)
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
         self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
-        self.assertIn('QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"', runtime)\n        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-v24-layer14-15-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
+        self.assertIn('QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"', runtime)
+        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20u-v24-layer14-15-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn("QWEN38_H20D_TARGET_LAYER=language_model.model.layers.0.mlp.experts", runtime)
         self.assertIn("h20_image_ok()", runtime)
-        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v23" ]]', runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v24" ]]', runtime)
         self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
 
 
