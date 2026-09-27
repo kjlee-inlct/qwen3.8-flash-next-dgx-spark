@@ -2016,7 +2016,7 @@ a missing experiment/result is visible immediately.
 | v25 first runtime attempt | instrumentation coverage failure | Image `ct-nvfp4-convert-diag-v25` built and reached READY, but four `boundary-probe` requests emitted zero boundary records. Source inspection showed the layer tag had been attached to the outer `FusedMoEKernel` wrapper while the patched hook executes on `FusedMoEKernelModularImpl`; therefore the target-layer check never matched. This run is not a model result. The tag was moved to `self.moe_kernel.impl` before rerunning v25. |
 | v25 corrected runtime r3 | instrumentation valid / root-cause qualification incomplete | Four requests produced all six modular-boundary pair records. Every pair first differed at `prepared_a1q`, with `prepared_equal=false`, `fused_out_equal=false`, and `final_output_equal=false`. Because this schema did not yet record the pre-`_prepare()` hidden/routing inputs, it cannot distinguish nondeterministic `_prepare()` from already-different entry inputs. This is localization evidence only, not proof that `_prepare()` is the source. The schema was extended to capture entry hidden states, top-k IDs/weights, and shared-expert input. |
 | v25 corrected runtime r4 | instrumentation valid / no qualifying same-entry pair | Four requests produced all six pair records with the extended entry schema. Every pair had `entry_equal=false`, `prepared_equal=false`, `fused_out_equal=false`, and `final_output_equal=false`; the first mismatch was `entry_hidden_states` in all six pairs. Therefore this run does not implicate `_prepare()` or expert execution: divergence was already present before the modular MoE entry for every observed pair. A qualifying `entry_equal=true` pair is still required before attributing any later boundary. |
-| v25 corrected runtime r5 | qualifying same-entry/same-prepare pair found | Eight requests produced 28 pair records. Pair `[4,9]` had `entry_equal=true`, `prepared_equal=true`, `fused_out_equal=false`, and `final_output_equal=false`; its first mismatch was `fused_out`. Under the v25 boundary-probe context, the first observed divergence for this qualifying pair is therefore inside `_fused_experts()`, not in the modular `_prepare()` path. This does not yet identify a specific Humming/CUDA/Triton sub-kernel; the next split must instrument the expert execution stages. |
+| v25 corrected runtime r5 | qualifying same-entry/same-prepare pair found | Eight requests produced 28 pair records. Pair `[4,9]` had `entry_equal=true`, `prepared_equal=true`, `fused_out_equal=false`, and `final_output_equal=false`; its first mismatch was `fused_out`. Under the v25 boundary-probe context, the first observed divergence for this qualifying pair is therefore inside `_fused_experts()`, not in the modular `_prepare()` path. This does not yet identify a specific expert backend or kernel; the next split must instrument the actually selected expert execution path. |
 | v26 Humming indexed-expert stages | historical wrong-backend probe | Added passive single-pass GPU snapshots inside v0.29 `HummingIndexedExperts.apply()`. Later runtime backend inspection proved that the target NVFP4 routed experts actually select `MARLIN` / `MarlinExperts`, so these Humming-internal stages were never on the target execution path. Keep v26 only as historical instrumentation; do not use it for further localization. |
 | v26 first build attempt | instrumentation build-validation failure | The patcher searched the full `fused_humming_moe.py` for the `quantize_input("w13")` block and found three matches across indexed/grouped implementations, so image construction stopped before runtime. The existing v25 image remained in place and preflight correctly rejected it as stale. This is not a model result. The patcher was narrowed to the `HummingIndexedExperts` class body before retrying v26. |
 | v26 second build attempt | instrumentation build-validation failure | After scoping the patcher to `HummingIndexedExperts`, image construction reached the final reduce patch but found zero `indexed reduce boundary` matches. The scoped class body intentionally ended before `class HummingGroupedExperts`, while the reduce anchor still included that next-class declaration. No runtime/model execution occurred. The reduce replacement was narrowed to the `moe_fused_mul_sum(...)` block itself. |
@@ -2075,9 +2075,47 @@ and concrete `FusedMoEExperts` implementation class. Do not infer a routed-MoE
 backend from unrelated linear-kernel log messages.
 
 The canonical v27 command is `marlin-probe`. It refuses to overwrite an
-existing result. If the expected pair set is incomplete or contains a self-pair,
-it writes a sibling `.status.json` instrumentation-failure artifact instead
-of silently losing the failed run.
+existing result. Before issuing requests it also requires the startup log marker
+`Using 'MARLIN' NvFp4 MoE backend`; a backend mismatch is recorded as a
+sibling `.status.json` artifact. If the expected pair set is incomplete or
+contains a self-pair, the same status-artifact path records the instrumentation
+failure instead of silently losing the failed run.
+
+Build and run the default PIECEWISE v27 diagnostic:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h20-ct-convert-diag:v1 \
+  -f scripts/Dockerfile.v029-h20-ct-convert-diag \
+  scripts/
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h20-ct-convert-diag \
+  --remove
+
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h20-ct-convert-diag
+
+QWEN38_H20U_LAYER14_GROUP=mlp_block \
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h20-ct-convert-diag
+
+./scripts/wait-ready.sh \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+OUT="scripts/benchmark/results/local/h20m-v27-layer15-marlin-r1.jsonl"
+python3 scripts/diagnostics/h20-nvfp4-moe.py marlin-probe \
+  --container qwen38-h20-ct-convert-diag-v029 \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --repeats 8 \
+  --output "$OUT"
+```
+
+Use `QWEN38_H20_ENFORCE_EAGER=1` only for a deliberate eager control. The
+default v27 localization stays on the normal PIECEWISE runtime so the execution
+context remains as close as possible to the preceding v25 witness.
 
 ### H20 v24: layer-14/15 router repeat result
 
