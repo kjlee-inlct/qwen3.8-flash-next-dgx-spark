@@ -2050,7 +2050,10 @@ are lower-priority explanations for the qualifying same-input samples. This
 still does not identify a specific CUDA/Triton/Humming expert kernel.
 
 Before adding new expert-internal instrumentation, reuse the existing H20-D
-single-pass probe at layer 15. It already snapshots `x`, `topk_weights`,
+single-pass probe at layer 15. The committed diagnostic now prints an all-pairs
+repeat summary automatically after collection and also provides `single-repeat`
+for re-analysis of an existing JSONL file, so no ad-hoc Python comparison block
+is required. It already snapshots `x`, `topk_weights`,
 `topk_ids`, `shared_experts_input`, and final MoE kernel `output` around
 the normal `self.moe_kernel.apply(...)` call. The snapshots are cloned before
 or immediately after the normal kernel call and fingerprinted only after the
