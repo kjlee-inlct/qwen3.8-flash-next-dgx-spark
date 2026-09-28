@@ -112,6 +112,11 @@ which remains a separate integration and lifecycle-qualification phase.
 
 ## Managed-service integration gap
 
+> **Naming boundary:** installer profile `orcarouter-hybrid` is the generated
+> H6 ModelOpt W4A16 checkpoint from the earlier checkpoint-isolation track. It
+> is not the H38 decoder-only runtime repair and does not close the H38
+> managed-service integration gap described below.
+
 The H38 runtime qualification above is for
 `scripts/runtime/orcarouter-v029.sh`.
 
