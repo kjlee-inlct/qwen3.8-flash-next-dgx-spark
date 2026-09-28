@@ -708,7 +708,7 @@ def batched_fused_marlin_moe():
     return None
 
 
-class MarlinExperts:
+class MarlinExperts(BaseExperts):
     def apply(self):
         assert self.w1_scale is not None
         assert self.w2_scale is not None
