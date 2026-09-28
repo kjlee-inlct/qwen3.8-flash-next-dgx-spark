@@ -3,18 +3,18 @@
 
 ## H38 runtime vs managed-service status
 
-The qualified OrcaRouter H38 decoder-only runtime is currently exposed through
+The qualified OrcaRouter H38 decoder-only runtime remains reproducible through
 `scripts/runtime/orcarouter-v029.sh --profile hybrid-h38-deterministic`.
 
-It is **not yet the transactional installer/systemd-managed runtime**. The
-managed path still derives its image and served-model state from
-`install.sh`, `scripts/model/model-profiles.sh`, the installation manifest,
-`scripts/serve.sh`, and `scripts/runtime/service-runner.sh`.
+The same checkpoint/runtime combination is now wired into the transactional
+installer as the opt-in `orcarouter-hybrid` profile. It reuses the pinned
+OrcaRouter checkpoint/model directory and selects the validated H38 decoder-only
+v0.29 image and runtime controls.
 
-Do not migrate those managed defaults implicitly. H38 managed-service promotion
-requires its own lifecycle qualification: image preparation from a clean host,
-manifest migration, service replacement, rollback, doctor/attestation,
-production-alias determinism, and performance regression checks.
+This wiring is **not yet a completed managed-host qualification**. Before the
+profile is described as managed H38 production, validate image preparation,
+systemd readiness and restart, rollback/attestation, doctor, uninstall
+preservation, managed determinism, and performance on the DGX Spark.
 
 Current H38 evidence and runtime roles are summarized in
 `docs/H38-DETERMINISM.md`.
@@ -46,19 +46,19 @@ The systemd service uses the stable `~/.local/share/qwen38-spark/current` symlin
 
 ## Installer model profiles
 
-The installer currently exposes three confirmed selectable profiles:
+The installer currently exposes four selectable profiles:
 
 ```text
-orcarouter         confirmed / default
-nvidia             confirmed / optional
-mazinb             confirmed / optional
+orcarouter         stable / default
+nvidia             experimental / optional
+mazinb             experimental / optional
+orcarouter-hybrid  experimental / optional; managed host qualification pending
 ```
 
-The roadmap profiles remain visible through `./install.sh --list-models` but
-are not selectable yet:
+The remaining roadmap profile is visible through `./install.sh --list-models`
+but is not selectable yet:
 
 ```text
-orcarouter-hybrid  in progress
 lychee888          planned
 ```
 
@@ -80,12 +80,14 @@ or a non-interactive example:
 # or:
 ./install.sh --model nvidia --lang en --yes
 ./install.sh --model mazinb --lang en --yes
+./install.sh --model orcarouter-hybrid --lang en --yes
 ```
 
 Before installing, a dry-run is recommended:
 
 ```bash
 ./install.sh --model orcarouter --lang en --yes --no-start --dry-run
+./install.sh --model orcarouter-hybrid --lang en --yes --no-start --dry-run
 ```
 
 A successful fresh install automatically:
