@@ -29,6 +29,35 @@ This directory contains the repository's canonical read-only benchmark harness f
 
 The upstream-derived `scripts/bench-prefill.py` intentionally remains at its upstream path. It is a compatibility/reference benchmark, while `scripts/benchmark/run.py` is the benchmark entry point maintained by this fork.
 
+
+## Current H38 status — 2026-09-28
+
+This file intentionally retains the complete experiment history, including failed
+hypotheses, instrumentation failures, one-off determinism failures, and
+superseded scope interpretations.
+
+For the current conclusion, use this summary before reading historical H20/H38
+entries:
+
+- supported causal finding: Marlin MoE output is sensitive to legal physical
+  within-expert routed-token ordering under the tested OrcaRouter NVFP4 /
+  vLLM v0.29 / GB10 conditions;
+- decoder-only and all-call canonicalization each passed two fresh-container
+  matched matrices plus one isolated fresh-compile matrix;
+- no determinism advantage was observed for all-call scope;
+- `hybrid-h38-deterministic` is the promoted decoder-only H38 production
+  runtime profile;
+- `hybrid-h38-all-scope` is the broader fallback/regression control;
+- the installer/systemd-managed service path is still a separate integration
+  gap and must not be described as H38 production yet;
+- the production alias itself must pass
+  `scripts/benchmark/run-h38-production-gate.sh`; startup readiness alone is
+  not the final correctness gate.
+
+See `../../docs/H38-DETERMINISM.md` for the concise operational status.
+Historical entries below remain authoritative for what was observed at their
+time, but later entries may supersede their interpretation.
+
 The top-level `bench/run.py` path is retained only as a compatibility shim. New documentation, automation, and internal references should use `scripts/benchmark/run.py`.
 
 ## Safety rules
