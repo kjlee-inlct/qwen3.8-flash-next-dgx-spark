@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-M v31 Marlin W13 buffer-semantics audit in vLLM v0.29."""
+"""Install H20-M v32 canonical-order Marlin causality control in vLLM v0.29."""
 
 from __future__ import annotations
 
@@ -50,6 +50,15 @@ try:
 except (IndexError, ValueError):
     _QWEN38_H20M_TARGET_LAYER_IDX = -1
 
+_QWEN38_H20M_CANONICAL_ORDER = (
+    os.getenv("QWEN38_H20M_CANONICAL_ORDER", "0") == "1"
+)
+if _QWEN38_H20M_CANONICAL_ORDER:
+    print(
+        "QWEN38_H20M_CANONICAL_ORDER enabled "
+        f"target={_QWEN38_H20M_TARGET_LAYER}"
+    )
+
 _QWEN38_H20M_ACTIVE: dict[int, dict[str, object]] = {}
 _QWEN38_H20M_COMPLETED: dict[int, dict[str, object]] = {}
 _QWEN38_H20M_STAGE_NAMES = {
@@ -77,6 +86,69 @@ _QWEN38_H20M_STAGE_NAMES = {
     21: "w13_output_buffer_pre",
     22: "w13_bias",
 }
+
+
+def _qwen38_h20m_canonicalize_sorted_tokens(
+    sorted_token_ids: torch.Tensor,
+    expert_ids: torch.Tensor,
+    num_tokens_post_padded: torch.Tensor,
+    block_size_m: int,
+    total_routed_tokens: int,
+    layer_idx: int,
+) -> torch.Tensor:
+    if (
+        not _QWEN38_H20M_CANONICAL_ORDER
+        or layer_idx != _QWEN38_H20M_TARGET_LAYER_IDX
+        or block_size_m <= 0
+    ):
+        return sorted_token_ids
+
+    full_blocks = sorted_token_ids.numel() // block_size_m
+    if full_blocks <= 0:
+        return sorted_token_ids
+    prefix_len = full_blocks * block_size_m
+
+    block_experts = expert_ids[:full_blocks].to(torch.int64)
+    if block_experts.numel() != full_blocks:
+        return sorted_token_ids
+
+    changes = torch.cat(
+        (
+            torch.ones(
+                (1,),
+                dtype=torch.int64,
+                device=sorted_token_ids.device,
+            ),
+            (block_experts[1:] != block_experts[:-1]).to(torch.int64),
+        )
+    )
+    group_rank = torch.cumsum(changes, dim=0) - 1
+    position_group = torch.repeat_interleave(group_rank, block_size_m)
+
+    positions = torch.arange(
+        prefix_len,
+        dtype=torch.int64,
+        device=sorted_token_ids.device,
+    )
+    valid_limit = num_tokens_post_padded.to(torch.int64).reshape(())
+    valid_mask = positions < valid_limit
+
+    token_ids = sorted_token_ids[:prefix_len].to(torch.int64)
+    token_key = torch.where(
+        (token_ids >= 0) & (token_ids < total_routed_tokens),
+        token_ids,
+        torch.full_like(token_ids, total_routed_tokens),
+    )
+    base = total_routed_tokens + 1
+    valid_key = position_group * base + token_key
+    invalid_base = (group_rank[-1] + 2) * base
+    key = torch.where(valid_mask, valid_key, invalid_base + positions)
+
+    order = torch.argsort(key, stable=True)
+    canonical_prefix = sorted_token_ids[:prefix_len][order]
+    if prefix_len == sorted_token_ids.numel():
+        return canonical_prefix
+    return torch.cat((canonical_prefix, sorted_token_ids[prefix_len:]))
 
 
 def _qwen38_h20m_compare(left: object, right: object) -> dict:
@@ -480,6 +552,7 @@ def _qwen38_h20m_commit(
             "phase": "marlin-repeat",
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
+            "canonical_order_enabled": _QWEN38_H20M_CANONICAL_ORDER,
             "request0": previous_id,
             "request1": request_id,
             "fields": fields,
@@ -845,6 +918,14 @@ align_new = '''    _qwen38_h20m_capture_alignment_static(
         global_num_experts,
         expert_map,
         ignore_invalid_experts=True,
+    )
+    sorted_token_ids = _qwen38_h20m_canonicalize_sorted_tokens(
+        sorted_token_ids,
+        expert_ids,
+        num_tokens_post_padded,
+        block_size_m,
+        topk_ids.numel(),
+        h20m_layer_idx,
     )
     _qwen38_h20m_capture(sorted_token_ids, 3, h20m_layer_idx)
     _qwen38_h20m_capture(expert_ids, 4, h20m_layer_idx)
