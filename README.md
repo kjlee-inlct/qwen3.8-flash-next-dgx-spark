@@ -551,17 +551,22 @@ metadata; it only adopts current profile runtime defaults. The optimized image i
 as shared during migration, so uninstall will not later delete an image that may also be
 used by another profile.
 
-The installer checks Docker and Hugging
-Face authentication, creates only the dedicated PLE swap when needed, downloads and
-verifies every checkpoint file, inspects tensor headers, records an installation manifest,
-and starts the conservative TP=1 profile:
+A clean install assumes the standard DGX Spark host stack is present (NVIDIA driver,
+Docker, Git, Python 3, curl and sudo) and that this repository has been cloned. No model
+checkpoint, project Docker image, dedicated PLE swap, immutable release, systemd unit, or
+Hugging Face CLI needs to exist beforehand. The installer creates/builds those
+project-specific resources as required, downloads and verifies every checkpoint file,
+inspects tensor headers, records an installation manifest, and starts the selected profile:
 
 ```bash
 ./install.sh
 ```
 
 The model revision is pinned to `c1209bda15a6bbc4c68b585e93d40c0d85f50306`.
-The gated model terms must be accepted and `hf auth login` completed first. Downloads are
+For gated OrcaRouter-family profiles, the model terms must be accepted in a browser first.
+The Hugging Face CLI is optional: the installer reuses `HF_TOKEN`,
+`HUGGING_FACE_HUB_TOKEN`, or the normal Hugging Face token cache when present; otherwise
+the interactive wizard securely asks for a read token and does not persist it. Downloads are
 resumable; files backed by Hugging Face LFS are checked against their published SHA-256,
 and the resolved repository revision and file manifest are stored with the model.
 The optional config override prompt normally answers **No**; choose Yes only when an
@@ -598,7 +603,7 @@ memory.
 # Public metadata: revision, total size, large shards and gated status.
 python3 scripts/inspect-model.py
 
-# Definitive PLE/MTP dtype and tensor-layout inspection after `hf auth login` + download.
+# Definitive PLE/MTP dtype and tensor-layout inspection after gated access + download.
 python3 scripts/inspect-model.py \
   --model-dir /home/jay/model_zoo/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
   --config-override /home/jay/vllm-qwen38/config.json
