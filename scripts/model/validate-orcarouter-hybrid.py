@@ -55,11 +55,16 @@ def hybrid_manifest(root: Path, variant: str) -> dict[str, Any]:
 
 def validate(args: argparse.Namespace) -> None:
     base = model_manifest(args.base_dir, repository=ORCA_REPO, revision=ORCA_REVISION)
-    overlay = model_manifest(args.overlay_dir, repository=MAZINB_REPO)
+    overlay = None
+    if not args.runtime_only:
+        require(args.overlay_dir is not None, "--overlay-dir is required without --runtime-only")
+        overlay = model_manifest(args.overlay_dir, repository=MAZINB_REPO)
 
     h3 = hybrid_manifest(args.h3_dir, "quant-layout-mazinb-experts")
     require(h3.get("base_revision") == base.get("revision"), "H3 base revision mismatch")
-    require(h3.get("overlay_revision") == overlay.get("revision"), "H3 overlay revision mismatch")
+    require(bool(h3.get("overlay_revision")), "H3 overlay revision is missing")
+    if overlay is not None:
+        require(h3.get("overlay_revision") == overlay.get("revision"), "H3 overlay revision mismatch")
     require(h3.get("group0_bf16_weights") == 300, "H3 group-0 BF16 count mismatch")
     require(h3.get("group0_fp8_scales_removed") == 300, "H3 removed FP8 scale count mismatch")
     require(h3.get("base_expert_tensors_removed") == 221184, "H3 removed expert tensor count mismatch")
@@ -101,14 +106,15 @@ def validate(args: argparse.Namespace) -> None:
 
     print(
         "OrcaRouter hybrid chain is valid "
-        f"(base={base.get('revision')}, overlay={overlay.get('revision')}, final=h6-modelopt-w4a16)"
+        f"(base={base.get('revision')}, overlay={h3.get('overlay_revision')}, final=h6-modelopt-w4a16)"
     )
 
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--base-dir", type=Path, required=True)
-    p.add_argument("--overlay-dir", type=Path, required=True)
+    p.add_argument("--overlay-dir", type=Path)
+    p.add_argument("--runtime-only", action="store_true")
     p.add_argument("--h3-dir", type=Path, required=True)
     p.add_argument("--h4-dir", type=Path, required=True)
     p.add_argument("--h5-dir", type=Path, required=True)
