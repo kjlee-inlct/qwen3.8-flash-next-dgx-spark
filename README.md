@@ -516,12 +516,19 @@ the downloaded model, then run the installer for the other profile.
 Installer roadmap status:
 
 ```text
-orcarouter         confirmed / installable / default
-nvidia             confirmed / installable
-mazinb             confirmed / installable
-orcarouter-hybrid  experimental / installable / generated H6
+orcarouter         qualified / installable / default
+nvidia             experimental / installable
+mazinb             experimental / installable / DGX managed E2E pending
+orcarouter-hybrid  experimental / installable / generated H6 / DGX managed E2E pending
 lychee888          planned / not installable yet
 ```
+
+Here, `installable` means the registry and installer have a defined preparation/runtime
+path. It does **not** mean that the profile has completed the full DGX Spark managed-service
+qualification gate. In particular, mazinb has only been checked through registry exposure
+and installer dry-run so far; its real download/image-build/systemd/API-ready lifecycle is
+still pending. `orcarouter-hybrid` depends on mazinb as a build input and also remains
+pending for its own clean-host managed E2E qualification.
 
 `orcarouter-hybrid` does not duplicate its tensor payload into one monolithic
 directory. H6 keeps the validated parent-link layout, so the managed runtime

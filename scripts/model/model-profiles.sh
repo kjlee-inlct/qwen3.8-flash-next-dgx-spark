@@ -3,7 +3,7 @@
 #
 # Stability policy:
 #   stable       qualified default path
-#   experimental qualified/installable, but not the default
+#   experimental installable/non-default; qualification level is profile-specific
 #   in-progress  integration/qualification is actively underway; not installable yet
 #   planned      tracked roadmap item; not installable yet
 
@@ -37,7 +37,7 @@ describe_model_profile() {
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-      PROFILE_DESCRIPTION="Qualified optional experts-only NVFP4 + BF16 PLE profile"
+      PROFILE_DESCRIPTION="Optional mazinb profile; installer wired, DGX managed-lifecycle E2E pending"
       ;;
     orcarouter-hybrid)
       PROFILE_STATUS="experimental"

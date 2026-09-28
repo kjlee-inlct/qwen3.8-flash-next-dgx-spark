@@ -30,8 +30,10 @@ requires the same lifecycle and correctness gates used by the primary profile:
 7. repeatable decode and prefill measurements;
 8. documented profile-specific memory, PLE, quantization, and parser requirements.
 
-Candidate profiles stay visible in the registry so they can be researched without
-silently becoming installer choices.
+Profiles may be made selectable once their preparation/runtime path is defined, but
+selectability is not itself a qualification claim. Experimental profiles can therefore be
+installable while some or all DGX managed-lifecycle gates remain pending. Promotion to
+stable still requires the full gate above.
 
 ## Model profiles
 
@@ -49,10 +51,15 @@ checkpoint-specific mixed-precision requirements must not leak into OrcaRouter d
 
 ### mazinb — experimental/installable
 
-`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` is a qualified optional installer
-profile. It keeps the large PLE table in BF16 and uses the vLLM v0.29 mmap runtime
-path already exercised during the determinism investigation. It is installable but is
-not the default profile.
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` has a defined installer/runtime path,
+but it has **not** completed the full managed DGX Spark lifecycle qualification. The
+verified installer evidence so far is registry exposure plus a non-mutating dry-run with
+the pinned `f2c21eb` revision and the local `vllm-orcarouter-v029:v1` image plan.
+
+Actual checkpoint download, image build, systemd startup/readiness, doctor, restart,
+uninstall preservation, API behavior, determinism/correctness, and performance remain
+qualification work. Until those gates pass, mazinb stays experimental even though it is
+selectable from `install.sh`.
 
 ### OrcaRouter hybrid — experimental/installable
 
@@ -73,9 +80,11 @@ payload is inherited through the validated parent-link chain. The managed
 runtime therefore uses vLLM v0.29 with PLE mmap, exact QSA, MTP k=2, and
 read-only mounts for the OrcaRouter base, H3, H4-all, and H5 parents.
 
-This profile is experimental and non-default. Its historical determinism result
-does not promote it over the stable OrcaRouter profile, and it is distinct from
-the separate H38 decoder-only runtime qualification track below.
+This profile is experimental and non-default. The H3→H6 checkpoint construction path has
+been integrated into the installer, but the complete clean-host managed installation has
+not yet been qualified on DGX Spark. Its historical checkpoint/determinism evidence does
+not substitute for that lifecycle gate, and it is distinct from the separate H38
+decoder-only runtime qualification track below.
 
 ### lychee888 — planned
 

@@ -39,16 +39,18 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 
 | Profile | Status | Installable |
 |---|---|---:|
-| `orcarouter` | stable/default, confirmed | yes |
-| `nvidia` | experimental, confirmed | yes |
-| `mazinb` | experimental, confirmed | yes |
-| `orcarouter-hybrid` | experimental, generated H6 | yes |
+| `orcarouter` | stable/default, qualified | yes |
+| `nvidia` | experimental | yes |
+| `mazinb` | experimental, managed E2E pending | yes |
+| `orcarouter-hybrid` | experimental, generated H6, managed E2E pending | yes |
 | `lychee888` | planned | no |
 
 A profile is not made installable merely because checkpoint metadata exists.
 The registry must also have a defined preparation/runtime path and the managed
-lifecycle must accept the profile. `orcarouter-hybrid` now uses the proven
-H3 -> H4-all -> H5 -> H6 preparation chain; `lychee888` remains blocked.
+lifecycle must accept the profile. However, `installable=yes` is an implementation
+state, not proof that the full DGX managed-service qualification has passed.
+`orcarouter-hybrid` now uses the H3 -> H4-all -> H5 -> H6 preparation chain;
+`lychee888` remains blocked.
 
 
 ### OrcaRouter hybrid installer profile
@@ -79,10 +81,11 @@ The installer promotion was merged after two concrete checks on DGX Spark:
   produced the expected model, revision `f2c21eb`, model directory, and local
   `vllm-orcarouter-v029:v1` image plan without mutating the host.
 
-The full managed lifecycle validation (actual image build/start, systemd
-readiness, doctor, restart, and uninstall preservation) is intentionally
-deferred. Treat that as a follow-up qualification task, not as a prerequisite
-for keeping mazinb selectable in the registry.
+The full managed lifecycle validation has **not yet been run** for mazinb.
+Actual checkpoint download, local image build, systemd readiness, doctor, restart,
+uninstall preservation, API behavior, determinism/correctness, and performance are
+still pending. Keeping mazinb selectable means only that the installer path exists;
+it is not a qualification result.
 
 ## Operator model inventory and cleanup
 
