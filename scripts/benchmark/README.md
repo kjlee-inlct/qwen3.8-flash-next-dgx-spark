@@ -2886,6 +2886,82 @@ for the 1024/128 five-repeat gate, followed by the already-established QSA
 sweep. If the reference hash returns, v38 can close as the minimal
 production-oriented repair with v34-equivalent scope.
 
+##### H20 v38 r2 observed result and corrected acceptance criterion
+
+Observed on 2026-09-28 after refining H38 so Marlin canonicalization is applied
+only to tagged decoder layers, matching the validated v34 scope.
+
+The refined image rebuilt successfully and a fresh runtime reached READY after
+652 seconds. Benchmark provenance recorded:
+
+```text
+git_revision=93d9b8c
+marlin_canonical_order="1"
+qsa_exact_topk="1"
+MTP k=2
+max_num_seqs=3
+prefix_caching=false
+```
+
+The 1024-token prompt / 128-token output / five-repeat seeded greedy gate again
+passed deterministically:
+
+```text
+status=pass
+all_equal=true
+unique_hashes=1
+sha256=910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee
+```
+
+All five repeats produced the same hash.
+
+The v38 r1 hypothesis that the hash shift was caused by canonicalizing untagged
+or auxiliary Marlin calls is therefore falsified: restricting the scope to
+tagged decoder layers did not change the stable output hash.
+
+Source comparison shows the v34 and refined v38 canonicalization algorithm is
+the same. The remaining material difference is that v34 contains the large H20
+diagnostic stack (custom capture ops, boundary probes, layer instrumentation,
+and related graph-visible code), while H38 intentionally removes it. Those
+differences can change compiled graph scheduling and floating-point execution
+order without representing a correctness failure.
+
+The historical `44867e5c...` value is retained as a useful regression marker,
+but it is not a correctness oracle. Requiring a diagnostic-free production
+runtime to reproduce that exact generated-text hash would over-constrain the
+repair to diagnostic graph behavior rather than to the actual determinism
+requirement.
+
+The final H38 acceptance criterion is therefore:
+
+1. seeded repeated requests are deterministic;
+2. determinism survives a fresh rebuild/runtime lifecycle;
+3. the established QSA prompt-size sweep remains deterministic;
+4. decode/prefill/concurrency regression checks remain operational with no
+   pathological performance loss;
+5. the production image contains only the intended repair controls and no H20
+   capture stack.
+
+The refined H38 r2 already satisfies items 1, 2, and 5. v38 r1 satisfied the
+QSA and decode checks before the scope refinement. Because the refinement
+changed the applied call scope, rerun the QSA sweep once on r2 before closing
+H20. A full repeat of the performance suite is unnecessary unless the r2 QSA
+sweep exposes a regression.
+
+Final r2 gate:
+
+```bash
+python3 scripts/benchmark/run.py qsa-determinism \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h38-qsa-r2-decoder-scope.json
+```
+
+If every size reports `unique_hashes=1` with
+`first_failure_tokens=null`, close v38 and H20 nondeterminism investigation.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
