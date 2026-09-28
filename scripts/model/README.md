@@ -42,14 +42,26 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 | `orcarouter` | stable/default, confirmed | yes |
 | `nvidia` | experimental, confirmed | yes |
 | `mazinb` | experimental, confirmed | yes |
-| `orcarouter-hybrid` | in progress | no |
+| `orcarouter-hybrid` | experimental; managed host qualification pending | yes |
 | `lychee888` | planned | no |
 
 A profile is not made installable merely because checkpoint metadata exists.
-The registry must also have a qualified download/runtime path and the managed
-lifecycle must accept the profile. `orcarouter-hybrid` and `lychee888`
-therefore remain visible but blocked.
+The registry must also have a defined download/runtime path and the managed
+lifecycle must accept the profile. `orcarouter-hybrid` now meets that wiring
+boundary; `lychee888` remains visible but blocked.
 
+
+### OrcaRouter hybrid installer integration status
+
+`orcarouter-hybrid` reuses the pinned OrcaRouter repository, revision, and
+`$HOME/models/qwen3.8-flash-next-orcarouter` directory. Its installer
+difference is the validated H38 decoder-only image
+`vllm-orcarouter-v029-h38-decoder-scope:v1` and matching managed runtime
+controls.
+
+The profile is selectable/installable in code. Full DGX managed lifecycle
+qualification is still pending and must be recorded separately before a
+stable/default promotion.
 
 ### mazinb installer promotion status
 
