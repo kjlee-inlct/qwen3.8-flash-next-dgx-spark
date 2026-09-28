@@ -663,6 +663,44 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             ROOT / "scripts" / "benchmark" / "lib" / "common.py"
         ).read_text(encoding="utf-8")
         self.assertIn('"marlin_canonical_order"', benchmark_common)
+        self.assertIn('"marlin_canonical_scope"', benchmark_common)
+
+    def test_h38_decoder_scope_ab_profile(self) -> None:
+        dockerfile = (
+            ROOT / "scripts" / "Dockerfile.v029-h38-decoder-scope"
+        ).read_text(encoding="utf-8")
+        tag_patch = (
+            ROOT / "scripts" / "patch-v029-ct-marlin-layer-tag-ab.py"
+        ).read_text(encoding="utf-8")
+        scope_patch = (
+            ROOT
+            / "scripts"
+            / "patch-v029-marlin-canonical-order-decoder-scope.py"
+        ).read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1",
+            dockerfile,
+        )
+        self.assertIn('LABEL qwen38.h38scope="decoder-v1"', dockerfile)
+        self.assertIn("_qwen38_marlin_layer_idx", tag_patch)
+        self.assertIn("if block_size_m <= 0 or layer_idx < 0", scope_patch)
+        self.assertIn('getattr(self, "_qwen38_marlin_layer_idx", -1)', scope_patch)
+        self.assertNotIn("QWEN38_H20M_TRIGGER", scope_patch)
+        self.assertNotIn("_qwen38_h20m_capture", scope_patch)
+
+        self.assertIn("hybrid-h38-decoder-scope", runtime)
+        self.assertIn("qwen38-h38-decoder-scope-v029", runtime)
+        self.assertIn(
+            "vllm-orcarouter-v029-h38-decoder-scope:v1",
+            runtime,
+        )
+        self.assertIn("runtime-ab-control", runtime)
+        self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", runtime)
+        self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=all", runtime)
+        self.assertIn("h38-marlin-canonical-decoder", runtime)
+        self.assertIn("h38-marlin-canonical-all", runtime)
 
     def test_h38_marlin_patcher_fixture(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-marlin-canonical-order.py"
