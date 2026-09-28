@@ -1,5 +1,25 @@
 # Qwen3.8 Flash Next — Operations Guide
 
+
+## H38 runtime vs managed-service status
+
+The qualified OrcaRouter H38 decoder-only runtime is currently exposed through
+`scripts/runtime/orcarouter-v029.sh --profile hybrid-h38-deterministic`.
+
+It is **not yet the transactional installer/systemd-managed runtime**. The
+managed path still derives its image and served-model state from
+`install.sh`, `scripts/model/model-profiles.sh`, the installation manifest,
+`scripts/serve.sh`, and `scripts/runtime/service-runner.sh`.
+
+Do not migrate those managed defaults implicitly. H38 managed-service promotion
+requires its own lifecycle qualification: image preparation from a clean host,
+manifest migration, service replacement, rollback, doctor/attestation,
+production-alias determinism, and performance regression checks.
+
+Current H38 evidence and runtime roles are summarized in
+`docs/H38-DETERMINISM.md`.
+
+
 This document describes the supported operational lifecycle for this repository. The model/performance background remains in `README.md`; this file is the runbook for install, update, recovery, and uninstall.
 
 ## Lifecycle model
