@@ -91,6 +91,11 @@ case "${ACTION}" in
   build)
     require_source "${BASE}" OrcaRouter
     require_source "${OVERLAY}" mazinb
+    if validate_final >/dev/null 2>&1; then
+      printf 'reuse complete OrcaRouter hybrid H6 chain: %s\n' "${OUTPUT}"
+      validate_final
+      exit 0
+    fi
     docker image inspect "${IMAGE}" >/dev/null 2>&1 || {
       printf 'ERROR: hybrid builder image is missing: %s\n' "${IMAGE}" >&2
       exit 1
