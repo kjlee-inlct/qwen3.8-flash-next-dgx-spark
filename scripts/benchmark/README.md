@@ -2483,6 +2483,107 @@ This is sufficient to justify a direct causality control. It is still not
 appropriate to label the Marlin implementation as the root cause until the
 ordering intervention itself is tested.
 
+##### H20 v32 r1 observed result
+
+Observed on 2026-09-28 with the canonical-order control enabled:
+
+- main was `7fd6eb5` (PR #192);
+- image ID was
+  `sha256:de9dbf21ba0cbbe020a4f37fd7b20d718b8d25b585637d5de0e2787e3cd466c7`;
+- image label was `ct-nvfp4-convert-diag-v32`;
+- runtime log contained both
+  `QWEN38_H20M_CANONICAL_ORDER enabled` and
+  `Using 'MARLIN' NvFp4 MoE backend`;
+- the runtime reached READY after 601 seconds;
+- eight requests completed and exactly 28 pair records were written.
+
+Seven pairs qualified with `entry_equal=true`:
+
+```text
+[0,1] [2,3] [2,5] [3,5] [2,6] [3,6] [5,6]
+```
+
+Every qualifying pair had:
+
+```text
+canonical_order_enabled=true
+full_sorted_equal=true
+valid_sorted_equal=true
+tail_sorted_equal=true
+expert_membership_equal=true
+expert_order_equal=true
+padding_layout_equal=true
+aligned_expert_ids_equal=true
+aligned_num_tokens_post_padded_equal=true
+alignment_equal=true
+
+w13_input_equal=true
+w13_output_equal=true
+activation_output_equal=true
+w2_input_equal=true
+w2_output_equal=true
+final_output_equal=true
+```
+
+This is the direct intervention result that the passive v29-v31 sequence was
+designed to reach.
+
+With the normal physical ordering, same-entry requests repeatedly preserved
+semantic expert membership but changed within-expert token order, and W13
+output changed immediately afterward. With the v32 canonical-order
+intervention, same-entry requests acquire identical physical alignment and the
+entire captured Marlin path through final MoE output becomes identical.
+
+Therefore, for the captured layer-15 Marlin boundary under this probe context,
+**within-expert physical routed-token ordering is causally responsible for the
+observed W13/output divergence**.
+
+Some qualifying records still report `first_mismatch=w13_state` because the
+historical audit aggregate includes allocator/scratch metadata such as absolute
+pointer alignment. This is not a dataflow tensor mismatch: those same records
+have equal aligned inputs and equal W13, activation, W2, and final outputs.
+Pair `[3,5]` additionally had all audited state equal and
+`first_mismatch=None`. Do not use the historical `w13_state` label to
+override the intervention result.
+
+The remaining question is end-to-end scope. Layer-15 causality is now
+established, but this alone does not prove that the same ordering mechanism is
+the only source of full-model output nondeterminism.
+
+##### H20 v33: end-to-end canonical-order determinism gate
+
+Keep the existing v32 container running with
+`QWEN38_H20M_CANONICAL_ORDER=1`; do not rebuild or restart it before this
+gate. The startup log markers from the same container are part of the control
+provenance.
+
+Run the established seeded greedy workload:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h20m-v33-canonical-det-1024-r1.json
+```
+
+The benchmark fixes `temperature=0`, `top_p=1.0`, `seed=0`, and thinking
+disabled. The output artifact must not overwrite an existing result.
+
+Interpretation:
+
+- `status=pass`, `all_equal=true`, `unique_hashes=1`: canonical ordering
+  removes the previously observed 1024-token end-to-end nondeterminism under
+  the same runtime, providing strong end-to-end causal evidence;
+- `status=fail` with multiple hashes: the layer-15 ordering path is causal for
+  the localized Marlin divergence but is not the only full-model source;
+- if the 1024 gate passes, run the existing QSA determinism sweep next before
+  considering the control a broadly stable repair.
+
+Do not restart between the v32 boundary intervention result and this first
+v33 end-to-end gate unless the current container becomes unhealthy.
+
 ##### H20 v32: canonical within-expert order causality control
 
 v32 adds an opt-in control that canonicalizes only the physical
