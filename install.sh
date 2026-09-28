@@ -293,13 +293,14 @@ else
 fi
 if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4] (1): ' answer
+    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H38] (1): ' answer
   else
-    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4] (1): ' answer
+    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H38] (1): ' answer
   fi
   case "${answer}" in
     2|nvidia) MODEL_PROFILE=nvidia ;;
     3|mazinb) MODEL_PROFILE=mazinb ;;
+    4|orcarouter-hybrid) MODEL_PROFILE=orcarouter-hybrid ;;
     *) MODEL_PROFILE=orcarouter ;;
   esac
   load_model_profile "${MODEL_PROFILE}" || exit $?
@@ -502,6 +503,27 @@ elif [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
 elif [[ "${MODEL_PROFILE}" == mazinb && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
+  fi
+elif [[ "${MODEL_PROFILE}" == orcarouter-hybrid && "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]; then
+  # Keep the installed H38 runtime byte-for-byte aligned with the validated image
+  # chain instead of flattening the historical repair layers into a new image.
+  if ! docker image inspect vllm-orcarouter-v029:v1 >/dev/null 2>&1; then
+    docker build -t vllm-orcarouter-v029:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
+  fi
+  if ! docker image inspect vllm-orcarouter-v029-h9-ct-modelweight:v1 >/dev/null 2>&1; then
+    docker build -t vllm-orcarouter-v029-h9-ct-modelweight:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-h9-ct-modelweight-scale" "${ROOT_DIR}/scripts"
+  fi
+  if ! docker image inspect vllm-orcarouter-v029-h10-ct-global-scale:v1 >/dev/null 2>&1; then
+    docker build -t vllm-orcarouter-v029-h10-ct-global-scale:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-h10-ct-global-scale" "${ROOT_DIR}/scripts"
+  fi
+  if ! docker image inspect vllm-orcarouter-v029-h11-ct-packed-modelweight:v1 >/dev/null 2>&1; then
+    docker build -t vllm-orcarouter-v029-h11-ct-packed-modelweight:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-h11-ct-packed-modelweight" "${ROOT_DIR}/scripts"
+  fi
+  if ! docker image inspect vllm-orcarouter-v029-h12-ct-postload-preserve:v1 >/dev/null 2>&1; then
+    docker build -t vllm-orcarouter-v029-h12-ct-postload-preserve:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-h12-ct-postload-preserve" "${ROOT_DIR}/scripts"
+  fi
+  if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+    docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.v029-h38-decoder-scope" "${ROOT_DIR}/scripts"
   fi
 else
   docker pull "${IMAGE}"
