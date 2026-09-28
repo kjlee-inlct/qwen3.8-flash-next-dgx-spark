@@ -2324,6 +2324,42 @@ W13 static/state inputs such as packed weights/scales, zeros/g_idx/sort indices,
 quantization type, dimensions, and workspace state. The next diagnostic must
 close those remaining inputs before making a kernel-level causality claim.
 
+##### H20 v30 r1 instrumentation failure
+
+Observed on 2026-09-28 with image label
+`ct-nvfp4-convert-diag-v30`:
+
+- main was `87fec1f` (PR #189);
+- the v30 image built successfully with image ID
+  `sha256:8baf00259a5701b06956f55c2a24b0a35bf01b4ee030786f8b006c4937c7886b`;
+- preflight passed;
+- the runtime reached READY after 732 seconds;
+- startup explicitly selected the `MARLIN` NVFP4 MoE backend;
+- the first `marlin-probe` request failed with HTTP 500 before any valid
+  v30 pair record was produced.
+
+This run is an **instrumentation/runtime failure**, not a numerical result.
+Do not use it to revise the v29 scientific conclusion.
+
+The server-side traceback identified the exact instrumentation bug:
+
+```text
+RuntimeError: Inference tensors do not track version counter.
+```
+
+The failure occurred in `_qwen38_h20m_tensor_meta()` when the v30 probe read
+`value._version` from the W13 output scratch tensor. Inference tensors do not
+carry a version counter in this runtime. This metadata field is not required
+for the W13 state audit, so the fix removes only the `_version` access while
+preserving data pointer, shape, stride, dtype, and storage offset metadata.
+
+The host-side diagnostic is also updated to surface HTTP error bodies and the
+recent container log tail automatically for future HTTP 5xx failures.
+
+After this fix, rebuild the v30 image and rerun the same non-overwriting v30
+probe under the normal PIECEWISE runtime. The failed r1 remains an
+instrumentation failure and must not be reused as a numerical result.
+
 ##### H20 v30: first-Marlin-GEMM state audit
 
 v30 keeps the v29 single-pass execution and semantic alignment analysis. It

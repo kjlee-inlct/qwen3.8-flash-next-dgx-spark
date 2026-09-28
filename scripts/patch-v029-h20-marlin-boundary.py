@@ -297,7 +297,6 @@ def _qwen38_h20m_tensor_meta(value: object) -> dict | None:
         "stride": list(value.stride()),
         "dtype": str(value.dtype),
         "storage_offset": int(value.storage_offset()),
-        "version": int(value._version),
     }
 
 
