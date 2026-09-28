@@ -607,13 +607,25 @@ if [[ "${API_ACCESS_MODE}" != local ]]; then
 fi
 
 printf '\nPreparing immutable runtime release...\n'
+baseline_revision="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
 release_status="$(bash "${ROOT_DIR}/scripts/release-manager.sh" status)"
 current_release="$(awk -F= '$1=="CURRENT_RELEASE" {print $2}' <<<"${release_status}")"
 if [[ -z "${current_release}" || "${current_release}" == none ]]; then
-  baseline_revision="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
   bash "${ROOT_DIR}/scripts/bootstrap-release.sh" "${baseline_revision}"
+elif [[ "${current_release}" == "${baseline_revision}" ]]; then
+  bash "${ROOT_DIR}/scripts/release-manager.sh" verify "${current_release}"
+elif [[ "${RESUME}" == 0 ]]; then
+  # A retained immutable release may survive a normal uninstall. A fresh install
+  # must run the code revision that defines the newly selected profile rather than
+  # silently reusing the older runtime payload.
+  bash "${ROOT_DIR}/scripts/release-manager.sh" verify "${current_release}"
+  bash "${ROOT_DIR}/scripts/release-manager.sh" stage "${baseline_revision}"
+  bash "${ROOT_DIR}/scripts/lifecycle/qualify-release.sh" "${baseline_revision}"
+  bash "${ROOT_DIR}/scripts/release-manager.sh" activate "${baseline_revision}"
+  printf 'Immutable runtime release advanced for fresh install: %s -> %s\n'     "${current_release}" "${baseline_revision}"
 else
   bash "${ROOT_DIR}/scripts/release-manager.sh" verify "${current_release}"
+  die "immutable current release ${current_release} differs from installer revision ${baseline_revision}; recover or finish the existing installation before resuming with different code"
 fi
 [[ -L "${CURRENT_RELEASE_LINK}" ]] || die "immutable current release pointer is missing after release preparation"
 RUNTIME_ROOT="$(readlink -f -- "${CURRENT_RELEASE_LINK}")"
