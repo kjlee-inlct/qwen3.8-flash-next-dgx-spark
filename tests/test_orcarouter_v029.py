@@ -617,6 +617,93 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("ct-h12-humming-fp8-batch-invariant-v1", runtime)
         self.assertIn("runtime-repair-candidate", runtime)
 
+    def test_h38_minimal_deterministic_profile(self) -> None:
+        dockerfile = (
+            ROOT / "scripts" / "Dockerfile.v029-h38-deterministic"
+        ).read_text(encoding="utf-8")
+        patch = (
+            ROOT / "scripts" / "patch-v029-marlin-canonical-order.py"
+        ).read_text(encoding="utf-8")
+        runtime = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1",
+            dockerfile,
+        )
+        self.assertIn(
+            "patch-v029-h20-humming-fp8-batch-invariant.py",
+            dockerfile,
+        )
+        self.assertIn("patch-v029-marlin-canonical-order.py", dockerfile)
+        self.assertIn(
+            'LABEL qwen38.h38="ct-h12-fp8-bi-marlin-canonical-v1"',
+            dockerfile,
+        )
+        self.assertNotIn("patch-v029-h20-marlin-boundary.py", dockerfile)
+        self.assertNotIn("patch-v029-h20-moe-router-capture.py", dockerfile)
+        self.assertNotIn("patch-v029-h20-modular-boundary.py", dockerfile)
+        self.assertNotIn("patch-v029-h20c-runtime-moe-trace.py", dockerfile)
+
+        self.assertIn(
+            "def _qwen38_canonicalize_marlin_sorted_tokens",
+            patch,
+        )
+        self.assertIn("torch.argsort(key, stable=True)", patch)
+        self.assertNotIn("torch.library.custom_op", patch)
+        self.assertNotIn("QWEN38_H20M_TRIGGER", patch)
+        self.assertNotIn("_qwen38_h20m_capture", patch)
+
+        self.assertIn("hybrid-h38-deterministic", runtime)
+        self.assertIn("qwen38-h38-deterministic-v029", runtime)
+        self.assertIn("vllm-orcarouter-v029-h38-deterministic:v1", runtime)
+        self.assertIn("ct-h12-fp8-bi-marlin-canonical-v1", runtime)
+        self.assertIn("runtime-production-candidate", runtime)
+
+    def test_h38_marlin_patcher_fixture(self) -> None:
+        patch = ROOT / "scripts" / "patch-v029-marlin-canonical-order.py"
+        source = """from vllm.scalar_type import ScalarType, scalar_types
+
+
+def fused_marlin_moe(
+    topk_ids,
+    block_size_m,
+    global_num_experts,
+    expert_map,
+    activation,
+):
+    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_align_block_size(
+        topk_ids,
+        block_size_m,
+        global_num_experts,
+        expert_map,
+        ignore_invalid_experts=True,
+    )
+
+    assert activation is not None
+    return sorted_token_ids
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "marlin_moe.py"
+            target.write_text(source, encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(patch), str(target)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patched = target.read_text(encoding="utf-8")
+            self.assertIn(
+                "def _qwen38_canonicalize_marlin_sorted_tokens",
+                patched,
+            )
+            self.assertIn("torch.argsort(key, stable=True)", patched)
+            self.assertIn(
+                "sorted_token_ids = _qwen38_canonicalize_marlin_sorted_tokens(",
+                patched,
+            )
+
     def test_h20_patcher_executes_on_v029_ct_and_modelopt_shapes(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py"
         ct_block = """import torch
