@@ -158,7 +158,9 @@ rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp" "${RUNTIME_COMMIT_FILE}
 if [[ "${PURGE_MODEL}" == 1 ]]; then
   [[ "${MODEL_OWNED}" == 1 ]] || die "refusing model deletion: directory was not created by this installer"
   if [[ -e "${MODEL_DIR}" ]]; then
-    [[ -f "${MODEL_DIR}/.qwen38-model-manifest.json" ]] || die "refusing model deletion: model manifest missing"
+    if [[ ! -f "${MODEL_DIR}/.qwen38-model-manifest.json" && ! -f "${MODEL_DIR}/.qwen38-hybrid-manifest.json" ]]; then
+      die "refusing model deletion: managed model/hybrid manifest missing"
+    fi
     if [[ "${MODEL_DIR}" != "${HOME}/models/"* && "${MODEL_DIR}" != "${INSTALL_ROOT}/model" ]]; then
       die "refusing model deletion outside ${HOME}/models or the install root's model directory"
     fi
