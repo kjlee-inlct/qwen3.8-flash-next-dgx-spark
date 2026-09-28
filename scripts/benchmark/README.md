@@ -3159,6 +3159,86 @@ The acceptance comparison is not based on matching a historical output hash.
 It is based on reproducible determinism across the same workload matrix and
 lifecycle repetitions.
 
+##### H20 v38 matched scope A/B implementation
+
+To avoid prematurely discarding decoder-only canonicalization, the repository
+provides two isolated H38 runtime profiles with the same checkpoint and runtime
+controls:
+
+| Scope | Profile | Image |
+|---|---|---|
+| all Marlin calls | `hybrid-h38-deterministic` | `vllm-orcarouter-v029-h38-deterministic:v1` |
+| tagged decoder calls only | `hybrid-h38-decoder-scope` | `vllm-orcarouter-v029-h38-decoder-scope:v1` |
+
+Both retain the H12 parent, Humming FP8 local batch-invariant repair, exact QSA,
+MTP k=2, max_num_seqs=3, prefix caching disabled, and the same model files.
+The intended experimental difference is Marlin canonicalization scope.
+
+Benchmark provenance records:
+
+```text
+marlin_canonical_order=1
+marlin_canonical_scope=all|decoder
+```
+
+The two profiles also use separate vLLM compile-cache roots so compiled
+artifacts cannot cross-contaminate the scope comparison.
+
+Build the decoder control once:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h38-decoder-scope:v1 \
+  -f scripts/Dockerfile.v029-h38-decoder-scope \
+  scripts/
+```
+
+For each scope and lifecycle, start a fresh runtime and run the canonical matrix
+script. Example decoder cycle:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h38-decoder-scope
+
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h38-decoder-scope
+
+./scripts/wait-ready.sh \
+  --container qwen38-h38-decoder-scope-v029 \
+  --model hybrid-h38-decoder-scope/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+bash scripts/benchmark/run-h38-scope-ab.sh decoder cycle1
+
+./scripts/runtime/orcarouter-v029.sh stop \
+  --profile hybrid-h38-decoder-scope \
+  --remove
+```
+
+Equivalent all-call cycle:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h38-deterministic
+
+./scripts/wait-ready.sh \
+  --container qwen38-h38-deterministic-v029 \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+bash scripts/benchmark/run-h38-scope-ab.sh all cycle1
+```
+
+The matrix runs, in order:
+
+1. 1024 / 128 x20 standalone;
+2. 32768 / 128 x10 standalone;
+3. forward QSA sweep 1K -> 2K -> 4K -> 8K -> 32K, five repeats each;
+4. reverse QSA sweep 32K -> 8K -> 4K -> 2K -> 1K, five repeats each.
+
+Run at least two fresh runtime lifecycles per scope before deciding whether
+decoder-only is sufficient or all-call canonicalization is required.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
