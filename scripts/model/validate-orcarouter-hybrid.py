@@ -54,6 +54,8 @@ def hybrid_manifest(root: Path, variant: str) -> dict[str, Any]:
 
 
 def validate(args: argparse.Namespace) -> None:
+    stage_order = {"h3": 3, "h4": 4, "h5": 5, "h6": 6}
+    through = stage_order[args.through]
     base = model_manifest(args.base_dir, repository=ORCA_REPO, revision=ORCA_REVISION)
     overlay = None
     if not args.runtime_only:
@@ -71,6 +73,12 @@ def validate(args: argparse.Namespace) -> None:
     require(h3.get("overlay_expert_tensors_added") == 294912, "H3 overlay expert tensor count mismatch")
     require(h3.get("quantization_config_source") == "mazinb-modelopt-nvfp4", "H3 quantization source mismatch")
     require(h3.get("mtp_tensors_changed") == 0, "H3 unexpectedly changes MTP")
+    if through == 3:
+        print(
+            "OrcaRouter hybrid chain is valid through H3 "
+            f"(base={base.get('revision')}, overlay={h3.get('overlay_revision')})"
+        )
+        return
 
     h4 = hybrid_manifest(args.h4_dir, "h4-orca-all")
     require(h4.get("parent_variant") == "quant-layout-mazinb-experts", "H4 parent mismatch")
@@ -79,6 +87,9 @@ def validate(args: argparse.Namespace) -> None:
     require(h4.get("input_scale_source") == "mazinb-h3", "H4 input-scale source mismatch")
     require(h4.get("quantization_config_source") == "mazinb-modelopt-nvfp4", "H4 quantization source mismatch")
     require(h4.get("mtp_tensors_changed") == 0, "H4 unexpectedly changes MTP")
+    if through == 4:
+        print("OrcaRouter hybrid chain is valid through H4")
+        return
 
     h5 = hybrid_manifest(args.h5_dir, "h5-neutral-input-scale")
     require(h5.get("parent_variant") == "h4-orca-all", "H5 parent mismatch")
@@ -87,6 +98,9 @@ def validate(args: argparse.Namespace) -> None:
     require(h5.get("expert_value_source") == "orcarouter-h4-all", "H5 expert source mismatch")
     require(h5.get("quantization_config_source") == "mazinb-modelopt-nvfp4", "H5 quantization source mismatch")
     require(h5.get("mtp_tensors_changed") == 0, "H5 unexpectedly changes MTP")
+    if through == 5:
+        print("OrcaRouter hybrid chain is valid through H5")
+        return
 
     h6 = hybrid_manifest(args.model_dir, "h6-modelopt-w4a16")
     require(h6.get("parent_variant") == "h5-neutral-input-scale", "H6 parent mismatch")
@@ -115,6 +129,12 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--base-dir", type=Path, required=True)
     p.add_argument("--overlay-dir", type=Path)
     p.add_argument("--runtime-only", action="store_true")
+    p.add_argument(
+        "--through",
+        choices=("h3", "h4", "h5", "h6"),
+        default="h6",
+        help="validate provenance through this generated stage",
+    )
     p.add_argument("--h3-dir", type=Path, required=True)
     p.add_argument("--h4-dir", type=Path, required=True)
     p.add_argument("--h5-dir", type=Path, required=True)
