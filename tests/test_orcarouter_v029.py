@@ -548,6 +548,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('"w13_workspace_pre"', marlin)
         self.assertIn('"w13_output_buffer_pre"', marlin)
         self.assertIn("_qwen38_h20m_capture_w13_meta", marlin)
+        self.assertNotIn('int(value._version)', marlin)
         self.assertIn("alignment_static_equal", collector)
         self.assertIn("valid_sorted_equal", collector)
         self.assertIn("tail_sorted_equal", collector)
