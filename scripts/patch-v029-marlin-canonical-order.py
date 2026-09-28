@@ -32,11 +32,10 @@ def _qwen38_canonicalize_marlin_sorted_tokens(
     num_tokens_post_padded: torch.Tensor,
     block_size_m: int,
     total_routed_tokens: int,
-    layer_idx: int,
 ) -> torch.Tensor:
-    """Return deterministic ordering for tagged decoder Marlin experts."""
+    """Return a deterministic within-expert physical routed-token order."""
 
-    if block_size_m <= 0 or layer_idx < 0:
+    if block_size_m <= 0:
         return sorted_token_ids
 
     full_blocks = sorted_token_ids.numel() // block_size_m
@@ -90,25 +89,6 @@ def _qwen38_canonicalize_marlin_sorted_tokens(
 '''
 text = replace_once(text, helper_anchor, helper, "helper anchor")
 
-fused_start = text.index("def _fused_marlin_moe(")
-public_start = text.index("\n\ndef fused_marlin_moe(", fused_start)
-fused_body = text[fused_start:public_start]
-fused_body = replace_once(
-    fused_body,
-    "    activation_config: ApplyMoEActivationConfig | None = None,\n) -> torch.Tensor:\n",
-    "    activation_config: ApplyMoEActivationConfig | None = None,\n    h38_layer_idx: int = -1,\n) -> torch.Tensor:\n",
-    "_fused_marlin_moe signature",
-)
-
-public_end = text.index("\n\ndef batched_fused_marlin_moe(", public_start)
-public_body = text[public_start:public_end]
-public_body = replace_once(
-    public_body,
-    "    activation_config: ApplyMoEActivationConfig | None = None,\n) -> torch.Tensor:\n",
-    "    activation_config: ApplyMoEActivationConfig | None = None,\n    h38_layer_idx: int = -1,\n) -> torch.Tensor:\n",
-    "fused_marlin_moe signature",
-)
-
 align_old = '''    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_align_block_size(
         topk_ids,
         block_size_m,
@@ -132,78 +112,11 @@ align_new = '''    sorted_token_ids, expert_ids, num_tokens_post_padded = moe_al
         num_tokens_post_padded,
         block_size_m,
         topk_ids.numel(),
-        h38_layer_idx,
     )
 
     assert activation is not None
 '''
-public_body = replace_once(
-    public_body, align_old, align_new, "Marlin alignment output"
-)
-public_body = replace_once(
-    public_body,
-    "        input_dtype=input_dtype,\n        is_k_full=is_k_full,\n    ).view(-1, topk, K)\n",
-    "        input_dtype=input_dtype,\n        is_k_full=is_k_full,\n        h38_layer_idx=h38_layer_idx,\n    ).view(-1, topk, K)\n",
-    "_fused_marlin_moe call",
-)
-
-class_start = text.index("class MarlinExperts(")
-class_end = text.index("\n\nclass BatchedMarlinExperts", class_start)
-class_body = text[class_start:class_end]
-
-apply_anchor = """        assert self.w1_scale is not None
-        assert self.w2_scale is not None
-
-        ctx = self._lora_context
-"""
-apply_new = """        assert self.w1_scale is not None
-        assert self.w2_scale is not None
-
-        h38_layer_idx = int(
-            getattr(self, "_qwen38_marlin_layer_idx", -1)
-        )
-        ctx = self._lora_context
-"""
-class_body = replace_once(
-    class_body, apply_anchor, apply_new, "MarlinExperts apply layer tag"
-)
-
-non_lora_old = """                is_k_full=self.is_k_full,
-                input_dtype=self.input_dtype,
-            )
-            return
-"""
-non_lora_new = """                is_k_full=self.is_k_full,
-                input_dtype=self.input_dtype,
-                h38_layer_idx=h38_layer_idx,
-            )
-            return
-"""
-class_body = replace_once(
-    class_body, non_lora_old, non_lora_new, "non-LoRA call"
-)
-
-lora_old = """            is_k_full=self.is_k_full,
-            input_dtype=self.input_dtype,
-        )
-"""
-lora_new = """            is_k_full=self.is_k_full,
-            input_dtype=self.input_dtype,
-            h38_layer_idx=h38_layer_idx,
-        )
-"""
-class_body = replace_once(
-    class_body, lora_old, lora_new, "LoRA call"
-)
-
-text = (
-    text[:fused_start]
-    + fused_body
-    + public_body
-    + text[public_end:class_start]
-    + class_body
-    + text[class_end:]
-)
+text = replace_once(text, align_old, align_new, "Marlin alignment output")
 
 path.write_text(text, encoding="utf-8")
 print("installed minimal Marlin canonical-order repair")
