@@ -2550,6 +2550,91 @@ The remaining question is end-to-end scope. Layer-15 causality is now
 established, but this alone does not prove that the same ordering mechanism is
 the only source of full-model output nondeterminism.
 
+##### H20 v33 r1 observed result
+
+Observed on 2026-09-28 without restarting the successful v32 control
+container. The benchmark environment recorded Git revision `7fd6eb5`, exact
+QSA enabled, MTP k=2, max-num-seqs 3, prefix caching disabled, and the same
+served H20 diagnostic model.
+
+The established 1024-token prompt / 128-token output / five-repeat seeded
+greedy gate **failed**:
+
+```text
+status=fail
+all_equal=false
+unique_hashes=3
+
+run 1: 7ee2d04af52ecf971994231a3fcf31fec17b4cc8237b4b763cfb0a4c81e6feb3
+run 2: 910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee
+run 3: 68b1855fad5cdc35508f6aa42326075f4cef2745dc02119be4527b1d7a5f22af
+run 4: 7ee2d04af52ecf971994231a3fcf31fec17b4cc8237b4b763cfb0a4c81e6feb3
+run 5: 910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee
+```
+
+This does **not** weaken the v32 layer-15 causality result. v32 directly showed
+that canonicalizing the layer-15 within-expert physical order removed the
+captured W13-through-final MoE divergence for every same-entry pair.
+
+Instead, v33 proves that layer 15 is not the only end-to-end nondeterministic
+source. At least one additional source remains elsewhere in the model/runtime.
+
+The highest-information next control is to test whether the same physical
+ordering mechanism occurs at other Marlin MoE layers. Repeating passive
+layer-by-layer localization before this intervention would be lower information
+than applying the already-proven causal transformation consistently across the
+Marlin MoE stack.
+
+Note: the v33 benchmark JSON did not yet include the H20 canonical-order
+environment variable in `runtime_config`. The same-container startup markers
+already prove the control was enabled for this run, but v34 adds explicit
+benchmark provenance fields so future artifacts are self-contained.
+
+##### H20 v34: all-layer canonical-order end-to-end control
+
+v34 extends the existing canonical control with:
+
+```text
+QWEN38_H20M_CANONICAL_SCOPE=target   # default, v32 behavior
+QWEN38_H20M_CANONICAL_SCOPE=all      # canonicalize every Marlin MoE layer
+```
+
+The boolean `QWEN38_H20M_CANONICAL_ORDER` remains the master opt-in switch.
+Default behavior stays unchanged when it is zero.
+
+For scope `all`, the same GPU-side canonicalizer is applied after
+`moe_align_block_size()` in every Marlin expert layer. It still preserves
+per-expert token membership, expert block IDs, padding semantics, and the
+Marlin GEMM implementation itself.
+
+The benchmark runtime snapshot now records:
+
+```text
+h20m_canonical_order
+h20m_canonical_scope
+```
+
+so end-to-end result artifacts prove the active control without relying only on
+startup logs.
+
+The v34 causal question is:
+
+```text
+canonical layer 15 only → 1024 gate still has 3 hashes
+canonical every Marlin MoE layer → does the same gate become 1 hash?
+```
+
+Interpretation:
+
+- all-layer control gives `unique_hashes=1`: strong evidence that the same
+  within-expert physical-order mechanism across multiple Marlin layers explains
+  the remaining end-to-end nondeterminism;
+- all-layer control still gives multiple hashes: the proven Marlin ordering
+  mechanism is only one class of source, and a different nondeterministic
+  region remains;
+- all-layer control changes routing membership or fails startup: invalid
+  control; do not interpret numerically.
+
 ##### H20 v33: end-to-end canonical-order determinism gate
 
 Keep the existing v32 container running with
