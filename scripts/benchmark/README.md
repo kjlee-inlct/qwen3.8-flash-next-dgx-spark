@@ -2360,6 +2360,79 @@ After this fix, rebuild the v30 image and rerun the same non-overwriting v30
 probe under the normal PIECEWISE runtime. The failed r1 remains an
 instrumentation failure and must not be reused as a numerical result.
 
+##### H20 v30 r2 observed result
+
+Observed on 2026-09-28 after PR #190 fixed the inference-tensor metadata
+crash:
+
+- main was `501391c`;
+- the rebuilt image label remained `ct-nvfp4-convert-diag-v30`;
+- the runtime reached READY after 621 seconds and selected the `MARLIN`
+  NVFP4 MoE backend;
+- eight requests completed and exactly 28 pair records were written;
+- one pair, `[3,6]`, qualified with `entry_equal=true`.
+
+The qualifying pair reproduced the v29 semantic pattern:
+
+```text
+alignment_static_equal=true
+valid_sorted_equal=false
+tail_sorted_equal=true
+expert_membership_equal=true
+expert_order_equal=false
+padding_layout_equal=true
+aligned_expert_ids_equal=true
+aligned_num_tokens_post_padded_equal=true
+alignment_order_only_divergence=true
+w13_input_equal=true
+w13_output_equal=false
+```
+
+The new W13 audit reported:
+
+```text
+w13_weight_meta_equal=true
+w13_scalar_meta_equal=true
+w13_buffer_meta_equal=false
+w13_state_equal=false
+```
+
+This narrows the unresolved W13 state to the scratch/workspace metadata
+comparison. v30 currently treats absolute `data_ptr` identity as part of
+`w13_buffer_meta_equal`, so `false` does not yet prove that buffer contents,
+shape/stride/dtype/storage geometry, or alignment differ. Different scratch
+addresses across requests are expected to be possible and must be separated
+from semantic buffer state.
+
+Therefore v30 r2 strengthens, but does not yet close, the W13 attribution.
+Do not interpret `w13_buffer_meta_equal=false` as a numerical-state
+difference until pointer identity is separated from buffer content/layout.
+
+##### H20 v31: W13 buffer semantics versus pointer identity
+
+v31 keeps the v30 passive W13 audit but splits scratch/workspace comparison
+into:
+
+- pre-call workspace-content equality;
+- pre-call output-buffer-content equality;
+- structural metadata equality excluding absolute pointer identity;
+- absolute pointer identity equality;
+- pointer-alignment equality for common alignment boundaries;
+- an aggregate W13 semantic-state equality that does not require the same
+  allocation address, but does require equal contents, structure, and pointer
+  alignment.
+
+Interpretation:
+
+- equal buffer contents + equal structural metadata + equal pointer alignment,
+  but different absolute addresses: address identity alone remains different
+  and must not be conflated with kernel input state;
+- any content/layout/alignment difference: keep that field as an unresolved
+  W13 state variable;
+- all semantic W13 state equal while ordering-only `sorted_token_ids`
+  differs and W13 output differs: proceed to a canonical-order causality
+  control rather than further passive localization.
+
 ##### H20 v30: first-Marlin-GEMM state audit
 
 v30 keeps the v29 single-pass execution and semantic alignment analysis. It
