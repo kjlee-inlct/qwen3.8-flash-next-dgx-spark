@@ -480,6 +480,8 @@ def runtime_config_from_docker_config(
         "mamba_state_fix": env.get("QWEN38_MAMBA_STATE_FIX"),
         "vllm_base": env.get("QWEN38_VLLM_BASE"),
         "ple_mmap": env.get("QWEN38_PLE_MMAP"),
+        "h20m_canonical_order": env.get("QWEN38_H20M_CANONICAL_ORDER"),
+        "h20m_canonical_scope": env.get("QWEN38_H20M_CANONICAL_SCOPE"),
     }
 
     raw_spec = option("--speculative-config")
