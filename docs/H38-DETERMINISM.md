@@ -105,6 +105,28 @@ rollback, doctor, determinism, and performance gates.
 This gap is intentionally documented rather than silently changing the managed
 runtime based only on the experimental-runtime qualification.
 
+
+Before managed-service H38 promotion is complete, the following must be updated
+and requalified together:
+
+- `scripts/model/model-profiles.sh`: OrcaRouter managed runtime image/defaults;
+- `install.sh`: clean-host image build path and profile-default migration;
+- `scripts/serve.sh`: H38 decoder patch/runtime environment and cache policy;
+- `scripts/runtime/service-runner.sh`: managed readiness/attestation behavior
+  against the H38 served runtime;
+- `scripts/model-assets.sh`: H38 image/container inventory and retirement
+  dependencies;
+- lifecycle/service/update tests covering installation, replacement, rollback,
+  restart, uninstall, and profile-default refresh;
+- doctor and qualification checks for the H38 image label, canonical scope, and
+  served-model identity;
+- a managed-service determinism/performance qualification run after the
+  integration.
+
+`scripts/model-assets.sh` is also commonly modified locally during asset
+cleanup work. Reconcile those local changes before changing its H38 inventory;
+do not overwrite operator-owned edits merely to make the registry look current.
+
 ## Remaining limitations
 
 The supported conclusion is limited to:
