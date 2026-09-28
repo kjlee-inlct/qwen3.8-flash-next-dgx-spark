@@ -3047,6 +3047,71 @@ Interpretation:
 Do not restart the container before this gate; preserving the current runtime
 state is essential to the discrimination.
 
+##### H20 v38 post-QSA 1K standalone discriminator
+
+Observed on 2026-09-28 without restarting the H38 container after the r3 full
+QSA sweep failed at 1024 tokens.
+
+The immediate standalone 1024-token / 128-token / 20-repeat gate passed:
+
+```text
+status=pass
+all_equal=true
+repeats=20
+unique_hashes=1
+sha256=910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee
+```
+
+All 20 repeats produced the same hash.
+
+Source review of `scripts/benchmark/run.py` confirms that
+`run_qsa_determinism()` simply calls the same `run_determinism()` helper for
+each requested size. Therefore the earlier 1024-token failure is not explained
+by a different request payload or sampling path in QSA mode.
+
+The strongest remaining hypothesis is a transient runtime-state effect around a
+large-to-small prompt-shape transition. Immediately before the failed full QSA
+sweep, the runtime had just completed a focused 32768-token determinism gate.
+The first 1024-token group in the subsequent sweep failed, while later sizes
+passed. After those requests, 1024-token standalone execution was stable for
+20/20 repeats.
+
+The next discriminator intentionally recreates the shape transition without
+restarting the runtime:
+
+1. run 32768 tokens for two repeats;
+2. immediately run 1024 tokens for twenty repeats;
+3. preserve both reports.
+
+Commands:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 2 \
+  --output scripts/benchmark/results/local/h38-transition-32768-r1.json
+
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 20 \
+  --output scripts/benchmark/results/local/h38-transition-1024-after-32768-r1.json
+```
+
+Interpretation:
+
+- if 1024 becomes multi-hash immediately after the 32K transition, the
+  residual nondeterminism is tied to shape/lifecycle state rather than steady
+  1K execution;
+- if 1024 remains 20/20 deterministic, the earlier QSA failure is not yet
+  reproducible and should not be attributed to a specific transition mechanism
+  without another controlled failure.
+
+Do not restart the container before this experiment.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
