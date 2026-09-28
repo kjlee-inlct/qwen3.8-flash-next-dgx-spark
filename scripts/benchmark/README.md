@@ -3306,6 +3306,61 @@ canonicalization is required.
 Do not promote decoder-only yet. Complete at least one more fresh decoder
 lifecycle and the matched all-call cycles before comparing scope robustness.
 
+##### H20 v38 decoder-scope A/B cycle2
+
+Observed on 2026-09-28 using a second fresh
+`hybrid-h38-decoder-scope` runtime.
+
+The complete matched matrix passed again:
+
+```text
+1K standalone x20        PASS, unique_hashes=1
+32K standalone x10       PASS, unique_hashes=1
+forward QSA sweep        PASS, every size unique_hashes=1
+reverse QSA sweep        PASS, every size unique_hashes=1
+```
+
+The 1K standalone output was stable for all 20 repeats at:
+
+```text
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+The 32K standalone output was stable for all 10 repeats at:
+
+```text
+d6fa888525cd888595d9c51c2a24aa248cce55cfd35d16bdc0ddbba0a8e78d39
+```
+
+Forward sweep:
+
+```text
+1024   PASS
+2048   PASS
+4096   PASS
+8192   PASS
+32768  PASS
+first_failure_tokens=null
+```
+
+Reverse sweep:
+
+```text
+32768  PASS
+8192   PASS
+4096   PASS
+2048   PASS
+1024   PASS
+first_failure_tokens=null
+```
+
+Together with decoder-scope cycle1, decoder-only canonicalization has now
+passed the full matrix across two fresh runtime lifecycles.
+
+This makes decoder-only canonicalization a strong production candidate.
+However, do not choose the final scope until the same two-cycle matrix is
+completed for the all-call profile under matched conditions.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
