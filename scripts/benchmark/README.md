@@ -2994,6 +2994,59 @@ If all sizes report `unique_hashes=1` and
 `first_failure_tokens=null`, close v38 and the H20 nondeterminism
 investigation.
 
+##### H20 v38 r3 full QSA sweep result
+
+Observed on 2026-09-28 using the same restored all-call H38 runtime that had
+just passed the focused 32768-token five-repeat determinism gate.
+
+The full QSA sweep did **not** pass:
+
+```text
+overall status=fail
+first_failure_tokens=1024
+
+1024   unique_hashes=2   FAIL
+2048   unique_hashes=1   PASS
+4096   unique_hashes=1   PASS
+8192   unique_hashes=1   PASS
+32768  unique_hashes=1   PASS
+```
+
+This means v38 cannot be closed yet.
+
+The failure pattern is different from the decoder-only r2 result:
+
+- decoder-only r2 failed at 32768 while shorter sizes passed;
+- restored all-call r3 passed a focused 32768 run, then the subsequent full
+  sweep failed only at 1024.
+
+Do not attribute the new failure to the 32K scope issue without additional
+evidence. The current result is consistent with either an incomplete repair or
+a runtime-state/lifecycle effect that depends on prior execution history.
+
+The next highest-information gate keeps the current runtime alive and reruns
+the 1024-token workload standalone:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 20 \
+  --output scripts/benchmark/results/local/h38-det-1024-r3-post32k-20x.json
+```
+
+Interpretation:
+
+- if the standalone 1024 run also fails, the production repair remains
+  insufficient under the current same-runtime state;
+- if the standalone 1024 run passes 20/20, the failure is likely tied to
+  workload-sequence/runtime-state effects in the QSA sweep path rather than a
+  simple per-request Marlin ordering failure.
+
+Do not restart the container before this gate; preserving the current runtime
+state is essential to the discrimination.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
