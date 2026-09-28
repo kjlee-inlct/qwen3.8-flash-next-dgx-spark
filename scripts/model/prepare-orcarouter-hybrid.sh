@@ -44,14 +44,16 @@ PY
 }
 
 stage_ok() {
-  local path="$1" variant="$2"
+  local path="$1" stage="$2"
   [[ -r "${path}/.qwen38-hybrid-manifest.json" ]] || return 1
-  python3 - "${path}/.qwen38-hybrid-manifest.json" "${variant}" <<'PY' >/dev/null
-import json, sys
-path, expected = sys.argv[1:]
-data = json.load(open(path, encoding="utf-8"))
-raise SystemExit(0 if data.get("status") == "complete" and data.get("variant") == expected else 1)
-PY
+  python3 "${VALIDATOR}" \
+    --through "${stage}" \
+    --base-dir "${BASE}" \
+    --overlay-dir "${OVERLAY}" \
+    --h3-dir "${H3}" \
+    --h4-dir "${H4}" \
+    --h5-dir "${H5}" \
+    --model-dir "${OUTPUT}" >/dev/null
 }
 
 require_source() {
@@ -63,13 +65,13 @@ require_source() {
 }
 
 require_empty_or_stage() {
-  local path="$1" variant="$2"
-  if stage_ok "${path}" "${variant}"; then
+  local path="$1" stage="$2" variant="$3"
+  if stage_ok "${path}" "${stage}"; then
     printf 'reuse %-8s %s\n' "${variant}" "${path}"
     return 0
   fi
   if [[ -d "${path}" ]] && find "${path}" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
-    printf 'ERROR: generated stage is non-empty but incomplete: %s\n' "${path}" >&2
+    printf 'ERROR: generated stage is non-empty, invalid, or stale: %s\n' "${path}" >&2
     printf 'Inspect/remove that generated stage explicitly before retrying; it will not be overwritten.\n' >&2
     exit 1
   fi
@@ -108,22 +110,22 @@ case "${ACTION}" in
     BASE_REVISION="$(model_revision "${BASE}")"
     OVERLAY_REVISION="$(model_revision "${OVERLAY}")"
 
-    if ! require_empty_or_stage "${H3}" quant-layout-mazinb-experts; then
+    if ! require_empty_or_stage "${H3}" h3 quant-layout-mazinb-experts; then
       mkdir -p "${H3}"
       docker run --pull=never --rm         --user "$(id -u):$(id -g)" -e HOME=/tmp         -v "${BASE}:/base:ro" -v "${OVERLAY}:/overlay:ro" -v "${H3}:/output"         -v "${H3_TOOL}:/tool.py:ro" --entrypoint python3 "${IMAGE}"         /tool.py build --base /base --overlay /overlay --output /output         --base-revision "${BASE_REVISION}" --overlay-revision "${OVERLAY_REVISION}"
     fi
 
-    if ! require_empty_or_stage "${H4}" h4-orca-all; then
+    if ! require_empty_or_stage "${H4}" h4 h4-orca-all; then
       mkdir -p "${H4}"
       docker run --pull=never --rm         --user "$(id -u):$(id -g)" -e HOME=/tmp         -v "${BASE}:/base:ro" -v "${H3}:/h3:ro" -v "${H4}:/output"         -v "${H4_TOOL}:/tool.py:ro" --entrypoint python3 "${IMAGE}"         /tool.py build --variant orca-all --base /base --h3 /h3 --output /output
     fi
 
-    if ! require_empty_or_stage "${H5}" h5-neutral-input-scale; then
+    if ! require_empty_or_stage "${H5}" h5 h5-neutral-input-scale; then
       mkdir -p "${H5}"
       docker run --pull=never --rm         --user "$(id -u):$(id -g)" -e HOME=/tmp         -v "${H4}:/h4-all:ro" -v "${H3}:/h3-model:ro" -v "${H5}:/output"         -v "${H5_TOOL}:/tool.py:ro" --entrypoint python3 "${IMAGE}"         /tool.py build --parent /h4-all --output /output
     fi
 
-    if ! require_empty_or_stage "${OUTPUT}" h6-modelopt-w4a16; then
+    if ! require_empty_or_stage "${OUTPUT}" h6 h6-modelopt-w4a16; then
       mkdir -p "${OUTPUT}"
       docker run --pull=never --rm         --user "$(id -u):$(id -g)" -e HOME=/tmp         -v "${H5}:/h5-parent:ro" -v "${OUTPUT}:/output"         -v "${H6_TOOL}:/tool.py:ro" --entrypoint python3 "${IMAGE}"         /tool.py build --parent /h5-parent --output /output
     fi
