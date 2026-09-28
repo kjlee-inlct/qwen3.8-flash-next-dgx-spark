@@ -6,15 +6,17 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/model-profiles.sh"
 
 CHECK_ONLY=0
+PRINT_REQUIRED_BYTES=0
 QUIET=0
 ALLOW_CANDIDATE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) CHECK_ONLY=1 ;;
+    --required-bytes) PRINT_REQUIRED_BYTES=1 ;;
     --candidate) ALLOW_CANDIDATE=1 ;;
     -q|--quiet) QUIET=1 ;;
     -h|--help)
-      printf 'Usage: [MODEL_PROFILE=PROFILE] ./scripts/download-weights.sh [--candidate] [--check] [--quiet]\n'
+      printf 'Usage: [MODEL_PROFILE=PROFILE] ./scripts/download-weights.sh [--candidate] [--check] [--required-bytes] [--quiet]\n'
       printf 'Interactive downloads show per-file and overall progress by default.\n'
       exit 0 ;;
     *) printf 'FATAL: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -104,6 +106,10 @@ PY
 )"
 [[ -n "${manifest}" ]] || { printf 'FATAL: empty model manifest\n' >&2; exit 4; }
 required_bytes="$(python3 -c 'import json,sys; print(sum(int(x.get("size") or 0) for x in json.load(open(sys.argv[1])).get("siblings", [])))' "${metadata_file}")"
+if [[ "${PRINT_REQUIRED_BYTES}" == 1 ]]; then
+  printf '%s\n' "${required_bytes}"
+  exit 0
+fi
 space_probe="${DEST}"
 while [[ ! -e "${space_probe}" ]]; do space_probe="$(dirname -- "${space_probe}")"; done
 available_bytes="$(df --output=avail -B1 "${space_probe}" | tail -n1 | tr -d ' ')"
