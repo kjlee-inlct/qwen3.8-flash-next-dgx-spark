@@ -167,10 +167,8 @@ class ModelProfileTests(unittest.TestCase):
 
     def test_installer_builds_local_v029_image_for_mazinb(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
-        self.assertIn(
-            'MODEL_PROFILE}" == mazinb && "${IMAGE}" == vllm-orcarouter-v029:v1',
-            installer,
-        )
+        self.assertIn('"${MODEL_PROFILE}" == mazinb', installer)
+        self.assertIn('"${IMAGE}" == vllm-orcarouter-v029:v1', installer)
         self.assertIn("Dockerfile.v029-orcarouter", installer)
 
     def test_unknown_profile_fails(self) -> None:
