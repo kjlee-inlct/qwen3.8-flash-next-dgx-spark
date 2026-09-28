@@ -105,7 +105,11 @@ def _qwen38_h20m_canonicalize_sorted_tokens(
     total_routed_tokens: int,
     layer_idx: int,
 ) -> torch.Tensor:
-    if not _QWEN38_H20M_CANONICAL_ORDER or block_size_m <= 0:
+    if (
+        not _QWEN38_H20M_CANONICAL_ORDER
+        or block_size_m <= 0
+        or layer_idx < 0
+    ):
         return sorted_token_ids
     if (
         _QWEN38_H20M_CANONICAL_SCOPE == "target"
