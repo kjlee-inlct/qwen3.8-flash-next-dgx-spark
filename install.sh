@@ -83,6 +83,20 @@ read_manifest_profile() {
   rm -f -- "${parsed}"
   printf '%s' "${profile}"
 }
+
+read_manifest_phase() {
+  local parsed key value phase=""
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" install-maintenance "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    [[ "${key}" == PHASE ]] && phase="${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  printf '%s' "${phase}"
+}
 expand_user_path() {
   case "$1" in
     "~") printf '%s\n' "${HOME}" ;;
@@ -227,7 +241,20 @@ RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
   [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
   manifest_profile="$(read_manifest_profile)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
-  if [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
+  manifest_phase="$(read_manifest_phase)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+  if [[ "${manifest_phase}" == uninstalled ]]; then
+    # A normal uninstall preserves the manifest so ownership/history are not lost.
+    # Treat that state as a fresh profile selection, while retaining shared swap
+    # ownership and operator preferences that still apply to the next install.
+    parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+    MODEL_PROFILE="${MODEL_CLI:-orcarouter}"
+    MODEL_REPO=""; MODEL_REVISION=""; MODEL_DIR=""; MODEL_OWNED=0
+    VLLM_IMAGE=""; IMAGE_OWNED=0; SERVED_NAME=""
+    CONFIG_OVERRIDE=""; CONFIG_OWNED=0
+    PROXY_OWNED=0; SERVICE_OWNED=0
+    PHASE=""
+    RESUME=0
+  elif [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
     [[ "${DRY_RUN}" == 1 ]] || \
       die "installed profile is ${manifest_profile}; uninstall it before selecting ${MODEL_CLI}"
   else
