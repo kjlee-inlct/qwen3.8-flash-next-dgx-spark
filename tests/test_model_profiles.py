@@ -132,6 +132,13 @@ class ModelProfileTests(unittest.TestCase):
                 self.assertIn(model_dir, result.stdout)
                 self.assertIn("DRY-RUN complete", result.stdout)
 
+    def test_wizard_labels_hybrid_composition_concisely(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertEqual(
+            installer.count("OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)"),
+            2,
+        )
+
     def test_clean_host_gated_profiles_do_not_require_hf_cli(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
         downloader = (ROOT / "scripts" / "download-weights.sh").read_text(encoding="utf-8")
@@ -219,7 +226,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("MODEL_PROFILE=orcarouter", installer)
         self.assertIn("MODEL_PROFILE=mazinb", installer)
         self.assertIn("H6_W4A16_MODEL_DIR", installer)
-        self.assertIn("OrcaRouter Hybrid H6", installer)
+        self.assertIn("OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)", installer)
 
     def test_installer_builds_local_v029_image_for_mazinb(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")

@@ -44,7 +44,7 @@ describe_model_profile() {
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="local/orcarouter-mazinb-h6-w4a16"
-      PROFILE_DESCRIPTION="Generated OrcaRouter/mazinb H6 ModelOpt W4A16 hybrid checkpoint"
+      PROFILE_DESCRIPTION="Generated H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"
       ;;
     lychee888)
       PROFILE_STATUS="planned"
