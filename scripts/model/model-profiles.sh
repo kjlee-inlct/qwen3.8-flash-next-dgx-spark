@@ -91,7 +91,7 @@ load_download_profile() {
       PROFILE_CONFIG_OVERRIDE=0
       ;;
     mazinb)
-      # Short immutable Hugging Face commit ID currently shown by the model repo.
+      # Short immutable Hugging Face commit ID verified for the qualified checkpoint.
       # download-weights.sh records the resolved full SHA in its local manifest.
       PROFILE_REVISION="f2c21eb"
       PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-flash-next-mazinb"
@@ -100,8 +100,12 @@ load_download_profile() {
       PROFILE_GATED=0
       PROFILE_CONFIG_OVERRIDE=0
       ;;
+    orcarouter-hybrid)
+      printf 'ERROR: model profile %s is still in progress and has no qualified download/runtime path yet\n' "$1" >&2
+      return 2
+      ;;
     lychee888)
-      printf 'ERROR: model profile %s is tracked but has no qualified download/runtime path yet\n' "$1" >&2
+      printf 'ERROR: model profile %s is planned and has no qualified download/runtime path yet\n' "$1" >&2
       return 2
       ;;
   esac
