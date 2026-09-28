@@ -30,6 +30,8 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `monitor-runtime.sh`
 - `wait-ready.sh`
 - `validate_runtime.py`
+- `orcarouter-v029.sh`: dedicated OrcaRouter v0.29 investigation/runtime launcher, including the validated H38 profiles.
+- `orcarouter-stock-skinny.sh`: guarded stock/skinny OrcaRouter comparison launcher.
 - `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
 
 Top-level runtime helper paths in `scripts/` are stable operator or compatibility entry points and should remain thin where a canonical implementation exists.
