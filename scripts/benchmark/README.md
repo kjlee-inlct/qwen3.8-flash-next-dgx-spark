@@ -2590,6 +2590,100 @@ environment variable in `runtime_config`. The same-container startup markers
 already prove the control was enabled for this run, but v34 adds explicit
 benchmark provenance fields so future artifacts are self-contained.
 
+##### H20 v34 r1 observed result
+
+Observed on 2026-09-28 with the all-layer canonical-order control enabled:
+
+- main was `0abb394`;
+- image ID was
+  `sha256:f8e6a2d285eb6d7b88e984c62e1f1fa38c62097dabd2bcf67b1e4a54c5fc9f35`;
+- image label was `ct-nvfp4-convert-diag-v34`;
+- runtime reached READY after 682 seconds;
+- startup log proved
+  `QWEN38_H20M_CANONICAL_ORDER enabled scope=all`;
+- startup also selected the `MARLIN` NVFP4 MoE backend;
+- benchmark runtime provenance recorded
+  `h20m_canonical_order="1"` and
+  `h20m_canonical_scope="all"`.
+
+The established 1024-token prompt / 128-token output / five-repeat seeded
+greedy gate **passed**:
+
+```text
+status=pass
+all_equal=true
+unique_hashes=1
+sha256=44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+All five repeats produced that exact hash.
+
+This is a strong end-to-end causal result:
+
+```text
+baseline OrcaRouter / H20 CT path
+  → multiple hashes
+
+canonical layer 15 only
+  → still 3 hashes
+
+canonical every tagged Marlin MoE layer
+  → 1 hash
+```
+
+Therefore the remaining end-to-end nondeterminism is explained by the same
+within-expert physical routed-token ordering mechanism occurring at more than
+one Marlin MoE layer. The layer-15 localization was one instance of a
+model-wide Marlin ordering sensitivity rather than the only affected layer.
+
+The v34 stable hash exactly matches the previously retained deterministic H6
+reference hash:
+
+```text
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+Treat the hash match as an important regression marker, not proof that H6 and
+v34 execute identical internal paths. The causal evidence comes from the
+target-only versus all-layer intervention, not from hash equality alone.
+
+The immediate next question is validation breadth, not further root-cause
+localization.
+
+##### H20 v35: all-layer canonical validation sweep
+
+Keep the current v34 all-layer canonical container running. Do not rebuild or
+restart before the first sweep.
+
+Run the established QSA-size determinism sweep:
+
+```bash
+python3 scripts/benchmark/run.py qsa-determinism \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h20m-v35-all-canonical-qsa-r1.json
+```
+
+Interpretation:
+
+- all sizes pass with one hash each: the all-layer canonical repair is stable
+  across the established prompt-size sweep and can move to repeat/fresh-start
+  reproduction plus performance measurement;
+- only larger sizes fail: the ordering repair is real but insufficient under
+  larger routing/batching shapes; localize the first failing size before
+  promoting a permanent fix;
+- 1024 fails on the same container after the v34 PASS: investigate runtime
+  lifecycle/state drift before changing the repair.
+
+If the sweep passes, the next validation sequence is:
+
+1. repeat the 1024/128 gate with 20 same-boot repeats;
+2. restart the same v34 all-layer configuration and repeat the 1024 gate;
+3. run decode/prefill/concurrency performance controls;
+4. only then design the production repair with the smallest possible scope.
+
 ##### H20 v34: all-layer canonical-order end-to-end control
 
 v34 extends the existing canonical control with:
