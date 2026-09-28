@@ -100,6 +100,11 @@ The gate report identifies Git revision
 `1bdc6932067d3110531f5c76b10e2842a98a9bb5`. The detailed result and
 per-gate hashes are recorded in `scripts/benchmark/README.md`.
 
+Those gate hashes differ from the earlier matched scope-A/B regression markers
+because the benchmark runner uses repository-root `README.md` as its default
+corpus and PR #215 changed that corpus before the production-alias run. The
+token-size targets match, but this is not a same-input hash comparison.
+
 Therefore the H38 determinism repair is closed for the validated
 `scripts/runtime/orcarouter-v029.sh` production runtime track. This closure
 does not include the transactional installer/systemd managed-service path,
