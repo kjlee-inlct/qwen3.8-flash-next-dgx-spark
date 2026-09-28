@@ -23,6 +23,33 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
 
+    def run_wizard(self, choice: str) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            env = {**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")}
+            env.pop("MODEL_PROFILE", None)
+            answers = "\n".join(
+                [
+                    choice,  # model profile
+                    "",      # default model directory
+                    "n",     # no separate config override
+                    "n",     # runtime memory monitor disabled
+                    "1",     # local-only API
+                    "y",     # install systemd service
+                    "y",     # continue
+                    "",
+                ]
+            )
+            return subprocess.run(
+                [str(ROOT / "install.sh"), "--lang", "en", "--no-start", "--dry-run"],
+                cwd=ROOT,
+                env=env,
+                input=answers,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
     def test_model_registry_marks_orcarouter_as_only_stable_default(self) -> None:
         result = subprocess.run(
             [str(ROOT / "install.sh"), "--list-models"],
@@ -88,6 +115,35 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("stable", result.stdout)
         self.assertIn("sglang", result.stdout)
         self.assertIn("planned", result.stdout)
+
+
+    def test_clean_host_wizard_can_select_every_installable_profile(self) -> None:
+        expected = {
+            "1": ("orcarouter", "qwen3.8-flash-next-orcarouter"),
+            "2": ("nvidia", "qwen3.8-flash-next-nvidia"),
+            "3": ("mazinb", "qwen3.8-flash-next-mazinb"),
+            "4": ("orcarouter-hybrid", "qwen3.8-h6-modelopt-w4a16"),
+        }
+        for choice, (profile, model_dir) in expected.items():
+            with self.subTest(profile=profile):
+                result = self.run_wizard(choice)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"profile     : {profile}", result.stdout)
+                self.assertIn(model_dir, result.stdout)
+                self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_clean_host_gated_profiles_do_not_require_hf_cli(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        downloader = (ROOT / "scripts" / "download-weights.sh").read_text(encoding="utf-8")
+
+        self.assertIn("discover_hf_token()", installer)
+        self.assertIn("ensure_profile_auth()", installer)
+        self.assertIn("export HF_TOKEN", installer)
+        self.assertIn("Hugging Face read token", installer)
+        self.assertNotIn("command -v hf", installer)
+        self.assertNotIn("hf auth whoami", installer)
+        self.assertIn('TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"', downloader)
+        self.assertIn("curl -sS -L", downloader)
 
     def test_orcarouter_profile(self) -> None:
         result = self.run_install("orcarouter")

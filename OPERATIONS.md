@@ -67,6 +67,11 @@ assuming every profile tracked by the repository is installable.
 
 ## Fresh install
 
+The clean-install baseline is a standard DGX Spark software image with the NVIDIA
+driver/container stack, Docker, Git, Python 3, curl and sudo available, plus a clone of
+this repository. Model checkpoints, project Docker images, the dedicated PLE swap,
+application release state and the systemd unit may all be absent.
+
 Run the normal installer:
 
 ```bash
@@ -90,11 +95,16 @@ Before installing, a dry-run is recommended:
 ./install.sh --model orcarouter-hybrid --lang en --yes --no-start --dry-run
 ```
 
-For `orcarouter-hybrid`, the installer reuses/downloads the pinned OrcaRouter
-and mazinb source checkpoints, builds/reuses H3 quant-layout, H4 `orca-all`,
-H5 neutral-input-scale, and H6 `W4A16_NVFP4`, then installs H6 as the active
-model. Existing complete generated stages are reused; a non-empty incomplete
-stage is never deleted automatically.
+For `orcarouter-hybrid`, no prebuilt local checkpoint is required. On an empty model
+store the installer downloads the pinned OrcaRouter and mazinb source checkpoints,
+builds H3 quant-layout, H4 `orca-all`, H5 neutral-input-scale, and H6
+`W4A16_NVFP4`, then installs H6 as the active model. Existing validated generated
+stages are reused; a non-empty stale or incomplete stage is never deleted automatically.
+
+OrcaRouter and `orcarouter-hybrid` require gated Hugging Face access. The `hf` CLI is
+not an installer prerequisite. The wizard uses an existing token environment/cache when
+available, otherwise it asks for a read token without storing it. The model terms still
+must be accepted in the browser before installation.
 
 When changing from an already installed profile, first run a normal uninstall
 without model/swap purge. A successful uninstall marks the retained manifest
@@ -121,10 +131,15 @@ A successful fresh install automatically:
 2. stages the current Git commit as an immutable release;
 3. runs release qualification without mutating the release payload;
 4. registers that release as `current` when no baseline exists yet;
-5. creates the systemd service with `--runtime-root ~/.local/share/qwen38-spark/current`;
-6. starts the runtime unless `--no-start` was requested.
+5. on a fresh install after a normal uninstall, stages/qualifies/activates the current checkout when a retained older `current` release exists;
+6. creates the systemd service with `--runtime-root ~/.local/share/qwen38-spark/current`;
+7. starts the runtime unless `--no-start` was requested.
 
-The installer must be run from a Git checkout because the immutable release ID is the Git commit SHA. Re-running `install.sh` does not silently move an existing `current` release to a newer checkout commit. Use the explicit update path below for code updates.
+The installer must be run from a Git checkout because the immutable release ID is the Git
+commit SHA. An in-progress/resumed installation fails closed if its immutable runtime release
+does not match the checkout revision. An already installed/running profile is not silently
+updated by re-running the installer; use the explicit update path below for normal code
+updates.
 
 ### API access choices
 

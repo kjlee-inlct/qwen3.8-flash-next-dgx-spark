@@ -104,6 +104,47 @@ expand_user_path() {
     *) printf '%s\n' "$1" ;;
   esac
 }
+
+discover_hf_token() {
+  local token="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"
+  if [[ -n "${token}" ]]; then
+    printf '%s' "${token}"
+    return 0
+  fi
+  if [[ -r "${HOME}/.cache/huggingface/token" ]]; then
+    cat "${HOME}/.cache/huggingface/token"
+    return 0
+  fi
+  python3 - <<'PY' 2>/dev/null || true
+try:
+    from huggingface_hub import get_token
+    print(get_token() or "", end="")
+except ImportError:
+    pass
+PY
+}
+
+ensure_profile_auth() {
+  [[ "${PROFILE_GATED}" == 1 ]] || return 0
+  local token
+  token="$(discover_hf_token)"
+  if [[ -z "${token}" ]]; then
+    if [[ "${YES}" != 1 && -t 0 ]]; then
+      if [[ "${UI_LANG}" == ko ]]; then
+        printf 'OrcaRouter 계열은 Hugging Face gated 모델입니다. 브라우저에서 모델 이용 약관을 먼저 승인해야 합니다.\n'
+        read -r -s -p 'Hugging Face read token (입력 내용은 저장하지 않음): ' token
+      else
+        printf 'OrcaRouter-family profiles use a gated Hugging Face model. Accept the model terms in a browser first.\n'
+        read -r -s -p 'Hugging Face read token (not stored by this installer): ' token
+      fi
+      printf '\n'
+    else
+      die "gated profile requires HF_TOKEN (or HUGGING_FACE_HUB_TOKEN / existing Hugging Face token cache)"
+    fi
+  fi
+  [[ -n "${token}" ]] || die "Hugging Face token cannot be empty for gated profile"
+  export HF_TOKEN="${token}"
+}
 detect_lan_ipv4() {
   command -v ip >/dev/null 2>&1 || return 0
   ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src" && i<NF) {print $(i+1); exit}}'
@@ -490,10 +531,7 @@ fi
 for command in python3 curl docker sudo git; do command -v "${command}" >/dev/null || die "${command} is required"; done
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
 git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "installer must run from a git checkout to create an immutable release baseline"
-if [[ "${PROFILE_GATED}" == 1 ]]; then
-  command -v hf >/dev/null || die "hf is required for the gated OrcaRouter profile"
-  hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: run 'hf auth login' after accepting the model terms"
-fi
+ensure_profile_auth
 
 if [[ "${RESUME}" != 1 ]]; then
   [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1
