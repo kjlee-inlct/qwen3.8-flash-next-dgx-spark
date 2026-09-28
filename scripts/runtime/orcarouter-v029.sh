@@ -192,7 +192,7 @@ load_source() {
       MODEL_PROFILE="hybrid-h38-deterministic"
       SERVED_NAME="hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       MODEL_REPO="local/h38-decoder-scope-over-h12"
-      MODEL_REVISION="runtime-production-decoder-scope"
+      MODEL_REVISION="runtime-production-candidate-decoder-scope"
     elif [[ "${PROFILE_CASE}" == hybrid-h38-decoder-scope ]]; then
       MODEL_PROFILE="hybrid-h38-decoder-scope"
       SERVED_NAME="hybrid-h38-decoder-scope/Qwen3.8-Flash-Next-Uncensored-NVFP4"
