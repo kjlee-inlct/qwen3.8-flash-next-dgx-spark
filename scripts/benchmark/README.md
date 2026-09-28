@@ -3576,6 +3576,33 @@ This closes the H38 scope-selection question for the tested OrcaRouter NVFP4 /
 vLLM v0.29 / single GB10 configuration and benchmark matrix. It does not claim
 universal determinism outside those tested conditions.
 
+##### H38 production-alias final gate
+
+After promoting decoder-only canonicalization to
+`hybrid-h38-deterministic`, validate the alias itself with:
+
+```bash
+bash scripts/benchmark/run-h38-production-gate.sh
+```
+
+The wrapper runs the canonical 1K x20, 32K x10, forward-QSA, and reverse-QSA
+matrix against:
+
+```text
+hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+and writes reports under:
+
+```text
+scripts/benchmark/results/local/h38-production/
+```
+
+The production alias has already been observed to boot successfully with
+`runtime-production-decoder-scope` and the validated decoder image. The final
+alias matrix result remains to be appended here after execution; do not infer a
+PASS from startup readiness alone.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
