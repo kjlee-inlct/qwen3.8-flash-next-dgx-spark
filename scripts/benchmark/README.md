@@ -3361,6 +3361,63 @@ This makes decoder-only canonicalization a strong production candidate.
 However, do not choose the final scope until the same two-cycle matrix is
 completed for the all-call profile under matched conditions.
 
+##### H20 v38 matched scope A/B final result
+
+Observed on 2026-09-28 after completing two fresh runtime lifecycles for each
+H38 canonicalization scope.
+
+Matched matrix result:
+
+```text
+decoder scope cycle1   PASS
+decoder scope cycle2   PASS
+all-call scope cycle1  PASS
+all-call scope cycle2  PASS
+```
+
+Every cycle used the same workload matrix:
+
+```text
+1K standalone x20
+32K standalone x10
+forward QSA: 1K -> 2K -> 4K -> 8K -> 32K, x5 each
+reverse QSA: 32K -> 8K -> 4K -> 2K -> 1K, x5 each
+```
+
+Across all four cycles:
+
+- every standalone gate reported `unique_hashes=1`;
+- every forward and reverse QSA size reported `unique_hashes=1`;
+- every sweep reported `first_failure_tokens=null`.
+
+The stable standalone hashes also matched across scope:
+
+```text
+1K:
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+
+32K:
+d6fa888525cd888595d9c51c2a24aa248cce55cfd35d16bdc0ddbba0a8e78d39
+```
+
+Therefore the previous one-off decoder-only 32K failure and one-off all-call 1K
+failure are not reproducible under the matched fresh-lifecycle matrix and
+should not be used as evidence that one scope is intrinsically more
+deterministic.
+
+Supported conclusion:
+
+- both scopes are deterministic under the matched validation matrix;
+- all-call canonicalization has not shown a determinism advantage over
+  decoder-only canonicalization;
+- decoder-only is preferred as the production scope under the minimum-change
+  principle because it limits the repair to tagged decoder Marlin MoE calls;
+- all-call remains a broader fallback/control, not the preferred default.
+
+This conclusion is limited to the tested OrcaRouter NVFP4 / vLLM v0.29 / GB10
+configuration and workload matrix. It does not prove universal determinism for
+all models, kernels, prompt distributions, or future vLLM versions.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
