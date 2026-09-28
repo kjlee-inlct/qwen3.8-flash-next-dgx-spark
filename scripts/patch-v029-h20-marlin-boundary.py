@@ -552,6 +552,7 @@ def _qwen38_h20m_commit(
             "phase": "marlin-repeat",
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
+            "canonical_order_enabled": _QWEN38_H20M_CANONICAL_ORDER,
             "request0": previous_id,
             "request1": request_id,
             "fields": fields,
