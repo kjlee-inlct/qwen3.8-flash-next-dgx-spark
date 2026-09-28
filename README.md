@@ -8,7 +8,9 @@ Model checkpoint and serving backend are intentionally separate axes:
 
 - `orcarouter` — **stable/default**
 - `nvidia` — experimental optional profile
-- `mazinb`, `lychee888` — tracked candidates, not installable until locally qualified
+- `mazinb` — experimental optional profile
+- `orcarouter-hybrid` — experimental generated H6 ModelOpt W4A16 hybrid profile
+- `lychee888` — planned, not installable
 - `vllm` — stable implemented backend
 - `sglang` — planned optional backend
 
@@ -486,22 +488,24 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 
 ### Guided install and uninstall
 
-The installer offers two checkpoint-specific profiles and defaults to OrcaRouter. Choose
-interactively, or use `--model orcarouter` / `--model nvidia` for automation. Repositories,
-pinned revisions, model directories, served IDs, images and runtime tuning stay separate;
-checkpoint files are never mixed in one directory.
+The installer exposes four selectable profiles and defaults to OrcaRouter. Choose
+interactively or pass `--model` for automation. The first three are downloaded
+checkpoints; `orcarouter-hybrid` is generated locally from the pinned OrcaRouter
+and mazinb inputs through the proven H3 -> H4-all -> H5 -> H6 pipeline.
 
 | Profile | Checkpoint | Runtime image |
 |---|---|---|
 | `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-skinny-tp1:v1` (stock image + GB10 TP=1 skinny-GEMM patch) |
 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | locally built `vllm-nv-mixed:v2` with the required patches |
 | `mazinb` | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-orcarouter-v029:v1` with PLE mmap + exact-QSA v0.29 path |
+| `orcarouter-hybrid` | generated H6: OrcaRouter + mazinb -> ModelOpt `W4A16_NVFP4` | `vllm-orcarouter-v029:v1`, with H6 parent mounts + PLE mmap + exact QSA |
 
 ```bash
 ./install.sh                       # bilingual interactive profile selection
 ./install.sh --model orcarouter
 ./install.sh --model nvidia
 ./install.sh --model mazinb
+./install.sh --model orcarouter-hybrid
 ```
 
 The shared `scripts/model-profiles.sh` registry is intentionally not a second lifecycle
@@ -515,9 +519,14 @@ Installer roadmap status:
 orcarouter         confirmed / installable / default
 nvidia             confirmed / installable
 mazinb             confirmed / installable
-orcarouter-hybrid  in progress / not installable yet
+orcarouter-hybrid  experimental / installable / generated H6
 lychee888          planned / not installable yet
 ```
+
+`orcarouter-hybrid` does not duplicate its tensor payload into one monolithic
+directory. H6 keeps the validated parent-link layout, so the managed runtime
+mounts the retained OrcaRouter base plus H3, H4-all, and H5 parents read-only.
+The mazinb source is needed to build H3 but is not required by the final runtime.
 
 
 > **H38 runtime status:** the validated OrcaRouter H38 decoder-only production profile lives
