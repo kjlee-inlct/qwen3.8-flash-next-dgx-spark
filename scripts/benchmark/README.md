@@ -50,13 +50,61 @@ entries:
 - `hybrid-h38-all-scope` is the broader fallback/regression control;
 - the installer/systemd-managed service path is still a separate integration
   gap and must not be described as H38 production yet;
-- the production alias itself must pass
-  `scripts/benchmark/run-h38-production-gate.sh`; startup readiness alone is
-  not the final correctness gate.
+- the production alias final matrix completed on 2026-09-28 and passed:
+  1K / 128 x20, 32K / 128 x10, forward QSA, and reverse QSA were all
+  deterministic;
+- the H38 runtime determinism repair is closed for the validated
+  `scripts/runtime/orcarouter-v029.sh` production track; managed-service
+  integration remains a separate open qualification phase.
 
 See `../../docs/H38-DETERMINISM.md` for the concise operational status.
 Historical entries below remain authoritative for what was observed at their
 time, but later entries may supersede their interpretation.
+
+### H38 production-alias final gate — 2026-09-28
+
+The promoted production alias was validated with:
+
+```bash
+bash scripts/benchmark/run-h38-production-gate.sh
+```
+
+Recorded provenance:
+
+- Git revision under test:
+  `29ec139bf1de8c2fcc2cbfc2f348d0741c0c7fd0`;
+- release ID:
+  `1bdc6932067d3110531f5c76b10e2842a98a9bb5`;
+- served model:
+  `hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4`;
+- image:
+  `vllm-orcarouter-v029-h38-decoder-scope:v1`;
+- Marlin canonicalization:
+  `QWEN38_MARLIN_CANONICAL_ORDER=1`, scope `decoder`;
+- exact QSA enabled, MTP speculative decode `k=2`,
+  `max_model_len=262144`, `max_num_batched_tokens=8192`,
+  `max_num_seqs=3`, prefix caching disabled, and PLE mmap enabled.
+
+Observed result:
+
+| Gate | Result | Repeats / sizes | Determinism evidence |
+|---|---|---|---|
+| 1K standalone | PASS | x20 | `unique_hashes=1`, SHA-256 `e8cfcf8639d934dffd0124b4ef8725ca1e2a6800bf510348026b3e24ff248352` |
+| 32K standalone | PASS | x10 | `unique_hashes=1`, SHA-256 `ae983cfc51cd7ff3c0115298a26e6bae3716f76896316ee4cf224d79350762ca` |
+| forward QSA | PASS | 1K, 2K, 4K, 8K, 32K x5 | every size `unique_hashes=1`, `first_failure_tokens=null` |
+| reverse QSA | PASS | 32K, 8K, 4K, 2K, 1K x5 | every size `unique_hashes=1`, `first_failure_tokens=null` |
+
+The hashes above are provenance/regression markers for this exact production
+alias gate, not universal correctness oracles. Final acceptance remains
+repeatable determinism under the recorded runtime controls.
+
+This closes H38 runtime determinism repair for the validated v0.29 production
+runtime profile. It does **not** close the separate `install.sh` / systemd
+managed-service integration and lifecycle qualification work.
+
+The gate ran before PR #216 was merged. PR #216 is preserved on current
+`main`; this documentation update is based on that newer main and does not
+rewrite the gate's recorded Git revision.
 
 The top-level `bench/run.py` path is retained only as a compatibility shim. New documentation, automation, and internal references should use `scripts/benchmark/run.py`.
 
