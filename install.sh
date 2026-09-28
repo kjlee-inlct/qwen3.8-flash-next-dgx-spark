@@ -544,6 +544,35 @@ fi
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  base_required_bytes="$(MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh" --required-bytes)"
+  overlay_required_bytes="$(MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh" --required-bytes)"
+
+  base_probe="${HYBRID_BASE_DIR}"
+  while [[ ! -e "${base_probe}" ]]; do base_probe="$(dirname -- "${base_probe}")"; done
+  overlay_probe="${HYBRID_OVERLAY_DIR}"
+  while [[ ! -e "${overlay_probe}" ]]; do overlay_probe="$(dirname -- "${overlay_probe}")"; done
+  base_fs="$(df --output=source "${base_probe}" | tail -n1 | tr -d ' ')"
+  overlay_fs="$(df --output=source "${overlay_probe}" | tail -n1 | tr -d ' ')"
+
+  if [[ "${base_fs}" == "${overlay_fs}" ]]; then
+    available_bytes="$(df --output=avail -B1 "${base_probe}" | tail -n1 | tr -d ' ')"
+    base_existing_bytes=0
+    overlay_existing_bytes=0
+    [[ ! -d "${HYBRID_BASE_DIR}" ]] || base_existing_bytes="$(du -sb "${HYBRID_BASE_DIR}" | cut -f1)"
+    [[ ! -d "${HYBRID_OVERLAY_DIR}" ]] || overlay_existing_bytes="$(du -sb "${HYBRID_OVERLAY_DIR}" | cut -f1)"
+    reserve_bytes=$((20 * 1024 * 1024 * 1024))
+    combined_required_bytes=$((base_required_bytes + overlay_required_bytes + reserve_bytes))
+    combined_capacity_bytes=$((available_bytes + base_existing_bytes + overlay_existing_bytes))
+    if (( combined_capacity_bytes < combined_required_bytes )); then
+      shortfall_bytes=$((combined_required_bytes - combined_capacity_bytes))
+      die "insufficient disk space for hybrid source checkpoints plus 20 GiB reserve; free an additional $(awk -v n="${shortfall_bytes}" 'BEGIN {printf "%.2f", n/1073741824}') GiB"
+    fi
+    printf 'Hybrid combined disk preflight passed: %.2f GiB sources + 20 GiB reserve on %s\n' \
+      "$(awk -v n="$((base_required_bytes + overlay_required_bytes))" 'BEGIN {printf "%.2f", n/1073741824}')" "${base_fs}"
+  fi
+
   MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
     "${ROOT_DIR}/scripts/download-weights.sh" --check
   MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
