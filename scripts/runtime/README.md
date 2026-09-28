@@ -30,9 +30,33 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `monitor-runtime.sh`
 - `wait-ready.sh`
 - `validate_runtime.py`
+- `orcarouter-v029.sh`: dedicated OrcaRouter v0.29 investigation/runtime launcher, including the validated H38 profiles.
+- `orcarouter-stock-skinny.sh`: guarded stock/skinny OrcaRouter comparison launcher.
 - `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
 
 Top-level runtime helper paths in `scripts/` are stable operator or compatibility entry points and should remain thin where a canonical implementation exists.
+
+
+## OrcaRouter v0.29 H38 runtime profiles
+
+`orcarouter-v029.sh` also owns the validated H38 investigation/runtime profiles:
+
+| Profile | Role | Canonical scope |
+|---|---|---|
+| `hybrid-h38-deterministic` | H38 production runtime | decoder-only |
+| `hybrid-h38-decoder-scope` | explicit decoder A/B control | decoder-only |
+| `hybrid-h38-all-scope` | fallback/regression control | all Marlin calls |
+
+The production profile uses
+`vllm-orcarouter-v029-h38-decoder-scope:v1`. The all-scope fallback keeps
+`vllm-orcarouter-v029-h38-deterministic:v1` for regression continuity.
+
+The canonical evidence is in `../benchmark/README.md`, with a concise summary
+in `../../docs/H38-DETERMINISM.md`.
+
+These H38 profiles are dedicated v0.29 runtime helpers and are not yet wired
+into the transactional `install.sh` / systemd-managed `serve.sh` lifecycle.
+Do not conflate H38 runtime qualification with managed-service qualification.
 
 
 ## Temporary NVIDIA tuning runtimes

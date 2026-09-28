@@ -29,6 +29,35 @@ This directory contains the repository's canonical read-only benchmark harness f
 
 The upstream-derived `scripts/bench-prefill.py` intentionally remains at its upstream path. It is a compatibility/reference benchmark, while `scripts/benchmark/run.py` is the benchmark entry point maintained by this fork.
 
+
+## Current H38 status — 2026-09-28
+
+This file intentionally retains the complete experiment history, including failed
+hypotheses, instrumentation failures, one-off determinism failures, and
+superseded scope interpretations.
+
+For the current conclusion, use this summary before reading historical H20/H38
+entries:
+
+- supported causal finding: Marlin MoE output is sensitive to legal physical
+  within-expert routed-token ordering under the tested OrcaRouter NVFP4 /
+  vLLM v0.29 / GB10 conditions;
+- decoder-only and all-call canonicalization each passed two fresh-container
+  matched matrices plus one isolated fresh-compile matrix;
+- no determinism advantage was observed for all-call scope;
+- `hybrid-h38-deterministic` is the promoted decoder-only H38 production
+  runtime profile;
+- `hybrid-h38-all-scope` is the broader fallback/regression control;
+- the installer/systemd-managed service path is still a separate integration
+  gap and must not be described as H38 production yet;
+- the production alias itself must pass
+  `scripts/benchmark/run-h38-production-gate.sh`; startup readiness alone is
+  not the final correctness gate.
+
+See `../../docs/H38-DETERMINISM.md` for the concise operational status.
+Historical entries below remain authoritative for what was observed at their
+time, but later entries may supersede their interpretation.
+
 The top-level `bench/run.py` path is retained only as a compatibility shim. New documentation, automation, and internal references should use `scripts/benchmark/run.py`.
 
 ## Safety rules
@@ -3575,6 +3604,33 @@ and fallback comparison.
 This closes the H38 scope-selection question for the tested OrcaRouter NVFP4 /
 vLLM v0.29 / single GB10 configuration and benchmark matrix. It does not claim
 universal determinism outside those tested conditions.
+
+##### H38 production-alias final gate
+
+After promoting decoder-only canonicalization to
+`hybrid-h38-deterministic`, validate the alias itself with:
+
+```bash
+bash scripts/benchmark/run-h38-production-gate.sh
+```
+
+The wrapper runs the canonical 1K x20, 32K x10, forward-QSA, and reverse-QSA
+matrix against:
+
+```text
+hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4
+```
+
+and writes reports under:
+
+```text
+scripts/benchmark/results/local/h38-production/
+```
+
+The production alias has already been observed to boot successfully with
+`runtime-production-decoder-scope` and the validated decoder image. The final
+alias matrix result remains to be appended here after execution; do not infer a
+PASS from startup readiness alone.
 
 ##### H20 v38: minimal production-oriented deterministic repair
 

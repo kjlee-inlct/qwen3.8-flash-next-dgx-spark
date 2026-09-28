@@ -325,10 +325,10 @@ acceptance 2.81. It has not recurred in three attempts and I cannot explain it. 
 reproducible figures are the ones above; treat single-boot numbers on this model with
 suspicion, including anyone else's.
 
-Within a boot the benchmark is perfectly deterministic (identical chunk counts across runs);
-across boots the generated sequence can differ, and since throughput is
-`acceptance x step rate`, a sequence difference moves the headline number by ~10% without
-anything being wrong.
+The paragraph above is a historical NVIDIA-profile benchmark observation, not the current
+OrcaRouter H38 determinism status. The validated OrcaRouter v0.29 H38 repair now passes
+matched fresh-container and isolated fresh-compile determinism matrices. See
+`docs/H38-DETERMINISM.md` and `scripts/benchmark/README.md` for the current evidence.
 
 ### Prefill
 
@@ -506,6 +506,13 @@ The shared `scripts/model-profiles.sh` registry is intentionally not a second li
 manager: installation, activation, service ownership and removal remain transactional in
 `install.sh` and `uninstall.sh`. To change the active profile, uninstall while preserving
 the downloaded model, then run the installer for the other profile.
+
+> **H38 runtime status:** the validated OrcaRouter H38 decoder-only production profile lives
+> in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. The transactional
+> `install.sh` / systemd-managed `scripts/serve.sh` path has **not yet been migrated** to
+> that H38 image/profile. Until that integration is separately qualified, “H38 production”
+> means the validated v0.29 runtime profile, not the installer-managed service default. See
+> `docs/H38-DETERMINISM.md`.
 
 When defaults for the *same* installed profile change (for example OrcaRouter moving from
 the stock image to the GB10 TP=1 skinny-GEMM image), existing manifests deliberately keep
@@ -872,14 +879,13 @@ This is not an optimized configuration. Things that are open:
   262144; the card sanctions up to 1M, but no needle test was run here.
 - **`temperature: 0` in the benchmark** does not match the card's recommendation of 1.0
   for thinking mode. It was chosen for measurement stability, not quality.
-- **Boot-to-boot sequence variation is unexplained.** Identical configurations sometimes
-  generate a different continuation, which moves decode throughput by ~10% through
-  acceptance length. Within a boot the engine is bit-deterministic at `temperature=0`.
-  Ruled out: executor choice, KV pool size, prefix caching, the image, `--async-scheduling`,
-  and torch.compile (`inductor_compile_config` is empty, so no max_autotune, and the model's
-  own Triton kernels carry zero `@triton.autotune` — compilation is deterministic and
-  persisting its cache would not help). Not ruled out: allocation alignment, cuBLAS
-  first-call algorithm selection.
+- **Historical NVIDIA-profile boot-to-boot variation:** the benchmark snapshot documented
+  above observed sequence changes across boots. Do not apply that statement to the current
+  OrcaRouter H38 runtime. On OrcaRouter NVFP4 / vLLM v0.29 / single GB10, the H38
+  decoder-only canonicalization repair passed two matched fresh-container lifecycles and an
+  isolated fresh-compile lifecycle. Compile/cache state was explicitly controlled with
+  separate cache roots rather than assumed irrelevant. The exact tested scope and remaining
+  limitations are recorded in `docs/H38-DETERMINISM.md`.
 - **Nothing here is profiled.** The per-step CPU→GPU PLE round trip is the leading suspect
   for decode being ~30 tok/s against a ~90 tok/s bandwidth ceiling, but that is an
   inference from the arithmetic, not a measurement.

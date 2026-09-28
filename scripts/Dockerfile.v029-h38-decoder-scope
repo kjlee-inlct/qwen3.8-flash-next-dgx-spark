@@ -1,4 +1,4 @@
-# H38 scope A/B control: H12 + Humming FP8 BI + decoder-tagged Marlin canonical order only.
+# H38 production/decoder control: H12 + Humming FP8 BI + decoder-tagged Marlin canonical order only.
 FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
@@ -50,7 +50,7 @@ for forbidden in (
 ):
     assert forbidden not in marlin_s, forbidden
 
-print("H38 decoder-scope A/B image installed")
+print("H38 decoder-scope production image installed")
 PY
 
 LABEL qwen38.h38scope="decoder-v1"

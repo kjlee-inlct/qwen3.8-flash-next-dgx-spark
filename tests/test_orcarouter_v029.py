@@ -673,6 +673,23 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('"marlin_canonical_order"', benchmark_common)
         self.assertIn('"marlin_canonical_scope"', benchmark_common)
+        production_gate = (
+            ROOT / "scripts" / "benchmark" / "run-h38-production-gate.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            production_gate,
+        )
+        self.assertIn("--determinism-prompt-tokens 1024", production_gate)
+        self.assertIn("--determinism-prompt-tokens 32768", production_gate)
+        self.assertIn(
+            "--qsa-determinism-sizes 1024,2048,4096,8192,32768",
+            production_gate,
+        )
+        self.assertIn(
+            "--qsa-determinism-sizes 32768,8192,4096,2048,1024",
+            production_gate,
+        )
 
     def test_h38_decoder_scope_ab_profile(self) -> None:
         dockerfile = (
