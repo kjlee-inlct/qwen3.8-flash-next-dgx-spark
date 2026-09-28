@@ -2324,6 +2324,28 @@ W13 static/state inputs such as packed weights/scales, zeros/g_idx/sort indices,
 quantization type, dimensions, and workspace state. The next diagnostic must
 close those remaining inputs before making a kernel-level causality claim.
 
+##### H20 v30 r1 instrumentation failure
+
+Observed on 2026-09-28 with image label
+`ct-nvfp4-convert-diag-v30`:
+
+- main was `87fec1f` (PR #189);
+- the v30 image built successfully with image ID
+  `sha256:8baf00259a5701b06956f55c2a24b0a35bf01b4ee030786f8b006c4937c7886b`;
+- preflight passed;
+- the runtime reached READY after 732 seconds;
+- startup explicitly selected the `MARLIN` NVFP4 MoE backend;
+- the first `marlin-probe` request failed with HTTP 500 before any valid
+  v30 pair record was produced.
+
+This run is an **instrumentation/runtime failure**, not a numerical result.
+Do not use it to revise the v29 scientific conclusion.
+
+The immediate next step is to capture the server-side traceback for the failed
+request and fix the v30 probe. The host-side diagnostic should also surface the
+HTTP error body and recent container logs automatically so future HTTP 5xx
+failures are self-diagnosing.
+
 ##### H20 v30: first-Marlin-GEMM state audit
 
 v30 keeps the v29 single-pass execution and semantic alignment analysis. It
