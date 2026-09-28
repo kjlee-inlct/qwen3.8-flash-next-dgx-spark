@@ -36,7 +36,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("orcarouter   stable", result.stdout)
         self.assertIn("nvidia       experimental", result.stdout)
         self.assertIn("mazinb       experimental", result.stdout)
-        self.assertIn("orcarouter-hybrid in-progress", result.stdout)
+        self.assertIn("orcarouter-hybrid experimental", result.stdout)
         self.assertIn("lychee888    planned", result.stdout)
 
     def test_mazinb_installable_profile_has_pinned_metadata(self) -> None:
@@ -69,19 +69,10 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
         self.assertIn("--candidate", help_result.stdout)
 
-    def test_in_progress_and_planned_profiles_are_not_installable(self) -> None:
-        expected_status = {
-            "orcarouter-hybrid": "in-progress",
-            "lychee888": "planned",
-        }
-        for profile, status in expected_status.items():
-            with self.subTest(profile=profile):
-                result = self.run_install(profile)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(
-                    f"is a {status} profile and is not installable yet",
-                    result.stderr,
-                )
+    def test_planned_profiles_are_not_installable(self) -> None:
+        result = self.run_install("lychee888")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is a planned profile and is not installable yet", result.stderr)
 
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
@@ -119,6 +110,60 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("f2c21eb", result.stdout)
         self.assertIn("profile     : mazinb", result.stdout)
         self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
+
+    def test_orcarouter_hybrid_profile_is_generated_h6_checkpoint(self) -> None:
+        result = self.run_install("orcarouter-hybrid")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("local/orcarouter-mazinb-h6-w4a16", result.stdout)
+        self.assertIn("h6-modelopt-w4a16-v1", result.stdout)
+        self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
+        self.assertIn("profile     : orcarouter-hybrid", result.stdout)
+        self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
+        self.assertIn("hybrid base", result.stdout)
+        self.assertIn("hybrid mix", result.stdout)
+
+    def test_orcarouter_hybrid_registry_marks_local_build_sources(self) -> None:
+        result = subprocess.run(
+            [
+                "bash",
+                "-lc",
+                'source scripts/model-profiles.sh; load_model_profile orcarouter-hybrid; '
+                'printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$PROFILE_LOCAL_BUILD" '
+                '"$PROFILE_BASE_PROFILE" "$PROFILE_OVERLAY_PROFILE" "$PROFILE_MODEL_DIR" "$PROFILE_IMAGE"',
+            ],
+            cwd=ROOT,
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines()[:3],
+            ["1", "orcarouter", "mazinb"],
+        )
+        self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
+        self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
+
+    def test_direct_hybrid_download_is_rejected_as_generated_profile(self) -> None:
+        result = subprocess.run(
+            [str(ROOT / "scripts" / "download-weights.sh"), "--check"],
+            cwd=ROOT,
+            env={**os.environ, "MODEL_PROFILE": "orcarouter-hybrid"},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("generated locally", result.stderr)
+
+    def test_installer_wires_hybrid_build_orchestrator(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("prepare-orcarouter-hybrid.sh", installer)
+        self.assertIn("MODEL_PROFILE=orcarouter", installer)
+        self.assertIn("MODEL_PROFILE=mazinb", installer)
+        self.assertIn("H6_W4A16_MODEL_DIR", installer)
+        self.assertIn("OrcaRouter Hybrid H6", installer)
 
     def test_installer_builds_local_v029_image_for_mazinb(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
