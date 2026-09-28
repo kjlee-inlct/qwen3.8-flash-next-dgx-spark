@@ -3306,6 +3306,51 @@ canonicalization is required.
 Do not promote decoder-only yet. Complete at least one more fresh decoder
 lifecycle and the matched all-call cycles before comparing scope robustness.
 
+##### H20 v38 all-call A/B cycle1
+
+Observed on 2026-09-28 using the matched
+`hybrid-h38-deterministic` all-call profile.
+
+The complete matrix passed:
+
+```text
+1K standalone x20        PASS, unique_hashes=1
+32K standalone x10       PASS, unique_hashes=1
+forward QSA sweep        PASS, every size unique_hashes=1
+reverse QSA sweep        PASS, every size unique_hashes=1
+```
+
+The 1K standalone output was stable for all 20 repeats at:
+
+```text
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+The 32K standalone output was stable for all 10 repeats at:
+
+```text
+d6fa888525cd888595d9c51c2a24aa248cce55cfd35d16bdc0ddbba0a8e78d39
+```
+
+Forward and reverse sweeps both reported
+`first_failure_tokens=null`.
+
+At this point the matched A/B status is:
+
+```text
+decoder scope cycle1   PASS
+decoder scope cycle2   PASS
+all-call scope cycle1  PASS
+all-call scope cycle2  pending
+```
+
+The matched cycle1 output hashes are also identical across decoder-only and
+all-call scope for the 1K and 32K standalone gates. Therefore the canonical
+scope difference has not produced an observable semantic output difference in
+the matched matrix so far.
+
+Do not choose a final scope until all-call cycle2 is complete.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
