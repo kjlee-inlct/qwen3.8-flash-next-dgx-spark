@@ -22,6 +22,8 @@ H5_TOOL = ROOT / "scripts" / "model" / "prepare-h5-input-scale.py"
 H5_WRAPPER = ROOT / "scripts" / "model" / "prepare-h5-input-scale.sh"
 H6_TOOL = ROOT / "scripts" / "model" / "prepare-h6-w4a16.py"
 H6_WRAPPER = ROOT / "scripts" / "model" / "prepare-h6-w4a16.sh"
+INSTALLER_HYBRID_WRAPPER = ROOT / "scripts" / "model" / "prepare-orcarouter-hybrid.sh"
+INSTALLER_HYBRID_VALIDATOR = ROOT / "scripts" / "model" / "validate-orcarouter-hybrid.py"
 
 
 class HybridCheckpointTests(unittest.TestCase):
@@ -312,6 +314,159 @@ class HybridCheckpointTests(unittest.TestCase):
         self.assertIn("qwen3.8-h5-neutral-input-scale", source)
         self.assertIn("stop the runtime before H6 build", source)
         self.assertIn("/h5-parent:ro", source)
+
+
+    def test_installer_hybrid_orchestrator_reuses_h3_h6_pipeline(self) -> None:
+        source = INSTALLER_HYBRID_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("prepare-quant-layout-hybrid-checkpoint.py", source)
+        self.assertIn("prepare-h4-expert-ab.py", source)
+        self.assertIn("prepare-h5-input-scale.py", source)
+        self.assertIn("prepare-h6-w4a16.py", source)
+        self.assertIn("--variant orca-all", source)
+        self.assertIn("qwen3.8-h6-modelopt-w4a16", source)
+        self.assertIn("non-empty but incomplete", source)
+        self.assertNotIn("rm -rf", source)
+
+    def test_installer_hybrid_validator_accepts_complete_h6_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "base"
+            overlay = root / "overlay"
+            h3 = root / "h3"
+            h4 = root / "h4"
+            h5 = root / "h5"
+            h6 = root / "h6"
+            for path in (base, overlay, h3, h4, h5, h6):
+                path.mkdir()
+                (path / "model.safetensors.index.json").write_text(
+                    json.dumps({"weight_map": {"x": "x.safetensors"}}),
+                    encoding="utf-8",
+                )
+
+            base_revision = "c1209bda15a6bbc4c68b585e93d40c0d85f50306"
+            overlay_revision = "f" * 40
+            (base / ".qwen38-model-manifest.json").write_text(
+                json.dumps({
+                    "status": "complete",
+                    "repository": "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                    "revision": base_revision,
+                }),
+                encoding="utf-8",
+            )
+            (overlay / ".qwen38-model-manifest.json").write_text(
+                json.dumps({
+                    "status": "complete",
+                    "repository": "mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                    "revision": overlay_revision,
+                }),
+                encoding="utf-8",
+            )
+            (h3 / ".qwen38-hybrid-manifest.json").write_text(
+                json.dumps({
+                    "status": "complete",
+                    "variant": "quant-layout-mazinb-experts",
+                    "base_revision": base_revision,
+                    "overlay_revision": overlay_revision,
+                    "group0_bf16_weights": 300,
+                    "group0_fp8_scales_removed": 300,
+                    "base_expert_tensors_removed": 221184,
+                    "overlay_expert_tensors_added": 294912,
+                    "quantization_config_source": "mazinb-modelopt-nvfp4",
+                    "mtp_tensors_changed": 0,
+                }),
+                encoding="utf-8",
+            )
+            (h4 / ".qwen38-hybrid-manifest.json").write_text(
+                json.dumps({
+                    "status": "complete",
+                    "variant": "h4-orca-all",
+                    "parent_variant": "quant-layout-mazinb-experts",
+                    "orca_modules_normalized": 73728,
+                    "normalized_tensors": 221184,
+                    "input_scale_source": "mazinb-h3",
+                    "quantization_config_source": "mazinb-modelopt-nvfp4",
+                    "mtp_tensors_changed": 0,
+                }),
+                encoding="utf-8",
+            )
+            (h5 / ".qwen38-hybrid-manifest.json").write_text(
+                json.dumps({
+                    "status": "complete",
+                    "variant": "h5-neutral-input-scale",
+                    "parent_variant": "h4-orca-all",
+                    "input_scale_tensors_changed": 73728,
+                    "input_scale_value": 1.0,
+                    "expert_value_source": "orcarouter-h4-all",
+                    "quantization_config_source": "mazinb-modelopt-nvfp4",
+                    "mtp_tensors_changed": 0,
+                }),
+                encoding="utf-8",
+            )
+            (h6 / ".qwen38-hybrid-manifest.json").write_text(
+                json.dumps({
+                    "status": "complete",
+                    "variant": "h6-modelopt-w4a16",
+                    "parent_variant": "h5-neutral-input-scale",
+                    "base_revision": base_revision,
+                    "expert_value_source": "orcarouter-h4-all",
+                    "input_scale_source": "h5-neutral-1.0",
+                    "quant_algo_before": "NVFP4",
+                    "quant_algo_after": "W4A16_NVFP4",
+                    "safetensor_bytes_changed": 0,
+                    "mtp_tensors_changed": 0,
+                }),
+                encoding="utf-8",
+            )
+            (h6 / "config.json").write_text(
+                json.dumps({
+                    "quantization_config": {
+                        "quant_method": "modelopt",
+                        "quant_algo": "W4A16_NVFP4",
+                    }
+                }),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(INSTALLER_HYBRID_VALIDATOR),
+                    "--base-dir", str(base),
+                    "--overlay-dir", str(overlay),
+                    "--h3-dir", str(h3),
+                    "--h4-dir", str(h4),
+                    "--h5-dir", str(h5),
+                    "--model-dir", str(h6),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("OrcaRouter hybrid chain is valid", result.stdout)
+
+            runtime_only = subprocess.run(
+                [
+                    "python3",
+                    str(INSTALLER_HYBRID_VALIDATOR),
+                    "--runtime-only",
+                    "--base-dir", str(base),
+                    "--h3-dir", str(h3),
+                    "--h4-dir", str(h4),
+                    "--h5-dir", str(h5),
+                    "--model-dir", str(h6),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(
+                runtime_only.returncode,
+                0,
+                runtime_only.stdout + runtime_only.stderr,
+            )
 
 if __name__ == "__main__":
     unittest.main()
