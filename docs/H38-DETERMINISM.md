@@ -110,49 +110,55 @@ Therefore the H38 determinism repair is closed for the validated
 does not include the transactional installer/systemd managed-service path,
 which remains a separate integration and lifecycle-qualification phase.
 
-## Managed-service integration gap
+## Managed-service integration qualification gap
 
-The H38 runtime qualification above is for
-`scripts/runtime/orcarouter-v029.sh`.
+The completed H38 runtime qualification above remains tied to
+`scripts/runtime/orcarouter-v029.sh`. The transactional managed-service code
+path is now wired to the same checkpoint/runtime combination through the
+opt-in installer profile:
 
-The transactional managed-service path is still separate:
+```text
+orcarouter-hybrid
+```
 
-- `install.sh`
-- `scripts/model/model-profiles.sh`
-- installation manifest image defaults
-- `scripts/serve.sh`
-- `scripts/runtime/service-runner.sh`
-- systemd replacement / rollback / runtime attestation
+The integration deliberately keeps the stable `orcarouter` profile unchanged.
+`orcarouter-hybrid` reuses the pinned OrcaRouter checkpoint, revision, and
+model directory, while selecting:
 
-That path currently does not select the H38 decoder image as its OrcaRouter
-default. Do not describe the installer-managed service as H38 production until
-that integration is implemented and requalified through its lifecycle,
-rollback, doctor, determinism, and performance gates.
+- `vllm-orcarouter-v029-h38-decoder-scope:v1`;
+- PLE mmap;
+- exact QSA;
+- MTP `k=2`;
+- `max_model_len=262144`;
+- `max_num_batched_tokens=8192`;
+- `max_num_seqs=3`;
+- prefix caching disabled;
+- Marlin canonical order enabled with scope `decoder`;
+- an isolated managed H38 compile-cache root.
 
-This gap is intentionally documented rather than silently changing the managed
-runtime based only on the experimental-runtime qualification.
+The integration covers the profile registry, installer image-build chain,
+strict install-manifest parsing, `scripts/serve.sh`, systemd service runner,
+and doctor image-label validation.
 
+This is **code-path integration, not completed managed-host qualification**.
+Before the installer-managed profile is described as H38 managed production,
+the DGX Spark must still demonstrate:
 
-Before managed-service H38 promotion is complete, the following must be updated
-and requalified together:
+- installer selection and dry-run from current main;
+- reuse or clean download of the pinned OrcaRouter checkpoint;
+- complete H38 image-chain build and decoder-scope image label;
+- managed systemd start and readiness attestation;
+- doctor with the expected image/model/served-name identity;
+- service restart;
+- runtime replacement rollback and update-failure rollback;
+- uninstall while preserving shared OrcaRouter checkpoint/swap when requested;
+- managed-profile determinism using the canonical H38 matrix;
+- performance regression comparison with the validated runtime track.
 
-- `scripts/model/model-profiles.sh`: OrcaRouter managed runtime image/defaults;
-- `install.sh`: clean-host image build path and profile-default migration;
-- `scripts/serve.sh`: H38 decoder patch/runtime environment and cache policy;
-- `scripts/runtime/service-runner.sh`: managed readiness/attestation behavior
-  against the H38 served runtime;
-- `scripts/model-assets.sh`: H38 image/container inventory and retirement
-  dependencies;
-- lifecycle/service/update tests covering installation, replacement, rollback,
-  restart, uninstall, and profile-default refresh;
-- doctor and qualification checks for the H38 image label, canonical scope, and
-  served-model identity;
-- a managed-service determinism/performance qualification run after the
-  integration.
-
-`scripts/model-assets.sh` is also commonly modified locally during asset
-cleanup work. Reconcile those local changes before changing its H38 inventory;
-do not overwrite operator-owned edits merely to make the registry look current.
+`scripts/model-assets.sh` is deliberately not changed by this integration
+because the active DGX workspace has operator-owned edits in that file.
+Reconcile those local changes separately before adding H38 image-retirement
+inventory; do not overwrite them merely to make the registry look current.
 
 ## Remaining limitations
 
