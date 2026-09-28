@@ -3,7 +3,8 @@
 #
 # PLE handling is profile-specific:
 #   - orcarouter / nvidia keep the legacy CPU-offload managed path;
-#   - mazinb uses the validated vLLM v0.29 PLE mmap path and exact-QSA fallback.
+#   - mazinb and orcarouter-hybrid use the validated vLLM v0.29 PLE mmap path
+#     and exact-QSA fallback.
 #
 # Keep profile defaults explicit below. Do not silently make experimental runtime flags
 # global because the published checkpoints differ in PLE representation and runtime image.
@@ -19,6 +20,7 @@ PLE_MODE=cpu-offload
 KV_MEMORY_FLAG=--kv-cache-memory
 VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38"
 FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer"
+HYBRID_MOUNTS=()
 case "${MODEL_PROFILE}" in
   orcarouter)
     IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
@@ -45,6 +47,31 @@ case "${MODEL_PROFILE}" in
     VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
     FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
     SERVED_NAME="${SERVED_NAME:-mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
+    ;;
+  orcarouter-hybrid)
+    IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029:v1}"
+    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-h6-modelopt-w4a16}"
+    DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
+    DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    DEFAULT_QSA_EXACT_TOPK=1
+    PLE_MODE=mmap
+    KV_MEMORY_FLAG=--kv-cache-memory-bytes
+    VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
+    FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
+    HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
+    HYBRID_H3_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
+    HYBRID_H4_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
+    HYBRID_H5_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
+    for hybrid_dir in "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}" "${HYBRID_H4_DIR}" "${HYBRID_H5_DIR}"; do
+      [[ -d "${hybrid_dir}" ]] || { echo "FATAL: hybrid parent checkpoint missing: ${hybrid_dir}" >&2; exit 1; }
+    done
+    HYBRID_MOUNTS=(
+      -v "${HYBRID_BASE_DIR}:/base-model:ro"
+      -v "${HYBRID_H3_DIR}:/h3-model:ro"
+      -v "${HYBRID_H4_DIR}:/h4-all:ro"
+      -v "${HYBRID_H5_DIR}:/h5-parent:ro"
+    )
+    SERVED_NAME="${SERVED_NAME:-orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   *) echo "FATAL: unknown MODEL_PROFILE=${MODEL_PROFILE}" >&2; exit 2 ;;
 esac
@@ -246,6 +273,7 @@ docker run -d \
   "${QSA_DET_ENV[@]}" \
   "${QSA_EXACT_ENV[@]}" \
   "${LONG_ENV[@]}" \
+  "${HYBRID_MOUNTS[@]}" \
   -v "${MODEL_DIR}:/model:ro" \
   "${CONFIG_MOUNT[@]}" \
   -v "${FLASHINFER_CACHE_DIR}:/root/.cache/flashinfer" \
