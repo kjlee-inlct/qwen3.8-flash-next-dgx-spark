@@ -237,6 +237,12 @@ class LifecycleIntegrationTests(unittest.TestCase):
             self.assertNotIn("Resuming installation", result.stdout)
             self.assertEqual(state.read_bytes(), before)
 
+    def test_uninstaller_accepts_managed_hybrid_manifest_for_owned_model_purge(self) -> None:
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        self.assertIn(".qwen38-model-manifest.json", uninstaller)
+        self.assertIn(".qwen38-hybrid-manifest.json", uninstaller)
+        self.assertIn("managed model/hybrid manifest missing", uninstaller)
+
     def test_operations_runbook_matches_supported_commands(self) -> None:
         operations = (ROOT / "OPERATIONS.md").read_text(encoding="utf-8")
 
