@@ -3510,6 +3510,72 @@ Decoder-only has now passed:
 One all-call isolated fresh-compile cycle remains before final production scope
 promotion.
 
+##### H20 v38 production scope promotion
+
+Final matched validation now includes three successful lifecycles per scope:
+
+```text
+decoder scope:
+  fresh container cycle1   PASS
+  fresh container cycle2   PASS
+  isolated fresh compile   PASS
+
+all-call scope:
+  fresh container cycle1   PASS
+  fresh container cycle2   PASS
+  isolated fresh compile   PASS
+```
+
+For the isolated fresh-compile runs, both scopes performed a real compile path
+instead of directly loading an existing AOT artifact. The all-call uncached
+startup reported:
+
+```text
+torch.compile took 15.94 s in total
+```
+
+Its full matrix passed:
+
+```text
+1K standalone x20        PASS, unique_hashes=1
+32K standalone x10       PASS, unique_hashes=1
+forward QSA sweep        PASS, every size unique_hashes=1
+reverse QSA sweep        PASS, every size unique_hashes=1
+```
+
+Stable standalone hashes remained identical across both scopes and all
+successful lifecycles:
+
+```text
+1K:
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+
+32K:
+d6fa888525cd888595d9c51c2a24aa248cce55cfd35d16bdc0ddbba0a8e78d39
+```
+
+No determinism advantage was observed for all-call canonicalization.
+
+Production scope is therefore promoted to **decoder-only canonicalization**
+under the minimum-change principle.
+
+Runtime role mapping after promotion:
+
+| Role | Profile | Canonical scope |
+|---|---|---|
+| production default | `hybrid-h38-deterministic` | decoder |
+| explicit decoder A/B control | `hybrid-h38-decoder-scope` | decoder |
+| broader fallback/control | `hybrid-h38-all-scope` | all |
+
+The production and decoder-control profiles both use the validated
+`vllm-orcarouter-v029-h38-decoder-scope:v1` image. The all-call fallback keeps
+the existing `vllm-orcarouter-v029-h38-deterministic:v1` image for regression
+and fallback comparison.
+
+This closes the H38 scope-selection question for the tested OrcaRouter NVFP4 /
+vLLM v0.29 / single GB10 configuration and benchmark matrix. It does not claim
+universal determinism outside those tested conditions.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
