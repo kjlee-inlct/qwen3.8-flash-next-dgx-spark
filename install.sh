@@ -293,13 +293,14 @@ else
 fi
 if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4] (1): ' answer
+    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6] (1): ' answer
   else
-    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4] (1): ' answer
+    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6] (1): ' answer
   fi
   case "${answer}" in
     2|nvidia) MODEL_PROFILE=nvidia ;;
     3|mazinb) MODEL_PROFILE=mazinb ;;
+    4|orcarouter-hybrid) MODEL_PROFILE=orcarouter-hybrid ;;
     *) MODEL_PROFILE=orcarouter ;;
   esac
   load_model_profile "${MODEL_PROFILE}" || exit $?
@@ -405,6 +406,16 @@ MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
 MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
+HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
+HYBRID_OVERLAY_DIR="${MAZINB_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-mazinb}"
+HYBRID_H3_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
+HYBRID_H4_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
+HYBRID_H5_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
+HYBRID_BASE_DIR="$(realpath -m -- "${HYBRID_BASE_DIR}")"
+HYBRID_OVERLAY_DIR="$(realpath -m -- "${HYBRID_OVERLAY_DIR}")"
+HYBRID_H3_DIR="$(realpath -m -- "${HYBRID_H3_DIR}")"
+HYBRID_H4_DIR="$(realpath -m -- "${HYBRID_H4_DIR}")"
+HYBRID_H5_DIR="$(realpath -m -- "${HYBRID_H5_DIR}")"
 [[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
 printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  profile     : %s\n' "${MODEL_PROFILE}"
@@ -413,7 +424,17 @@ if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${OLD_PROFILE_IMAGE:-${IMAGE}}" != 
   printf '  image change: %s -> %s\n' "${OLD_PROFILE_IMAGE}" "${IMAGE}"
 fi
 printf '\n'
-printf '  config      : %s\n' "${CONFIG_OVERRIDE:-automatic vLLM compatibility override}"
+if [[ -n "${CONFIG_OVERRIDE}" ]]; then
+  config_plan="${CONFIG_OVERRIDE}"
+elif [[ "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
+  config_plan="automatic vLLM compatibility override"
+else
+  config_plan="checkpoint config (no override)"
+fi
+printf '  config      : %s\n' "${config_plan}"
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  printf '  hybrid base : %s\n  hybrid mix  : %s\n' "${HYBRID_BASE_DIR}" "${HYBRID_OVERLAY_DIR}"
+fi
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s GiB, %s samples, heartbeat=%ss)\n\n' \
   "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)" "${MONITOR_MIN_AVAILABLE_GIB}" \
@@ -457,8 +478,15 @@ elif [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
 fi
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
-MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
-  "${ROOT_DIR}/scripts/download-weights.sh" --check
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh" --check
+  MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh" --check
+else
+  MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh" --check
+fi
 write_state prepared
 
 if ! "${ROOT_DIR}/scripts/manage-swap.sh" status --file "${SWAP_FILE}" | grep -q 'active     : yes'; then
@@ -470,10 +498,29 @@ if ! "${ROOT_DIR}/scripts/manage-swap.sh" status --file "${SWAP_FILE}" | grep -q
 fi
 write_state swap_ready
 
-printf '\nDownloading and verifying pinned checkpoint...\n'
+printf '\nDownloading and verifying pinned checkpoint inputs...\n'
 write_state downloading
-MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
-  "${ROOT_DIR}/scripts/download-weights.sh"
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh"
+  MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh"
+  if ! docker image inspect vllm-orcarouter-v029:v1 >/dev/null 2>&1; then
+    printf '\nPreparing vLLM v0.29 hybrid builder/runtime image...\n'
+    docker build -t vllm-orcarouter-v029:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
+  fi
+  printf '\nBuilding/reusing OrcaRouter hybrid H3 -> H4-all -> H5 -> H6 chain...\n'
+  ORCAROUTER_MODEL_DIR="${HYBRID_BASE_DIR}" \
+  MAZINB_MODEL_DIR="${HYBRID_OVERLAY_DIR}" \
+  HYBRID_QUANT_LAYOUT_MODEL_DIR="${HYBRID_H3_DIR}" \
+  H4_ORCA_ALL_MODEL_DIR="${HYBRID_H4_DIR}" \
+  H5_NEUTRAL_INPUT_MODEL_DIR="${HYBRID_H5_DIR}" \
+  H6_W4A16_MODEL_DIR="${MODEL_DIR}" \
+    bash "${ROOT_DIR}/scripts/model/prepare-orcarouter-hybrid.sh" build
+else
+  MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
+    "${ROOT_DIR}/scripts/download-weights.sh"
+fi
 write_state weights_ready
 if [[ -z "${CONFIG_OVERRIDE}" && "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
   CONFIG_OVERRIDE="${STATE_DIR}/config.vllm.json"
@@ -482,10 +529,21 @@ if [[ -z "${CONFIG_OVERRIDE}" && "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
   CONFIG_OWNED=1
   write_state config_ready
 fi
-printf '\nInspecting checkpoint tensor headers...\n'
-inspect_args=(--offline --repo "${REPO}" --model-dir "${MODEL_DIR}")
-[[ -n "${CONFIG_OVERRIDE}" ]] && inspect_args+=(--config-override "${CONFIG_OVERRIDE}")
-python3 "${ROOT_DIR}/scripts/inspect-model.py" "${inspect_args[@]}"
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  printf '\nValidating generated OrcaRouter hybrid checkpoint chain...\n'
+  python3 "${ROOT_DIR}/scripts/model/validate-orcarouter-hybrid.py" \
+    --base-dir "${HYBRID_BASE_DIR}" \
+    --overlay-dir "${HYBRID_OVERLAY_DIR}" \
+    --h3-dir "${HYBRID_H3_DIR}" \
+    --h4-dir "${HYBRID_H4_DIR}" \
+    --h5-dir "${HYBRID_H5_DIR}" \
+    --model-dir "${MODEL_DIR}"
+else
+  printf '\nInspecting checkpoint tensor headers...\n'
+  inspect_args=(--offline --repo "${REPO}" --model-dir "${MODEL_DIR}")
+  [[ -n "${CONFIG_OVERRIDE}" ]] && inspect_args+=(--config-override "${CONFIG_OVERRIDE}")
+  python3 "${ROOT_DIR}/scripts/inspect-model.py" "${inspect_args[@]}"
+fi
 write_state inspected
 printf '\nPreparing vLLM image...\n'
 if [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
@@ -499,7 +557,7 @@ elif [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.nv-mixed" "${ROOT_DIR}/scripts"
   fi
-elif [[ "${MODEL_PROFILE}" == mazinb && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
+elif [[ ( "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybrid ) && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
   fi
