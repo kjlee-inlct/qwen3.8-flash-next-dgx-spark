@@ -10,7 +10,7 @@ CYCLE="${2:-}"
 
 case "${SCOPE}" in
   all)
-    MODEL="hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+    MODEL="hybrid-h38-all-scope/Qwen3.8-Flash-Next-Uncensored-NVFP4"
     ;;
   decoder)
     MODEL="hybrid-h38-decoder-scope/Qwen3.8-Flash-Next-Uncensored-NVFP4"
