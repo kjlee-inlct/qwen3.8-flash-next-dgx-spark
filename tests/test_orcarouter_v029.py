@@ -658,6 +658,11 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("vllm-orcarouter-v029-h38-deterministic:v1", runtime)
         self.assertIn("ct-h12-fp8-bi-marlin-canonical-v1", runtime)
         self.assertIn("runtime-production-candidate", runtime)
+        self.assertIn("QWEN38_MARLIN_CANONICAL_ORDER=1", runtime)
+        benchmark_common = (
+            ROOT / "scripts" / "benchmark" / "lib" / "common.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"marlin_canonical_order"', benchmark_common)
 
     def test_h38_marlin_patcher_fixture(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-marlin-canonical-order.py"
