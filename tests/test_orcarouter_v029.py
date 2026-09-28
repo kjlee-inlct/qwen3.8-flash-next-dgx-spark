@@ -634,6 +634,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             "patch-v029-h20-humming-fp8-batch-invariant.py",
             dockerfile,
         )
+        self.assertIn("patch-v029-ct-marlin-layer-tag.py", dockerfile)
         self.assertIn("patch-v029-marlin-canonical-order.py", dockerfile)
         self.assertIn(
             'LABEL qwen38.h38="ct-h12-fp8-bi-marlin-canonical-v1"',
@@ -648,6 +649,8 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             "def _qwen38_canonicalize_marlin_sorted_tokens",
             patch,
         )
+        self.assertIn("if block_size_m <= 0 or layer_idx < 0", patch)
+        self.assertIn('getattr(self, "_qwen38_marlin_layer_idx", -1)', patch)
         self.assertIn("torch.argsort(key, stable=True)", patch)
         self.assertNotIn("torch.library.custom_op", patch)
         self.assertNotIn("QWEN38_H20M_TRIGGER", patch)
@@ -669,13 +672,22 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         source = """from vllm.scalar_type import ScalarType, scalar_types
 
 
+def _fused_marlin_moe(
+    activation_config: ApplyMoEActivationConfig | None = None,
+) -> torch.Tensor:
+    return output
+
+
 def fused_marlin_moe(
     topk_ids,
     block_size_m,
     global_num_experts,
     expert_map,
     activation,
-):
+    input_dtype=None,
+    is_k_full=True,
+    activation_config: ApplyMoEActivationConfig | None = None,
+) -> torch.Tensor:
     sorted_token_ids, expert_ids, num_tokens_post_padded = moe_align_block_size(
         topk_ids,
         block_size_m,
@@ -685,7 +697,37 @@ def fused_marlin_moe(
     )
 
     assert activation is not None
-    return sorted_token_ids
+    result = _fused_marlin_moe(
+        input_dtype=input_dtype,
+        is_k_full=is_k_full,
+    ).view(-1, topk, K)
+    return result
+
+
+def batched_fused_marlin_moe():
+    return None
+
+
+class MarlinExperts:
+    def apply(self):
+        assert self.w1_scale is not None
+        assert self.w2_scale is not None
+
+        ctx = self._lora_context
+        if ctx is None:
+            fused_marlin_moe(
+                is_k_full=self.is_k_full,
+                input_dtype=self.input_dtype,
+            )
+            return
+        fused_marlin_moe(
+            is_k_full=self.is_k_full,
+            input_dtype=self.input_dtype,
+        )
+
+
+class BatchedMarlinExperts:
+    pass
 """
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "marlin_moe.py"
@@ -708,6 +750,9 @@ def fused_marlin_moe(
                 "sorted_token_ids = _qwen38_canonicalize_marlin_sorted_tokens(",
                 patched,
             )
+
+            self.assertIn("h38_layer_idx", patched)
+            self.assertIn("_qwen38_marlin_layer_idx", patched)
 
     def test_h20_patcher_executes_on_v029_ct_and_modelopt_shapes(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-nvfp4-moe-convert-diagnostics.py"
