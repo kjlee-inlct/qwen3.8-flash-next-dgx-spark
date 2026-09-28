@@ -4,32 +4,25 @@ FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG HUM=${SP}/vllm/model_executor/kernels/linear/scaled_mm/humming.py
-ARG CT=${SP}/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py
 ARG MARLIN_MOE=${SP}/vllm/model_executor/layers/fused_moe/experts/marlin_moe.py
 
 COPY patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py
-COPY patch-v029-ct-marlin-layer-tag.py /tmp/patch-v029-ct-marlin-layer-tag.py
 COPY patch-v029-marlin-canonical-order.py /tmp/patch-v029-marlin-canonical-order.py
 
 RUN cp ${HUM} ${HUM}.h20-v38.orig \
- && cp ${CT} ${CT}.h20-v38.orig \
  && cp ${MARLIN_MOE} ${MARLIN_MOE}.h20-v38.orig \
  && python3 /tmp/patch-v029-h20-humming-fp8-batch-invariant.py ${HUM} \
- && python3 /tmp/patch-v029-ct-marlin-layer-tag.py ${CT} \
  && python3 /tmp/patch-v029-marlin-canonical-order.py ${MARLIN_MOE} \
- && rm /tmp/patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-ct-marlin-layer-tag.py /tmp/patch-v029-marlin-canonical-order.py \
+ && rm /tmp/patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-marlin-canonical-order.py \
  && python3 - <<'PY'
 import ast
 
 hum = "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm/humming.py"
-ct = "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe/compressed_tensors_moe_w4a4_nvfp4.py"
 marlin = "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/marlin_moe.py"
 
 hum_s = open(hum, encoding="utf-8").read()
-ct_s = open(ct, encoding="utf-8").read()
 marlin_s = open(marlin, encoding="utf-8").read()
 ast.parse(hum_s)
-ast.parse(ct_s)
 ast.parse(marlin_s)
 
 fp8 = hum_s[
@@ -38,12 +31,9 @@ fp8 = hum_s[
 ]
 assert '_qwen38_h20_compute["use_batch_invariant"] = True' in fp8
 
-assert "_qwen38_marlin_layer_idx" in ct_s
 assert "def _qwen38_canonicalize_marlin_sorted_tokens" in marlin_s
 assert "torch.argsort(key, stable=True)" in marlin_s
 assert "sorted_token_ids = _qwen38_canonicalize_marlin_sorted_tokens(" in marlin_s
-assert 'getattr(self, "_qwen38_marlin_layer_idx", -1)' in marlin_s
-assert "if block_size_m <= 0 or layer_idx < 0" in marlin_s
 
 # Production image must not contain H20 Marlin capture/instrumentation.
 for forbidden in (
