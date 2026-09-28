@@ -619,10 +619,12 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
 
     def test_h38_minimal_deterministic_profile(self) -> None:
         dockerfile = (
-            ROOT / "scripts" / "Dockerfile.v029-h38-deterministic"
+            ROOT / "scripts" / "Dockerfile.v029-h38-decoder-scope"
         ).read_text(encoding="utf-8")
         patch = (
-            ROOT / "scripts" / "patch-v029-marlin-canonical-order.py"
+            ROOT
+            / "scripts"
+            / "patch-v029-marlin-canonical-order-decoder-scope.py"
         ).read_text(encoding="utf-8")
         runtime = SCRIPT.read_text(encoding="utf-8")
 
@@ -634,9 +636,12 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             "patch-v029-h20-humming-fp8-batch-invariant.py",
             dockerfile,
         )
-        self.assertIn("patch-v029-marlin-canonical-order.py", dockerfile)
         self.assertIn(
-            'LABEL qwen38.h38="ct-h12-fp8-bi-marlin-canonical-v1"',
+            "patch-v029-marlin-canonical-order-decoder-scope.py",
+            dockerfile,
+        )
+        self.assertIn(
+            'LABEL qwen38.h38scope="decoder-v1"',
             dockerfile,
         )
         self.assertNotIn("patch-v029-h20-marlin-boundary.py", dockerfile)
@@ -649,16 +654,20 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             patch,
         )
         self.assertIn("torch.argsort(key, stable=True)", patch)
+        self.assertIn("if block_size_m <= 0 or layer_idx < 0", patch)
         self.assertNotIn("torch.library.custom_op", patch)
         self.assertNotIn("QWEN38_H20M_TRIGGER", patch)
         self.assertNotIn("_qwen38_h20m_capture", patch)
 
         self.assertIn("hybrid-h38-deterministic", runtime)
         self.assertIn("qwen38-h38-deterministic-v029", runtime)
-        self.assertIn("vllm-orcarouter-v029-h38-deterministic:v1", runtime)
-        self.assertIn("ct-h12-fp8-bi-marlin-canonical-v1", runtime)
-        self.assertIn("runtime-production-candidate", runtime)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", runtime)
+        self.assertIn('qwen38.h38scope', runtime)
+        self.assertIn("runtime-production-decoder-scope", runtime)
         self.assertIn("QWEN38_MARLIN_CANONICAL_ORDER=1", runtime)
+        self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", runtime)
+        self.assertIn("hybrid-h38-all-scope", runtime)
+        self.assertIn("runtime-fallback-control", runtime)
         benchmark_common = (
             ROOT / "scripts" / "benchmark" / "lib" / "common.py"
         ).read_text(encoding="utf-8")
