@@ -47,7 +47,23 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("DEFAULT_QSA_EXACT_TOPK=1", server)
         self.assertIn("KV_MEMORY_FLAG=--kv-cache-memory-bytes", server)
         self.assertIn('"${MODEL_PROFILE:-}" == mazinb', runner)
-        self.assertIn('one_of("orcarouter", "nvidia", "mazinb")', parser)
+        self.assertIn('one_of("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid")', parser)
+
+    def test_orcarouter_hybrid_managed_runtime_path_is_wired(self) -> None:
+        server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        runner = (
+            ROOT / "scripts" / "runtime" / "service-runner.sh"
+        ).read_text(encoding="utf-8")
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        self.assertIn("orcarouter-hybrid)", server)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", server)
+        self.assertIn("QWEN38_MARLIN_CANONICAL_ORDER=1", server)
+        self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", server)
+        self.assertIn("h38-marlin-canonical-decoder-managed-v1", server)
+        self.assertIn('"${H38_ENV[@]}"', server)
+        self.assertIn('"${MODEL_PROFILE:-}" == orcarouter-hybrid', runner)
+        self.assertIn("H38 decoder-only image label is valid", doctor)
+        self.assertIn("model profile does not require a vLLM config override", doctor)
 
     def test_service_runner_strictly_parses_install_manifest(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
