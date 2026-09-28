@@ -2822,6 +2822,70 @@ do not by themselves quantify canonicalization overhead versus an exactly
 matched unpatched runtime, but they show no correctness failure, OOM, or
 catastrophic throughput collapse.
 
+##### H20 v38 r1 observed result
+
+Observed on 2026-09-28 with the first diagnostic-free H38 image:
+
+- image ID
+  `sha256:6f6128e148c9f06210b5d9f8160a93ee80b292fe2c10c02f3463c8cdff89b919`;
+- image label `ct-h12-fp8-bi-marlin-canonical-v1`;
+- READY after 642 seconds;
+- runtime selected `MARLIN` NVFP4 MoE;
+- local Humming FP8 batch-invariant mode was active;
+- benchmark provenance recorded `marlin_canonical_order="1"`.
+
+The diagnostic-free 1024/128 five-repeat gate passed deterministically:
+
+```text
+status=pass
+all_equal=true
+unique_hashes=1
+sha256=910fbeaa4995c601cca46fa323dbc5dfe855aaf94b35721f8a18d5a721e4d0ee
+```
+
+The QSA-size sweep also passed at all requested sizes
+1024,2048,4096,8192,32768 with one unique hash per size and
+`first_failure_tokens=null`.
+
+Decode also passed. Median decode throughput was 29.7103 tok/s and median TTFT
+was 0.244615 s, effectively comparable to the v37 diagnostic runtime.
+
+However, the deterministic hash differs from the validated v34-v36 reference
+`44867e5c...`. Therefore v38 r1 is a determinism PASS but not yet accepted as
+output-equivalent to the validated intervention.
+
+Source comparison found one semantic scope difference:
+
+- v34 canonicalized only Marlin expert calls carrying a decoder layer tag
+  parsed from `.layers.<idx>.`; untagged calls used `layer_idx=-1` and were
+  not reordered;
+- v38 r1 removed the tagging machinery and canonicalized every
+  `fused_marlin_moe()` invocation.
+
+This can include non-decoder/untagged Marlin calls such as auxiliary MTP paths.
+The broader scope is a plausible explanation for the stable-but-different
+output hash.
+
+v38 is therefore refined without increasing the experiment version:
+
+1. add a minimal CT-side decoder-layer tag only;
+2. propagate that integer through `MarlinExperts -> fused_marlin_moe ->
+   _fused_marlin_moe`;
+3. canonicalize only when `layer_idx >= 0`, matching the successful v34
+   all-decoder-layer control;
+4. keep all diagnostic capture machinery removed.
+
+The refined H38 acceptance target is both:
+
+```text
+unique_hashes=1
+sha256=44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+for the 1024/128 five-repeat gate, followed by the already-established QSA
+sweep. If the reference hash returns, v38 can close as the minimal
+production-oriented repair with v34-equivalent scope.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
