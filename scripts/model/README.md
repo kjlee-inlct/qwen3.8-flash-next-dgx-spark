@@ -42,14 +42,32 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 | `orcarouter` | stable/default, confirmed | yes |
 | `nvidia` | experimental, confirmed | yes |
 | `mazinb` | experimental, confirmed | yes |
-| `orcarouter-hybrid` | in progress | no |
+| `orcarouter-hybrid` | experimental, generated H6 | yes |
 | `lychee888` | planned | no |
 
 A profile is not made installable merely because checkpoint metadata exists.
-The registry must also have a qualified download/runtime path and the managed
-lifecycle must accept the profile. `orcarouter-hybrid` and `lychee888`
-therefore remain visible but blocked.
+The registry must also have a defined preparation/runtime path and the managed
+lifecycle must accept the profile. `orcarouter-hybrid` now uses the proven
+H3 -> H4-all -> H5 -> H6 preparation chain; `lychee888` remains blocked.
 
+
+### OrcaRouter hybrid installer profile
+
+`orcarouter-hybrid` is generated locally rather than downloaded directly.
+`install.sh` prepares the pinned OrcaRouter and mazinb source checkpoints,
+builds/reuses H3 quant-layout, H4 `orca-all`, H5 neutral input scale, and the
+final H6 ModelOpt `W4A16_NVFP4` checkpoint.
+
+The final H6 checkpoint retains the validated parent-link layout. Runtime
+validation therefore requires the OrcaRouter base, H3, H4-all, H5, and H6
+directories; mazinb is a build-time input and is not a final runtime mount.
+
+The canonical orchestration/validation helpers are:
+
+```text
+scripts/model/prepare-orcarouter-hybrid.sh
+scripts/model/validate-orcarouter-hybrid.py
+```
 
 ### mazinb installer promotion status
 

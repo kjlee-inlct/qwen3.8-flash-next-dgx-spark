@@ -60,7 +60,7 @@ write_runtime_commit_attestation() {
   mv -- "${temporary}" "${RUNTIME_COMMIT_FILE}"
 }
 
-[[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia || "${MODEL_PROFILE:-}" == mazinb ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
+[[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia || "${MODEL_PROFILE:-}" == mazinb || "${MODEL_PROFILE:-}" == orcarouter-hybrid ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
 [[ -x "${RUNTIME_ROOT}/scripts/serve.sh" ]] || { printf 'FATAL: invalid runtime release root\n' >&2; exit 1; }
 [[ -r "${RUNTIME_TRANSITION}" ]] || { printf 'FATAL: runtime transition helper is unavailable\n' >&2; exit 1; }
 [[ -r "${RUNTIME_PREFLIGHT}" ]] || { printf 'FATAL: runtime preflight helper is unavailable\n' >&2; exit 1; }

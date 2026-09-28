@@ -28,6 +28,25 @@ sudo_with_operation_lock() {
     "$@"
 }
 
+mark_manifest_uninstalled() {
+  python3 - "${STATE_FILE}" <<'PY'
+import os
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+matches = [i for i, line in enumerate(lines) if line.startswith("PHASE=")]
+if len(matches) != 1:
+    raise SystemExit("installation manifest must contain exactly one PHASE field")
+lines[matches[0]] = "PHASE=uninstalled"
+temporary = path.with_name(path.name + ".tmp")
+temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+os.chmod(temporary, path.stat().st_mode & 0o777)
+os.replace(temporary, path)
+PY
+}
+
 parse_install_manifest() {
   local parsed key value
   parsed="$(mktemp)"
@@ -139,7 +158,9 @@ rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp" "${RUNTIME_COMMIT_FILE}
 if [[ "${PURGE_MODEL}" == 1 ]]; then
   [[ "${MODEL_OWNED}" == 1 ]] || die "refusing model deletion: directory was not created by this installer"
   if [[ -e "${MODEL_DIR}" ]]; then
-    [[ -f "${MODEL_DIR}/.qwen38-model-manifest.json" ]] || die "refusing model deletion: model manifest missing"
+    if [[ ! -f "${MODEL_DIR}/.qwen38-model-manifest.json" && ! -f "${MODEL_DIR}/.qwen38-hybrid-manifest.json" ]]; then
+      die "refusing model deletion: managed model/hybrid manifest missing"
+    fi
     if [[ "${MODEL_DIR}" != "${HOME}/models/"* && "${MODEL_DIR}" != "${INSTALL_ROOT}/model" ]]; then
       die "refusing model deletion outside ${HOME}/models or the install root's model directory"
     fi
@@ -176,9 +197,10 @@ if [[ "${PURGE_ALL}" == 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && printf '전체 제거 완료; immutable release 데이터와 설치 manifest를 삭제했습니다.\n' || \
     printf 'Full uninstall completed; immutable release data and installation manifest removed.\n'
 else
+  mark_manifest_uninstalled
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '제거 완료. immutable release history와 유지한 리소스를 위해 manifest를 보존했습니다: %s\n' "${STATE_FILE}"
+    printf '제거 완료. manifest를 uninstalled 상태로 보존했습니다. 다음 install.sh 실행에서 새 모델 프로필을 선택할 수 있습니다: %s\n' "${STATE_FILE}"
   else
-    printf 'Uninstall completed. Immutable release history and manifest were retained for reinstall or later purge: %s\n' "${STATE_FILE}"
+    printf 'Uninstall completed. The manifest is retained in the uninstalled state; the next install.sh run may select a new model profile: %s\n' "${STATE_FILE}"
   fi
 fi

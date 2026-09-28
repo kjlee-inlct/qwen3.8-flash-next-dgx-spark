@@ -94,7 +94,7 @@ INSTALL_KEYS = {
 
 INSTALL_RUNTIME_SCHEMA: dict[str, Validator] = {
     "SCHEMA_VERSION": one_of("3", "4"), "PHASE": exact("complete"),
-    "MODEL_PROFILE": one_of("orcarouter", "nvidia", "mazinb"), "MODEL_DIR": absolute_path,
+    "MODEL_PROFILE": one_of("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid"), "MODEL_DIR": absolute_path,
     "VLLM_IMAGE": nonempty_text, "SERVED_NAME": nonempty_text,
     "CONTAINER_NAME": exact("qwen38-flash-next"), "CONFIG_OVERRIDE": optional(absolute_path),
     "MONITOR_PROTECT": one_of("0", "1"), "MONITOR_ENABLED": one_of("0", "1"),
@@ -110,7 +110,7 @@ INSTALL_SERVICE_SCHEMA: dict[str, Validator] = {
 
 INSTALL_DOCTOR_SCHEMA: dict[str, Validator] = {
     "SCHEMA_VERSION": one_of("3", "4"), "PHASE": nonempty_text,
-    "MODEL_PROFILE": one_of("orcarouter", "nvidia", "mazinb"), "MODEL_REPO": nonempty_text,
+    "MODEL_PROFILE": one_of("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid"), "MODEL_REPO": nonempty_text,
     "MODEL_REVISION": nonempty_text, "MODEL_DIR": absolute_path, "SWAP_FILE": absolute_path,
     "VLLM_IMAGE": nonempty_text, "SERVED_NAME": nonempty_text, "CONTAINER_NAME": exact("qwen38-flash-next"),
     "CONFIG_OVERRIDE": optional(absolute_path), "MONITOR_PROTECT": one_of("0", "1"),
@@ -173,7 +173,7 @@ INSTALL_FIELD_VALIDATORS: dict[str, Validator] = {
     "SCHEMA_VERSION": one_of("2", "3", "4"),
     "PHASE": nonempty_text,
     "INSTALL_ROOT": absolute_path,
-    "MODEL_PROFILE": one_of("orcarouter", "nvidia", "mazinb"),
+    "MODEL_PROFILE": one_of("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid"),
     "MODEL_REPO": nonempty_text,
     "MODEL_REVISION": nonempty_text,
     "MODEL_DIR": absolute_path,

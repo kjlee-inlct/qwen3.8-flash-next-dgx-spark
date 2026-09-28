@@ -9,6 +9,7 @@ TRANSITION_STATE_FILE="${STATE_DIR}/runtime-transition.env"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
 CHECKPOINT_INTEGRITY="${SCRIPT_DIR}/model/checkpoint_integrity.py"
+HYBRID_VALIDATOR="${SCRIPT_DIR}/model/validate-orcarouter-hybrid.py"
 # shellcheck source=model-profiles.sh
 source "${SCRIPT_DIR}/model-profiles.sh"
 SERVICE_UNIT="qwen38-flash-next.service"
@@ -78,7 +79,19 @@ source "${SCRIPT_DIR}/doctor-observability.sh"
 
 if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]; then
   pass "model index is present"
-  if [[ -r "${CHECKPOINT_INTEGRITY}" ]]; then
+  if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid ]]; then
+    if [[ -r "${HYBRID_VALIDATOR}" ]] && hybrid_detail="$(python3 "${HYBRID_VALIDATOR}" \
+      --runtime-only \
+      --base-dir "${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}" \
+      --h3-dir "${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}" \
+      --h4-dir "${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}" \
+      --h5-dir "${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}" \
+      --model-dir "${MODEL_DIR}" 2>&1)"; then
+      pass "${hybrid_detail}"
+    else
+      fail "${hybrid_detail:-OrcaRouter hybrid validator is unavailable or failed}"
+    fi
+  elif [[ -r "${CHECKPOINT_INTEGRITY}" ]]; then
     if checkpoint_integrity_detail="$(python3 "${CHECKPOINT_INTEGRITY}" "${MODEL_DIR}" 2>&1)"; then
       pass "${checkpoint_integrity_detail}"
     else
@@ -90,7 +103,9 @@ if [[ -d "${MODEL_DIR:-}" && -f "${MODEL_DIR:-}/model.safetensors.index.json" ]]
 else
   fail "model index is missing under ${MODEL_DIR:-unset}"
 fi
-if [[ -r "${MODEL_DIR:-}/.qwen38-model-manifest.json" ]]; then
+if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid ]]; then
+  [[ -r "${MODEL_DIR:-}/.qwen38-hybrid-manifest.json" ]] && pass "hybrid checkpoint manifest is present" || fail "hybrid checkpoint manifest is missing"
+elif [[ -r "${MODEL_DIR:-}/.qwen38-model-manifest.json" ]]; then
   if python3 - "${MODEL_DIR}/.qwen38-model-manifest.json" "${EXPECTED_REPO}" "${EXPECTED_REVISION}" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle: data = json.load(handle)
@@ -102,13 +117,14 @@ PY
   then pass "checkpoint manifest is complete"; else fail "checkpoint manifest is incomplete or mismatched"; fi
 else fail "checkpoint manifest is missing"; fi
 
-CONFIG_CANDIDATE="${CONFIG_OVERRIDE:-}"
-if [[ ! -r "${CONFIG_CANDIDATE}" && -r "${STATE_DIR}/config.vllm.json" ]]; then CONFIG_CANDIDATE="${STATE_DIR}/config.vllm.json"; fi
-if [[ ! -r "${CONFIG_CANDIDATE}" ]] && command -v docker >/dev/null 2>&1 && docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
-  CONFIG_CANDIDATE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model/config.json"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
-fi
-if [[ -r "${CONFIG_CANDIDATE}" ]]; then
-  if python3 - "${CONFIG_CANDIDATE}" <<'PY'
+if [[ "${PROFILE_CONFIG_OVERRIDE:-0}" == 1 ]]; then
+  CONFIG_CANDIDATE="${CONFIG_OVERRIDE:-}"
+  if [[ ! -r "${CONFIG_CANDIDATE}" && -r "${STATE_DIR}/config.vllm.json" ]]; then CONFIG_CANDIDATE="${STATE_DIR}/config.vllm.json"; fi
+  if [[ ! -r "${CONFIG_CANDIDATE}" ]] && command -v docker >/dev/null 2>&1 && docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
+    CONFIG_CANDIDATE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model/config.json"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+  fi
+  if [[ -r "${CONFIG_CANDIDATE}" ]]; then
+    if python3 - "${CONFIG_CANDIDATE}" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8")); values = []
 def walk(item):
@@ -119,8 +135,11 @@ def walk(item):
     elif isinstance(item, str): values.append(item)
 walk(data); assert "qwen_sparse_attention" not in values
 PY
-  then pass "vLLM config is compatible (${CONFIG_CANDIDATE})"; else fail "vLLM config still contains incompatible layer values"; fi
-else fail "vLLM config override is missing (manifest, generated config, and container mount checked)"; fi
+    then pass "vLLM config is compatible (${CONFIG_CANDIDATE})"; else fail "vLLM config still contains incompatible layer values"; fi
+  else fail "vLLM config override is missing (manifest, generated config, and container mount checked)"; fi
+else
+  pass "model profile does not require a vLLM config override"
+fi
 
 if command -v swapon >/dev/null 2>&1 && swapon --show=NAME --noheadings | awk '{$1=$1};1' | grep -Fxq "${SWAP_FILE:-}"; then pass "dedicated PLE swap is active (${SWAP_FILE})"; else fail "dedicated PLE swap is not active (${SWAP_FILE:-unset})"; fi
 
@@ -144,6 +163,21 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     state="$(docker inspect --format '{{.State.Status}}' "${RUNTIME_CONTAINER}" 2>/dev/null)"; [[ "${state}" == running ]] && pass "container is running" || fail "container state is ${state}"
     runtime_image="$(docker inspect --format '{{.Config.Image}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"; [[ "${runtime_image}" == "${VLLM_IMAGE:-}" ]] && pass "runtime container image matches installation manifest" || warn "runtime image drift: running=${runtime_image:-unknown}, manifest=${VLLM_IMAGE:-missing}"
     runtime_model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"; [[ "${runtime_model_mount}" == "${MODEL_DIR:-}" ]] && pass "runtime model mount matches installation manifest" || warn "runtime model mount drift: running=${runtime_model_mount:-missing}, manifest=${MODEL_DIR:-missing}"
+    if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid ]]; then
+      declare -A expected_hybrid_mounts=(
+        ["/base-model"]="${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
+        ["/h3-model"]="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
+        ["/h4-all"]="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
+        ["/h5-parent"]="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
+      )
+      for destination in "/base-model" "/h3-model" "/h4-all" "/h5-parent"; do
+        actual_source="$(docker inspect --format "{{range .Mounts}}{{if eq .Destination \"${destination}\"}}{{.Source}}{{end}}{{end}}" "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+        [[ "${actual_source}" == "${expected_hybrid_mounts[${destination}]}" ]] && pass "hybrid parent mount matches (${destination})" || fail "hybrid parent mount drift at ${destination}: ${actual_source:-missing}"
+      done
+      runtime_env="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+      grep -Fxq 'VLLM_PLE_MMAP=1' <<<"${runtime_env}" && pass "hybrid runtime uses PLE mmap" || fail "hybrid runtime PLE mmap setting is missing"
+      grep -Fxq 'VLLM_QSA_EXACT_TOPK=1' <<<"${runtime_env}" && pass "hybrid runtime uses exact QSA" || fail "hybrid runtime exact-QSA setting is missing"
+    fi
     runtime_served_name="$(docker inspect --format '{{json .Config.Cmd}}' "${RUNTIME_CONTAINER}" 2>/dev/null | python3 -c 'import json,sys; cmd=json.load(sys.stdin); print(cmd[cmd.index("--served-model-name")+1] if "--served-model-name" in cmd and cmd.index("--served-model-name")+1 < len(cmd) else "")' 2>/dev/null || true)"
     if [[ -n "${runtime_served_name}" && "${runtime_served_name}" == "${SERVED_NAME:-}" ]]; then pass "runtime served model name matches installation manifest"; elif [[ -n "${runtime_served_name}" ]]; then warn "runtime served-name drift: running=${runtime_served_name}, manifest=${SERVED_NAME:-missing}"; else warn "runtime served model name could not be determined from container command"; fi
     init_enabled="$(docker inspect --format '{{.HostConfig.Init}}' "${RUNTIME_CONTAINER}" 2>/dev/null)"; [[ "${init_enabled}" == true ]] && pass "container init process is enabled" || warn "container was created without --init; apply on the next maintenance restart"

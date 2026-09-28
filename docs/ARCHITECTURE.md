@@ -7,7 +7,7 @@ model profile
   ├─ orcarouter        stable / default / installable
   ├─ nvidia            experimental / installable
   ├─ mazinb            experimental / installable
-  ├─ orcarouter-hybrid in-progress / not installable
+  ├─ orcarouter-hybrid experimental / installable / generated H6
   └─ lychee888         planned / not installable
 
 serving backend
@@ -54,12 +54,28 @@ profile. It keeps the large PLE table in BF16 and uses the vLLM v0.29 mmap runti
 path already exercised during the determinism investigation. It is installable but is
 not the default profile.
 
-### OrcaRouter hybrid — in progress
+### OrcaRouter hybrid — experimental/installable
 
-`orcarouter-hybrid` is the canonical installer-facing name for the hybrid track that is
-currently under integration/qualification. It remains visible in the model registry but
-is deliberately not installable until its checkpoint definition, image/runtime path,
-and lifecycle gates are complete.
+`orcarouter-hybrid` is the installer-facing result of the checkpoint isolation
+track, not an alias for the H38 runtime repair. The installed model is the H6
+`h6-modelopt-w4a16` checkpoint produced by:
+
+```text
+pinned OrcaRouter + pinned mazinb
+  -> H3 quant-layout-mazinb-experts
+  -> H4 orca-all
+  -> H5 neutral input_scale=1.0
+  -> H6 ModelOpt W4A16_NVFP4
+```
+
+H6 changes only the final quantization configuration relative to H5; its tensor
+payload is inherited through the validated parent-link chain. The managed
+runtime therefore uses vLLM v0.29 with PLE mmap, exact QSA, MTP k=2, and
+read-only mounts for the OrcaRouter base, H3, H4-all, and H5 parents.
+
+This profile is experimental and non-default. Its historical determinism result
+does not promote it over the stable OrcaRouter profile, and it is distinct from
+the separate H38 decoder-only runtime qualification track below.
 
 ### lychee888 — planned
 

@@ -145,7 +145,103 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn('"${STATE_DIR}/runtime-commit.env"', uninstaller)
         self.assertIn('"${STATE_DIR}/runtime-transition.env"', uninstaller)
         self.assertIn('"${STATE_DIR}/update-transition.env"', uninstaller)
-        self.assertIn("Immutable release history and manifest were retained", uninstaller)
+        self.assertIn("PHASE=uninstalled", uninstaller)
+        self.assertIn("manifest is retained in the uninstalled state", uninstaller)
+
+    def test_retained_uninstall_manifest_allows_fresh_profile_selection(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+
+        self.assertIn('manifest_phase="$(read_manifest_phase)"', installer)
+        self.assertIn('if [[ "${manifest_phase}" == uninstalled ]]', installer)
+        self.assertIn('MODEL_PROFILE="${MODEL_CLI:-orcarouter}"', installer)
+        self.assertIn('MODEL_REPO=""; MODEL_REVISION=""; MODEL_DIR=""; MODEL_OWNED=0', installer)
+        self.assertIn('mark_manifest_uninstalled', uninstaller)
+        self.assertIn('lines[matches[0]] = "PHASE=uninstalled"', uninstaller)
+
+    def test_uninstalled_manifest_can_preview_orcarouter_hybrid_as_fresh_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state_dir = home / "state" / "qwen38-spark"
+            state_dir.mkdir(parents=True)
+            state = state_dir / "install.env"
+            state.write_text(
+                "\n".join(
+                    [
+                        "SCHEMA_VERSION=4",
+                        "PHASE=uninstalled",
+                        f"INSTALL_ROOT={ROOT}",
+                        "MODEL_PROFILE=orcarouter",
+                        "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                        "MODEL_REVISION=c1209bda15a6bbc4c68b585e93d40c0d85f50306",
+                        f"MODEL_DIR={home / 'old-orcarouter'}",
+                        "MODEL_OWNED=1",
+                        "SWAP_FILE=/swap-ple.img",
+                        "SWAP_OWNED=1",
+                        "VLLM_IMAGE=vllm-skinny-tp1:v1",
+                        "IMAGE_OWNED=1",
+                        "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                        "CONTAINER_NAME=qwen38-flash-next",
+                        "CONFIG_OVERRIDE=''",
+                        "CONFIG_OWNED=0",
+                        "MONITOR_PROTECT=0",
+                        "MONITOR_ENABLED=0",
+                        "MONITOR_MIN_AVAILABLE_GIB=6",
+                        "MONITOR_MIN_FREE_GIB=2",
+                        "MONITOR_FREE_GATE_GIB=10",
+                        "MONITOR_MIN_SWAP_FREE_GIB=8",
+                        "MONITOR_CONSECUTIVE=5",
+                        "MONITOR_HEARTBEAT=60",
+                        "API_ACCESS_MODE=local",
+                        "API_DOCKER_PORT=8000",
+                        "API_LAN_ADDRESS=''",
+                        "API_LAN_PORT=8001",
+                        "PROXY_ENABLED=0",
+                        "PROXY_OWNED=0",
+                        "PROXY_PORT=8000",
+                        "SERVICE_ENABLED=1",
+                        "SERVICE_OWNED=0",
+                        "SERVICE_UNIT=qwen38-flash-next.service",
+                        "UI_LANG=en",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            before = state.read_bytes()
+            result = subprocess.run(
+                [
+                    str(ROOT / "install.sh"),
+                    "--model",
+                    "orcarouter-hybrid",
+                    "--lang",
+                    "en",
+                    "--yes",
+                    "--no-start",
+                    "--dry-run",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                    "XDG_DATA_HOME": str(home / "data"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("profile     : orcarouter-hybrid", result.stdout)
+            self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
+            self.assertNotIn("Resuming installation", result.stdout)
+            self.assertEqual(state.read_bytes(), before)
+
+    def test_uninstaller_accepts_managed_hybrid_manifest_for_owned_model_purge(self) -> None:
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        self.assertIn(".qwen38-model-manifest.json", uninstaller)
+        self.assertIn(".qwen38-hybrid-manifest.json", uninstaller)
+        self.assertIn("managed model/hybrid manifest missing", uninstaller)
 
     def test_operations_runbook_matches_supported_commands(self) -> None:
         operations = (ROOT / "OPERATIONS.md").read_text(encoding="utf-8")

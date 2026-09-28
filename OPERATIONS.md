@@ -46,19 +46,19 @@ The systemd service uses the stable `~/.local/share/qwen38-spark/current` symlin
 
 ## Installer model profiles
 
-The installer currently exposes three confirmed selectable profiles:
+The installer currently exposes four selectable profiles:
 
 ```text
-orcarouter         confirmed / default
-nvidia             confirmed / optional
-mazinb             confirmed / optional
+orcarouter         stable / default
+nvidia             experimental / optional
+mazinb             experimental / optional
+orcarouter-hybrid  experimental / generated H6 hybrid
 ```
 
-The roadmap profiles remain visible through `./install.sh --list-models` but
-are not selectable yet:
+The remaining roadmap profile is visible through `./install.sh --list-models`
+but is not selectable yet:
 
 ```text
-orcarouter-hybrid  in progress
 lychee888          planned
 ```
 
@@ -80,13 +80,40 @@ or a non-interactive example:
 # or:
 ./install.sh --model nvidia --lang en --yes
 ./install.sh --model mazinb --lang en --yes
+./install.sh --model orcarouter-hybrid --lang en --yes
 ```
 
 Before installing, a dry-run is recommended:
 
 ```bash
 ./install.sh --model orcarouter --lang en --yes --no-start --dry-run
+./install.sh --model orcarouter-hybrid --lang en --yes --no-start --dry-run
 ```
+
+For `orcarouter-hybrid`, the installer reuses/downloads the pinned OrcaRouter
+and mazinb source checkpoints, builds/reuses H3 quant-layout, H4 `orca-all`,
+H5 neutral-input-scale, and H6 `W4A16_NVFP4`, then installs H6 as the active
+model. Existing complete generated stages are reused; a non-empty incomplete
+stage is never deleted automatically.
+
+When changing from an already installed profile, first run a normal uninstall
+without model/swap purge. A successful uninstall marks the retained manifest
+`PHASE=uninstalled`; the next `install.sh` run is then treated as a fresh
+profile selection while retained resources stay available:
+
+```bash
+./uninstall.sh --lang en --yes
+./install.sh --model orcarouter-hybrid --lang en --yes
+```
+
+Do **not** add `--purge-model` or `--purge-swap` when the retained
+OrcaRouter checkpoint/swap should be reused to build the hybrid.
+
+The final H6 directory intentionally contains parent links. Keep the OrcaRouter
+base, H3, H4-all, and H5 directories while this profile is installed. The
+managed service mounts those parents read-only at the same paths used during H6
+validation. Uninstalling the active H6 model does not automatically purge those
+shared/generated parents.
 
 A successful fresh install automatically:
 

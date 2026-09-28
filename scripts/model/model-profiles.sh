@@ -9,11 +9,11 @@
 
 list_model_profiles() {
   # Installable profiles only.
-  printf '%s\n' orcarouter nvidia mazinb
+  printf '%s\n' orcarouter nvidia mazinb orcarouter-hybrid
 }
 
 list_model_candidates() {
-  printf '%s\n' orcarouter-hybrid lychee888
+  printf '%s\n' lychee888
 }
 
 describe_model_profile() {
@@ -40,11 +40,11 @@ describe_model_profile() {
       PROFILE_DESCRIPTION="Qualified optional experts-only NVFP4 + BF16 PLE profile"
       ;;
     orcarouter-hybrid)
-      PROFILE_STATUS="in-progress"
+      PROFILE_STATUS="experimental"
       PROFILE_DEFAULT=0
-      PROFILE_INSTALLABLE=0
-      PROFILE_REPO="TBD"
-      PROFILE_DESCRIPTION="OrcaRouter hybrid installer profile; integration and qualification in progress"
+      PROFILE_INSTALLABLE=1
+      PROFILE_REPO="local/orcarouter-mazinb-h6-w4a16"
+      PROFILE_DESCRIPTION="Generated OrcaRouter/mazinb H6 ModelOpt W4A16 hybrid checkpoint"
       ;;
     lychee888)
       PROFILE_STATUS="planned"
@@ -72,6 +72,9 @@ print_model_profiles() {
 
 load_download_profile() {
   describe_model_profile "$1" || return
+  PROFILE_LOCAL_BUILD=0
+  PROFILE_BASE_PROFILE=""
+  PROFILE_OVERLAY_PROFILE=""
 
   case "$1" in
     orcarouter)
@@ -101,8 +104,15 @@ load_download_profile() {
       PROFILE_CONFIG_OVERRIDE=0
       ;;
     orcarouter-hybrid)
-      printf 'ERROR: model profile %s is still in progress and has no qualified download/runtime path yet\n' "$1" >&2
-      return 2
+      PROFILE_REVISION="h6-modelopt-w4a16-v1"
+      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-h6-modelopt-w4a16"
+      PROFILE_IMAGE="vllm-orcarouter-v029:v1"
+      PROFILE_SERVED_NAME="orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      PROFILE_GATED=1
+      PROFILE_CONFIG_OVERRIDE=0
+      PROFILE_LOCAL_BUILD=1
+      PROFILE_BASE_PROFILE="orcarouter"
+      PROFILE_OVERLAY_PROFILE="mazinb"
       ;;
     lychee888)
       printf 'ERROR: model profile %s is planned and has no qualified download/runtime path yet\n' "$1" >&2
