@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-M v30 Marlin W13 state-audit capture in vLLM v0.29."""
+"""Install H20-M v31 Marlin W13 buffer-semantics audit in vLLM v0.29."""
 
 from __future__ import annotations
 
@@ -364,16 +364,75 @@ def _qwen38_h20m_commit(
         w13_scalar_meta_equal = (
             previous.get("w13_scalar_meta") == snapshots.get("w13_scalar_meta")
         )
+        previous_output_meta = previous.get("w13_output_buffer_meta")
+        current_output_meta = snapshots.get("w13_output_buffer_meta")
+        previous_workspace_meta = previous.get("w13_workspace_meta")
+        current_workspace_meta = snapshots.get("w13_workspace_meta")
+
         w13_buffer_meta_equal = (
-            previous.get("w13_output_buffer_meta")
-            == snapshots.get("w13_output_buffer_meta")
-            and previous.get("w13_workspace_meta")
-            == snapshots.get("w13_workspace_meta")
+            previous_output_meta == current_output_meta
+            and previous_workspace_meta == current_workspace_meta
+        )
+
+        def structural_meta(value: object) -> object:
+            if not isinstance(value, dict):
+                return value
+            return {
+                key: item
+                for key, item in value.items()
+                if key != "data_ptr"
+            }
+
+        w13_buffer_layout_equal = (
+            structural_meta(previous_output_meta)
+            == structural_meta(current_output_meta)
+            and structural_meta(previous_workspace_meta)
+            == structural_meta(current_workspace_meta)
+        )
+
+        def pointer_equal(left: object, right: object) -> bool:
+            if not isinstance(left, dict) or not isinstance(right, dict):
+                return left == right
+            return left.get("data_ptr") == right.get("data_ptr")
+
+        w13_buffer_pointer_identity_equal = (
+            pointer_equal(previous_output_meta, current_output_meta)
+            and pointer_equal(previous_workspace_meta, current_workspace_meta)
+        )
+
+        def pointer_alignment(value: object) -> object:
+            if not isinstance(value, dict):
+                return value
+            ptr = value.get("data_ptr")
+            if not isinstance(ptr, int):
+                return None
+            return {
+                "mod16": ptr % 16,
+                "mod128": ptr % 128,
+                "mod256": ptr % 256,
+                "mod4096": ptr % 4096,
+            }
+
+        w13_buffer_pointer_alignment_equal = (
+            pointer_alignment(previous_output_meta)
+            == pointer_alignment(current_output_meta)
+            and pointer_alignment(previous_workspace_meta)
+            == pointer_alignment(current_workspace_meta)
+        )
+        w13_workspace_content_equal = fields["w13_workspace_pre"]["equal"]
+        w13_output_buffer_content_equal = fields[
+            "w13_output_buffer_pre"
+        ]["equal"]
+        w13_buffer_semantic_equal = (
+            w13_buffer_layout_equal
+            and w13_buffer_pointer_alignment_equal
+            and w13_workspace_content_equal
+            and w13_output_buffer_content_equal
         )
         w13_state_equal = (
             w13_weight_meta_equal
             and w13_scalar_meta_equal
-            and w13_buffer_meta_equal
+            and w13_buffer_semantic_equal
             and all(
                 fields[name]["equal"]
                 for name in (
@@ -382,8 +441,6 @@ def _qwen38_h20m_commit(
                     "w13_zeros",
                     "w13_g_idx",
                     "w13_sort_indices",
-                    "w13_workspace_pre",
-                    "w13_output_buffer_pre",
                     "w13_bias",
                 )
             )
@@ -419,7 +476,7 @@ def _qwen38_h20m_commit(
             None,
         )
         record = {
-            "schema": 6,
+            "schema": 7,
             "phase": "marlin-repeat",
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
@@ -449,6 +506,18 @@ def _qwen38_h20m_commit(
             "w13_weight_meta_equal": w13_weight_meta_equal,
             "w13_scalar_meta_equal": w13_scalar_meta_equal,
             "w13_buffer_meta_equal": w13_buffer_meta_equal,
+            "w13_buffer_layout_equal": w13_buffer_layout_equal,
+            "w13_buffer_pointer_identity_equal": (
+                w13_buffer_pointer_identity_equal
+            ),
+            "w13_buffer_pointer_alignment_equal": (
+                w13_buffer_pointer_alignment_equal
+            ),
+            "w13_workspace_content_equal": w13_workspace_content_equal,
+            "w13_output_buffer_content_equal": (
+                w13_output_buffer_content_equal
+            ),
+            "w13_buffer_semantic_equal": w13_buffer_semantic_equal,
             "w13_state_equal": w13_state_equal,
             "alignment_order_only_divergence": (
                 not sorted_detail["valid_equal"]

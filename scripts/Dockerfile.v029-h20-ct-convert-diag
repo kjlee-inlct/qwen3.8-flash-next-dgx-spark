@@ -180,6 +180,10 @@ assert '"w13_state_equal"' in marlin_moe_s
 assert '"w13_weight_meta_equal"' in marlin_moe_s
 assert '"w13_scalar_meta_equal"' in marlin_moe_s
 assert '"w13_buffer_meta_equal"' in marlin_moe_s
+assert '"w13_buffer_layout_equal"' in marlin_moe_s
+assert '"w13_buffer_pointer_identity_equal"' in marlin_moe_s
+assert '"w13_buffer_pointer_alignment_equal"' in marlin_moe_s
+assert '"w13_buffer_semantic_equal"' in marlin_moe_s
 assert '"w13_workspace_pre"' in marlin_moe_s
 assert '"w13_output_buffer_pre"' in marlin_moe_s
 assert '"w13_output"' in marlin_moe_s
@@ -195,4 +199,4 @@ assert "router._qwen38_h20_layer_name = layer_name" in moe_layer_s
 print("H20 CT NVFP4 conversion diagnostics installed")
 PY
 
-LABEL qwen38.h20="ct-nvfp4-convert-diag-v30"
+LABEL qwen38.h20="ct-nvfp4-convert-diag-v31"
