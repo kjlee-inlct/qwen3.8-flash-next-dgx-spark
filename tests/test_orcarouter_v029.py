@@ -490,7 +490,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         runtime = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1", ct)
         self.assertIn(" ct", ct)
-        self.assertIn("ct-nvfp4-convert-diag-v30", ct)
+        self.assertIn("ct-nvfp4-convert-diag-v31", ct)
         self.assertIn("FROM vllm-orcarouter-v029:v1", mo)
         self.assertIn(" modelopt", mo)
         self.assertIn("modelopt-nvfp4-convert-diag-v13", mo)
@@ -503,7 +503,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('QWEN38_H20U_CAPTURE_LAYER14="${QWEN38_H20U_CAPTURE_LAYER14:-1}"', runtime)
         self.assertIn('QWEN38_H20U_LAYER14_GROUP="${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn('QWEN38_H20U_ROUTE_LAYERS="${QWEN38_H20U_ROUTE_LAYERS:-14,15}"', runtime)
-        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20m-v30-marlin-w13-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
+        self.assertIn('VLLM_CACHE_ROOT="/root/.cache/vllm/h20m-v31-marlin-buffer-${QWEN38_H20U_LAYER14_GROUP:-all}"', runtime)
         self.assertIn("QWEN38_H20C_MAX_CALLS=128", runtime)
         self.assertIn("QWEN38_H20C_SAMPLE_ELEMS=1024", runtime)
         self.assertIn(
@@ -519,7 +519,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
             runtime,
         )
         self.assertIn("h20_image_ok()", runtime)
-        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v30" ]]', runtime)
+        self.assertIn('[[ "${label}" == "ct-nvfp4-convert-diag-v31" ]]', runtime)
         self.assertIn('QWEN38_H20_ENFORCE_EAGER:-0', runtime)
         self.assertIn('compile_args=(--enforce-eager)', runtime)
         self.assertIn("patch-v029-h20-moe-router-capture.py", ct)
@@ -545,6 +545,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('"w13_weight_meta_equal"', marlin)
         self.assertIn('"w13_scalar_meta_equal"', marlin)
         self.assertIn('"w13_buffer_meta_equal"', marlin)
+        self.assertIn('"w13_buffer_layout_equal"', marlin)
+        self.assertIn('"w13_buffer_pointer_identity_equal"', marlin)
+        self.assertIn('"w13_buffer_pointer_alignment_equal"', marlin)
+        self.assertIn('"w13_buffer_semantic_equal"', marlin)
         self.assertIn('"w13_workspace_pre"', marlin)
         self.assertIn('"w13_output_buffer_pre"', marlin)
         self.assertIn("_qwen38_h20m_capture_w13_meta", marlin)
@@ -559,6 +563,10 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("w13_weight_meta_equal", collector)
         self.assertIn("w13_scalar_meta_equal", collector)
         self.assertIn("w13_buffer_meta_equal", collector)
+        self.assertIn("w13_buffer_layout_equal", collector)
+        self.assertIn("w13_buffer_pointer_identity_equal", collector)
+        self.assertIn("w13_buffer_pointer_alignment_equal", collector)
+        self.assertIn("w13_buffer_semantic_equal", collector)
 
 
     def test_h20_fp8_batch_invariant_repair_profile_is_diagnostic_free(self) -> None:
@@ -1349,7 +1357,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.assertIn("self.moe_kernel.impl._qwen38_h20_layer_name", h20c_patch)
         self.assertNotIn("self.moe_kernel._qwen38_h20_layer_name =", h20c_patch)
         self.assertIn("QWEN38_H20Q_FP8_BATCH_INVARIANT", dockerfile)
-        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v30"', dockerfile)
+        self.assertIn('LABEL qwen38.h20="ct-nvfp4-convert-diag-v31"', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE " in router_s', dockerfile)
         self.assertIn('assert "QWEN38_H20U_ROUTE_LAYERS" in router_s', dockerfile)
         self.assertNotIn(r'router_s\nassert', dockerfile)
