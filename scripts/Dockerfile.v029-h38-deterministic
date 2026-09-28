@@ -1,5 +1,5 @@
-# H20 v38 production-oriented repair:
-# H12 CT + local batch-invariant Humming FP8 linear + minimal Marlin canonical order.
+# H20/H38 historical all-call repair retained as fallback/regression control.
+# H12 CT + local batch-invariant Humming FP8 linear + all-call Marlin canonical order.
 FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
 
 ARG SP=/usr/local/lib/python3.12/dist-packages
@@ -44,7 +44,7 @@ for forbidden in (
 ):
     assert forbidden not in marlin_s, forbidden
 
-print("H20 v38 minimal deterministic repair installed")
+print("H38 all-call fallback repair installed")
 PY
 
 LABEL qwen38.h38="ct-h12-fp8-bi-marlin-canonical-v1"
