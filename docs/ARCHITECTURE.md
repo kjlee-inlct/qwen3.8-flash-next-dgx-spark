@@ -7,7 +7,7 @@ model profile
   ├─ orcarouter        stable / default / installable
   ├─ nvidia            experimental / installable
   ├─ mazinb            experimental / installable
-  ├─ orcarouter-hybrid in-progress / not installable
+  ├─ orcarouter-hybrid experimental / installable; managed host qualification pending
   └─ lychee888         planned / not installable
 
 serving backend
@@ -54,12 +54,18 @@ profile. It keeps the large PLE table in BF16 and uses the vLLM v0.29 mmap runti
 path already exercised during the determinism investigation. It is installable but is
 not the default profile.
 
-### OrcaRouter hybrid — in progress
+### OrcaRouter hybrid — experimental/installable
 
-`orcarouter-hybrid` is the canonical installer-facing name for the hybrid track that is
-currently under integration/qualification. It remains visible in the model registry but
-is deliberately not installable until its checkpoint definition, image/runtime path,
-and lifecycle gates are complete.
+`orcarouter-hybrid` is the installer-facing form of the validated H38 decoder-only
+runtime. It deliberately reuses the exact pinned OrcaRouter checkpoint and model
+directory; the profile changes the runtime image and controls rather than creating a
+second checkpoint.
+
+The installer, strict manifest parser, managed service runner, `serve.sh`, and doctor
+are wired for this profile. That makes it selectable/installable, but does not by itself
+complete the managed-host qualification gates. Clean install, systemd lifecycle,
+rollback, doctor, uninstall preservation, managed determinism, and performance remain
+to be demonstrated on the DGX Spark before a stable/default promotion is considered.
 
 ### lychee888 — planned
 
@@ -118,12 +124,15 @@ determinism matrices plus one isolated fresh-compile matrix. No determinism
 advantage was observed for all-call, so decoder-only is the preferred H38
 runtime under the minimum-change principle.
 
-This qualification currently applies to the dedicated v0.29 runtime helper
-(`scripts/runtime/orcarouter-v029.sh`). It is **not yet the same thing as the
-transactional installer/systemd-managed service path**. `install.sh`,
-`scripts/serve.sh`, the installation manifest, rollback flow, and managed
-service qualification still need an explicit H38 integration/requalification
-before the managed service can be said to use the H38 production runtime.
+The dedicated v0.29 runtime helper remains the source of the completed H38
+runtime qualification. The same runtime has now been integrated into the
+transactional installer/systemd code path behind the opt-in
+`orcarouter-hybrid` model profile.
+
+Integration and qualification remain distinct: the managed path is wired, but its
+DGX-host lifecycle, rollback/attestation, doctor, uninstall-preservation,
+determinism, and performance gates must still pass before the installer-managed
+profile is described as H38 managed production or promoted to stable/default.
 
 The canonical experiment evidence remains in `scripts/benchmark/README.md`;
 `docs/H38-DETERMINISM.md` is the concise operational summary.
