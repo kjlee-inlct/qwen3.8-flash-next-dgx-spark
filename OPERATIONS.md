@@ -131,10 +131,15 @@ A successful fresh install automatically:
 2. stages the current Git commit as an immutable release;
 3. runs release qualification without mutating the release payload;
 4. registers that release as `current` when no baseline exists yet;
-5. creates the systemd service with `--runtime-root ~/.local/share/qwen38-spark/current`;
-6. starts the runtime unless `--no-start` was requested.
+5. on a fresh install after a normal uninstall, stages/qualifies/activates the current checkout when a retained older `current` release exists;
+6. creates the systemd service with `--runtime-root ~/.local/share/qwen38-spark/current`;
+7. starts the runtime unless `--no-start` was requested.
 
-The installer must be run from a Git checkout because the immutable release ID is the Git commit SHA. Re-running `install.sh` does not silently move an existing `current` release to a newer checkout commit. Use the explicit update path below for code updates.
+The installer must be run from a Git checkout because the immutable release ID is the Git
+commit SHA. An in-progress/resumed installation fails closed if its immutable runtime release
+does not match the checkout revision. An already installed/running profile is not silently
+updated by re-running the installer; use the explicit update path below for normal code
+updates.
 
 ### API access choices
 
