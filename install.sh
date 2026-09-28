@@ -361,9 +361,9 @@ else
 fi
 if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6] (1): ' answer
+    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)] (1): ' answer
   else
-    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6] (1): ' answer
+    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)] (1): ' answer
   fi
   case "${answer}" in
     2|nvidia) MODEL_PROFILE=nvidia ;;
