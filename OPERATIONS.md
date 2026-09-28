@@ -96,6 +96,19 @@ H5 neutral-input-scale, and H6 `W4A16_NVFP4`, then installs H6 as the active
 model. Existing complete generated stages are reused; a non-empty incomplete
 stage is never deleted automatically.
 
+When changing from an already installed profile, first run a normal uninstall
+without model/swap purge. A successful uninstall marks the retained manifest
+`PHASE=uninstalled`; the next `install.sh` run is then treated as a fresh
+profile selection while retained resources stay available:
+
+```bash
+./uninstall.sh --lang en --yes
+./install.sh --model orcarouter-hybrid --lang en --yes
+```
+
+Do **not** add `--purge-model` or `--purge-swap` when the retained
+OrcaRouter checkpoint/swap should be reused to build the hybrid.
+
 The final H6 directory intentionally contains parent links. Keep the OrcaRouter
 base, H3, H4-all, and H5 directories while this profile is installed. The
 managed service mounts those parents read-only at the same paths used during H6
