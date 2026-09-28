@@ -711,6 +711,13 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("h38-marlin-canonical-decoder", runtime)
         self.assertIn("h38-marlin-canonical-all", runtime)
         self.assertIn("QWEN38_H38_CACHE_TAG", runtime)
+        matrix = (
+            ROOT / "scripts" / "benchmark" / "run-h38-scope-ab.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "hybrid-h38-all-scope/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            matrix,
+        )
 
     def test_h38_marlin_patcher_fixture(self) -> None:
         patch = ROOT / "scripts" / "patch-v029-marlin-canonical-order.py"
