@@ -1391,6 +1391,8 @@ def marlin_probe(
             f"entry_equal={record.get('entry_equal')} "
             f"canonical_order_enabled="
             f"{record.get('canonical_order_enabled')} "
+            f"canonical_order_scope="
+            f"{record.get('canonical_order_scope')} "
             f"alignment_static_equal={record.get('alignment_static_equal')} "
             f"full_sorted_equal={record.get('full_sorted_equal')} "
             f"valid_sorted_equal={record.get('valid_sorted_equal')} "

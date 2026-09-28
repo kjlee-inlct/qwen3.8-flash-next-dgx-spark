@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install H20-M v32 canonical-order Marlin causality control in vLLM v0.29."""
+"""Install H20-M v34 scoped canonical-order Marlin causality control in vLLM v0.29."""
 
 from __future__ import annotations
 
@@ -53,9 +53,18 @@ except (IndexError, ValueError):
 _QWEN38_H20M_CANONICAL_ORDER = (
     os.getenv("QWEN38_H20M_CANONICAL_ORDER", "0") == "1"
 )
+_QWEN38_H20M_CANONICAL_SCOPE = os.getenv(
+    "QWEN38_H20M_CANONICAL_SCOPE",
+    "target",
+)
+if _QWEN38_H20M_CANONICAL_SCOPE not in {"target", "all"}:
+    raise RuntimeError(
+        "QWEN38_H20M_CANONICAL_SCOPE must be 'target' or 'all'"
+    )
 if _QWEN38_H20M_CANONICAL_ORDER:
     print(
         "QWEN38_H20M_CANONICAL_ORDER enabled "
+        f"scope={_QWEN38_H20M_CANONICAL_SCOPE} "
         f"target={_QWEN38_H20M_TARGET_LAYER}"
     )
 
@@ -98,8 +107,13 @@ def _qwen38_h20m_canonicalize_sorted_tokens(
 ) -> torch.Tensor:
     if (
         not _QWEN38_H20M_CANONICAL_ORDER
-        or layer_idx != _QWEN38_H20M_TARGET_LAYER_IDX
         or block_size_m <= 0
+        or layer_idx < 0
+    ):
+        return sorted_token_ids
+    if (
+        _QWEN38_H20M_CANONICAL_SCOPE == "target"
+        and layer_idx != _QWEN38_H20M_TARGET_LAYER_IDX
     ):
         return sorted_token_ids
 
@@ -553,6 +567,7 @@ def _qwen38_h20m_commit(
             "backend": "MARLIN",
             "layer_name": _QWEN38_H20M_TARGET_LAYER,
             "canonical_order_enabled": _QWEN38_H20M_CANONICAL_ORDER,
+            "canonical_order_scope": _QWEN38_H20M_CANONICAL_SCOPE,
             "request0": previous_id,
             "request1": request_id,
             "fields": fields,
