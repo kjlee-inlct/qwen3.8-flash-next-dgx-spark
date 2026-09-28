@@ -482,6 +482,7 @@ def runtime_config_from_docker_config(
         "ple_mmap": env.get("QWEN38_PLE_MMAP"),
         "h20m_canonical_order": env.get("QWEN38_H20M_CANONICAL_ORDER"),
         "h20m_canonical_scope": env.get("QWEN38_H20M_CANONICAL_SCOPE"),
+        "marlin_canonical_order": env.get("QWEN38_MARLIN_CANONICAL_ORDER"),
     }
 
     raw_spec = option("--speculative-config")
