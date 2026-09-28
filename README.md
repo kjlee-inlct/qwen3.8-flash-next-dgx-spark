@@ -8,7 +8,9 @@ Model checkpoint and serving backend are intentionally separate axes:
 
 - `orcarouter` — **stable/default**
 - `nvidia` — experimental optional profile
-- `mazinb`, `lychee888` — tracked candidates, not installable until locally qualified
+- `mazinb` — experimental optional profile
+- `orcarouter-hybrid` — experimental optional profile using the validated H38 decoder-only v0.29 runtime
+- `lychee888` — planned, not installable
 - `vllm` — stable implemented backend
 - `sglang` — planned optional backend
 
@@ -486,22 +488,27 @@ dead weight, since one 524288 request needs ~14.3 GiB at the measured 28.6 KiB/t
 
 ### Guided install and uninstall
 
-The installer offers two checkpoint-specific profiles and defaults to OrcaRouter. Choose
-interactively, or use `--model orcarouter` / `--model nvidia` for automation. Repositories,
-pinned revisions, model directories, served IDs, images and runtime tuning stay separate;
-checkpoint files are never mixed in one directory.
+The installer exposes four selectable profiles and defaults to OrcaRouter. Choose
+interactively or pass `--model` for automation. Repositories, pinned revisions,
+model directories, served IDs, images and runtime tuning stay explicit.
+
+`orcarouter-hybrid` deliberately reuses the exact pinned OrcaRouter checkpoint and
+the same model directory; its distinction is the validated H38 decoder-only v0.29
+runtime image and controls, not a second copy of the checkpoint.
 
 | Profile | Checkpoint | Runtime image |
 |---|---|---|
 | `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-skinny-tp1:v1` (stock image + GB10 TP=1 skinny-GEMM patch) |
 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | locally built `vllm-nv-mixed:v2` with the required patches |
 | `mazinb` | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-orcarouter-v029:v1` with PLE mmap + exact-QSA v0.29 path |
+| `orcarouter-hybrid` | same pinned OrcaRouter checkpoint | locally built `vllm-orcarouter-v029-h38-decoder-scope:v1` with H38 decoder-only canonicalization |
 
 ```bash
 ./install.sh                       # bilingual interactive profile selection
 ./install.sh --model orcarouter
 ./install.sh --model nvidia
 ./install.sh --model mazinb
+./install.sh --model orcarouter-hybrid
 ```
 
 The shared `scripts/model-profiles.sh` registry is intentionally not a second lifecycle
@@ -515,17 +522,18 @@ Installer roadmap status:
 orcarouter         confirmed / installable / default
 nvidia             confirmed / installable
 mazinb             confirmed / installable
-orcarouter-hybrid  in progress / not installable yet
+orcarouter-hybrid  experimental / installable; managed host qualification pending
 lychee888          planned / not installable yet
 ```
 
 
-> **H38 runtime status:** the validated OrcaRouter H38 decoder-only production profile lives
-> in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. The transactional
-> `install.sh` / systemd-managed `scripts/serve.sh` path has **not yet been migrated** to
-> that H38 image/profile. Until that integration is separately qualified, “H38 production”
-> means the validated v0.29 runtime profile, not the installer-managed service default. See
-> `docs/H38-DETERMINISM.md`.
+> **H38 runtime status:** the validated OrcaRouter H38 decoder-only runtime is now wired
+> into the transactional installer as the opt-in `orcarouter-hybrid` profile. The code
+> path reuses the pinned OrcaRouter checkpoint and selects the validated H38 decoder image
+> and runtime controls. This is installer integration, not yet host lifecycle qualification:
+> clean install, systemd readiness/restart/rollback, doctor, uninstall preservation,
+> managed determinism and performance still require DGX validation before this path is
+> described as managed H38 production. See `docs/H38-DETERMINISM.md`.
 
 When defaults for the *same* installed profile change (for example OrcaRouter moving from
 the stock image to the GB10 TP=1 skinny-GEMM image), existing manifests deliberately keep
