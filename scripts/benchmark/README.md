@@ -2408,6 +2408,120 @@ Therefore v30 r2 strengthens, but does not yet close, the W13 attribution.
 Do not interpret `w13_buffer_meta_equal=false` as a numerical-state
 difference until pointer identity is separated from buffer content/layout.
 
+##### H20 v31 r1 observed result
+
+Observed on 2026-09-28 with image label
+`ct-nvfp4-convert-diag-v31` and the normal PIECEWISE runtime:
+
+- main was `b3e9c3b`;
+- the v31 image built successfully with image ID
+  `sha256:723aa91318c0115487176ba839af6122171befcfe64e22921533828514f74f47`;
+- the runtime reached READY after 681 seconds;
+- eight requests completed and exactly 28 pair records were written.
+
+Seven pairs qualified with `entry_equal=true`:
+
+```text
+[1,2] [1,4] [2,4] [1,5] [2,5] [4,5] [6,7]
+```
+
+Every qualifying pair reproduced the same alignment and W13 boundary pattern:
+
+```text
+alignment_static_equal=true
+valid_sorted_equal=false
+tail_sorted_equal=true
+expert_membership_equal=true
+expert_order_equal=false
+padding_layout_equal=true
+aligned_expert_ids_equal=true
+aligned_num_tokens_post_padded_equal=true
+alignment_order_only_divergence=true
+w13_weight_meta_equal=true
+w13_scalar_meta_equal=true
+w13_buffer_layout_equal=true
+w13_workspace_content_equal=true
+w13_input_equal=true
+w13_output_equal=false
+```
+
+Absolute scratch allocation identity was different for every qualifying pair.
+Pointer alignment matched for some qualifying pairs and differed for others.
+The pre-call W13 output scratch content also frequently differed because that
+buffer is created from `torch.empty()`.
+
+Source review of vLLM v0.29 clarifies the role of this scratch state.
+`moe_wna16_marlin_gemm()` receives the supplied `c` tensor as its output
+destination. In the selected W13 call, `use_atomic_add=False` and
+`use_fp32_reduce=True`. The kernel writes final values to `C`; when a
+cross-threadblock reduction is required, intermediate reduction state is kept
+in a separately allocated FP32 `C_tmp` buffer. The non-atomic final path
+assigns the result into `C[true_idx]` rather than accumulating into its
+pre-call value.
+
+Therefore the arbitrary pre-call contents of the `torch.empty()` W13 output
+scratch are not treated as a semantic GEMM input for this control. Absolute
+allocation address differences are likewise tracked separately from logical
+inputs. The workspace remains a real synchronization resource; its captured
+contents were equal in all v31 pairs.
+
+The passive evidence is now:
+
+```text
+same semantic routing
+same W13 activation input
+same W13 weight metadata
+same W13 launch scalar metadata
+same W13 buffer layout
+same workspace contents
+
+different legal within-expert sorted_token_ids order
+→ different W13 output
+```
+
+This is sufficient to justify a direct causality control. It is still not
+appropriate to label the Marlin implementation as the root cause until the
+ordering intervention itself is tested.
+
+##### H20 v32: canonical within-expert order causality control
+
+v32 adds an opt-in control that canonicalizes only the physical
+`sorted_token_ids` ordering immediately after `moe_align_block_size()` and
+before the first Marlin GEMM. The default path remains unchanged unless the
+control environment variable is enabled.
+
+The canonicalization must:
+
+- run only for the target diagnostic layer;
+- preserve the same per-expert token membership;
+- preserve `expert_ids`, `num_tokens_post_padded`, and padding semantics;
+- order valid flattened routed-token IDs deterministically within each
+  contiguous expert group;
+- remain GPU-side without a host `.item()` synchronization;
+- leave the Marlin GEMM itself unchanged;
+- emit an explicit runtime marker proving the control is enabled.
+
+The v32 control question is causal rather than merely localizing:
+
+```text
+same seeded requests
++ canonical within-expert sorted_token_ids
+→ do W13 output and final model output become repeatable?
+```
+
+Interpretation:
+
+- same-entry pairs become physically aligned and W13 outputs become equal:
+  direct evidence that routed-token physical order drives the W13 divergence;
+- whole seeded repeat output also becomes deterministic:
+  strong end-to-end causal evidence for the ordering path;
+- W13 remains different after canonical ordering:
+  the ordering hypothesis is falsified or incomplete and kernel/workspace
+  execution state must be revisited;
+- W13 equal but final output still diverges:
+  layer-15 Marlin ordering explains this boundary but is not the only
+  end-to-end nondeterministic source.
+
 ##### H20 v31: W13 buffer semantics versus pointer identity
 
 v31 keeps the v30 passive W13 audit but splits scratch/workspace comparison
