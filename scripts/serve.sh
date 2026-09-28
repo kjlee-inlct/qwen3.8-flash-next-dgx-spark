@@ -1,15 +1,12 @@
 #!/bin/bash
-# Serve Qwen3.8-Flash-Next NVFP4 on a single DGX Spark (GB10 / sm_121a, 121 GiB unified),
-# with the 51B n-gram (PLE) embedding table offloaded to swap.
+# Serve supported Qwen3.8-Flash-Next profiles on one DGX Spark (GB10 / sm_121a).
 #
-# Updated 2026-09-06 for nvidia/Qwen3.8-Flash-Next-NVFP4. See ../README.md.
+# PLE handling is profile-specific:
+#   - orcarouter / nvidia keep the legacy CPU-offload managed path;
+#   - mazinb uses the validated vLLM v0.29 PLE mmap path and exact-QSA fallback.
 #
-# The checkpoint is 123.6 GiB on a 121 GiB box. 47.7 GiB of it is one tensor -- the n-gram
-# embedding table, FP8 in the official build -- and that tensor is a pure lookup: each
-# token reads 18 rows out of 320 million.
-# VLLM_PLE_CPU_OFFLOAD=1 hands it to a dedicated CPU process which gathers on CPU and DMAs
-# the result to the GPU worker. It is ordinary pageable memory, so the kernel pages the
-# cold rows out to swap. Measured cost: ~73 KiB of page-ins per decoded token.
+# Keep profile defaults explicit below. Do not silently make experimental runtime flags
+# global because the published checkpoints differ in PLE representation and runtime image.
 set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -74,15 +71,10 @@ PUBLISH_HOST="${PUBLISH_HOST:-127.0.0.1}"
 [[ "${PUBLISH_HOST}" == 127.0.0.1 || "${PUBLISH_HOST}" == 0.0.0.0 ]] || {
   echo "FATAL: unsupported PUBLISH_HOST=${PUBLISH_HOST}" >&2; exit 2; }
 
-# THE ONE THAT COSTS YOU A DAY -----------------------------------------------------
-# PLE offload requires the multiproc executor, even at TP=1. spawn_ple_offload() and
-# wait_ple_offload_ready() are called from vllm/v1/executor/multiproc_executor.py and
-# from nowhere else -- uniproc_executor.py has no such call. vLLM picks uniproc by
-# default at TP=1, so the offload worker is never spawned, the GPU side waits forever on
-# a peer that does not exist, and the boot hangs after "Graph capturing finished" with
-# EngineCore spinning at 90% of one core, no disk I/O, and no /tmp socket. Nothing is
-# ever logged. Diagnostic: `docker exec <container> ps -eo pid,rss,comm` -- if there is
-# no PleOffloadWorker process, it was never spawned.
+# Legacy CPU PLE offload requires the multiproc executor even at TP=1. mazinb's
+# v0.29 mmap path does not depend on PleOffloadWorker, but keeping mp as the managed
+# default is compatible with the existing service lifecycle and avoids changing another
+# runtime variable during installer promotion.
 EXECUTOR="${EXECUTOR:-mp}"
 
 # Context. The card documents YaRN to 1M; factor 4.0 x 262144 = 1048576 exactly.
