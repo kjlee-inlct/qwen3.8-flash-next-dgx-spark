@@ -29,7 +29,10 @@ list_storage_images() {
     vllm-orcarouter-v029-h18-ct-input-scale-lifecycle:v1 \
     vllm-orcarouter-v029-h19-ct-combined-lifecycle:v1 \
     vllm-orcarouter-v029-h20-ct-convert-diag:v1 \
-    vllm-orcarouter-v029-h20-modelopt-convert-diag:v1
+    vllm-orcarouter-v029-h20-fp8-bi-repair:v1 \
+    vllm-orcarouter-v029-h20-modelopt-convert-diag:v1 \
+    vllm-orcarouter-v029-h38-decoder-scope:v1 \
+    vllm-orcarouter-v029-h38-deterministic:v1
 }
 
 describe_storage_image() {
@@ -129,10 +132,25 @@ describe_storage_image() {
       STORAGE_IMAGE_DISPOSABLE=0
       STORAGE_IMAGE_DESCRIPTION="Current H20 CT NVFP4 conversion diagnostic"
       ;;
+    vllm-orcarouter-v029-h20-fp8-bi-repair:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="H20 Humming FP8 batch-invariant repair control; retain for H38 provenance"
+      ;;
     vllm-orcarouter-v029-h20-modelopt-convert-diag:v1)
       STORAGE_IMAGE_CLASS="experiment"
       STORAGE_IMAGE_DISPOSABLE=0
       STORAGE_IMAGE_DESCRIPTION="Current H20 ModelOpt NVFP4 conversion diagnostic"
+      ;;
+    vllm-orcarouter-v029-h38-decoder-scope:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="Validated H38 decoder-scoped determinism candidate; protected pending managed promotion"
+      ;;
+    vllm-orcarouter-v029-h38-deterministic:v1)
+      STORAGE_IMAGE_CLASS="experiment"
+      STORAGE_IMAGE_DISPOSABLE=0
+      STORAGE_IMAGE_DESCRIPTION="Validated H38 all-call fallback/control; protected for regression comparison"
       ;;
     *)
       printf 'ERROR: unknown storage image: %s\n' "$1" >&2
