@@ -35,10 +35,11 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("orcarouter   stable", result.stdout)
         self.assertIn("nvidia       experimental", result.stdout)
-        self.assertIn("mazinb       candidate", result.stdout)
-        self.assertIn("lychee888    candidate", result.stdout)
+        self.assertIn("mazinb       experimental", result.stdout)
+        self.assertIn("orcarouter-hybrid in-progress", result.stdout)
+        self.assertIn("lychee888    planned", result.stdout)
 
-    def test_mazinb_candidate_has_download_only_metadata(self) -> None:
+    def test_mazinb_installable_profile_has_pinned_metadata(self) -> None:
         result = subprocess.run(
             [
                 "bash",
@@ -68,12 +69,19 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
         self.assertIn("--candidate", help_result.stdout)
 
-    def test_candidate_profiles_are_not_installable(self) -> None:
-        for profile in ("mazinb", "lychee888"):
+    def test_in_progress_and_planned_profiles_are_not_installable(self) -> None:
+        expected_status = {
+            "orcarouter-hybrid": "in-progress",
+            "lychee888": "planned",
+        }
+        for profile, status in expected_status.items():
             with self.subTest(profile=profile):
                 result = self.run_install(profile)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("is a candidate profile and is not installable yet", result.stderr)
+                self.assertIn(
+                    f"is a {status} profile and is not installable yet",
+                    result.stderr,
+                )
 
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
@@ -103,6 +111,14 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("nvidia/Qwen3.8-Flash-Next-NVFP4", result.stdout)
         self.assertIn("fc694b54fb0174e0913e6adf86691ef85a4ead47", result.stdout)
         self.assertIn("profile     : nvidia", result.stdout)
+
+    def test_mazinb_profile(self) -> None:
+        result = self.run_install("mazinb")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
+        self.assertIn("f2c21eb", result.stdout)
+        self.assertIn("profile     : mazinb", result.stdout)
+        self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
 
     def test_unknown_profile_fails(self) -> None:
         result = self.run_install("unknown")
