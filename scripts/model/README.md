@@ -31,6 +31,41 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 
 Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/prepare-config.py` are compatibility entry points.
 
+
+## Installer model status
+
+`model-profiles.sh` is also the source of truth for which checkpoint profiles
+`install.sh` may select:
+
+| Profile | Status | Installable |
+|---|---|---:|
+| `orcarouter` | stable/default, confirmed | yes |
+| `nvidia` | experimental, confirmed | yes |
+| `mazinb` | experimental, confirmed | yes |
+| `orcarouter-hybrid` | in progress | no |
+| `lychee888` | planned | no |
+
+A profile is not made installable merely because checkpoint metadata exists.
+The registry must also have a qualified download/runtime path and the managed
+lifecycle must accept the profile. `orcarouter-hybrid` and `lychee888`
+therefore remain visible but blocked.
+
+
+### mazinb installer promotion status
+
+The installer promotion was merged after two concrete checks on DGX Spark:
+
+- `./install.sh --list-models` exposed `mazinb` as
+  `experimental / installable=1`;
+- `./install.sh --model mazinb --lang en --yes --no-start --dry-run`
+  produced the expected model, revision `f2c21eb`, model directory, and local
+  `vllm-orcarouter-v029:v1` image plan without mutating the host.
+
+The full managed lifecycle validation (actual image build/start, systemd
+readiness, doctor, restart, and uninstall preservation) is intentionally
+deferred. Treat that as a follow-up qualification task, not as a prerequisite
+for keeping mazinb selectable in the registry.
+
 ## Operator model inventory and cleanup
 
 The stable top-level `scripts/manage-models.sh` command inventories locally managed checkpoints by their `.qwen38-model-manifest.json` files. It reports the active model separately and refuses to delete it. Active-model removal remains an uninstall lifecycle operation via `./uninstall.sh --purge-model`.

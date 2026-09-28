@@ -293,11 +293,15 @@ else
 fi
 if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4] (1): ' answer
+    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4] (1): ' answer
   else
-    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4] (1): ' answer
+    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4] (1): ' answer
   fi
-  [[ "${answer}" == 2 || "${answer}" == nvidia ]] && MODEL_PROFILE=nvidia || MODEL_PROFILE=orcarouter
+  case "${answer}" in
+    2|nvidia) MODEL_PROFILE=nvidia ;;
+    3|mazinb) MODEL_PROFILE=mazinb ;;
+    *) MODEL_PROFILE=orcarouter ;;
+  esac
   load_model_profile "${MODEL_PROFILE}" || exit $?
   REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
   [[ -n "${MODEL_DIR:-}" && "${MODEL_DIR}" != "$HOME/models/qwen3.8-flash-next-orcarouter" ]] || MODEL_DIR="${PROFILE_MODEL_DIR}"
@@ -494,6 +498,10 @@ elif [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
   fi
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.nv-mixed" "${ROOT_DIR}/scripts"
+  fi
+elif [[ "${MODEL_PROFILE}" == mazinb && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
+  if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+    docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
   fi
 else
   docker pull "${IMAGE}"

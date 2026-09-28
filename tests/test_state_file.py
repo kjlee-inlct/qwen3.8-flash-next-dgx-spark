@@ -105,6 +105,25 @@ class StateFileParserTests(unittest.TestCase):
         self.assertIn(b"/home/inlc/models/qwen model", fields); self.assertIn(b"/home/inlc/state/config override.json", fields)
         self.assertNotIn(b"INSTALL_ROOT", fields); self.assertNotIn(b"MODEL_REPO", fields); self.assertNotIn(b"PROXY_OWNED", fields)
 
+    def test_install_runtime_accepts_mazinb_profile(self) -> None:
+        manifest = (
+            self.install_manifest()
+            .replace("MODEL_PROFILE=orcarouter", "MODEL_PROFILE=mazinb")
+            .replace(
+                "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                "MODEL_REPO=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            )
+            .replace(
+                "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                "SERVED_NAME=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            )
+        )
+        result = self.run_parser("install-runtime", manifest)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"MODEL_PROFILE", fields)
+        self.assertIn(b"mazinb", fields)
+
     def test_install_service_emits_only_service_fields_and_decodes_install_root(self) -> None:
         result = self.run_parser("install-service", self.install_manifest())
         self.assertEqual(result.returncode, 0, result.stderr.decode())

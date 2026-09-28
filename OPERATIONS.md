@@ -44,6 +44,27 @@ A normal installation has two kinds of persistent application state:
 
 The systemd service uses the stable `~/.local/share/qwen38-spark/current` symlink. It does not execute directly from the mutable Git checkout after installation.
 
+## Installer model profiles
+
+The installer currently exposes three confirmed selectable profiles:
+
+```text
+orcarouter         confirmed / default
+nvidia             confirmed / optional
+mazinb             confirmed / optional
+```
+
+The roadmap profiles remain visible through `./install.sh --list-models` but
+are not selectable yet:
+
+```text
+orcarouter-hybrid  in progress
+lychee888          planned
+```
+
+Use `./install.sh --list-models` as the canonical operator view rather than
+assuming every profile tracked by the repository is installable.
+
 ## Fresh install
 
 Run the normal installer:
@@ -56,6 +77,9 @@ or a non-interactive example:
 
 ```bash
 ./install.sh --model orcarouter --lang en --yes
+# or:
+./install.sh --model nvidia --lang en --yes
+./install.sh --model mazinb --lang en --yes
 ```
 
 Before installing, a dry-run is recommended:

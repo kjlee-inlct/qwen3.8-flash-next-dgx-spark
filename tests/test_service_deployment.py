@@ -33,6 +33,22 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime container already exists", server)
         self.assertNotIn('docker rm -f "${NAME}"', server)
 
+    def test_mazinb_managed_runtime_path_is_wired(self) -> None:
+        server = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        runner = (
+            ROOT / "scripts" / "runtime" / "service-runner.sh"
+        ).read_text(encoding="utf-8")
+        parser = (ROOT / "scripts" / "lib" / "state_file.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("mazinb)", server)
+        self.assertIn("vllm-orcarouter-v029:v1", server)
+        self.assertIn("VLLM_PLE_MMAP=1", server)
+        self.assertIn("DEFAULT_QSA_EXACT_TOPK=1", server)
+        self.assertIn("KV_MEMORY_FLAG=--kv-cache-memory-bytes", server)
+        self.assertIn('"${MODEL_PROFILE:-}" == mazinb', runner)
+        self.assertIn('one_of("orcarouter", "nvidia", "mazinb")', parser)
+
     def test_service_runner_strictly_parses_install_manifest(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn('parse_state_into_vars install-runtime "${STATE_FILE}"', runner)
