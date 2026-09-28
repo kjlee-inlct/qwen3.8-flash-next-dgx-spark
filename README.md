@@ -495,17 +495,30 @@ checkpoint files are never mixed in one directory.
 |---|---|---|
 | `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-skinny-tp1:v1` (stock image + GB10 TP=1 skinny-GEMM patch) |
 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | locally built `vllm-nv-mixed:v2` with the required patches |
+| `mazinb` | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-orcarouter-v029:v1` with PLE mmap + exact-QSA v0.29 path |
 
 ```bash
 ./install.sh                       # bilingual interactive profile selection
 ./install.sh --model orcarouter
 ./install.sh --model nvidia
+./install.sh --model mazinb
 ```
 
 The shared `scripts/model-profiles.sh` registry is intentionally not a second lifecycle
 manager: installation, activation, service ownership and removal remain transactional in
 `install.sh` and `uninstall.sh`. To change the active profile, uninstall while preserving
 the downloaded model, then run the installer for the other profile.
+
+Installer roadmap status:
+
+```text
+orcarouter         confirmed / installable / default
+nvidia             confirmed / installable
+mazinb             confirmed / installable
+orcarouter-hybrid  in progress / not installable yet
+lychee888          planned / not installable yet
+```
+
 
 > **H38 runtime status:** the validated OrcaRouter H38 decoder-only production profile lives
 > in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. The transactional
