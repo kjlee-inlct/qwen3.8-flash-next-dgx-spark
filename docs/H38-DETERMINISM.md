@@ -64,24 +64,46 @@ The profile names are runtime roles. The all-call image keeps its historical
 name for regression continuity; do not infer its preferred production role from
 the image tag.
 
-## Production-alias gate
+## Production-alias gate — completed
 
-After scope promotion, validate the production alias itself with:
+The final promoted production-alias matrix completed on 2026-09-28 with:
 
 ```bash
 bash scripts/benchmark/run-h38-production-gate.sh
 ```
 
-This runs the same 1K, 32K, forward-QSA, and reverse-QSA gates against:
+The gate exercised:
 
 ```text
 hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4
 ```
 
-The production alias has already been observed to start successfully with the
-decoder-scope image and runtime revision `runtime-production-decoder-scope`.
-The final alias matrix result must be recorded in
-`scripts/benchmark/README.md` when completed.
+with the decoder-scope production image
+`vllm-orcarouter-v029-h38-decoder-scope:v1`.
+
+Recorded runtime controls included Marlin canonical order enabled with
+scope `decoder`, exact QSA, MTP `k=2`, `max_model_len=262144`,
+`max_num_batched_tokens=8192`, `max_num_seqs=3`, prefix caching disabled,
+and PLE mmap enabled.
+
+Results:
+
+- 1K / 128 x20: PASS, `unique_hashes=1`;
+- 32K / 128 x10: PASS, `unique_hashes=1`;
+- forward QSA 1K -> 2K -> 4K -> 8K -> 32K x5: PASS at every size,
+  `first_failure_tokens=null`;
+- reverse QSA 32K -> 8K -> 4K -> 2K -> 1K x5: PASS at every size,
+  `first_failure_tokens=null`.
+
+The gate report identifies Git revision
+`29ec139bf1de8c2fcc2cbfc2f348d0741c0c7fd0` and release ID
+`1bdc6932067d3110531f5c76b10e2842a98a9bb5`. The detailed result and
+per-gate hashes are recorded in `scripts/benchmark/README.md`.
+
+Therefore the H38 determinism repair is closed for the validated
+`scripts/runtime/orcarouter-v029.sh` production runtime track. This closure
+does not include the transactional installer/systemd managed-service path,
+which remains a separate integration and lifecycle-qualification phase.
 
 ## Managed-service integration gap
 
