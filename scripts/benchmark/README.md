@@ -95,8 +95,13 @@ Observed result:
 | reverse QSA | PASS | 32K, 8K, 4K, 2K, 1K x5 | every size `unique_hashes=1`, `first_failure_tokens=null` |
 
 The hashes above are provenance/regression markers for this exact production
-alias gate, not universal correctness oracles. Final acceptance remains
-repeatable determinism under the recorded runtime controls.
+alias gate, not universal correctness oracles. They are also not directly
+comparable with the earlier scope-A/B hashes: the benchmark runner builds its
+determinism prompt from the repository-root `README.md` by default, and PR #215
+changed that corpus before this production-alias gate was run. The requested
+token sizes stayed the same, but the prompt text was not the same input.
+Final acceptance remains repeatable determinism under the recorded runtime
+controls.
 
 This closes H38 runtime determinism repair for the validated v0.29 production
 runtime profile. It does **not** close the separate `install.sh` / systemd
