@@ -124,6 +124,25 @@ class StateFileParserTests(unittest.TestCase):
         self.assertIn(b"MODEL_PROFILE", fields)
         self.assertIn(b"mazinb", fields)
 
+    def test_install_runtime_accepts_orcarouter_hybrid_profile(self) -> None:
+        manifest = (
+            self.install_manifest()
+            .replace("MODEL_PROFILE=orcarouter", "MODEL_PROFILE=orcarouter-hybrid")
+            .replace(
+                "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                "SERVED_NAME=orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            )
+            .replace(
+                "VLLM_IMAGE=vllm/vllm-openai:qwen38-flash-next-arm64-cu130",
+                "VLLM_IMAGE=vllm-orcarouter-v029-h38-decoder-scope:v1",
+            )
+        )
+        result = self.run_parser("install-runtime", manifest)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        fields = result.stdout.split(b"\0")
+        self.assertIn(b"MODEL_PROFILE", fields)
+        self.assertIn(b"orcarouter-hybrid", fields)
+
     def test_install_service_emits_only_service_fields_and_decodes_install_root(self) -> None:
         result = self.run_parser("install-service", self.install_manifest())
         self.assertEqual(result.returncode, 0, result.stderr.decode())
