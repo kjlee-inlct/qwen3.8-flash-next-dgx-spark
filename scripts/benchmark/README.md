@@ -3112,6 +3112,53 @@ Interpretation:
 
 Do not restart the container before this experiment.
 
+##### H20 v38 scope conclusion reopened
+
+The earlier conclusion that decoder-only canonicalization was insufficient was
+too strong.
+
+Evidence now available:
+
+- decoder-only r2 full QSA sweep:
+  - 1K/2K/4K/8K PASS;
+  - 32K FAIL with four unique hashes;
+- restored all-call r3:
+  - focused 32K x5 PASS;
+  - subsequent full QSA sweep failed only at 1K with two unique hashes;
+  - immediate same-runtime standalone 1K x20 PASS;
+  - controlled same-runtime 32K x2 -> 1K x20 transition also PASS.
+
+Therefore a single failing size in one sweep is not sufficient to attribute the
+failure causally to Marlin canonicalization scope. Both r2 and r3 have shown
+intermittent sweep-level failures while focused repeated requests can be fully
+deterministic.
+
+The current supported statement is:
+
+- all-call canonicalization is a validated deterministic candidate;
+- decoder-only canonicalization is **not yet disproven**;
+- residual failures may depend on runtime lifecycle, compiled graph/cache state,
+  allocator/workspace state, or another execution-history effect;
+- scope causality requires a matched A/B experiment across fresh runtimes and
+  repeated sweep orderings.
+
+Do not close H20 based on r3 alone, and do not discard r2.
+
+Next validation should compare decoder-only and all-call scope symmetrically:
+
+1. fresh runtime for each scope;
+2. 1K standalone x20;
+3. 32K standalone x10;
+4. full QSA sweep x5 repeats per size;
+5. repeat the full sweep in reverse order
+   `32768,8192,4096,2048,1024`;
+6. perform at least two fresh-runtime lifecycles per scope before attributing
+   a failure to scope.
+
+The acceptance comparison is not based on matching a historical output hash.
+It is based on reproducible determinism across the same workload matrix and
+lifecycle repetitions.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
