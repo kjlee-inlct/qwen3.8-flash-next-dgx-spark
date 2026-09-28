@@ -726,13 +726,13 @@ start_runtime() {
     h20_env=(
       -e QWEN38_MARLIN_CANONICAL_ORDER=1
       -e QWEN38_MARLIN_CANONICAL_SCOPE=all
-      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h38-marlin-canonical-all"
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h38-marlin-canonical-all-${QWEN38_H38_CACHE_TAG:-default}"
     )
   elif [[ "${PROFILE_CASE}" == hybrid-h38-decoder-scope ]]; then
     h20_env=(
       -e QWEN38_MARLIN_CANONICAL_ORDER=1
       -e QWEN38_MARLIN_CANONICAL_SCOPE=decoder
-      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h38-marlin-canonical-decoder"
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h38-marlin-canonical-decoder-${QWEN38_H38_CACHE_TAG:-default}"
     )
   elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
     h20_env=(

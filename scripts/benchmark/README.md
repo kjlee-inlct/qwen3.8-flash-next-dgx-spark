@@ -3418,6 +3418,59 @@ This conclusion is limited to the tested OrcaRouter NVFP4 / vLLM v0.29 / GB10
 configuration and workload matrix. It does not prove universal determinism for
 all models, kernels, prompt distributions, or future vLLM versions.
 
+##### H20 v38 fresh-compile A/B follow-up
+
+The matched scope A/B completed two fresh container lifecycles per scope, but
+cycle2 may reuse persistent vLLM AOT compile artifacts through the host-mounted
+cache. Because compile/cache state remains a plausible contributor to the
+earlier intermittent sweep failures, one isolated compile lifecycle per scope
+is required before final production promotion.
+
+The runtime supports an explicit cache tag:
+
+```text
+QWEN38_H38_CACHE_TAG=<unique-tag>
+```
+
+which changes the H38 `VLLM_CACHE_ROOT` without deleting any prior cache.
+
+Run one decoder-only uncached cycle:
+
+```bash
+QWEN38_H38_CACHE_TAG=decoder-uncached1 \
+  ./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h38-decoder-scope
+
+./scripts/wait-ready.sh \
+  --container qwen38-h38-decoder-scope-v029 \
+  --model hybrid-h38-decoder-scope/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+bash scripts/benchmark/run-h38-scope-ab.sh decoder uncached1
+```
+
+Then repeat for all-call using a different tag:
+
+```bash
+QWEN38_H38_CACHE_TAG=all-uncached1 \
+  ./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h38-deterministic
+
+./scripts/wait-ready.sh \
+  --container qwen38-h38-deterministic-v029 \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+
+bash scripts/benchmark/run-h38-scope-ab.sh all uncached1
+```
+
+A new cache tag must produce a compile path that did not exist before. Preserve
+all prior cache directories and benchmark reports.
+
+If both isolated compile lifecycles pass the full matrix, prefer decoder-only
+for production under the minimum-change principle and retain all-call as the
+broader fallback/control.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
