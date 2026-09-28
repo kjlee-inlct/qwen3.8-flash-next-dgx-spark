@@ -560,6 +560,7 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn('"QWEN38_H20M_CANONICAL_ORDER"', marlin)
         self.assertIn('"QWEN38_H20M_CANONICAL_SCOPE"', marlin)
         self.assertIn('"canonical_order_scope"', marlin)
+        self.assertIn("or layer_idx < 0", marlin)
         self.assertIn("_qwen38_h20m_canonicalize_sorted_tokens", marlin)
         self.assertIn("torch.argsort(key, stable=True)", marlin)
         self.assertIn('"canonical_order_enabled"', marlin)
@@ -583,6 +584,11 @@ class OrcaRouterV029ExperimentTests(unittest.TestCase):
         self.assertIn("w13_buffer_semantic_equal", collector)
         self.assertIn("canonical_order_enabled", collector)
         self.assertIn("canonical_order_scope", collector)
+        benchmark_common = (
+            ROOT / "scripts" / "benchmark" / "lib" / "common.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"h20m_canonical_order"', benchmark_common)
+        self.assertIn('"h20m_canonical_scope"', benchmark_common)
 
 
     def test_h20_fp8_batch_invariant_repair_profile_is_diagnostic_free(self) -> None:
