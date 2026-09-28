@@ -102,13 +102,14 @@ PY
   then pass "checkpoint manifest is complete"; else fail "checkpoint manifest is incomplete or mismatched"; fi
 else fail "checkpoint manifest is missing"; fi
 
-CONFIG_CANDIDATE="${CONFIG_OVERRIDE:-}"
-if [[ ! -r "${CONFIG_CANDIDATE}" && -r "${STATE_DIR}/config.vllm.json" ]]; then CONFIG_CANDIDATE="${STATE_DIR}/config.vllm.json"; fi
-if [[ ! -r "${CONFIG_CANDIDATE}" ]] && command -v docker >/dev/null 2>&1 && docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
-  CONFIG_CANDIDATE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model/config.json"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
-fi
-if [[ -r "${CONFIG_CANDIDATE}" ]]; then
-  if python3 - "${CONFIG_CANDIDATE}" <<'PY'
+if [[ "${PROFILE_CONFIG_OVERRIDE:-0}" == 1 ]]; then
+  CONFIG_CANDIDATE="${CONFIG_OVERRIDE:-}"
+  if [[ ! -r "${CONFIG_CANDIDATE}" && -r "${STATE_DIR}/config.vllm.json" ]]; then CONFIG_CANDIDATE="${STATE_DIR}/config.vllm.json"; fi
+  if [[ ! -r "${CONFIG_CANDIDATE}" ]] && command -v docker >/dev/null 2>&1 && docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
+    CONFIG_CANDIDATE="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model/config.json"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+  fi
+  if [[ -r "${CONFIG_CANDIDATE}" ]]; then
+    if python3 - "${CONFIG_CANDIDATE}" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8")); values = []
 def walk(item):
@@ -119,8 +120,11 @@ def walk(item):
     elif isinstance(item, str): values.append(item)
 walk(data); assert "qwen_sparse_attention" not in values
 PY
-  then pass "vLLM config is compatible (${CONFIG_CANDIDATE})"; else fail "vLLM config still contains incompatible layer values"; fi
-else fail "vLLM config override is missing (manifest, generated config, and container mount checked)"; fi
+    then pass "vLLM config is compatible (${CONFIG_CANDIDATE})"; else fail "vLLM config still contains incompatible layer values"; fi
+  else fail "vLLM config override is missing (manifest, generated config, and container mount checked)"; fi
+else
+  pass "model profile does not require a vLLM config override"
+fi
 
 if command -v swapon >/dev/null 2>&1 && swapon --show=NAME --noheadings | awk '{$1=$1};1' | grep -Fxq "${SWAP_FILE:-}"; then pass "dedicated PLE swap is active (${SWAP_FILE})"; else fail "dedicated PLE swap is not active (${SWAP_FILE:-unset})"; fi
 
@@ -138,7 +142,13 @@ if [[ -r "${TRANSITION_STATE_FILE}" ]]; then transition_state="$(awk -F= '$1=="T
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   pass "Docker daemon is available"
-  if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then pass "vLLM image is present"; else fail "vLLM image is missing"; fi
+  if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then
+    pass "vLLM image is present"
+    if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid ]]; then
+      h38_scope="$(docker image inspect "${VLLM_IMAGE}" --format '{{ index .Config.Labels "qwen38.h38scope" }}' 2>/dev/null || true)"
+      [[ "${h38_scope}" == decoder-v1 ]] && pass "H38 decoder-only image label is valid" || fail "H38 decoder-only image label is missing or unexpected"
+    fi
+  else fail "vLLM image is missing"; fi
   if docker inspect "${ROLLBACK_CONTAINER}" >/dev/null 2>&1; then if [[ -r "${TRANSITION_STATE_FILE}" ]]; then fail "rollback container exists while a runtime transition is incomplete (${ROLLBACK_CONTAINER})"; else warn "stale rollback container exists (${ROLLBACK_CONTAINER})"; fi; else pass "no stale rollback container exists"; fi
   if docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
     state="$(docker inspect --format '{{.State.Status}}' "${RUNTIME_CONTAINER}" 2>/dev/null)"; [[ "${state}" == running ]] && pass "container is running" || fail "container state is ${state}"
