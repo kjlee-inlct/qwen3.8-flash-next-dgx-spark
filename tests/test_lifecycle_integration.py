@@ -15,8 +15,15 @@ class LifecycleIntegrationTests(unittest.TestCase):
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
 
         self.assertIn('DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"', installer)
+        self.assertIn('baseline_revision="$(git -C "${ROOT_DIR}" rev-parse HEAD)"', installer)
         self.assertIn('bash "${ROOT_DIR}/scripts/bootstrap-release.sh" "${baseline_revision}"', installer)
         self.assertIn('bash "${ROOT_DIR}/scripts/release-manager.sh" verify "${current_release}"', installer)
+        self.assertIn('bash "${ROOT_DIR}/scripts/release-manager.sh" stage "${baseline_revision}"', installer)
+        self.assertIn('bash "${ROOT_DIR}/scripts/lifecycle/qualify-release.sh" "${baseline_revision}"', installer)
+        self.assertIn('bash "${ROOT_DIR}/scripts/release-manager.sh" activate "${baseline_revision}"', installer)
+        self.assertIn('elif [[ "${RESUME}" == 0 ]]', installer)
+        self.assertIn("Immutable runtime release advanced for fresh install", installer)
+        self.assertIn("differs from installer revision", installer)
         self.assertIn('service_args=(create --runtime-root "${CURRENT_RELEASE_LINK}" --yes)', installer)
         self.assertIn('"${RUNTIME_ROOT}/scripts/serve.sh"', installer)
         self.assertLess(
