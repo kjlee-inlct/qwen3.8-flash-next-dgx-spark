@@ -10,8 +10,18 @@ source "${STATE_FILE}"
 MIN_START_MEMORY_GIB="${MIN_START_MEMORY_GIB:-2}"
 MIN_START_SWAP_FREE_GIB="${MIN_START_SWAP_FREE_GIB:-2}"
 MIN_START_DISK_FREE_GIB="${MIN_START_DISK_FREE_GIB:-5}"
+SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
 [[ -f "${MODEL_DIR:-}/model.safetensors.index.json" ]] || { printf 'FATAL: model index is missing\n' >&2; exit 1; }
+if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid ]]; then
+  python3 "${SCRIPT_ROOT}/scripts/model/validate-orcarouter-hybrid.py" \
+    --runtime-only \
+    --base-dir "${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}" \
+    --h3-dir "${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}" \
+    --h4-dir "${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}" \
+    --h5-dir "${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}" \
+    --model-dir "${MODEL_DIR}" || { printf 'FATAL: OrcaRouter hybrid runtime chain validation failed\n' >&2; exit 1; }
+fi
 docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1 || { printf 'FATAL: runtime image is missing: %s\n' "${VLLM_IMAGE:-unset}" >&2; exit 1; }
 swapon --show=NAME --noheadings | awk '{$1=$1};1' | grep -Fxq "${SWAP_FILE:-}" || { printf 'FATAL: dedicated PLE swap is inactive\n' >&2; exit 1; }
 
