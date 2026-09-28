@@ -17,6 +17,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # checkpoint declares quant_algo=MIXED_PRECISION, which the pinned image cannot load
 # (PLE) and cannot draft with (FP8_PB_WO MTP). Build both Dockerfiles in scripts/ first.
 MODEL_PROFILE="${MODEL_PROFILE:-nvidia}"
+DEFAULT_QSA_EXACT_TOPK=0
+PLE_MODE=cpu-offload
+KV_MEMORY_FLAG=--kv-cache-memory
+VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38"
+FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer"
 case "${MODEL_PROFILE}" in
   orcarouter)
     IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
@@ -31,6 +36,18 @@ case "${MODEL_PROFILE}" in
     DEFAULT_MAXLEN=524288; DEFAULT_NSPEC=3; DEFAULT_INDEX_SHARE=1
     DEFAULT_GPU_UTIL=0.78; DEFAULT_KV_MEM=16106127360; DEFAULT_MAXSEQS=8; DEFAULT_AUTOTUNE=1
     SERVED_NAME="${SERVED_NAME:-qwen3.8-flash-next}"
+    ;;
+  mazinb)
+    IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029:v1}"
+    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-mazinb}"
+    DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
+    DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    DEFAULT_QSA_EXACT_TOPK=1
+    PLE_MODE=mmap
+    KV_MEMORY_FLAG=--kv-cache-memory-bytes
+    VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
+    FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
+    SERVED_NAME="${SERVED_NAME:-mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   *) echo "FATAL: unknown MODEL_PROFILE=${MODEL_PROFILE}" >&2; exit 2 ;;
 esac
@@ -129,7 +146,7 @@ MAXSEQS="${MAXSEQS:-${DEFAULT_MAXSEQS}}"
 # leaves ~5% over the 14.3 GiB one 524288 request needs. KV_MEM= restores the old behaviour.
 KV_MEM="${KV_MEM-${DEFAULT_KV_MEM}}"
 KVMEM_ARGS=()
-[[ -n "${KV_MEM}" ]] && KVMEM_ARGS=(--kv-cache-memory "${KV_MEM}")
+[[ -n "${KV_MEM}" ]] && KVMEM_ARGS=("${KV_MEMORY_FLAG}" "${KV_MEM}")
 
 # Prefix caching needs BOTH flags on this hybrid model: without align the GDN state is not
 # cacheable and the hit rate is 0 regardless of traffic. With align the attention block
@@ -163,8 +180,27 @@ if [[ "${QSA_DET_TOPK}" == "1" ]]; then
   QSA_DET_ENV=(-e VLLM_QSA_DET_TOPK=1 -e VLLM_QSA_DET_LIB=/opt/qwen38/kernel-det/_C_det.so)
 fi
 
-QSA_EXACT_TOPK="${QSA_EXACT_TOPK:-0}"
+QSA_EXACT_TOPK="${QSA_EXACT_TOPK:-${DEFAULT_QSA_EXACT_TOPK}}"
 QSA_EXACT_ENV=(-e VLLM_QSA_EXACT_TOPK="${QSA_EXACT_TOPK}")
+
+PLE_ENV=(-e VLLM_PLE_CPU_OFFLOAD=1 -e VLLM_PLE_OFFLOAD_READY_TIMEOUT="${PLE_TIMEOUT}")
+V029_ARGS=()
+if [[ "${PLE_MODE}" == mmap ]]; then
+  PLE_ENV=(
+    -e VLLM_PLE_MMAP=1
+    -e VLLM_PLE_MMAP_DIR=/model
+    -e VLLM_PLE_MMAP_WORKERS=32
+    -e VLLM_PLE_MMAP_PREWARM=0
+    -e VLLM_PLE_MMAP_MADVISE=random
+    -e VLLM_PLE_MMAP_FAST_ROWS=0
+  )
+  V029_SPLITTING_OPS='["vllm::unified_attention_with_output","vllm::unified_mla_attention_with_output","vllm::mamba_mixer2","vllm::mamba_mixer","vllm::short_conv","vllm::qwen4_exp_compute_ple_ngram_ids","vllm::qwen4_exp_ple_short_conv","vllm::qwen4_exp_qsa_with_output","vllm::linear_attention","vllm::qwen_gdn_attention_core","vllm::qwen_gdn_attention_core_fused_norm_packed","vllm::sparse_attn_indexer","vllm::ple_mmap_lookup_ids"]'
+  V029_ARGS=(
+    --load-format safetensors
+    -cc.cudagraph_mode=PIECEWISE
+    "-cc.splitting_ops=${V029_SPLITTING_OPS}"
+  )
+fi
 
 [[ -f "${MODEL_DIR}/model.safetensors.index.json" ]] || {
   echo "FATAL: weights missing at ${MODEL_DIR} -- run ./download-weights.sh first" >&2; exit 1; }
@@ -187,7 +223,7 @@ if [[ -n "${CONFIG_OVERRIDE}" ]]; then
   [[ -f "${CONFIG_OVERRIDE}" ]] || { echo "FATAL: config override not found: ${CONFIG_OVERRIDE}" >&2; exit 1; }
   CONFIG_MOUNT=(-v "${CONFIG_OVERRIDE}:/model/config.json:ro")
 fi
-mkdir -p "${HOME}/.cache/flashinfer" "${HOME}/.cache/vllm-qwen38"
+mkdir -p "${FLASHINFER_CACHE_DIR}" "${VLLM_CACHE_DIR}"
 
 # Direct/manual invocation must never destroy an existing canonical runtime. Managed
 # replacement first preserves the old container under the rollback name, leaving this
@@ -213,16 +249,15 @@ docker run -d \
   --workdir /workspace \
   -e VLLM_TARGET_DEVICE=cuda \
   -e CUTE_DSL_ARCH=sm_121a \
-  -e VLLM_PLE_CPU_OFFLOAD=1 \
-  -e VLLM_PLE_OFFLOAD_READY_TIMEOUT="${PLE_TIMEOUT}" \
+  "${PLE_ENV[@]}" \
   -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
   "${QSA_DET_ENV[@]}" \
   "${QSA_EXACT_ENV[@]}" \
   "${LONG_ENV[@]}" \
   -v "${MODEL_DIR}:/model:ro" \
   "${CONFIG_MOUNT[@]}" \
-  -v "${HOME}/.cache/flashinfer:/root/.cache/flashinfer" \
-  -v "${HOME}/.cache/vllm-qwen38:/root/.cache/vllm" \
+  -v "${FLASHINFER_CACHE_DIR}:/root/.cache/flashinfer" \
+  -v "${VLLM_CACHE_DIR}:/root/.cache/vllm" \
   "${IMAGE}" \
   /model \
     --served-model-name "${SERVED_NAME}" \
@@ -231,6 +266,7 @@ docker run -d \
     --tensor-parallel-size 1 \
     --distributed-executor-backend "${EXECUTOR}" \
     --trust-remote-code \
+    "${V029_ARGS[@]}" \
     "${KV_ARGS[@]}" \
     --gpu-memory-utilization "${GPU_UTIL}" \
     "${KVMEM_ARGS[@]}" \
@@ -269,7 +305,7 @@ if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   echo "memory monitor started (protect=${MONITOR_PROTECT}, pid=${monitor_pid}, log=${MONITOR_LOG})"
 fi
 
-echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE offload=on, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, qsa_det_topk=${QSA_DET_TOPK}, qsa_exact_topk=${QSA_EXACT_TOPK}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
+echo "started ${NAME} (profile=${MODEL_PROFILE}, executor=${EXECUTOR}, PLE=${PLE_MODE}, SPEC=${SPEC:-mtp}${SPEC_CFG:+ k=${NSPEC}}, qsa_det_topk=${QSA_DET_TOPK}, qsa_exact_topk=${QSA_EXACT_TOPK}, maxlen=${MAXLEN}, util=${GPU_UTIL})"
 echo "follow with:  docker logs -f ${NAME}"
 echo "watch memory: watch -n5 'free -g; swapon --show'"
 echo
