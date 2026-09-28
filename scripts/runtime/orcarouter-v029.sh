@@ -704,7 +704,12 @@ start_runtime() {
   fi
 
   h20_env=()
-  if [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
+  if [[ "${PROFILE_CASE}" == hybrid-h38-deterministic ]]; then
+    h20_env=(
+      -e QWEN38_MARLIN_CANONICAL_ORDER=1
+      -e VLLM_CACHE_ROOT="/root/.cache/vllm/h38-marlin-canonical"
+    )
+  elif [[ "${PROFILE_CASE}" == hybrid-h20-ct-convert-diag || "${PROFILE_CASE}" == hybrid-h20-modelopt-convert-diag ]]; then
     h20_env=(
       -e QWEN38_H20_DIAG_MAX_CALLS=4
       -e QWEN38_H20_DIAG_FULL_HASH_MAX_BYTES=1048576
