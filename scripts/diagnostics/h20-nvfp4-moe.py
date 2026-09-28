@@ -7,6 +7,7 @@ import argparse
 import json
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -1283,8 +1284,48 @@ def marlin_probe(
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=300) as response:
-                response.read()
+            try:
+                with urllib.request.urlopen(req, timeout=300) as response:
+                    response.read()
+            except urllib.error.HTTPError as exc:
+                try:
+                    body = exc.read().decode("utf-8", errors="replace")
+                except Exception:
+                    body = "<unable to read HTTP error body>"
+                logs = subprocess.run(
+                    ["docker", "logs", "--tail", "160", container],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                print(
+                    f"ERROR: marlin request id={request_id} returned "
+                    f"HTTP {exc.code}: {exc.reason}",
+                    file=sys.stderr,
+                )
+                if body:
+                    print("HTTP error body:", file=sys.stderr)
+                    print(body, file=sys.stderr)
+                print("container log tail:", file=sys.stderr)
+                print(logs.stdout, file=sys.stderr)
+                if logs.stderr:
+                    print(logs.stderr, file=sys.stderr)
+                _write_new_json(
+                    status_output,
+                    {
+                        "schema": 1,
+                        "phase": "marlin-probe-status",
+                        "status": "request_http_error",
+                        "request_id": request_id,
+                        "http_status": exc.code,
+                        "http_reason": str(exc.reason),
+                    },
+                )
+                print(
+                    f"wrote {status_output}",
+                    file=sys.stderr,
+                )
+                return 2
             print(
                 f"marlin request {offset + 1}/{repeats} completed id={request_id}"
             )
