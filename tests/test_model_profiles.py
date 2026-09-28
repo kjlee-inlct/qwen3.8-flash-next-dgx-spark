@@ -208,6 +208,17 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
         self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
 
+    def test_hybrid_installer_checks_combined_source_disk_capacity(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        downloader = (ROOT / "scripts" / "download-weights.sh").read_text(encoding="utf-8")
+
+        self.assertIn("--required-bytes", downloader)
+        self.assertIn("PRINT_REQUIRED_BYTES", downloader)
+        self.assertIn("base_required_bytes", installer)
+        self.assertIn("overlay_required_bytes", installer)
+        self.assertIn("Hybrid combined disk preflight passed", installer)
+        self.assertIn("insufficient disk space for hybrid source checkpoints", installer)
+
     def test_direct_hybrid_download_is_rejected_as_generated_profile(self) -> None:
         result = subprocess.run(
             [str(ROOT / "scripts" / "download-weights.sh"), "--check"],
