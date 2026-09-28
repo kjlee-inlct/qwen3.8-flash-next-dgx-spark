@@ -3,7 +3,9 @@
 #
 # PLE handling is profile-specific:
 #   - orcarouter / nvidia keep the legacy CPU-offload managed path;
-#   - mazinb uses the validated vLLM v0.29 PLE mmap path and exact-QSA fallback.
+#   - mazinb uses the vLLM v0.29 PLE mmap path and exact-QSA fallback;
+#   - orcarouter-hybrid uses that v0.29 path plus the validated H38 decoder-only
+#     Marlin canonical-order repair.
 #
 # Keep profile defaults explicit below. Do not silently make experimental runtime flags
 # global because the published checkpoints differ in PLE representation and runtime image.
@@ -19,6 +21,7 @@ PLE_MODE=cpu-offload
 KV_MEMORY_FLAG=--kv-cache-memory
 VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38"
 FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer"
+H38_ENV=()
 case "${MODEL_PROFILE}" in
   orcarouter)
     IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
@@ -45,6 +48,23 @@ case "${MODEL_PROFILE}" in
     VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
     FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
     SERVED_NAME="${SERVED_NAME:-mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
+    ;;
+  orcarouter-hybrid)
+    IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029-h38-decoder-scope:v1}"
+    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
+    DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
+    DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    DEFAULT_QSA_EXACT_TOPK=1
+    PLE_MODE=mmap
+    KV_MEMORY_FLAG=--kv-cache-memory-bytes
+    VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
+    FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
+    H38_ENV=(
+      -e QWEN38_MARLIN_CANONICAL_ORDER=1
+      -e QWEN38_MARLIN_CANONICAL_SCOPE=decoder
+      -e VLLM_CACHE_ROOT=/root/.cache/vllm/h38-marlin-canonical-decoder-managed-v1
+    )
+    SERVED_NAME="${SERVED_NAME:-orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   *) echo "FATAL: unknown MODEL_PROFILE=${MODEL_PROFILE}" >&2; exit 2 ;;
 esac
@@ -245,6 +265,7 @@ docker run -d \
   -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
   "${QSA_DET_ENV[@]}" \
   "${QSA_EXACT_ENV[@]}" \
+  "${H38_ENV[@]}" \
   "${LONG_ENV[@]}" \
   -v "${MODEL_DIR}:/model:ro" \
   "${CONFIG_MOUNT[@]}" \
