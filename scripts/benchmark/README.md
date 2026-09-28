@@ -3471,6 +3471,45 @@ If both isolated compile lifecycles pass the full matrix, prefer decoder-only
 for production under the minimum-change principle and retain all-call as the
 broader fallback/control.
 
+##### H20 v38 decoder-scope fresh-compile uncached1
+
+Observed on 2026-09-28 using
+`QWEN38_H38_CACHE_TAG=decoder-uncached1`.
+
+Startup performed a real compile path rather than directly loading an existing
+AOT artifact:
+
+```text
+torch.compile took 16.31 s in total
+```
+
+The full matched matrix passed:
+
+```text
+1K standalone x20        PASS, unique_hashes=1
+32K standalone x10       PASS, unique_hashes=1
+forward QSA sweep        PASS, every size unique_hashes=1
+reverse QSA sweep        PASS, every size unique_hashes=1
+```
+
+Stable standalone hashes:
+
+```text
+1K:
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+
+32K:
+d6fa888525cd888595d9c51c2a24aa248cce55cfd35d16bdc0ddbba0a8e78d39
+```
+
+Decoder-only has now passed:
+
+- two fresh-container matched cycles;
+- one isolated fresh-compile matched cycle.
+
+One all-call isolated fresh-compile cycle remains before final production scope
+promotion.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
