@@ -25,5 +25,9 @@ This directory contains canonical repository-specific read-only diagnostics and 
 - `doctor-observability.sh`: doctor-specific observability checks.
 - `runtime-commit-observability.sh`: runtime attestation observability.
 - `collect-diagnostics.sh`: bounded support-bundle implementation.
+- `h20-nvfp4-moe.py`: canonical H20/H38 NVFP4 MoE capture, parsing, and
+  decision helper used to localize routed-expert/Marlin divergence. Historical
+  instrumentation failures and superseded hypotheses must remain distinguishable
+  from numerical results.
 
 Top-level diagnostic commands in `scripts/` remain stable operator or compatibility entry points and should delegate here where appropriate.
