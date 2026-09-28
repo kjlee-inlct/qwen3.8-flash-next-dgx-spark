@@ -4,10 +4,11 @@ This project treats the model checkpoint and serving engine as two independent a
 
 ```text
 model profile
-  ├─ orcarouter  stable / default
-  ├─ nvidia      experimental / optional
-  ├─ mazinb      candidate / not installable
-  └─ lychee888   candidate / not installable
+  ├─ orcarouter        stable / default / installable
+  ├─ nvidia            experimental / installable
+  ├─ mazinb            experimental / installable
+  ├─ orcarouter-hybrid in-progress / not installable
+  └─ lychee888         planned / not installable
 
 serving backend
   ├─ vllm        stable / implemented
@@ -46,18 +47,25 @@ gates above.
 The NVIDIA profile is maintained as an optional comparison/compatibility path. Its
 checkpoint-specific mixed-precision requirements must not leak into OrcaRouter defaults.
 
-### mazinb — candidate
+### mazinb — experimental/installable
 
-`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` is tracked as a candidate. It keeps a
-BF16 PLE and uses an experts-focused NVFP4 layout, so it is useful as a future
-checkpoint/quantization comparison. It is intentionally not installable until a pinned
-revision and local DGX Spark qualification are recorded.
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` is a qualified optional installer
+profile. It keeps the large PLE table in BF16 and uses the vLLM v0.29 mmap runtime
+path already exercised during the determinism investigation. It is installable but is
+not the default profile.
 
-### lychee888 — candidate
+### OrcaRouter hybrid — in progress
 
-`lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` is tracked as a candidate.
-Its FP8 PLE materially changes the PLE loading/runtime requirements and therefore needs
-its own compatibility work and qualification before becoming selectable.
+`orcarouter-hybrid` is the canonical installer-facing name for the hybrid track that is
+currently under integration/qualification. It remains visible in the model registry but
+is deliberately not installable until its checkpoint definition, image/runtime path,
+and lifecycle gates are complete.
+
+### lychee888 — planned
+
+`lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` is a planned profile.
+Its FP8 PLE materially changes the PLE loading/runtime requirements and therefore still
+needs compatibility and lifecycle qualification before becoming selectable.
 
 ## Serving backends
 
@@ -76,8 +84,11 @@ uninstall end to end; doing so earlier would add migration risk without runtime 
 ## Promotion flow
 
 ```text
-candidate
-   │  pin revision + compatibility work
+planned
+   │  define checkpoint/runtime path
+   ▼
+in-progress
+   │  integration + qualification
    ▼
 experimental
    │  install/lifecycle/correctness/performance qualification
