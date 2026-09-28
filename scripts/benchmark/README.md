@@ -2650,6 +2650,88 @@ target-only versus all-layer intervention, not from hash equality alone.
 The immediate next question is validation breadth, not further root-cause
 localization.
 
+##### H20 v35 r1 observed result
+
+Observed on 2026-09-28 using the same running v34 all-layer canonical container.
+
+Runtime provenance remained:
+
+```text
+h20m_canonical_order="1"
+h20m_canonical_scope="all"
+qsa_exact_topk="1"
+MTP k=2
+max_num_seqs=3
+prefix_caching=false
+```
+
+The established prompt-size determinism sweep passed at every requested size:
+
+```text
+requested 1024   actual 1024   repeats=5   unique_hashes=1   PASS
+requested 2048   actual 2048   repeats=5   unique_hashes=1   PASS
+requested 4096   actual 4096   repeats=5   unique_hashes=1   PASS
+requested 8192   actual 8191   repeats=5   unique_hashes=1   PASS
+requested 32768  actual 32768  repeats=5   unique_hashes=1   PASS
+```
+
+The aggregate result was:
+
+```text
+status=pass
+first_failure_tokens=null
+```
+
+This materially strengthens the v34 conclusion. The all-layer canonical-order
+control is not limited to the original 1024-token reproducer; it remains
+deterministic across the established QSA-size sweep through 32768 tokens.
+
+The 8192 request produced 8191 actual prompt tokens through the benchmark's
+token-target construction. This is accepted as the normal benchmark artifact
+for this sweep and is not a failure.
+
+At this point root-cause localization is complete enough to move to
+reproduction/robustness validation rather than additional layer tracing.
+
+##### H20 v36: same-boot and fresh-start reproduction
+
+v36 has two gates.
+
+Gate A: same-boot 20-repeat stress on the currently running v34 all-layer
+canonical runtime:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 20 \
+  --output scripts/benchmark/results/local/h20m-v36-all-canonical-det-1024-r1-20x.json
+```
+
+Gate B: fresh-start reproduction. After Gate A passes, stop/remove the
+experimental container, start the same v34 all-layer canonical configuration
+again, wait for READY, verify the canonical-order and MARLIN markers, then run
+the original five-repeat 1024 gate into a new artifact:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 1024 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h20m-v36-all-canonical-det-1024-fresh-r1.json
+```
+
+Interpretation:
+
+- Gate A PASS + Gate B PASS: same-boot and fresh-runtime reproducibility are
+  established; proceed to v37 performance/regression validation;
+- Gate A FAIL: same-boot stability is insufficient; retain the current runtime
+  and inspect the first divergent repeat before restarting;
+- Gate A PASS but Gate B FAIL: startup/allocation/lifecycle state still affects
+  determinism; do not promote the repair yet.
+
 ##### H20 v35: all-layer canonical validation sweep
 
 Keep the current v34 all-layer canonical container running. Do not rebuild or
