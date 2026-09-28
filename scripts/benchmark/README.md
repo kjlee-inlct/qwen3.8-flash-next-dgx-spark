@@ -2771,6 +2771,128 @@ reproducibility for the all-layer canonical-order control.
 Root-cause and reproducibility validation are therefore complete enough to move
 to performance/regression validation.
 
+##### H20 v37 observed result
+
+Observed on 2026-09-28 using the fresh v34 all-layer canonical runtime that
+already passed v36 Gate B.
+
+All three regression/performance workloads completed successfully.
+
+Decode, 512 requested tokens, five repeats:
+
+```text
+status=pass
+decode_tokens_s median=29.5669
+decode_tokens_s max=29.6183
+median TTFT=0.240692 s
+engine steps/s=13.498636
+draft acceptance rate=0.571739
+generation tokens/step=2.12987
+```
+
+Every decode request completed successfully. The first request carried the
+expected warm-path TTFT outlier; subsequent TTFT values were approximately
+0.24 s.
+
+Prefill:
+
+```text
+8192 tokens:  1316.234 prompt tok/s, TTFT 6.232173 s
+32768 tokens: 1751.326 prompt tok/s, TTFT 18.716678 s
+65536 tokens: 1766.106 prompt tok/s, TTFT 37.113849 s
+status=pass
+```
+
+All prefill sizes completed without OOM or runtime failure.
+
+Concurrency:
+
+```text
+c=1  aggregate=29.6496 tok/s  per-stream=29.6496  median TTFT=0.219240 s
+c=2  aggregate=47.9134 tok/s  per-stream=23.9567  median TTFT=0.524791 s
+c=4  aggregate=48.2537 tok/s  per-stream=12.0634  median TTFT=1.071932 s
+c=8  aggregate=61.6299 tok/s  per-stream=7.7037   median TTFT=17.220106 s
+```
+
+All 15 concurrency requests completed successfully across the four levels.
+The minimum recorded MemAvailable remained above approximately 6.2 GiB.
+
+This is sufficient to close v37 as a regression-safety PASS. These measurements
+do not by themselves quantify canonicalization overhead versus an exactly
+matched unpatched runtime, but they show no correctness failure, OOM, or
+catastrophic throughput collapse.
+
+##### H20 v38: minimal production-oriented deterministic repair
+
+v38 removes the H20 diagnostic capture stack and keeps only the repair controls
+that were present in the validated v34 path:
+
+1. local Humming FP8 linear batch-invariant compute mode;
+2. deterministic within-expert physical ordering immediately after
+   `moe_align_block_size()` in the Marlin MoE path.
+
+The v38 Marlin patch does not contain request triggers, custom capture ops,
+layer tagging, tensor snapshots, pair comparison, W13 metadata inspection, or
+diagnostic environment switches.
+
+The dedicated image is built directly from H12:
+
+```text
+vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+  + Humming FP8 local batch-invariant patch
+  + minimal Marlin canonical-order patch
+```
+
+The Humming control is retained because it was part of every successful v34-v37
+runtime and had independently stabilized the earlier QKVZ boundary. Its
+standalone diagnostic-free repair was insufficient end-to-end, but removing it
+at the same time as the instrumentation would introduce a second variable.
+Further minimization can be a later A/B only after the combined production
+candidate is validated.
+
+Build:
+
+```bash
+docker build --no-cache \
+  -t vllm-orcarouter-v029-h38-deterministic:v1 \
+  -f scripts/Dockerfile.v029-h38-deterministic \
+  scripts/
+```
+
+Run with the dedicated profile:
+
+```bash
+./scripts/runtime/orcarouter-v029.sh preflight \
+  --profile hybrid-h38-deterministic
+
+./scripts/runtime/orcarouter-v029.sh start \
+  --profile hybrid-h38-deterministic
+
+./scripts/wait-ready.sh \
+  --container qwen38-h38-deterministic-v029 \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --timeout 3600
+```
+
+The benchmark runtime snapshot records
+`marlin_canonical_order="1"` for this profile.
+
+The minimum v38 acceptance sequence is:
+
+1. 1024/128 seeded determinism, five repeats;
+2. QSA-size sweep at 1024,2048,4096,8192,32768;
+3. one decode performance check to ensure the diagnostic-free implementation
+   did not regress unexpectedly.
+
+Expected deterministic reference for the first gate remains:
+
+```text
+44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+If v38 passes these gates, H20 can be closed with the minimal production
+candidate and the large diagnostic image retained only as historical evidence.
+
 ##### H20 v37: performance and regression validation
 
 Keep the current fresh v34 all-layer canonical container running. Do not rebuild

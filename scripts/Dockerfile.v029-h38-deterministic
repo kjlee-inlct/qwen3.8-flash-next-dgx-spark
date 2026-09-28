@@ -1,0 +1,50 @@
+# H20 v38 production-oriented repair:
+# H12 CT + local batch-invariant Humming FP8 linear + minimal Marlin canonical order.
+FROM vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG HUM=${SP}/vllm/model_executor/kernels/linear/scaled_mm/humming.py
+ARG MARLIN_MOE=${SP}/vllm/model_executor/layers/fused_moe/experts/marlin_moe.py
+
+COPY patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-h20-humming-fp8-batch-invariant.py
+COPY patch-v029-marlin-canonical-order.py /tmp/patch-v029-marlin-canonical-order.py
+
+RUN cp ${HUM} ${HUM}.h20-v38.orig \
+ && cp ${MARLIN_MOE} ${MARLIN_MOE}.h20-v38.orig \
+ && python3 /tmp/patch-v029-h20-humming-fp8-batch-invariant.py ${HUM} \
+ && python3 /tmp/patch-v029-marlin-canonical-order.py ${MARLIN_MOE} \
+ && rm /tmp/patch-v029-h20-humming-fp8-batch-invariant.py /tmp/patch-v029-marlin-canonical-order.py \
+ && python3 - <<'PY'
+import ast
+
+hum = "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm/humming.py"
+marlin = "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/marlin_moe.py"
+
+hum_s = open(hum, encoding="utf-8").read()
+marlin_s = open(marlin, encoding="utf-8").read()
+ast.parse(hum_s)
+ast.parse(marlin_s)
+
+fp8 = hum_s[
+    hum_s.index("class HummingFP8ScaledMMLinearKernel"):
+    hum_s.index("class HummingInt8ScaledMMLinearKernel")
+]
+assert '_qwen38_h20_compute["use_batch_invariant"] = True' in fp8
+
+assert "def _qwen38_canonicalize_marlin_sorted_tokens" in marlin_s
+assert "torch.argsort(key, stable=True)" in marlin_s
+assert "sorted_token_ids = _qwen38_canonicalize_marlin_sorted_tokens(" in marlin_s
+
+# Production image must not contain H20 Marlin capture/instrumentation.
+for forbidden in (
+    "QWEN38_H20M_TRIGGER",
+    "qwen38_h20m::capture",
+    "_qwen38_h20m_capture",
+    "canonical_order_scope",
+):
+    assert forbidden not in marlin_s, forbidden
+
+print("H20 v38 minimal deterministic repair installed")
+PY
+
+LABEL qwen38.h38="ct-h12-fp8-bi-marlin-canonical-v1"
