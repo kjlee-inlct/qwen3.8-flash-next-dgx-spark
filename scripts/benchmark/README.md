@@ -2938,6 +2938,62 @@ python3 scripts/benchmark/run.py determinism \
   --output scripts/benchmark/results/local/h38-det-32768-r3-all-marlin.json
 ```
 
+##### H20 v38 r3 32K decisive gate
+
+Observed on 2026-09-28 after restoring the original diagnostic-free all-call
+Marlin canonicalization.
+
+The H38 image rebuilt successfully from commit
+`d46d8cb3f57649aa66f4f9c54ad6e6387042a03d` and the fresh runtime reached
+READY after 641 seconds.
+
+Runtime provenance again recorded:
+
+```text
+marlin_canonical_order="1"
+qsa_exact_topk="1"
+MTP k=2
+max_num_seqs=3
+prefix_caching=false
+```
+
+The focused 32768-token determinism gate passed:
+
+```text
+status=pass
+all_equal=true
+requested_prompt_tokens=32768
+actual_prompt_tokens=32768
+repeats=5
+unique_hashes=1
+sha256=d6fa888525cd888595d9c51c2a24aa248cce55cfd35d16bdc0ddbba0a8e78d39
+```
+
+All five repeats produced the same hash.
+
+This is the decisive control against the r2 decoder-only scope. The same 32K
+workload produced four unique hashes under decoder-tagged-only
+canonicalization, but returns to one-hash determinism when all Marlin MoE calls
+are canonicalized.
+
+The strongest supported production conclusion is therefore that long-context
+determinism requires the all-call Marlin canonicalization scope.
+
+One final full QSA sweep remains:
+
+```bash
+python3 scripts/benchmark/run.py qsa-determinism \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --qsa-determinism-sizes 1024,2048,4096,8192,32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h38-qsa-r3-all-marlin.json
+```
+
+If all sizes report `unique_hashes=1` and
+`first_failure_tokens=null`, close v38 and the H20 nondeterminism
+investigation.
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
