@@ -9,11 +9,11 @@
 
 list_model_profiles() {
   # Installable profiles only.
-  printf '%s\n' orcarouter nvidia mazinb
+  printf '%s\n' orcarouter nvidia mazinb orcarouter-hybrid
 }
 
 list_model_candidates() {
-  printf '%s\n' orcarouter-hybrid lychee888
+  printf '%s\n' lychee888
 }
 
 describe_model_profile() {
@@ -40,11 +40,11 @@ describe_model_profile() {
       PROFILE_DESCRIPTION="Qualified optional experts-only NVFP4 + BF16 PLE profile"
       ;;
     orcarouter-hybrid)
-      PROFILE_STATUS="in-progress"
+      PROFILE_STATUS="experimental"
       PROFILE_DEFAULT=0
-      PROFILE_INSTALLABLE=0
-      PROFILE_REPO="TBD"
-      PROFILE_DESCRIPTION="OrcaRouter hybrid installer profile; integration and qualification in progress"
+      PROFILE_INSTALLABLE=1
+      PROFILE_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      PROFILE_DESCRIPTION="Pinned OrcaRouter checkpoint with the validated H38 decoder-only v0.29 runtime"
       ;;
     lychee888)
       PROFILE_STATUS="planned"
@@ -101,8 +101,14 @@ load_download_profile() {
       PROFILE_CONFIG_OVERRIDE=0
       ;;
     orcarouter-hybrid)
-      printf 'ERROR: model profile %s is still in progress and has no qualified download/runtime path yet\n' "$1" >&2
-      return 2
+      # Reuse the exact OrcaRouter checkpoint bytes; the hybrid distinction is the
+      # validated H38 decoder-only runtime image and runtime controls.
+      PROFILE_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
+      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-flash-next-orcarouter"
+      PROFILE_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"
+      PROFILE_SERVED_NAME="orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      PROFILE_GATED=1
+      PROFILE_CONFIG_OVERRIDE=0
       ;;
     lychee888)
       printf 'ERROR: model profile %s is planned and has no qualified download/runtime path yet\n' "$1" >&2
