@@ -36,7 +36,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("orcarouter   stable", result.stdout)
         self.assertIn("nvidia       experimental", result.stdout)
         self.assertIn("mazinb       experimental", result.stdout)
-        self.assertIn("orcarouter-hybrid in-progress", result.stdout)
+        self.assertIn("orcarouter-hybrid experimental", result.stdout)
         self.assertIn("lychee888    planned", result.stdout)
 
     def test_mazinb_installable_profile_has_pinned_metadata(self) -> None:
@@ -69,19 +69,13 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
         self.assertIn("--candidate", help_result.stdout)
 
-    def test_in_progress_and_planned_profiles_are_not_installable(self) -> None:
-        expected_status = {
-            "orcarouter-hybrid": "in-progress",
-            "lychee888": "planned",
-        }
-        for profile, status in expected_status.items():
-            with self.subTest(profile=profile):
-                result = self.run_install(profile)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(
-                    f"is a {status} profile and is not installable yet",
-                    result.stderr,
-                )
+    def test_planned_profiles_are_not_installable(self) -> None:
+        result = self.run_install("lychee888")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "is a planned profile and is not installable yet",
+            result.stderr,
+        )
 
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
@@ -120,6 +114,36 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("profile     : mazinb", result.stdout)
         self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
 
+    def test_orcarouter_hybrid_profile_reuses_pinned_checkpoint(self) -> None:
+        result = self.run_install("orcarouter-hybrid")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
+        self.assertIn("c1209bda15a6bbc4c68b585e93d40c0d85f50306", result.stdout)
+        self.assertIn("qwen3.8-flash-next-orcarouter", result.stdout)
+        self.assertIn("profile     : orcarouter-hybrid", result.stdout)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
+
+    def test_orcarouter_hybrid_download_metadata_reuses_orcarouter_directory(self) -> None:
+        result = subprocess.run(
+            [
+                "bash",
+                "-lc",
+                'source scripts/model-profiles.sh; load_download_profile orcarouter-hybrid; '
+                'printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$PROFILE_REPO" "$PROFILE_REVISION" '
+                '"$PROFILE_MODEL_DIR" "$PROFILE_IMAGE" "$PROFILE_CONFIG_OVERRIDE"',
+            ],
+            cwd=ROOT,
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
+        self.assertIn("qwen3.8-flash-next-orcarouter", result.stdout)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
+        self.assertTrue(result.stdout.rstrip().endswith("0"))
+
     def test_installer_builds_local_v029_image_for_mazinb(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
         self.assertIn(
@@ -127,6 +151,20 @@ class ModelProfileTests(unittest.TestCase):
             installer,
         )
         self.assertIn("Dockerfile.v029-orcarouter", installer)
+
+    def test_installer_builds_validated_h38_image_chain_for_orcarouter_hybrid(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("orcarouter-hybrid", installer)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", installer)
+        for dockerfile in (
+            "Dockerfile.v029-orcarouter",
+            "Dockerfile.v029-h9-ct-modelweight-scale",
+            "Dockerfile.v029-h10-ct-global-scale",
+            "Dockerfile.v029-h11-ct-packed-modelweight",
+            "Dockerfile.v029-h12-ct-postload-preserve",
+            "Dockerfile.v029-h38-decoder-scope",
+        ):
+            self.assertIn(dockerfile, installer)
 
     def test_unknown_profile_fails(self) -> None:
         result = self.run_install("unknown")
