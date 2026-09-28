@@ -36,6 +36,10 @@ if [[ "${ALLOW_CANDIDATE}" == 1 ]]; then
 else
   load_model_profile "${PROFILE}" || exit $?
 fi
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  printf 'FATAL: model profile %s is generated locally; use ./install.sh --model %s or scripts/model/prepare-orcarouter-hybrid.sh\n' "${PROFILE}" "${PROFILE}" >&2
+  exit 2
+fi
 REPO="${REPO:-${PROFILE_REPO}}"; REVISION="${REVISION:-${PROFILE_REVISION}}"
 DEST="${DEST:-${MODELS_DIR:-$HOME/models}/$(basename "${PROFILE_MODEL_DIR}")}"; REQUIRE_TOKEN="${PROFILE_GATED}"
 DEST="$(realpath -m -- "$(expand_user_path "${DEST}")")"
