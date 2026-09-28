@@ -2693,6 +2693,41 @@ for this sweep and is not a failure.
 At this point root-cause localization is complete enough to move to
 reproduction/robustness validation rather than additional layer tracing.
 
+##### H20 v36 Gate A observed result
+
+Observed on 2026-09-28 using the same running v34 all-layer canonical
+configuration after the successful v35 sweep.
+
+The 1024-token prompt / 128-token output seeded greedy workload was repeated
+20 times without restarting the runtime.
+
+Result:
+
+```text
+status=pass
+all_equal=true
+repeats=20
+unique_hashes=1
+sha256=44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+All 20 runs produced the same hash. Runtime provenance remained:
+
+```text
+h20m_canonical_order="1"
+h20m_canonical_scope="all"
+qsa_exact_topk="1"
+MTP k=2
+max_num_seqs=3
+prefix_caching=false
+```
+
+This establishes strong same-boot stability for the all-layer canonical-order
+control. The stable hash again matches the retained H6 reference marker.
+
+The remaining v36 requirement is Gate B: reproduce the result after a fresh
+runtime restart using the same v34 image and all-layer canonical configuration.
+
 ##### H20 v36: same-boot and fresh-start reproduction
 
 v36 has two gates.
