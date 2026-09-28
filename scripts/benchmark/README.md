@@ -2886,6 +2886,58 @@ for the 1024/128 five-repeat gate, followed by the already-established QSA
 sweep. If the reference hash returns, v38 can close as the minimal
 production-oriented repair with v34-equivalent scope.
 
+##### H20 v38 r2 long-context result
+
+Observed on 2026-09-28 after restricting Marlin canonicalization to tagged
+decoder-layer calls.
+
+The refined runtime remained deterministic through 8K but failed at 32K:
+
+```text
+1024   unique_hashes=1   PASS
+2048   unique_hashes=1   PASS
+4096   unique_hashes=1   PASS
+8192   unique_hashes=1   PASS
+32768  unique_hashes=4   FAIL
+first_failure_tokens=32768
+```
+
+This directly falsifies the decoder-only production scope. The original H38 r1
+all-call implementation had already passed the same 1K/2K/4K/8K/32K sweep,
+while the decoder-tagged refinement reintroduced nondeterminism only at the
+largest established prompt size.
+
+The strongest supported interpretation is therefore:
+
+- decoder-layer Marlin ordering is sufficient for the short-context reproducer;
+- at 32K, at least one additional untagged/auxiliary Marlin MoE call can
+  participate in the same physical routed-token ordering sensitivity;
+- production canonicalization must cover all Marlin MoE calls, not only tagged
+  decoder layers.
+
+The decoder-layer tag patch is removed and H38 is restored to the original
+diagnostic-free all-call canonicalization used by r1.
+
+Do not advance to a new experiment version for this correction; this is a v38
+production-scope refinement based on the long-context acceptance gate.
+
+Final verification after rebuilding the restored all-call H38 image:
+
+1. run 32768-token determinism first, five repeats;
+2. if it reports `unique_hashes=1`, rerun the full QSA sweep;
+3. if the full sweep passes with `first_failure_tokens=null`, close H20/v38.
+
+The 32768-focused gate is:
+
+```bash
+python3 scripts/benchmark/run.py determinism \
+  --model hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --determinism-prompt-tokens 32768 \
+  --determinism-output-tokens 128 \
+  --determinism-repeats 5 \
+  --output scripts/benchmark/results/local/h38-det-32768-r3-all-marlin.json
+```
+
 ##### H20 v38: minimal production-oriented deterministic repair
 
 v38 removes the H20 diagnostic capture stack and keeps only the repair controls
