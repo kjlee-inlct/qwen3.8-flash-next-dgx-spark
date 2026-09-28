@@ -3,16 +3,17 @@
 #
 # Stability policy:
 #   stable       qualified default path
-#   experimental installable, but not the default
-#   candidate    tracked for evaluation; never selectable by install.sh yet
+#   experimental qualified/installable, but not the default
+#   in-progress  integration/qualification is actively underway; not installable yet
+#   planned      tracked roadmap item; not installable yet
 
 list_model_profiles() {
   # Installable profiles only.
-  printf '%s\n' orcarouter nvidia
+  printf '%s\n' orcarouter nvidia mazinb
 }
 
 list_model_candidates() {
-  printf '%s\n' mazinb lychee888
+  printf '%s\n' orcarouter-hybrid lychee888
 }
 
 describe_model_profile() {
@@ -32,18 +33,25 @@ describe_model_profile() {
       PROFILE_DESCRIPTION="Optional NVIDIA comparison profile"
       ;;
     mazinb)
-      PROFILE_STATUS="candidate"
+      PROFILE_STATUS="experimental"
+      PROFILE_DEFAULT=0
+      PROFILE_INSTALLABLE=1
+      PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+      PROFILE_DESCRIPTION="Qualified optional experts-only NVFP4 + BF16 PLE profile"
+      ;;
+    orcarouter-hybrid)
+      PROFILE_STATUS="in-progress"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=0
-      PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-      PROFILE_DESCRIPTION="Candidate experts-only NVFP4 + BF16 PLE profile; pin and qualify before enabling"
+      PROFILE_REPO="TBD"
+      PROFILE_DESCRIPTION="OrcaRouter hybrid installer profile; integration and qualification in progress"
       ;;
     lychee888)
-      PROFILE_STATUS="candidate"
+      PROFILE_STATUS="planned"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=0
       PROFILE_REPO="lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE"
-      PROFILE_DESCRIPTION="Candidate OrcaRouter-derived FP8-PLE profile; requires FP8 PLE loader qualification"
+      PROFILE_DESCRIPTION="Planned OrcaRouter-derived FP8-PLE profile"
       ;;
     *)
       printf 'ERROR: unknown model profile: %s\n' "$1" >&2
@@ -55,7 +63,7 @@ describe_model_profile() {
 print_model_profiles() {
   local profile
   printf '%-12s %-14s %-11s %-8s %s\n' PROFILE STATUS INSTALLABLE DEFAULT REPOSITORY
-  for profile in orcarouter nvidia mazinb lychee888; do
+  for profile in orcarouter nvidia mazinb orcarouter-hybrid lychee888; do
     describe_model_profile "${profile}" || return
     printf '%-12s %-14s %-11s %-8s %s\n' \
       "${profile}" "${PROFILE_STATUS}" "${PROFILE_INSTALLABLE}" "${PROFILE_DEFAULT}" "${PROFILE_REPO}"
