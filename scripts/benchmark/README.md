@@ -2341,10 +2341,24 @@ Observed on 2026-09-28 with image label
 This run is an **instrumentation/runtime failure**, not a numerical result.
 Do not use it to revise the v29 scientific conclusion.
 
-The immediate next step is to capture the server-side traceback for the failed
-request and fix the v30 probe. The host-side diagnostic should also surface the
-HTTP error body and recent container logs automatically so future HTTP 5xx
-failures are self-diagnosing.
+The server-side traceback identified the exact instrumentation bug:
+
+```text
+RuntimeError: Inference tensors do not track version counter.
+```
+
+The failure occurred in `_qwen38_h20m_tensor_meta()` when the v30 probe read
+`value._version` from the W13 output scratch tensor. Inference tensors do not
+carry a version counter in this runtime. This metadata field is not required
+for the W13 state audit, so the fix removes only the `_version` access while
+preserving data pointer, shape, stride, dtype, and storage offset metadata.
+
+The host-side diagnostic is also updated to surface HTTP error bodies and the
+recent container log tail automatically for future HTTP 5xx failures.
+
+After this fix, rebuild the v30 image and rerun the same non-overwriting v30
+probe under the normal PIECEWISE runtime. The failed r1 remains an
+instrumentation failure and must not be reused as a numerical result.
 
 ##### H20 v30: first-Marlin-GEMM state audit
 
