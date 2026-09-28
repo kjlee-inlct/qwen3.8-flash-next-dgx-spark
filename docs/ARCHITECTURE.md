@@ -87,3 +87,32 @@ stable
 
 There is exactly one default stable model profile at a time. Currently that is
 `orcarouter`.
+
+
+## OrcaRouter H38 runtime qualification track
+
+The stable *model profile* and the qualified *runtime variant* are separate concepts.
+
+For OrcaRouter NVFP4 on one DGX Spark GB10 with vLLM v0.29, the H38
+determinism investigation qualified the following runtime roles:
+
+| Runtime role | Profile | Marlin canonicalization scope |
+|---|---|---|
+| validated H38 production runtime | `hybrid-h38-deterministic` | decoder-only |
+| explicit decoder A/B control | `hybrid-h38-decoder-scope` | decoder-only |
+| broader fallback/regression control | `hybrid-h38-all-scope` | all Marlin calls |
+
+The decoder-only and all-call variants each passed two fresh-container
+determinism matrices plus one isolated fresh-compile matrix. No determinism
+advantage was observed for all-call, so decoder-only is the preferred H38
+runtime under the minimum-change principle.
+
+This qualification currently applies to the dedicated v0.29 runtime helper
+(`scripts/runtime/orcarouter-v029.sh`). It is **not yet the same thing as the
+transactional installer/systemd-managed service path**. `install.sh`,
+`scripts/serve.sh`, the installation manifest, rollback flow, and managed
+service qualification still need an explicit H38 integration/requalification
+before the managed service can be said to use the H38 production runtime.
+
+The canonical experiment evidence remains in `scripts/benchmark/README.md`;
+`docs/H38-DETERMINISM.md` is the concise operational summary.
