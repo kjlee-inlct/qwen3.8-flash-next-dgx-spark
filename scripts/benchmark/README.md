@@ -2728,6 +2728,106 @@ control. The stable hash again matches the retained H6 reference marker.
 The remaining v36 requirement is Gate B: reproduce the result after a fresh
 runtime restart using the same v34 image and all-layer canonical configuration.
 
+##### H20 v36 Gate B observed result
+
+Observed on 2026-09-28 after removing the prior experiment container and
+starting a fresh container from the same v34 image with the same all-layer
+canonical configuration.
+
+The fresh runtime reached READY after 682 seconds. Startup logs confirmed:
+
+```text
+QWEN38_H20M_CANONICAL_ORDER enabled scope=all
+Using 'MARLIN' NvFp4 MoE backend
+```
+
+Benchmark provenance again recorded:
+
+```text
+h20m_canonical_order="1"
+h20m_canonical_scope="all"
+qsa_exact_topk="1"
+MTP k=2
+max_num_seqs=3
+prefix_caching=false
+```
+
+The fresh-start 1024-token prompt / 128-token output / five-repeat seeded
+greedy gate passed:
+
+```text
+status=pass
+all_equal=true
+repeats=5
+unique_hashes=1
+sha256=44867e5c36d54b5bbec26f7c4f7c500783602a4bbc1b1545758929fc1c763670
+```
+
+All five repeats produced the same retained stable reference hash.
+
+Together with Gate A, v36 establishes both same-boot stability and fresh-runtime
+reproducibility for the all-layer canonical-order control.
+
+Root-cause and reproducibility validation are therefore complete enough to move
+to performance/regression validation.
+
+##### H20 v37: performance and regression validation
+
+Keep the current fresh v34 all-layer canonical container running. Do not rebuild
+or restart before the first v37 measurements.
+
+Run decode:
+
+```bash
+python3 scripts/benchmark/run.py decode \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --decode-tokens 512 \
+  --decode-repeats 5 \
+  --output scripts/benchmark/results/local/h20m-v37-all-canonical-decode-r1.json
+```
+
+Run prefill:
+
+```bash
+python3 scripts/benchmark/run.py prefill \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --prefill-sizes 8192,32768,65536 \
+  --corpus README.md \
+  --output scripts/benchmark/results/local/h20m-v37-all-canonical-prefill-r1.json
+```
+
+Run concurrency:
+
+```bash
+python3 scripts/benchmark/run.py concurrency \
+  --model hybrid-h20-ct-convert-diag/Qwen3.8-Flash-Next-Uncensored-NVFP4 \
+  --concurrency-levels 1,2,4,8 \
+  --decode-tokens 384 \
+  --output scripts/benchmark/results/local/h20m-v37-all-canonical-concurrency-r1.json
+```
+
+The purpose of v37 is not to require zero overhead. The canonicalizer adds a
+GPU-side sort, so some performance cost is plausible. The questions are:
+
+- does decode remain operational with no correctness failure or pathological
+  throughput collapse;
+- do 8K/32K/64K prefill runs complete without OOM/runtime failure and with
+  usable TTFT/throughput;
+- do concurrency levels 1/2/4/8 complete without correctness/runtime failure;
+- is memory behavior acceptable;
+- is the measured overhead small enough to justify a production implementation,
+  or does v38 need a more selective/optimized canonicalization strategy.
+
+Do not compare small percentage performance differences to an unrelated
+historical runtime. Use historical results only when image/model/runtime
+controls are materially comparable. The main v37 gate is regression safety and
+absence of catastrophic performance loss.
+
+If all three workloads complete cleanly, proceed to v38 production repair:
+remove diagnostic capture machinery, keep only the minimum deterministic
+ordering intervention, retain provenance/tests, and benchmark the minimized
+repair against the v34 diagnostic implementation.
+
 ##### H20 v36: same-boot and fresh-start reproduction
 
 v36 has two gates.
