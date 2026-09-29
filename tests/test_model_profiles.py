@@ -154,7 +154,7 @@ class ModelProfileTests(unittest.TestCase):
     def test_clean_host_defaults_to_repository_local_model_root(self) -> None:
         result = self.run_install("nvidia")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f"storage root : {ROOT / 'models'}", result.stdout)
+        self.assertIn(f"storage root: {ROOT / 'models'}", result.stdout)
         self.assertIn(str(ROOT / "models" / "qwen3.8-flash-next-nvidia"), result.stdout)
 
     def test_explicit_model_root_overrides_clean_host_default(self) -> None:
@@ -181,7 +181,7 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn(f"storage root : {root}", result.stdout)
+            self.assertIn(f"storage root: {root}", result.stdout)
             self.assertIn(str(root / "qwen3.8-flash-next-nvidia"), result.stdout)
 
     def test_existing_home_model_store_is_reused_automatically(self) -> None:
@@ -217,7 +217,7 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn(f"storage root : {home / 'models'}", result.stdout)
+            self.assertIn(f"storage root: {home / 'models'}", result.stdout)
             self.assertIn(str(home / "models" / "qwen3.8-flash-next-nvidia"), result.stdout)
 
     def test_uninstalled_manifest_reprompts_language_and_defaults_to_korean(self) -> None:
