@@ -272,10 +272,7 @@ restore_profile_switch_manifest_on_exit() {
     mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
     printf 'Profile switch did not commit; restored previous installation manifest (%s).\n' "${SWITCH_FROM_PROFILE}" >&2
   fi
-  rm -f -- "${PROFILE_SWITCH_CANDIDATE}" "${PROFILE_SWITCH_CANDIDATE}.tmp"
-  if [[ "${PROFILE_SWITCH_COMMITTED}" == 1 ]]; then
-    rm -f -- "${PROFILE_SWITCH_BACKUP}"
-  fi
+  rm -f -- "${PROFILE_SWITCH_CANDIDATE}" "${PROFILE_SWITCH_CANDIDATE}.tmp" "${PROFILE_SWITCH_BACKUP}"
   return "${rc}"
 }
 
