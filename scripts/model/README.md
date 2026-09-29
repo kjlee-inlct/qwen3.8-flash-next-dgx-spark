@@ -96,6 +96,26 @@ uninstall preservation, API behavior, determinism/correctness, and performance a
 still pending. Keeping mazinb selectable means only that the installer path exists;
 it is not a qualification result.
 
+## Installer ownership vs model inventory
+
+The installer now keeps cumulative destructive authority in
+`~/.local/state/qwen38-spark/asset-ownership.json`. This is intentionally
+separate from model discovery. A valid `.qwen38-model-manifest.json` or
+`.qwen38-hybrid-manifest.json` proves that a directory is structurally managed;
+it does **not** prove that the installer created it.
+
+During install/profile switching, existing checkpoints are observed as unowned
+and reused without adoption. Newly absent checkpoints are claimed before
+creation and finalized with the managed-manifest SHA-256 after completion.
+Hybrid H3/H4/H5/H6 dependencies are recorded by exact path so full uninstall can
+remove H6 → H5 → H4 → H3 → base and refuse deletion when a retained unowned
+dependent still needs an owned parent.
+
+`scripts/manage-models.sh` remains the operator inventory/retirement interface
+for managed checkpoints. The ownership registry serves a narrower purpose:
+deciding what `uninstall.sh --purge-model`, `--purge-image`, and
+`--purge-all` are authorized to destroy.
+
 ## Operator model inventory and cleanup
 
 The stable top-level `scripts/manage-models.sh` command inventories locally managed checkpoints by their `.qwen38-model-manifest.json` files. It reports the active model separately and refuses to delete it. Active-model removal remains an uninstall lifecycle operation via `./uninstall.sh --purge-model`.
