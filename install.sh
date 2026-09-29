@@ -603,7 +603,7 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
     if [[ "${UI_LANG}" == ko ]]; then
       wizard_input API_LAN_PORT 'LAN API 포트 (신규 권장 8001, 기존 URL 호환은 8000)' "${API_LAN_PORT}"
     else
-      wizard_input API_LAN_PORT 'LAN API port (8001 recommended; 8000 for legacy compatibility)' "${API_LAN_PORT}"
+      wizard_input API_LAN_PORT 'LAN API port (8001 recommended for new installs; use 8000 for legacy URL compatibility)' "${API_LAN_PORT}"
     fi
   else
     API_LAN_ADDRESS=""
@@ -649,59 +649,58 @@ fi
 
 if [[ "${UI_LANG}" == ko ]]; then
   printf '모델\n'
-  printf '  프로필       : %s\n' "${MODEL_PROFILE}"
-  printf '  저장 루트    : %s\n' "${MODEL_ROOT}"
-  printf '  모델 경로    : %s\n' "${MODEL_DIR}"
-  printf '  리비전       : %s\n' "${REVISION}"
-  printf '  이미지       : %s\n' "${IMAGE}"
+  printf '  model       : %s\n' "${REPO}"
+  printf '  profile     : %s\n' "${MODEL_PROFILE}"
+  printf '  저장 루트   : %s\n' "${MODEL_ROOT}"
+  printf '  directory   : %s\n' "${MODEL_DIR}"
+  printf '  revision    : %s\n' "${REVISION}"
+  printf '  image       : %s\n' "${IMAGE}"
 else
   printf 'Model\n'
-  printf '  profile      : %s\n' "${MODEL_PROFILE}"
-  printf '  storage root : %s\n' "${MODEL_ROOT}"
-  printf '  model path   : %s\n' "${MODEL_DIR}"
-  printf '  revision     : %s\n' "${REVISION}"
-  printf '  image        : %s\n' "${IMAGE}"
+  printf '  model       : %s\n' "${REPO}"
+  printf '  profile     : %s\n' "${MODEL_PROFILE}"
+  printf '  storage root: %s\n' "${MODEL_ROOT}"
+  printf '  directory   : %s\n' "${MODEL_DIR}"
+  printf '  revision    : %s\n' "${REVISION}"
+  printf '  image       : %s\n' "${IMAGE}"
 fi
 if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${OLD_PROFILE_IMAGE:-${IMAGE}}" != "${IMAGE}" ]]; then
-  printf '  image change : %s -> %s\n' "${OLD_PROFILE_IMAGE}" "${IMAGE}"
+  printf '  image change: %s -> %s\n' "${OLD_PROFILE_IMAGE}" "${IMAGE}"
 fi
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
-  printf '  hybrid base  : %s\n' "${HYBRID_BASE_DIR}"
+  printf '  hybrid base : %s\n' "${HYBRID_BASE_DIR}"
   if [[ "${HYBRID_REUSE_H3}" == 1 ]]; then
-    [[ "${UI_LANG}" == ko ]] && printf '  hybrid mix   : 기존 H3 provenance 재사용 (mazinb source 다운로드 생략)\n' || printf '  hybrid mix   : reuse pinned H3 provenance (skip mazinb source download)\n'
+    [[ "${UI_LANG}" == ko ]] && printf '  hybrid mix  : 기존 H3 provenance 재사용 (mazinb source 다운로드 생략)\n' || printf '  hybrid mix  : reuse pinned H3 provenance (skip mazinb source download)\n'
   else
-    printf '  hybrid mix   : %s\n' "${HYBRID_OVERLAY_DIR}"
+    printf '  hybrid mix  : %s\n' "${HYBRID_OVERLAY_DIR}"
   fi
 fi
+
 printf '\n'
 if [[ "${UI_LANG}" == ko ]]; then
   printf '런타임\n'
-  printf '  config       : %s\n' "${config_plan}"
-  printf '  PLE swap     : %s (128 GiB, 기존 swap 보존)\n' "${SWAP_FILE}"
-  printf '  메모리 모니터: %s\n' "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf 사용 || printf 사용\ 안함)"
-  printf '  자동 보호    : %s\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf 사용 || printf 사용\ 안함)"
+  printf '  config      : %s\n' "${config_plan}"
+  printf '  PLE swap    : %s (128 GiB, 기존 swap 보존)\n' "${SWAP_FILE}"
 else
   printf 'Runtime\n'
-  printf '  config       : %s\n' "${config_plan}"
-  printf '  PLE swap     : %s (128 GiB; existing swap preserved)\n' "${SWAP_FILE}"
-  printf '  monitor      : %s\n' "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)"
-  printf '  protection   : %s\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf disabled)"
+  printf '  config      : %s\n' "${config_plan}"
+  printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n' "${SWAP_FILE}"
 fi
+printf '  protection  : %s\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
+printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s GiB, %s samples, heartbeat=%ss)\n' \
+  "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)" "${MONITOR_MIN_AVAILABLE_GIB}" \
+  "${MONITOR_MIN_FREE_GIB}" "${MONITOR_FREE_GATE_GIB}" "${MONITOR_MIN_SWAP_FREE_GIB}" \
+  "${MONITOR_CONSECUTIVE}" "${MONITOR_HEARTBEAT}"
+
 case "${API_ACCESS_MODE}" in
-  local) api_plan='127.0.0.1:8888' ;;
+  local) api_plan='local only: 127.0.0.1:8888' ;;
   docker) api_plan="Docker apps: ${API_DOCKER_PORT} -> 127.0.0.1:8888" ;;
   lan) api_plan="Docker apps: ${API_DOCKER_PORT}; LAN: ${API_LAN_ADDRESS}:${API_LAN_PORT} -> 127.0.0.1:8888" ;;
 esac
 printf '\n'
-if [[ "${UI_LANG}" == ko ]]; then
-  printf '접근 / 서비스\n'
-  printf '  API          : %s\n' "${api_plan}"
-  printf '  systemd      : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf '설치 및 부팅 시 자동 시작' || printf '사용 안 함')"
-else
-  printf 'Access / service\n'
-  printf '  API          : %s\n' "${api_plan}"
-  printf '  systemd      : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'install and start at boot' || printf disabled)"
-fi
+[[ "${UI_LANG}" == ko ]] && printf '접근 / 서비스\n' || printf 'Access / service\n'
+printf '  API access  : %s\n' "${api_plan}"
+printf '  service     : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service via immutable current release' || printf 'Docker container via immutable current release')"
 printf '\n'
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
