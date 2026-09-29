@@ -174,6 +174,19 @@ class StateFileParserTests(unittest.TestCase):
         result = self.run_parser("install-runtime", manifest)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_install_service_runtime_accepts_service_ready_and_complete(self) -> None:
+        service_ready = self.install_manifest().replace("PHASE=complete", "PHASE=service_ready")
+        result = self.run_parser("install-service-runtime", service_ready)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+        result = self.run_parser("install-service-runtime", self.install_manifest())
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+    def test_install_service_runtime_rejects_unrelated_phase(self) -> None:
+        manifest = self.install_manifest().replace("PHASE=complete", "PHASE=proxy_ready")
+        result = self.run_parser("install-service-runtime", manifest)
+        self.assertNotEqual(result.returncode, 0)
+
     def test_install_doctor_emits_diagnostic_fields_and_api_values(self) -> None:
         result = self.run_parser("install-doctor", self.install_manifest())
         self.assertEqual(result.returncode, 0, result.stderr.decode())
