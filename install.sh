@@ -889,14 +889,12 @@ docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks perm
 git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "installer must run from a git checkout to create an immutable release baseline"
 ensure_profile_auth
 
-if [[ "${RESUME}" != 1 ]]; then
-  [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1
-  docker image inspect "${IMAGE}" >/dev/null 2>&1 || IMAGE_OWNED=1
-elif [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
-  # Profile-default refresh is intentionally conservative about image ownership:
-  # the shared skinny image may already belong to another profile/install.
-  IMAGE_OWNED=0
-fi
+# Bootstrap schema-4 MODEL_OWNED/IMAGE_OWNED into the cumulative registry once,
+# then derive the active compatibility flags from per-asset ownership. A profile
+# switch therefore cannot erase ownership of assets created by earlier profiles.
+asset_bootstrap_install
+asset_track_profile_models
+asset_track_profile_images
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
@@ -979,6 +977,9 @@ else
   MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
     "${ROOT_DIR}/scripts/download-weights.sh"
 fi
+# Refresh fingerprints after successful downloads/builds. Claimed assets become
+# ready only after their managed model/hybrid manifest exists.
+asset_track_profile_models
 write_state weights_ready
 if [[ -z "${CONFIG_OVERRIDE}" && "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
   CONFIG_OVERRIDE="${STATE_DIR}/config.vllm.json"
@@ -1028,6 +1029,8 @@ elif [[ ( "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybri
 else
   docker pull "${IMAGE}"
 fi
+# Bind installer ownership to the concrete image IDs now present locally.
+asset_track_profile_images
 write_state image_ready
 
 if [[ "${API_ACCESS_MODE}" != local ]]; then
