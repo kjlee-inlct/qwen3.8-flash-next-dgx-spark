@@ -122,18 +122,7 @@ operation_lock_busy() {
   return 0
 }
 
-manifest_runtime_equal() {
-  local left="$1" right="$2" key
-  parse_manifest_runtime "${left}" LEFT || return 1
-  parse_manifest_runtime "${right}" RIGHT || return 1
-  for key in SCHEMA_VERSION MODEL_PROFILE MODEL_DIR VLLM_IMAGE SERVED_NAME CONTAINER_NAME CONFIG_OVERRIDE     MONITOR_PROTECT MONITOR_ENABLED MONITOR_MIN_AVAILABLE_GIB MONITOR_MIN_FREE_GIB MONITOR_FREE_GATE_GIB     MONITOR_MIN_SWAP_FREE_GIB MONITOR_CONSECUTIVE MONITOR_HEARTBEAT; do
-    [[ "${!LEFT_key-}" == "${!RIGHT_key-}" ]] && continue
-  done
-}
-
-# Bash cannot indirectly expand a dynamically composed variable via ${!LEFT_key};
-# keep the comparison in Python while still using the strict parser for both files.
-manifest_runtime_equal() {
+# Compare runtime-relevant fields through the strict parser; PHASE may differ after recovery finalizes the target.\nmanifest_runtime_equal() {
   python3 - "${STATE_PARSER}" "$1" "$2" <<'PY'
 import importlib.util
 import pathlib
