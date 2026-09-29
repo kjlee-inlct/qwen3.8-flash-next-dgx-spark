@@ -5531,3 +5531,46 @@ Interpretation:
 - both twin outputs and cross-source outputs match: H20-C's layer-0 divergence
   was instrumentation/request-sequencing induced; move the next minimal probe
   downstream without creating H21.
+
+
+### 2026-09-29 managed Hybrid H6 host-stability incident
+
+A managed `orcarouter-hybrid` runtime passed install, health, model-list,
+restart, doctor, and API validation, but the host later entered a system-wide
+hang that required a forced reboot. Previous-boot kernel evidence showed:
+
+- repeated NVIDIA RM system-memory allocation failures (`NV_ERR_NO_MEMORY`);
+- global OOM activity while roughly 135 GiB of swap still remained free;
+- raw Normal-zone free memory dominated by `CmaFree`;
+- `VLLM::Worker` inside NVIDIA system-page allocation/reclaim while holding an
+  RM writer lock;
+- desktop/GPU clients blocked waiting on the same RM lock for multiple hung-task
+  intervals;
+- vLLM IPC/request progress subsequently timing out;
+- no incident-local NVIDIA Xid preceding the failure.
+
+Classification:
+
+```text
+Managed Hybrid functional E2E        PASS
+Managed Hybrid restart E2E           PASS
+Managed Hybrid host stability        FAIL (2026-09-29)
+Root-cause class                      non-CMA host-memory exhaustion /
+                                      NVIDIA RM reclaim lock contention
+```
+
+The dedicated PLE swap capacity was not exhausted, so adding swap is not the
+repair. The runtime monitor previously evaluated raw `MemAvailable` and
+`MemFree`, which can overstate allocatable host margin when CMA pages dominate,
+and the affected install used warn-only protection.
+
+Repair gate:
+
+1. monitor and doctor must exclude `CmaFree` from available/free host margins;
+2. fresh Hybrid H6 installs must default to protected monitoring;
+3. an existing Hybrid install must be explicitly migrated with
+   `./install.sh --model orcarouter-hybrid --protect --yes`;
+4. reproduce sustained inference/load without host OOM, NVIDIA RM memory
+   allocation failure, or hung-task symptoms before changing host-stability
+   status back to PASS.
+

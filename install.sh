@@ -28,6 +28,8 @@ PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 STATE_WRITE_FILE="${STATE_FILE}"
 LIST_MODELS=0; LIST_BACKENDS=0
+MONITOR_ENABLED_ENV_SET="${MONITOR_ENABLED+x}"
+MONITOR_PROTECT_ENV_SET="${MONITOR_PROTECT+x}"
 MONITOR_ENABLED="${MONITOR_ENABLED:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
 MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
@@ -422,6 +424,15 @@ else
   choose_default_model_root
 fi
 load_model_profile "${MODEL_PROFILE}" || exit $?
+if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 && "${MODEL_PROFILE}" == orcarouter-hybrid &&
+      -z "${MONITOR_ENABLED_ENV_SET}" && -z "${MONITOR_PROTECT_ENV_SET}" &&
+      -z "${MONITOR_ENABLED_CLI}" && -z "${MONITOR_PROTECT_CLI}" ]]; then
+  # Hybrid H6 can exhaust non-CMA host memory while raw MemFree still looks
+  # healthy because CMA pages dominate. Fresh non-interactive installs protect
+  # the host by default; operators can opt out with --monitor/--no-monitor.
+  MONITOR_ENABLED=1
+  MONITOR_PROTECT=1
+fi
 REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
 MODEL_DIR="${MODEL_DIR:-${PROFILE_MODEL_DIR}}"
 IMAGE="${VLLM_IMAGE:-${PROFILE_IMAGE}}"
@@ -606,7 +617,8 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   fi
   if [[ "${MONITOR_ENABLED}" == 1 ]]; then
     if [[ "${UI_LANG}" == ko ]]; then
-      wizard_yes_no '지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까?' no && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
+      wizard_yes_no '지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까?' "${protect_default}" && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
       if wizard_yes_no '권장 모니터 임계값과 heartbeat를 변경합니까?' no; then
         wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
         wizard_input MONITOR_MIN_FREE_GIB 'MemFree GiB' "${MONITOR_MIN_FREE_GIB}"
@@ -616,7 +628,8 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
         wizard_input MONITOR_HEARTBEAT 'Heartbeat seconds (0 disables)' "${MONITOR_HEARTBEAT}"
       fi
     else
-      wizard_yes_no 'Stop the container safely after sustained low memory?' no && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
+      wizard_yes_no 'Stop the container safely after sustained low memory?' "${protect_default}" && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
       if wizard_yes_no 'Customize the recommended monitor thresholds and heartbeat?' no; then
         wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
         wizard_input MONITOR_MIN_FREE_GIB 'MemFree GiB' "${MONITOR_MIN_FREE_GIB}"
