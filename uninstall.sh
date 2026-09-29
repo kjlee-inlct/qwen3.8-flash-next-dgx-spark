@@ -38,12 +38,18 @@ asset_bootstrap_install() {
   python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
 }
 asset_model_owned() {
-  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] &&
+  if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
     python3 "${ASSET_OWNERSHIP_TOOL}" owns-model "${ASSET_OWNERSHIP_FILE}" "$1"
+  else
+    return 1
+  fi
 }
 asset_image_owned() {
-  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] &&
+  if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
     python3 "${ASSET_OWNERSHIP_TOOL}" owns-image "${ASSET_OWNERSHIP_FILE}" "$1"
+  else
+    return 1
+  fi
 }
 asset_forget() {
   python3 "${ASSET_OWNERSHIP_TOOL}" forget "${ASSET_OWNERSHIP_FILE}" "$1" "$2"
@@ -61,7 +67,36 @@ asset_preflight_full_purge() {
   [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
   python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${ASSET_OWNERSHIP_FILE}" --kind all
   local kind locator refs
-  while IFS=
+  while IFS=$'\t' read -r kind locator; do
+    [[ "${kind}" == image ]] || continue
+    refs="$(image_referenced_by_external_container "${locator}")"
+    [[ -z "${refs}" ]] || die "refusing image purge; ${locator} is referenced by other containers: ${refs//$'\n'/, }"
+  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+}
+
+asset_apply_full_purge() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
+  local kind locator
+  while IFS=$'\t' read -r kind locator; do
+    case "${kind}" in
+      model)
+        if [[ -e "${locator}" || -L "${locator}" ]]; then
+          rm -rf --one-file-system -- "${locator}"
+          printf 'Removed owned model asset: %s\n' "${locator}"
+        fi
+        asset_forget model "${locator}"
+        ;;
+      image)
+        if docker image inspect "${locator}" >/dev/null 2>&1; then
+          docker image rm "${locator}" || die "owned image is still in use: ${locator}"
+          printf 'Removed owned image asset: %s\n' "${locator}"
+        fi
+        asset_forget image "${locator}"
+        ;;
+      *) die "invalid asset purge plan kind: ${kind}" ;;
+    esac
+  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+}
 mark_manifest_uninstalled() {
   python3 - "${STATE_FILE}" <<'PY'
 import os
