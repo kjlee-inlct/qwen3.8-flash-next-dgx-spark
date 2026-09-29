@@ -5,6 +5,13 @@ set -Eeuo pipefail
 RUNTIME_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env}"
 STATE_PARSER="${RUNTIME_ROOT}/scripts/lib/state_file.py"
+PROFILE_SWITCH_TRANSITION="${RUNTIME_ROOT}/scripts/lifecycle/profile-switch-transition.sh"
+[[ -r "${PROFILE_SWITCH_TRANSITION}" ]] || { printf 'FATAL: profile-switch transition helper is unavailable: %s\n' "${PROFILE_SWITCH_TRANSITION}" >&2; exit 1; }
+# During an intentional switch the installer still owns operation.lock, so
+# service-recover defers. After a reboot/interruption the lock is free and the
+# persisted profile transaction is deterministically recovered before parsing
+# the canonical install manifest.
+bash "${PROFILE_SWITCH_TRANSITION}" service-recover
 [[ -r "${STATE_FILE}" ]] || { printf 'FATAL: installation manifest is not readable: %s\n' "${STATE_FILE}" >&2; exit 1; }
 [[ -r "${STATE_PARSER}" ]] || { printf 'FATAL: state parser is unavailable: %s\n' "${STATE_PARSER}" >&2; exit 1; }
 
