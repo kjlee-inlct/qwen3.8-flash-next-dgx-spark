@@ -965,7 +965,7 @@ The scripts in this repository are yours to use.
 
 ## Operator utilities
 
-Two stable helpers cover recurring operations that should not require ad-hoc shell loops:
+Stable operator helpers cover recurring operations that should not require ad-hoc shell loops:
 
 ```bash
 # List managed checkpoints and show which one is active.
@@ -974,12 +974,17 @@ Two stable helpers cover recurring operations that should not require ad-hoc she
 # Preview removal of an inactive managed checkpoint.
 ./scripts/manage-models.sh remove "$HOME/models/old-qwen38" --dry-run
 
+# Safely migrate a complete legacy repo-local OrcaRouter checkpoint to the
+# canonical installer path. Dry-run first; reruns are idempotent.
+./scripts/manage-models.sh migrate-orcarouter --dry-run
+./scripts/manage-models.sh migrate-orcarouter --yes
+
 # Wait for the canonical runtime and exact served-model identity.
 ./scripts/wait-ready.sh \
   --container qwen38-flash-next \
   --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
 ```
 
-`manage-models.sh` only considers directories with a local Qwen model manifest and refuses to delete the active installation model; use `uninstall.sh --purge-model` for that lifecycle operation. `wait-ready.sh` checks container state, `/health`, and `/v1/models`, and prints recent logs if a container exits before becoming ready.
+`manage-models.sh` only considers directories with a local Qwen model manifest and refuses to delete the active installation model; use `uninstall.sh --purge-model` for that lifecycle operation. Its `migrate-orcarouter` action validates the pinned OrcaRouter identity and referenced shards, refuses running-container mounts and cross-filesystem moves, preserves an interrupted canonical download as a `.partial-backup*` directory, moves the complete checkpoint to `$HOME/models/qwen3.8-flash-next-orcarouter`, and leaves `./model` as a compatibility symlink. `wait-ready.sh` checks container state, `/health`, and `/v1/models`, and prints recent logs if a container exits before becoming ready.
 
 Repository maintenance policy: when a workflow repeatedly needs manual commands, add or extend a reusable operator helper and update its tests and documentation in the same change.
