@@ -5,6 +5,7 @@ set -uo pipefail
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+STATE_PARSER="${SCRIPT_ROOT}/lib/state_file.py"
 CONTAINER_NAME="qwen38-flash-next"
 SERVICE_UNIT="qwen38-flash-next.service"
 INCLUDE_LOGS=1
@@ -79,6 +80,25 @@ capture() {
   } >"${bundle_dir}/${destination}" 2>&1 || true
 }
 
+capture_state_file() {
+  local destination="$1" schema="$2" path="$3" parsed key value
+  [[ -f "${path}" && ! -L "${path}" ]] || return 0
+  parsed="$(mktemp)"
+  if python3 "${STATE_PARSER}" "${schema}" "${path}" >"${parsed}" 2>"${bundle_dir}/${destination}.parser-error"; then
+    : >"${bundle_dir}/${destination}"
+    while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+      printf '%s=%q\n' "${key}" "${value}" >>"${bundle_dir}/${destination}"
+    done <"${parsed}"
+    rm -f -- "${bundle_dir}/${destination}.parser-error"
+  else
+    {
+      printf 'INVALID_STATE_FILE=%q\n' "${path}"
+      cat "${bundle_dir}/${destination}.parser-error"
+    } >"${bundle_dir}/${destination}"
+    rm -f -- "${bundle_dir}/${destination}.parser-error"
+  fi
+  rm -f -- "${parsed}"
+}
 redact_file() {
   local path="$1" temporary="${path}.redacted"
   local host_name escaped_host
@@ -119,20 +139,17 @@ if [[ -x "${SCRIPT_ROOT}/doctor.sh" ]]; then
   capture doctor.txt "${SCRIPT_ROOT}/doctor.sh"
 fi
 
-if [[ -r "${STATE_FILE}" && ! -L "${STATE_FILE}" ]]; then
-  (
-    # Installer output is shell-escaped and owned by the current installation user.
-    # shellcheck disable=SC1090
-    source "${STATE_FILE}"
-    for name in SCHEMA_VERSION PHASE INSTALL_ROOT MODEL_PROFILE MODEL_REPO MODEL_REVISION \
-      MODEL_DIR MODEL_OWNED SWAP_FILE SWAP_OWNED VLLM_IMAGE IMAGE_OWNED SERVED_NAME \
-      CONTAINER_NAME CONFIG_OVERRIDE CONFIG_OWNED MONITOR_ENABLED MONITOR_PROTECT \
-      MONITOR_MIN_AVAILABLE_GIB MONITOR_MIN_FREE_GIB MONITOR_FREE_GATE_GIB \
-      MONITOR_MIN_SWAP_FREE_GIB MONITOR_CONSECUTIVE MONITOR_HEARTBEAT PROXY_ENABLED \
-      PROXY_OWNED PROXY_PORT SERVICE_ENABLED SERVICE_OWNED SERVICE_UNIT UI_LANG; do
-      printf '%s=%q\n' "${name}" "${!name-}"
-    done
-  ) >"${bundle_dir}/install-manifest.txt" 2>&1 || true
+if [[ -r "${STATE_PARSER}" ]]; then
+  capture_state_file install-manifest.txt install-maintenance "${STATE_FILE}"
+  capture_state_file runtime-transition.txt runtime-transition "${STATE_DIR}/runtime-transition.env"
+  capture_state_file update-transition.txt update "${STATE_DIR}/update-transition.env"
+  capture_state_file profile-switch-transition.txt profile-switch "${STATE_DIR}/profile-switch-transition.env"
+  capture_state_file runtime-stop.txt runtime-stop "${STATE_DIR}/runtime-stop.env"
+  capture_state_file runtime-commit.txt runtime-commit "${STATE_DIR}/runtime-commit.env"
+  capture_state_file profile-switch-candidate.txt install-maintenance "${STATE_FILE}.profile-switch-candidate"
+  capture_state_file profile-switch-backup.txt install-maintenance "${STATE_FILE}.profile-switch-backup"
+else
+  printf 'state parser unavailable: %s\n' "${STATE_PARSER}" >"${bundle_dir}/state-parser-error.txt"
 fi
 
 if command -v docker >/dev/null 2>&1 && docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then

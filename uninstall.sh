@@ -9,6 +9,9 @@ STATE_FILE="${STATE_DIR}/install.env"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 RUNTIME_TRANSITION_FILE="${STATE_DIR}/runtime-transition.env"
 UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
+PROFILE_SWITCH_TRANSITION_FILE="${STATE_DIR}/profile-switch-transition.env"
+PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
+PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
@@ -129,6 +132,11 @@ acquire_operation_lock "${STATE_DIR}" "uninstall" || exit $?
   die "an update transition is active; recover or roll it back before uninstalling"
 [[ ! -e "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]] || \
   die "a runtime transition is active; recover or roll it back before uninstalling"
+[[ ! -e "${PROFILE_SWITCH_TRANSITION_FILE}" && ! -L "${PROFILE_SWITCH_TRANSITION_FILE}" ]] || \
+  die "a profile-switch transition is active; run scripts/profile-switch-transition.sh recover before uninstalling"
+[[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" &&
+   ! -e "${PROFILE_SWITCH_CANDIDATE}" && ! -L "${PROFILE_SWITCH_CANDIDATE}" ]] || \
+  die "profile-switch artifacts exist without an active transaction; run doctor before uninstalling"
 
 if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
@@ -191,7 +199,9 @@ if [[ "${PURGE_ALL}" == 1 ]]; then
     "${STATE_DIR}/runtime-stop.env" "${STATE_DIR}/runtime-stop.env.tmp" \
     "${STATE_DIR}/runtime-commit.env" "${STATE_DIR}/runtime-commit.env.tmp" \
     "${STATE_DIR}/runtime-transition.env" "${STATE_DIR}/runtime-transition.env.tmp" \
-    "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp"
+    "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp" \
+    "${STATE_DIR}/profile-switch-transition.env" "${STATE_DIR}/profile-switch-transition.env.tmp" \
+    "${STATE_FILE}.profile-switch-backup" "${STATE_FILE}.profile-switch-candidate" "${STATE_FILE}.profile-switch-candidate.tmp"
   rm -f -- "${STATE_FILE}"
   rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
   [[ "${UI_LANG}" == ko ]] && printf '전체 제거 완료; immutable release 데이터와 설치 manifest를 삭제했습니다.\n' || \

@@ -38,7 +38,11 @@ A normal installation has two kinds of persistent application state:
 ├── config.vllm.json              # generated compatibility config, when owned
 ├── runtime-transition.env        # exists only during runtime replacement
 ├── update-transition.env         # exists only during release cutover
+├── profile-switch-transition.env # exists only during a managed profile switch
+├── runtime-commit.env            # committed runtime attestation, transient
 ├── runtime-stop.env              # memory-protection stop marker, transient
+├── install.env.profile-switch-candidate # target manifest while preparing a switch
+├── install.env.profile-switch-backup    # previous manifest after target activation
 └── monitor.*                     # optional memory monitor state/log
 ```
 
@@ -121,18 +125,42 @@ uses the managed runtime transaction to replace the running container:
 
 A profile switch requires the installer-owned systemd service and runtime startup;
 `--no-start` and `--no-service` are intentionally rejected for a live switch.
-Both update/runtime transaction states must be idle before the switch begins.
+The update/runtime/profile-switch transaction states must be idle before a new
+switch begins. Profile switching has its own persisted lifecycle:
+
+```text
+preparing -> activated -> runtime_committed -> committing -> idle
+```
+
 During model/download/image preparation, the existing `install.env` remains
 unchanged and target progress is written to
-`install.env.profile-switch-candidate`. Immediately before service replacement,
-the old manifest is backed up and the target manifest becomes canonical. The
-existing runtime container is preserved as the runtime transaction rollback
-candidate until the target health check, served-model ID check, and runtime
-attestation all pass.
+`install.env.profile-switch-candidate`. The `preparing` state is persisted
+before that candidate is created. When the candidate reaches `service_ready`,
+the previous manifest is copied to `install.env.profile-switch-backup`, the
+target manifest becomes canonical, and the transaction moves to `activated`.
+The existing runtime container is preserved by the nested runtime transaction
+until health, exact served-model ID, and runtime commit attestation all pass.
+Only then does the profile transaction record `runtime_committed`, finalize
+the target manifest as `complete`, remove the temporary manifests, and clear
+the transaction state last.
 
-If preparation or replacement fails before commit, the previous installation
-manifest is restored. A normal uninstall is still available when an operator
-explicitly wants to stop/remove the managed runtime while retaining models.
+Installer startup runs profile-switch recovery before resuming installation.
+Managed service startup also checks for an interrupted profile switch before
+parsing the canonical manifest. During an intentional switch the installer still
+holds the lifecycle operation lock, so service-side recovery is deliberately
+deferred rather than racing the installer.
+
+Recovery is fail-closed. A valid target runtime attestation plus matching target
+manifest/container proves that the target can be committed. If the target is not
+committed and the previous runtime can be proven against the backup manifest,
+recovery restores the previous profile. If neither side can be proven—for
+example, power loss after the runtime transaction committed but before its
+attestation was written—automatic recovery does not guess. The transaction is
+left for doctor/operator inspection and destructive maintenance is blocked.
+
+A normal uninstall is still available after all lifecycle transactions are idle
+when an operator explicitly wants to stop/remove the managed runtime while
+retaining models.
 
 Do **not** use `--purge-model`, `--purge-swap`, or `--purge-all` for a
 normal profile switch. Those options are removal operations, not switching
@@ -209,15 +237,17 @@ Wildcard LAN listeners (`0.0.0.0`) are not supported. The selected LAN address m
 bash ./scripts/release-manager.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
+bash ./scripts/profile-switch-transition.sh status
 systemctl is-active qwen38-flash-next.service
 docker ps -a --filter name=qwen38-flash-next
 ```
 
-Healthy steady state has both transaction states idle:
+Healthy steady state has all transaction states idle:
 
 ```text
 UPDATE_STATE=idle
 TRANSACTION_STATE=idle
+PROFILE_SWITCH_STATE=idle
 ```
 
 ### Doctor lifecycle observability
@@ -231,6 +261,8 @@ TRANSACTION_STATE=idle
 - historical schema-1 qualification is reported as a legacy unbound warning and must be re-qualified before a future cutover;
 - an optional `previous` release pointer is safe and its manifest remains verifiable;
 - no `update-transition.env` is left from an interrupted release cutover;
+- no incomplete or malformed `profile-switch-transition.env` is left from an interrupted profile cutover;
+- no orphan profile-switch candidate/backup manifest exists without its transaction state;
 - no stale or malformed `runtime-stop.env` marker is left behind;
 - an installed systemd unit executes from `~/.local/share/qwen38-spark/current` rather than the mutable checkout;
 - runtime image, model mount, served model name, loopback publication, and rollback-container state match the installation manifest;
@@ -266,7 +298,7 @@ Use strict mode when maintenance automation should fail on warnings as well as h
 ./scripts/doctor.sh --strict
 ```
 
-Examples of signals that require operator attention include an incomplete update/runtime transaction, a tampered current immutable release, an unsafe/dangling release pointer, a legacy or digest-mismatched qualification marker, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
+Examples of signals that require operator attention include an incomplete update/runtime/profile-switch transaction, a tampered current immutable release, an unsafe/dangling release pointer, a legacy or digest-mismatched qualification marker, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
 
 ## Update a checkout revision
 
@@ -302,7 +334,19 @@ Inspect state before doing manual Docker or symlink changes:
 ```bash
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
+bash ./scripts/profile-switch-transition.sh status
 ```
+
+Recover an interrupted profile switch first when it is active:
+
+```bash
+bash ./scripts/profile-switch-transition.sh recover
+```
+
+The profile-switch helper either proves and commits the target, proves and
+restores the previous profile, or fails closed while leaving its persisted state
+intact. Do not delete `profile-switch-transition.env`, its candidate/backup
+manifests, or runtime attestation files to force a decision.
 
 Recover an interrupted runtime replacement:
 
@@ -339,7 +383,7 @@ A normal uninstall removes the runtime/service resources recorded by the install
 
 Owned managed API-access endpoints are removed together. API access created outside the installer remains untouched unless it was explicitly adopted into the manifest.
 
-Uninstall refuses to start if either `update-transition.env` or `runtime-transition.env` exists. Recover or roll back that transaction first rather than deleting transaction state manually.
+Uninstall refuses to start if `update-transition.env`, `runtime-transition.env`, or `profile-switch-transition.env` exists, and it also refuses orphan profile-switch candidate/backup manifests. Recover or roll back the owning transaction first rather than deleting lifecycle state manually.
 
 Preview a full purge:
 
@@ -366,6 +410,7 @@ Before maintenance:
 ./scripts/manage-proxy.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
+bash ./scripts/profile-switch-transition.sh status
 ```
 
 After maintenance:
@@ -376,8 +421,9 @@ After maintenance:
 bash ./scripts/release-manager.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
+bash ./scripts/profile-switch-transition.sh status
 curl -fsS http://127.0.0.1:8888/health
 curl -fsS http://127.0.0.1:8888/v1/models
 ```
 
-Do not consider an operation complete while either transaction state is non-idle.
+Do not consider an operation complete while any update, runtime, or profile-switch transaction state is non-idle.

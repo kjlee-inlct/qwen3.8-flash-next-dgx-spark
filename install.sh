@@ -15,6 +15,8 @@ source "${WIZARD_UI}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
+PROFILE_SWITCH_TRANSITION="${ROOT_DIR}/scripts/lifecycle/profile-switch-transition.sh"
+PROFILE_SWITCH_STATE="${STATE_DIR}/profile-switch-transition.env"
 OPERATION_LOCK_LIB="${ROOT_DIR}/scripts/lib/operation-lock.sh"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 CURRENT_RELEASE_LINK="${DATA_HOME}/current"
@@ -269,20 +271,20 @@ write_state() {
 
 restore_profile_switch_manifest_on_exit() {
   local rc="$?"
-  if [[ "${PROFILE_SWITCH}" == 1 && "${PROFILE_SWITCH_COMMITTED}" != 1 && -f "${PROFILE_SWITCH_BACKUP}" ]]; then
-    cp -p -- "${PROFILE_SWITCH_BACKUP}" "${STATE_FILE}.tmp"
-    mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
-    printf 'Profile switch did not commit; restored previous installation manifest (%s).\n' "${SWITCH_FROM_PROFILE}" >&2
+  [[ "${PROFILE_SWITCH}" == 1 ]] || return "${rc}"
+  [[ -e "${PROFILE_SWITCH_STATE}" && ! -L "${PROFILE_SWITCH_STATE}" ]] || return "${rc}"
+  set +e
+  if [[ "${PROFILE_SWITCH_COMMITTED}" == 1 ]]; then
+    bash "${PROFILE_SWITCH_TRANSITION}" recover
+  else
+    bash "${PROFILE_SWITCH_TRANSITION}" rollback
   fi
-  rm -f -- "${PROFILE_SWITCH_CANDIDATE}" "${PROFILE_SWITCH_CANDIDATE}.tmp" "${PROFILE_SWITCH_BACKUP}"
+  recovery_rc="$?"
+  set -e
+  if [[ "${recovery_rc}" != 0 ]]; then
+    printf 'Profile switch exit recovery failed; persisted transaction state was retained for explicit recovery.\n' >&2
+  fi
   return "${rc}"
-}
-
-activate_profile_switch_manifest() {
-  [[ "${PROFILE_SWITCH}" == 1 ]] || return 0
-  [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "installed manifest became unavailable before profile switch activation"
-  cp -p -- "${STATE_FILE}" "${PROFILE_SWITCH_BACKUP}"
-  STATE_WRITE_FILE="${STATE_FILE}"
 }
 
 usage() {
@@ -351,6 +353,10 @@ fi
 if [[ "${DRY_RUN}" != 1 ]]; then
   ensure_operation_lock
 fi
+if [[ "${DRY_RUN}" != 1 ]]; then
+  [[ -r "${PROFILE_SWITCH_TRANSITION}" ]] || die "profile-switch transition helper is unavailable: ${PROFILE_SWITCH_TRANSITION}"
+  bash "${PROFILE_SWITCH_TRANSITION}" recover
+fi
 
 RESUME=0
 if [[ -r "${STATE_FILE}" ]]; then
@@ -389,10 +395,7 @@ if [[ -r "${STATE_FILE}" ]]; then
         die "a runtime transition is active; wait for it to commit or recover it before switching profiles"
       [[ ! -e "${STATE_DIR}/update-transition.env" && ! -L "${STATE_DIR}/update-transition.env" ]] || \
         die "an update transition is active; finish or recover it before switching profiles"
-      [[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" ]] || \
-        die "stale profile-switch manifest backup exists: ${PROFILE_SWITCH_BACKUP}"
-      [[ ! -e "${PROFILE_SWITCH_CANDIDATE}" && ! -L "${PROFILE_SWITCH_CANDIDATE}" ]] || \
-        die "stale profile-switch candidate manifest exists: ${PROFILE_SWITCH_CANDIDATE}"
+      bash "${PROFILE_SWITCH_TRANSITION}" prepare "${SWITCH_FROM_PROFILE}" "${MODEL_PROFILE}"
       STATE_WRITE_FILE="${PROFILE_SWITCH_CANDIDATE}"
       trap restore_profile_switch_manifest_on_exit EXIT
     fi
@@ -971,17 +974,21 @@ RUNTIME_ROOT="$(readlink -f -- "${CURRENT_RELEASE_LINK}")"
 write_state release_ready
 
 if [[ "${SERVICE_ENABLED}" == 1 ]]; then
-  if [[ "${PROFILE_SWITCH}" == 1 ]]; then
-    activate_profile_switch_manifest
-  fi
   SERVICE_OWNED=1
   write_state service_ready
+  if [[ "${PROFILE_SWITCH}" == 1 ]]; then
+    # Candidate state is service-ready before it becomes canonical. The helper
+    # persists the old manifest and activation boundary before systemd cutover.
+    bash "${PROFILE_SWITCH_TRANSITION}" activate
+    STATE_WRITE_FILE="${STATE_FILE}"
+  fi
   service_args=(create --runtime-root "${CURRENT_RELEASE_LINK}" --yes)
   [[ "${START}" == 1 ]] && service_args+=(--start) || service_args+=(--no-start)
   sudo_with_operation_lock "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
   if [[ "${PROFILE_SWITCH}" == 1 ]]; then
     # manage-service returns only after the replacement container is healthy,
     # its served model ID matches, and the runtime commit attestation matches.
+    bash "${PROFILE_SWITCH_TRANSITION}" runtime-committed
     PROFILE_SWITCH_COMMITTED=1
   fi
 elif [[ "${START}" == 1 ]]; then
@@ -995,7 +1002,7 @@ elif [[ "${START}" == 1 ]]; then
 fi
 write_state complete
 if [[ "${PROFILE_SWITCH}" == 1 ]]; then
-  rm -f -- "${PROFILE_SWITCH_BACKUP}" "${PROFILE_SWITCH_CANDIDATE}" "${PROFILE_SWITCH_CANDIDATE}.tmp"
+  bash "${PROFILE_SWITCH_TRANSITION}" commit
   trap - EXIT
 fi
 if [[ "${UI_LANG}" == ko ]]; then
