@@ -379,6 +379,23 @@ def preflight_purge(registry: Path, kind: str) -> None:
             _verify_image(item)
 
 
+def preflight_one(registry: Path, kind: str, locator: str) -> None:
+    data = load_registry(registry)
+    normalized = _canonical_path(locator) if kind == "model" else _safe_text(locator, "image name")
+    entry = find_entry(data, kind, normalized)
+    if entry is None or not entry["owned"]:
+        raise RegistryError(f"asset is not recorded as installer-owned: {kind}:{normalized}")
+    blockers = _dependency_blockers(data, [entry])
+    if blockers:
+        raise RegistryError(
+            "owned asset is required by a retained dependent: " + "; ".join(blockers)
+        )
+    if kind == "model":
+        _verify_model(entry)
+    else:
+        _verify_image(entry)
+
+
 def _purge_order(data: dict[str, Any], kind: str) -> list[dict[str, Any]]:
     candidates = _selected_owned(data, kind)
     by_key = {(item["kind"], item["locator"]): item for item in candidates}
@@ -461,6 +478,11 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("registry")
         cmd.add_argument("--kind", choices=("model", "image", "all"), default="all")
 
+    one = sub.add_parser("preflight-one")
+    one.add_argument("registry")
+    one.add_argument("kind", choices=("model", "image"))
+    one.add_argument("locator")
+
     remove = sub.add_parser("forget")
     remove.add_argument("registry")
     remove.add_argument("kind", choices=("model", "image"))
@@ -486,6 +508,8 @@ def main() -> int:
             return 0 if owns(registry, "image", args.locator) else 1
         elif args.command == "preflight-purge":
             preflight_purge(registry, args.kind)
+        elif args.command == "preflight-one":
+            preflight_one(registry, args.kind, args.locator)
         elif args.command == "plan-purge":
             print_plan(registry, args.kind)
         elif args.command == "forget":
