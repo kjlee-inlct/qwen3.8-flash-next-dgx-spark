@@ -23,6 +23,8 @@ CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
+PROFILE_SWITCH=0; PROFILE_SWITCH_COMMITTED=0; SWITCH_FROM_PROFILE=""; SWITCH_MODEL_ROOT=""
+PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 LIST_MODELS=0; LIST_BACKENDS=0
 MONITOR_ENABLED="${MONITOR_ENABLED:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
@@ -346,8 +348,28 @@ if [[ -r "${STATE_FILE}" ]]; then
     PHASE=""
     RESUME=0
   elif [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
-    [[ "${DRY_RUN}" == 1 ]] || \
-      die "installed profile is ${manifest_profile}; uninstall it before selecting ${MODEL_CLI}"
+    # A profile switch is a runtime replacement, not a model purge. Reuse the
+    # existing model root and shared operational settings while selecting fresh
+    # model-specific metadata for the requested target profile.
+    parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+    PROFILE_SWITCH=1
+    SWITCH_FROM_PROFILE="${MODEL_PROFILE}"
+    SWITCH_MODEL_ROOT="$(realpath -m -- "$(dirname -- "${MODEL_DIR}")")"
+    MODEL_PROFILE="${MODEL_CLI}"
+    MODEL_REPO=""; MODEL_REVISION=""; MODEL_DIR=""; MODEL_OWNED=0
+    VLLM_IMAGE=""; IMAGE_OWNED=0; SERVED_NAME=""
+    CONFIG_OVERRIDE=""; CONFIG_OWNED=0
+    PHASE=""
+    RESUME=0
+    if [[ "${DRY_RUN}" != 1 ]]; then
+      [[ ! -e "${STATE_DIR}/runtime-transition.env" && ! -L "${STATE_DIR}/runtime-transition.env" ]] || \
+        die "a runtime transition is active; wait for it to commit or recover it before switching profiles"
+      [[ ! -e "${STATE_DIR}/update-transition.env" && ! -L "${STATE_DIR}/update-transition.env" ]] || \
+        die "an update transition is active; finish or recover it before switching profiles"
+      [[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" ]] || \
+        die "stale profile-switch manifest backup exists: ${PROFILE_SWITCH_BACKUP}"
+      cp -p -- "${STATE_FILE}" "${PROFILE_SWITCH_BACKUP}"
+    fi
   else
     parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
     RESUME=1
@@ -364,7 +386,11 @@ MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
 [[ -z "${MONITOR_HEARTBEAT_CLI}" ]] || MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT_CLI}"
 validate_monitor_settings
 [[ -z "${MODEL_CLI}" ]] || MODEL_PROFILE="${MODEL_CLI}"
-if [[ "${RESUME}" == 1 && -n "${MODEL_DIR:-}" ]]; then
+if [[ "${PROFILE_SWITCH}" == 1 && -z "${MODEL_ROOT_CLI}" && -z "${MODEL_ROOT_ENV}" ]]; then
+  MODEL_ROOT="${SWITCH_MODEL_ROOT}"
+  MODEL_ROOT_SOURCE=manifest-switch
+  export QWEN38_MODEL_ROOT="${MODEL_ROOT}"
+elif [[ "${RESUME}" == 1 && -n "${MODEL_DIR:-}" ]]; then
   MODEL_ROOT="$(realpath -m -- "$(dirname -- "${MODEL_DIR}")")"
   MODEL_ROOT_SOURCE=manifest
   export QWEN38_MODEL_ROOT="${MODEL_ROOT}"
@@ -507,6 +533,11 @@ CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED="${SERVICE_OWNED:-0}"
 [[ -z "${SERVICE_CLI}" ]] || SERVICE_ENABLED="${SERVICE_CLI}"
+if [[ "${PROFILE_SWITCH}" == 1 && "${DRY_RUN}" != 1 ]]; then
+  [[ "${START}" == 1 ]] || die "transactional profile switch requires runtime startup; omit --no-start"
+  [[ "${SERVICE_ENABLED}" == 1 && "${SERVICE_OWNED}" == 1 ]] || \
+    die "transactional profile switch requires an owned managed systemd service; uninstall first for unmanaged/no-service installs"
+fi
 if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${MIGRATE_MANIFEST}" == 1 ]]; then
   die "--refresh-profile-defaults cannot be combined with --migrate-manifest"
 fi
@@ -651,6 +682,7 @@ if [[ "${UI_LANG}" == ko ]]; then
   printf '모델\n'
   printf '  model       : %s\n' "${REPO}"
   printf '  profile     : %s\n' "${MODEL_PROFILE}"
+  [[ "${PROFILE_SWITCH}" != 1 ]] || printf '  전환        : %s -> %s\n' "${SWITCH_FROM_PROFILE}" "${MODEL_PROFILE}"
   printf '  저장 루트   : %s\n' "${MODEL_ROOT}"
   printf '  directory   : %s\n' "${MODEL_DIR}"
   printf '  revision    : %s\n' "${REVISION}"
@@ -659,6 +691,7 @@ else
   printf 'Model\n'
   printf '  model       : %s\n' "${REPO}"
   printf '  profile     : %s\n' "${MODEL_PROFILE}"
+  [[ "${PROFILE_SWITCH}" != 1 ]] || printf '  switch      : %s -> %s\n' "${SWITCH_FROM_PROFILE}" "${MODEL_PROFILE}"
   printf '  storage root: %s\n' "${MODEL_ROOT}"
   printf '  directory   : %s\n' "${MODEL_DIR}"
   printf '  revision    : %s\n' "${REVISION}"
@@ -713,6 +746,22 @@ if [[ "${DRY_RUN}" == 1 ]]; then
     printf '\nDRY-RUN complete: no download, swap, release, API access, service, Docker, or manifest changes were made.\n'
   fi
   exit 0
+fi
+
+restore_profile_switch_manifest_on_exit() {
+  local rc="$?"
+  if [[ "${PROFILE_SWITCH}" == 1 && "${PROFILE_SWITCH_COMMITTED}" != 1 && -f "${PROFILE_SWITCH_BACKUP}" ]]; then
+    cp -p -- "${PROFILE_SWITCH_BACKUP}" "${STATE_FILE}.tmp"
+    mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
+    printf 'Profile switch did not commit; restored previous installation manifest (%s).\n' "${SWITCH_FROM_PROFILE}" >&2
+  fi
+  if [[ "${PROFILE_SWITCH_COMMITTED}" == 1 ]]; then
+    rm -f -- "${PROFILE_SWITCH_BACKUP}"
+  fi
+  return "${rc}"
+}
+if [[ "${PROFILE_SWITCH}" == 1 ]]; then
+  trap restore_profile_switch_manifest_on_exit EXIT
 fi
 
 for command in python3 curl docker sudo git; do command -v "${command}" >/dev/null || die "${command} is required"; done
@@ -906,6 +955,11 @@ if [[ "${SERVICE_ENABLED}" == 1 ]]; then
   service_args=(create --runtime-root "${CURRENT_RELEASE_LINK}" --yes)
   [[ "${START}" == 1 ]] && service_args+=(--start) || service_args+=(--no-start)
   sudo_with_operation_lock "${ROOT_DIR}/scripts/manage-service.sh" "${service_args[@]}"
+  if [[ "${PROFILE_SWITCH}" == 1 ]]; then
+    # manage-service returns only after the replacement container is healthy,
+    # its served model ID matches, and the runtime commit attestation matches.
+    PROFILE_SWITCH_COMMITTED=1
+  fi
 elif [[ "${START}" == 1 ]]; then
   printf '\nStarting runtime from immutable current release...\n'
   MODEL_PROFILE="${MODEL_PROFILE}" MODEL_DIR="${MODEL_DIR}" VLLM_IMAGE="${IMAGE}" SERVED_NAME="${SERVED_NAME}" \
@@ -916,6 +970,10 @@ elif [[ "${START}" == 1 ]]; then
     "${RUNTIME_ROOT}/scripts/serve.sh"
 fi
 write_state complete
+if [[ "${PROFILE_SWITCH}" == 1 ]]; then
+  rm -f -- "${PROFILE_SWITCH_BACKUP}"
+  trap - EXIT
+fi
 if [[ "${UI_LANG}" == ko ]]; then
   printf '\n설치가 완료되었습니다.\n  manifest: %s\n  runtime: %s\n' "${STATE_FILE}" "${CURRENT_RELEASE_LINK}"
   [[ "${SERVICE_ENABLED}" == 1 ]] && printf '  logs: journalctl -fu qwen38-flash-next.service\n' || printf '  logs: docker logs -f qwen38-flash-next\n'
