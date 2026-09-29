@@ -352,6 +352,8 @@ fi
 
 if [[ "${DRY_RUN}" != 1 ]]; then
   ensure_operation_lock
+fi
+if [[ "${DRY_RUN}" != 1 ]]; then
   [[ -r "${PROFILE_SWITCH_TRANSITION}" ]] || die "profile-switch transition helper is unavailable: ${PROFILE_SWITCH_TRANSITION}"
   bash "${PROFILE_SWITCH_TRANSITION}" recover
 fi
