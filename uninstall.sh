@@ -4,8 +4,10 @@ set -euo pipefail
 
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
+ASSET_OWNERSHIP_TOOL="${SCRIPT_ROOT}/scripts/lib/asset_ownership.py"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 RUNTIME_TRANSITION_FILE="${STATE_DIR}/runtime-transition.env"
 UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
@@ -29,6 +31,26 @@ sudo_with_operation_lock() {
     QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
     QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
     "$@"
+}
+
+asset_bootstrap_install() {
+  [[ -r "${ASSET_OWNERSHIP_TOOL}" ]] || die "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
+  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
+}
+asset_model_owned() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] &&
+    python3 "${ASSET_OWNERSHIP_TOOL}" owns-model "${ASSET_OWNERSHIP_FILE}" "$1"
+}
+asset_image_owned() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] &&
+    python3 "${ASSET_OWNERSHIP_TOOL}" owns-image "${ASSET_OWNERSHIP_FILE}" "$1"
+}
+asset_forget() {
+  python3 "${ASSET_OWNERSHIP_TOOL}" forget "${ASSET_OWNERSHIP_FILE}" "$1" "$2"
+}
+image_referenced_by_container() {
+  local image="$1"
+  [[ -z "$(docker ps -aq --filter "ancestor=${image}" 2>/dev/null)" ]]
 }
 
 mark_manifest_uninstalled() {
