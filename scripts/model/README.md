@@ -28,6 +28,7 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 - `inspect_model.py`
 - `checkpoint_integrity.py`
 - `migrate_orcarouter.py`
+- `relocate_model_root.py`
 - `prepare_config.py`
 
 Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/prepare-config.py` are compatibility entry points.
@@ -107,6 +108,8 @@ Examples:
 ./scripts/manage-models.sh remove "$HOME/models/old-qwen38"
 ./scripts/manage-models.sh migrate-orcarouter --dry-run
 ./scripts/manage-models.sh migrate-orcarouter --yes
+./scripts/manage-models.sh relocate-root --dry-run
+./scripts/manage-models.sh relocate-root --yes
 ```
 
 Deletion is intentionally limited to managed model manifests under `$HOME/models`,
@@ -125,3 +128,24 @@ canonical download is preserved as `.partial-backup*`; complete conflicts, unexp
 symlinks, running-container mounts, and cross-filesystem migrations are rejected.
 After migration, `./model` is retained as a compatibility symlink and rerunning the
 command is idempotent.
+
+
+### Managed model-root relocation
+
+`relocate-root` is the supported way to consolidate existing managed assets from
+`$HOME/models` into the repository-local `./models` root introduced by the installer.
+It performs a same-filesystem atomic rename and is intentionally fail-closed:
+
+- every top-level source entry must be a managed model/hybrid directory with
+  `status=complete`;
+- any safetensors index present must resolve to non-empty local shards;
+- running Docker mounts and an active `qwen38-flash-next.service` block the move;
+- a held lifecycle operation lock, cross-filesystem destination, existing destination,
+  or unexpected `./model` symlink blocks the move;
+- unrelated/unmanaged top-level entries under `$HOME/models` block whole-root relocation.
+
+After a successful move, the physical data lives under `./models`.
+`$HOME/models` becomes a compatibility symlink to that directory, so retained lifecycle
+manifests or older scripts that still contain `$HOME/models/...` continue to resolve.
+The historical repository `./model` symlink is refreshed to the relocated OrcaRouter
+checkpoint. The command is idempotent and should always be previewed with `--dry-run`.
