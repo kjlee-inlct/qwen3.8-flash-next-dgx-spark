@@ -19,9 +19,9 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/monitor-runtime.sh [options]
   --container NAME             Container to monitor (default: qwen38-flash-next)
-  --min-available-gib N        Non-CMA available floor (MemAvailable-CmaFree, default: 6)
-  --min-free-gib N             Non-CMA free-memory floor (MemFree-CmaFree, default: 2)
-  --free-gate-gib N            Apply non-CMA free floor below this MemAvailable (default: 10)
+  --min-available-gib N        Non-CMA available warning floor (default: 6)
+  --min-free-gib N             Non-CMA free protection floor (default: 2)
+  --free-gate-gib N            Protect on low free only below this non-CMA available gate (default: 10)
   --min-swap-free-gib N        SwapFree warning floor (default: 8)
   --consecutive N              Consecutive low samples before protection (default: 5)
   --interval N                 Sampling interval in seconds (default: 2)
@@ -91,13 +91,26 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   cma_free="${cma_free:-0}"
   (( mem_free >= cma_free )) && noncma_free=$((mem_free - cma_free)) || noncma_free=0
   (( mem_available >= cma_free )) && noncma_available=$((mem_available - cma_free)) || noncma_available=0
-  if (( noncma_available < available_floor || swap_free < swap_free_floor || (noncma_free < free_floor && noncma_available < free_gate) )); then
-    low_count=$((low_count + 1))
-    printf '%s WARNING memory margin low %d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
+  warning_low=0
+  protection_low=0
+  (( noncma_available < available_floor )) && warning_low=1
+  (( swap_free < swap_free_floor )) && warning_low=1 && protection_low=1
+  if (( noncma_free < free_floor && noncma_available < free_gate )); then
+    warning_low=1
+    protection_low=1
+  fi
+
+  if (( warning_low == 1 )); then
+    if (( protection_low == 1 )); then
+      low_count=$((low_count + 1))
+    else
+      low_count=0
+    fi
+    printf '%s WARNING memory margin low protect=%d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
       "$(date '+%F %T')" "${low_count}" "${CONSECUTIVE}" \
       "$((mem_available / 1024))" "$((noncma_available / 1024))" "$((mem_free / 1024))" \
       "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
-    if [[ "${PROTECT}" == 1 && "${low_count}" -ge "${CONSECUTIVE}" ]]; then
+    if [[ "${PROTECT}" == 1 && "${protection_low}" == 1 && "${low_count}" -ge "${CONSECUTIVE}" ]]; then
       printf '%s PROTECT stopping %s gracefully to preserve host stability\n' "$(date '+%F %T')" "${CONTAINER}" >&2
       docker logs --tail 1000 "${CONTAINER}" 2>&1 || true
       container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER}")"

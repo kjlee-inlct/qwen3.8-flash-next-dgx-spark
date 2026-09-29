@@ -256,7 +256,9 @@ bash ./scripts/update-release.sh "${TARGET}"
 ./install.sh --model orcarouter-hybrid --protect --yes
 ```
 
-A protected stop writes `runtime-stop.env` and gracefully stops the inference container so systemd does not immediately restart the same memory-pressure workload. Operators can intentionally select warn-only mode with `--monitor`, or disable monitoring with `--no-monitor`.
+The non-CMA available floor is a warning threshold. Protection is intentionally narrower: it stops only after the configured number of consecutive samples where non-CMA free memory is below `MONITOR_MIN_FREE_GIB` while non-CMA available memory is below `MONITOR_FREE_GATE_GIB`, or when swap-free falls below its configured floor. This keeps a healthy Hybrid runtime running when non-CMA available is below 6 GiB but ordinary non-CMA free memory still has margin.
+
+A protected stop writes `runtime-stop.env` and gracefully stops the inference container so systemd does not immediately restart the same memory-pressure workload. If protection fires while a replacement candidate is still starting, the runtime transaction removes that candidate, restores the previous container name in the stopped state, clears the transaction, and exits the service successfully rather than retrying the same startup. Operators can intentionally select warn-only mode with `--monitor`, or disable monitoring with `--no-monitor`.
 
 Use strict mode when maintenance automation should fail on warnings as well as hard failures:
 

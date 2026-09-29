@@ -173,6 +173,15 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("exit 0", runner)
         self.assertIn("stale runtime stop marker", runner)
 
+    def test_memory_protection_during_startup_does_not_retry_candidate(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        transition = (ROOT / "scripts" / "runtime" / "runtime-transition.sh").read_text(encoding="utf-8")
+        self.assertIn("protected_stop_matches_container", runner)
+        self.assertIn('bash "${RUNTIME_TRANSITION}" abort-protected', runner)
+        self.assertIn("Candidate runtime was stopped by memory protection during startup", runner)
+        self.assertIn("abort-protected)", transition)
+        self.assertIn("left stopped after memory protection", transition)
+
     def test_doctor_checks_runtime_lifecycle_drift(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
         self.assertIn('realpath -m -- "${expected_hybrid_mounts[${destination}]}"', doctor)

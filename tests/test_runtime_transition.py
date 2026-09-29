@@ -172,6 +172,20 @@ class RuntimeTransitionTests(unittest.TestCase):
         self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
         self.assertFalse(self.transition_file.exists())
 
+    def test_abort_protected_restores_previous_but_leaves_it_stopped(self) -> None:
+        self.set_container("qwen38-flash-next", "running")
+        self.run_transition("prepare")
+        self.set_container("qwen38-flash-next", "stopped")
+        self.run_transition("candidate-started", check=False)
+        self.write_transition_state("validating", 1)
+
+        result = self.run_transition("abort-protected")
+
+        self.assertIn("left stopped after memory protection", result.stdout)
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "stopped")
+        self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
+        self.assertFalse(self.transition_file.exists())
+
     def test_recover_after_previous_was_preserved(self) -> None:
         self.set_container("qwen38-flash-next", "running")
         self.run_transition("prepare")

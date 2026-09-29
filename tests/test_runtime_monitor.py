@@ -106,5 +106,102 @@ esac
             self.assertIn("STOP_REASON=memory-protection", stop_reason.read_text(encoding="utf-8"))
 
 
+    def test_low_available_with_healthy_noncma_free_warns_without_stopping(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            state_home = root / "state"
+            bin_dir.mkdir()
+
+            docker_log = root / "docker.log"
+            stop_marker = root / "docker-stopped"
+            inspect_count = root / "inspect-count"
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
+case "${1:-}" in
+  inspect)
+    if [[ "${2:-}" == "-f" ]]; then
+      count=0
+      [[ ! -f "$FAKE_DOCKER_INSPECT_COUNT" ]] || count="$(cat "$FAKE_DOCKER_INSPECT_COUNT")"
+      if (( count >= 1 )); then
+        printf 'false\\n'
+      else
+        printf '1\\n' > "$FAKE_DOCKER_INSPECT_COUNT"
+        printf 'true\\n'
+      fi
+    elif [[ "${2:-}" == "--format" ]]; then
+      printf '%064d\\n' 0
+    fi
+    ;;
+  logs)
+    ;;
+  stop)
+    : > "$FAKE_DOCKER_STOP_MARKER"
+    ;;
+  *)
+    ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
+
+            meminfo = root / "meminfo"
+            meminfo.write_text(
+                "\n".join(
+                    [
+                        "MemTotal:       127506432 kB",
+                        "MemFree:          7340032 kB",
+                        "MemAvailable:     7130317 kB",
+                        "CmaFree:           4194304 kB",
+                        "SwapFree:        104857600 kB",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(MONITOR),
+                    "--container",
+                    "qwen38-flash-next",
+                    "--protect",
+                    "--consecutive",
+                    "1",
+                    "--interval",
+                    "1",
+                    "--heartbeat",
+                    "0",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+                    "XDG_STATE_HOME": str(state_home),
+                    "QWEN38_MEMINFO_PATH": str(meminfo),
+                    "FAKE_DOCKER_LOG": str(docker_log),
+                    "FAKE_DOCKER_STOP_MARKER": str(stop_marker),
+                    "FAKE_DOCKER_INSPECT_COUNT": str(inspect_count),
+                },
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            output = result.stdout + result.stderr
+            self.assertIn("WARNING memory margin low protect=0/1", output)
+            self.assertIn("noncma_available=2867MiB", output)
+            self.assertIn("noncmafree=3072MiB", output)
+            self.assertNotIn("PROTECT stopping", output)
+            self.assertFalse(stop_marker.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
