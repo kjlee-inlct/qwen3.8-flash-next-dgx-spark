@@ -66,7 +66,9 @@ managed_model_candidates() {
   declare -A seen=()
   local -a roots=("${HOME}/models" "${SCRIPT_ROOT}/models" "${SCRIPT_ROOT}/model")
   local root path canonical manifest
-  [[ -n "${ACTIVE_MODEL}" ]] && roots+=("${ACTIVE_MODEL}")
+  if [[ -n "${ACTIVE_MODEL}" ]]; then
+    roots+=("${ACTIVE_MODEL}" "$(dirname -- "${ACTIVE_MODEL}")")
+  fi
   for root in "${roots[@]}"; do
     [[ -e "${root}" ]] || continue
     if [[ -f "${root}/.qwen38-model-manifest.json" || -f "${root}/.qwen38-hybrid-manifest.json" ]]; then
