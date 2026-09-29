@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -207,6 +208,60 @@ class ModelProfileTests(unittest.TestCase):
         )
         self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
         self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
+
+    def test_h3_reuse_requires_pinned_source_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            h3 = Path(directory) / "h3"
+            h3.mkdir()
+            (h3 / "model.safetensors.index.json").write_text("{}", encoding="utf-8")
+            manifest = {
+                "status": "complete",
+                "variant": "quant-layout-mazinb-experts",
+                "base_revision": "c1209bda15a6bbc4c68b585e93d40c0d85f50306",
+                "overlay_revision": "f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f",
+                "group0_bf16_weights": 300,
+                "group0_fp8_scales_removed": 300,
+                "base_expert_tensors_removed": 221184,
+                "overlay_expert_tensors_added": 294912,
+                "quantization_config_source": "mazinb-modelopt-nvfp4",
+                "mtp_tensors_changed": 0,
+            }
+            manifest_path = h3 / ".qwen38-hybrid-manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            command = [
+                "python3",
+                str(ROOT / "scripts" / "model" / "validate-orcarouter-hybrid.py"),
+                "--h3-source-reuse-check",
+                "--h3-dir",
+                str(h3),
+            ]
+            good = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(good.returncode, 0, good.stdout + good.stderr)
+            self.assertIn("safely replaces the mazinb build-time source", good.stdout)
+
+            manifest["overlay_revision"] = "0" * 40
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            bad = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertNotEqual(bad.returncode, 0)
+            self.assertIn("not pinned mazinb f2c21eb", bad.stdout)
+
+    def test_hybrid_installer_reuses_pinned_h3_without_mazinb_download(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        preparer = (ROOT / "scripts" / "model" / "prepare-orcarouter-hybrid.sh").read_text(
+            encoding="utf-8"
+        )
+        validator = (ROOT / "scripts" / "model" / "validate-orcarouter-hybrid.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("HYBRID_REUSE_H3=0", installer)
+        self.assertIn("Pinned H3 provenance is reusable", installer)
+        self.assertIn('if [[ "${HYBRID_REUSE_H3}" != 1 ]]; then', installer)
+        self.assertIn("--runtime-only", installer)
+        self.assertIn("reuse-check", preparer)
+        self.assertIn("--h3-source-reuse-check", preparer)
+        self.assertIn('MAZINB_REVISION = "f2c21eb"', validator)
 
     def test_hybrid_installer_checks_combined_source_disk_capacity(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
