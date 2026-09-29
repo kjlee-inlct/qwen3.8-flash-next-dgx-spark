@@ -61,23 +61,23 @@ wizard_menu_option() {
 }
 
 wizard_read_raw() {
-  local variable="$1" prompt="$2" secret="${3:-0}" answer=""
+  local variable="$1" prompt="$2" secret="${3:-0}" raw_value=""
   if [[ -t 0 && -r /dev/tty ]]; then
     if [[ "${secret}" == 1 ]]; then
-      IFS= read -r -s -p "${prompt}" answer </dev/tty
+      IFS= read -r -s -p "${prompt}" raw_value </dev/tty
       printf '\n' >/dev/tty
     else
-      IFS= read -r -p "${prompt}" answer </dev/tty
+      IFS= read -r -p "${prompt}" raw_value </dev/tty
     fi
   else
     if [[ "${secret}" == 1 ]]; then
-      IFS= read -r -s -p "${prompt}" answer
+      IFS= read -r -s -p "${prompt}" raw_value
       printf '\n'
     else
-      IFS= read -r -p "${prompt}" answer
+      IFS= read -r -p "${prompt}" raw_value
     fi
   fi
-  printf -v "${variable}" '%s' "${answer}"
+  printf -v "${variable}" '%s' "${raw_value}"
 }
 
 wizard_input() {
