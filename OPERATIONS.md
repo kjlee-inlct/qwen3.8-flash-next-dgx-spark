@@ -244,9 +244,15 @@ A memory monitor that was intentionally disabled at install time is reported as 
 
 If the monitor is configured as enabled, a missing or stale monitor PID remains a failure. Memory margins are CMA-aware on DGX Spark: the monitor and doctor subtract `CmaFree` from both `MemAvailable` and `MemFree` before applying the normal available/free thresholds. This avoids treating CMA-reserved pages as a safe host-allocation margin for NVIDIA system-page allocation.
 
-Fresh `orcarouter-hybrid` installs enable the monitor in protection mode by default. Existing manifests are not silently rewritten; enable protection explicitly when upgrading an older Hybrid install:
+Fresh `orcarouter-hybrid` installs enable the monitor in protection mode by default. Existing manifests are not silently rewritten. When upgrading an older Hybrid install from a newer checkout, first advance the immutable runtime release through the normal qualified update path, then rewrite the existing profile settings with protection enabled:
 
 ```bash
+TARGET="$(git rev-parse HEAD)"
+bash ./scripts/release-manager.sh stage "${TARGET}"
+bash ./scripts/lifecycle/qualify-release.sh "${TARGET}"
+bash ./scripts/release-manager.sh verify "${TARGET}"
+bash ./scripts/update-release.sh "${TARGET}"
+
 ./install.sh --model orcarouter-hybrid --protect --yes
 ```
 

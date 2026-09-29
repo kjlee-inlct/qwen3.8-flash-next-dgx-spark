@@ -5568,7 +5568,9 @@ Repair gate:
 
 1. monitor and doctor must exclude `CmaFree` from available/free host margins;
 2. fresh Hybrid H6 installs must default to protected monitoring;
-3. an existing Hybrid install must be explicitly migrated with
+3. an existing Hybrid install must first advance to the repaired immutable
+   release through the normal qualified update path, then explicitly migrate its
+   runtime settings with
    `./install.sh --model orcarouter-hybrid --protect --yes`;
 4. reproduce sustained inference/load without host OOM, NVIDIA RM memory
    allocation failure, or hung-task symptoms before changing host-stability
