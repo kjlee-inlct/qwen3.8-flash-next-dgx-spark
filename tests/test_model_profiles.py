@@ -520,7 +520,100 @@ class ModelProfileTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("profile     : nvidia", result.stdout)
+            self.assertIn("switch      : orcarouter -> nvidia", result.stdout)
             self.assertNotIn("Resuming installation", result.stdout)
+
+    def test_profile_switch_uses_shadow_manifest_and_transactional_service(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        service_runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("uninstall it before selecting", installer)
+        self.assertIn('PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"', installer)
+        self.assertIn('STATE_WRITE_FILE="${PROFILE_SWITCH_CANDIDATE}"', installer)
+        self.assertIn("activate_profile_switch_manifest", installer)
+        self.assertIn("PROFILE_SWITCH_COMMITTED=1", installer)
+        self.assertIn(
+            "transactional profile switch requires an owned managed systemd service",
+            installer,
+        )
+        self.assertIn('bash "${RUNTIME_TRANSITION}" prepare', service_runner)
+        self.assertIn('bash "${RUNTIME_TRANSITION}" commit', service_runner)
+
+    def test_profile_switch_reuses_installed_model_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_root = home / "custom-model-store"
+            state = home / "state" / "qwen38-spark"
+            state.mkdir(parents=True)
+            (state / "install.env").write_text(
+                "\n".join(
+                    [
+                        "SCHEMA_VERSION=4",
+                        "PHASE=complete",
+                        f"INSTALL_ROOT={ROOT}",
+                        "MODEL_PROFILE=orcarouter-hybrid",
+                        "MODEL_REPO=local/orcarouter-mazinb-h6-w4a16",
+                        "MODEL_REVISION=h6-modelopt-w4a16-v1",
+                        f"MODEL_DIR={model_root / 'qwen3.8-h6-modelopt-w4a16'}",
+                        "MODEL_OWNED=0",
+                        "SWAP_FILE=/swap-ple.img",
+                        "SWAP_OWNED=0",
+                        "VLLM_IMAGE=vllm-orcarouter-v029:v1",
+                        "IMAGE_OWNED=0",
+                        "SERVED_NAME=orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                        "CONTAINER_NAME=qwen38-flash-next",
+                        "CONFIG_OVERRIDE=",
+                        "CONFIG_OWNED=0",
+                        "MONITOR_PROTECT=0",
+                        "MONITOR_ENABLED=1",
+                        "MONITOR_MIN_AVAILABLE_GIB=6",
+                        "MONITOR_MIN_FREE_GIB=2",
+                        "MONITOR_FREE_GATE_GIB=10",
+                        "MONITOR_MIN_SWAP_FREE_GIB=8",
+                        "MONITOR_CONSECUTIVE=5",
+                        "MONITOR_HEARTBEAT=60",
+                        "API_ACCESS_MODE=lan",
+                        "API_DOCKER_PORT=8000",
+                        "API_LAN_ADDRESS=10.221.50.65",
+                        "API_LAN_PORT=8000",
+                        "PROXY_ENABLED=1",
+                        "PROXY_OWNED=1",
+                        "PROXY_PORT=8000",
+                        "SERVICE_ENABLED=1",
+                        "SERVICE_OWNED=1",
+                        "SERVICE_UNIT=qwen38-flash-next.service",
+                        "UI_LANG=en",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    str(ROOT / "install.sh"),
+                    "--model",
+                    "orcarouter",
+                    "--lang",
+                    "en",
+                    "--yes",
+                    "--dry-run",
+                ],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("switch      : orcarouter-hybrid -> orcarouter", result.stdout)
+            self.assertIn(f"storage root: {model_root}", result.stdout)
+            self.assertIn(
+                str(model_root / "qwen3.8-flash-next-orcarouter"),
+                result.stdout,
+            )
+            self.assertIn("LAN: 10.221.50.65:8000", result.stdout)
 
     def test_refresh_profile_defaults_previews_new_orcarouter_image(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

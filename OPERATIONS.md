@@ -106,18 +106,37 @@ not an installer prerequisite. The wizard uses an existing token environment/cac
 available, otherwise it asks for a read token without storing it. The model terms still
 must be accepted in the browser before installation.
 
-When changing from an already installed profile, first run a normal uninstall
-without model/swap purge. A successful uninstall marks the retained manifest
-`PHASE=uninstalled`; the next `install.sh` run is then treated as a fresh
-profile selection while retained resources stay available:
+When changing from an already installed managed profile, select the target
+profile directly. The installer keeps downloaded/generated model directories and
+shared runtime resources, prepares the target from the same model root, then
+uses the managed runtime transaction to replace the running container:
 
 ```bash
-./uninstall.sh --lang en --yes
+# Example: Hybrid H6 -> OrcaRouter without deleting either checkpoint
+./install.sh --model orcarouter --lang en --yes
+
+# Switch back; validated H3/H4/H5/H6 stages are reused
 ./install.sh --model orcarouter-hybrid --lang en --yes
 ```
 
-Do **not** add `--purge-model` or `--purge-swap` when the retained
-OrcaRouter checkpoint/swap should be reused to build the hybrid.
+A profile switch requires the installer-owned systemd service and runtime startup;
+`--no-start` and `--no-service` are intentionally rejected for a live switch.
+Both update/runtime transaction states must be idle before the switch begins.
+During model/download/image preparation, the existing `install.env` remains
+unchanged and target progress is written to
+`install.env.profile-switch-candidate`. Immediately before service replacement,
+the old manifest is backed up and the target manifest becomes canonical. The
+existing runtime container is preserved as the runtime transaction rollback
+candidate until the target health check, served-model ID check, and runtime
+attestation all pass.
+
+If preparation or replacement fails before commit, the previous installation
+manifest is restored. A normal uninstall is still available when an operator
+explicitly wants to stop/remove the managed runtime while retaining models.
+
+Do **not** use `--purge-model`, `--purge-swap`, or `--purge-all` for a
+normal profile switch. Those options are removal operations, not switching
+operations.
 
 The final H6 directory intentionally contains parent links. Keep the OrcaRouter
 base, H3, H4-all, and H5 directories while this profile is installed. The
