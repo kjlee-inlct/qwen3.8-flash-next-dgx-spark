@@ -512,25 +512,41 @@ and mazinb inputs through the proven H3 -> H4-all -> H5 -> H6 pipeline.
 
 The shared `scripts/model-profiles.sh` registry is intentionally not a second lifecycle
 manager: installation, activation, service ownership and removal remain transactional in
-`install.sh` and `uninstall.sh`. To change the active profile, uninstall while preserving
-the downloaded model, then run the installer for the other profile.
+`install.sh` and `uninstall.sh`. A managed installation can switch profiles directly:
 
-Installer roadmap status:
+```bash
+./install.sh --model orcarouter
+./install.sh --model orcarouter-hybrid
+./install.sh --model mazinb
+./install.sh --model nvidia
+```
+
+A different installed profile is prepared without purging retained checkpoints, then the
+managed runtime is replaced transactionally. Do not use `--purge-model`,
+`--purge-swap`, or `--purge-all` for a normal profile switch.
+
+Installer/qualification status:
 
 ```text
 orcarouter         qualified / installable / default
 nvidia             experimental / installable
-mazinb             experimental / installable / DGX managed E2E pending
-orcarouter-hybrid  experimental / installable / generated H6 / DGX managed E2E pending
+mazinb             experimental / installable / clean managed DGX lifecycle pending
+orcarouter-hybrid  experimental / installable / generated H6
+                   warm/reuse managed E2E PASS
+                   Hybrid -> OrcaRouter -> Hybrid round-trip PASS
+                   2026-09-29 host-stability repair gate PASS
+                   clean-host full-build managed E2E pending
 lychee888          planned / not installable yet
 ```
 
 Here, `installable` means the registry and installer have a defined preparation/runtime
-path. It does **not** mean that the profile has completed the full DGX Spark managed-service
-qualification gate. In particular, mazinb has only been checked through registry exposure
-and installer dry-run so far; its real download/image-build/systemd/API-ready lifecycle is
-still pending. `orcarouter-hybrid` depends on mazinb as a build input and also remains
-pending for its own clean-host managed E2E qualification.
+path. It does **not** by itself mean that the profile is fully qualified or stable.
+`mazinb` has only been checked through registry exposure and installer dry-run so far;
+its real download/image-build/systemd/API-ready lifecycle remains pending.
+`orcarouter-hybrid` has passed managed warm/reuse operation, restart/functional checks,
+the no-uninstall profile-switch round trip, and the specific CMA-aware host-stability
+repair gate recorded on 2026-09-29. Its genuinely clean-host source download + H3→H6
+build + managed-service lifecycle is still pending, so the profile remains experimental.
 
 `orcarouter-hybrid` does not duplicate its tensor payload into one monolithic
 directory. H6 keeps the validated parent-link layout, so the managed runtime
@@ -609,10 +625,13 @@ shared resources:
 ./uninstall.sh --purge-all
 ```
 
-Destructive model removal is allowed only below `$HOME/models`, below the
-repository-local `./models` store, or for the legacy `./model` compatibility path,
-and only when a managed model/hybrid manifest exists. Dedicated swap removal delegates to `manage-swap.sh`; `/swap.img` is
-never selected. Use `--yes` only for already-reviewed automation.
+Destructive model/image removal is governed by the cumulative
+`~/.local/state/qwen38-spark/asset-ownership.json` registry. A managed
+model/hybrid manifest proves that a checkpoint is structurally managed, but does not by
+itself grant deletion authority. `--purge-all` validates recorded ownership/fingerprints,
+protects retained dependencies, and removes owned Hybrid stages from dependents to parents.
+Dedicated swap removal still delegates to `manage-swap.sh`; `/swap.img` is never
+selected. Use `--yes` only for already-reviewed automation.
 
 ### Inspect a checkpoint before downloading or serving
 
@@ -673,57 +692,62 @@ are never modified.
 
 ### Monitor DGX Spark unified memory
 
-The runtime monitor is warning-only by default. It samples `MemAvailable`, `MemFree`, and
-`SwapFree`, debounces transient pressure, emits a healthy heartbeat every 60 seconds, and
-exits when the container stops:
+The runtime monitor is CMA-aware on DGX Spark. It derives host-allocation margins as:
+
+```text
+noncma_available = max(MemAvailable - CmaFree, 0)
+noncma_free      = max(MemFree - CmaFree, 0)
+```
+
+and also samples `SwapFree`. The current defaults are:
+
+```text
+MONITOR_MIN_AVAILABLE_GIB=6
+MONITOR_MIN_FREE_GIB=2
+MONITOR_FREE_GATE_GIB=10
+MONITOR_MIN_SWAP_FREE_GIB=8
+MONITOR_CONSECUTIVE=5
+MONITOR_HEARTBEAT=60
+```
+
+Low non-CMA available memory by itself is a warning, not a stop condition. Protection
+counts only when non-CMA free is below 2 GiB while non-CMA available is below the
+10 GiB gate, or when swap-free is below 8 GiB. Five consecutive protection samples
+trigger a graceful container stop. Warning-only state is logged once on entry and then at
+the heartbeat interval; protection-counter samples are logged individually.
 
 ```bash
 ./scripts/monitor-runtime.sh
-```
-
-Automatic protection is deliberately opt-in. With `--protect`, five consecutive low-memory
-samples cause a graceful 30-second container stop instead of letting unified-memory pressure
-make the host unresponsive:
-
-```bash
 ./scripts/monitor-runtime.sh --protect
 ```
 
-Change or disable the heartbeat without changing the two-second safety sampling interval:
-
-```bash
-./scripts/monitor-runtime.sh --heartbeat 30
-./scripts/monitor-runtime.sh --heartbeat 0
-```
-
-New interactive installations ask whether to enable the monitor, whether sustained pressure
-may stop the container, and optionally whether to customize the thresholds. Automation can
-set the same policy explicitly:
+Fresh `orcarouter-hybrid` installs enable the monitor in protection mode by default
+unless explicitly overridden with `--monitor` (warn-only) or `--no-monitor`.
+For other profiles the wizard still asks for the desired monitor/protection policy.
+Automation can set the same policy explicitly:
 
 ```bash
 ./install.sh --monitor --monitor-heartbeat 60 --no-start
-./install.sh --protect --monitor-min-available-gib 6 \
-  --monitor-min-swap-free-gib 8 --monitor-consecutive 5 --no-start
+./install.sh --protect \
+  --monitor-min-available-gib 6 \
+  --monitor-min-free-gib 2 \
+  --monitor-free-gate-gib 10 \
+  --monitor-min-swap-free-gib 8 \
+  --monitor-consecutive 5 --no-start
 ```
 
-The manifest records the monitor mode, `MemAvailable`, `MemFree`, conditional free-memory
-gate, `SwapFree`, consecutive-sample count and heartbeat. Schema-2 installations can add
-these defaults atomically without downloading or restarting anything:
+The 2026-09-29 Hybrid host-stability repair gate passed 30/30 repeated runtime
+validations with the monitor staying at `protect=0/5`, no protected stop, and no
+matching NVIDIA RM allocation/OOM/hung-task symptoms in the privileged kernel-journal
+window. That closes the reproduced failure mode; it is not a claim of indefinite soak
+stability or safety at arbitrarily higher concurrency.
 
-```bash
-./install.sh --migrate-manifest
-```
-
-Before every systemd-managed start, `preflight-runtime.sh` verifies the model index, image,
-dedicated swap and hard minimum reserves of 2 GiB available memory, 2 GiB free swap and
-5 GiB free disk. `doctor.sh` reports the configured live memory/swap margins, requires a
-20 GiB recommended disk reserve, and warns when the current container predates `--init`.
-
-The interactive installer asks whether to enable this protection. If enabled, `serve.sh`
-runs the monitor in the background and records its PID and log under
-`${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark`; `uninstall.sh` stops only that recorded
-monitor process. Non-interactive installs keep protection disabled unless
-`MONITOR_PROTECT=1` is explicitly supplied.
+The manifest records the configured monitor/protection thresholds and heartbeat.
+Existing manifests are not silently rewritten; an older Hybrid install should first
+advance its immutable runtime release through the normal qualified update path and then
+explicitly apply the protected Hybrid settings. `serve.sh` records the monitor PID/log
+under `${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark`, and `uninstall.sh` stops only
+that recorded monitor process.
 
 For the OrcaRouter checkpoint, `install.sh` now generates a separate
 `~/.local/state/qwen38-spark/config.vllm.json` automatically. It converts the checkpoint's
