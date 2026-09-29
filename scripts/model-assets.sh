@@ -2,6 +2,26 @@
 # Logical model/profile asset registry.
 # Sourced by manage-models.sh. No side effects.
 
+model_asset_root_has_managed() {
+  local root="$1"
+  [[ -d "${root}" ]] || return 1
+  find "${root}" -mindepth 1 -maxdepth 2 -type f \
+    \( -name .qwen38-model-manifest.json -o -name .qwen38-hybrid-manifest.json \) \
+    -print -quit 2>/dev/null | grep -q .
+}
+
+model_asset_root() {
+  if [[ -n "${QWEN38_MODEL_ROOT:-}" ]]; then
+    realpath -m -- "${QWEN38_MODEL_ROOT}"
+  elif model_asset_root_has_managed "${SCRIPT_ROOT}/models"; then
+    realpath -m -- "${SCRIPT_ROOT}/models"
+  elif model_asset_root_has_managed "${HOME}/models"; then
+    realpath -m -- "${HOME}/models"
+  else
+    realpath -m -- "${SCRIPT_ROOT}/models"
+  fi
+}
+
 model_asset_profiles() {
   printf '%s\n' \
     orcarouter \
@@ -28,7 +48,8 @@ model_asset_profiles() {
 }
 
 describe_model_asset() {
-  local profile="$1"
+  local profile="$1" model_root
+  model_root="$(model_asset_root)"
   MODEL_ASSET_PROFILE="$profile"
   MODEL_ASSET_CHECKPOINT=""
   MODEL_ASSET_CONTAINER=""
@@ -40,47 +61,47 @@ describe_model_asset() {
 
   case "$profile" in
     orcarouter)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-flash-next-orcarouter"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-flash-next-orcarouter"
       MODEL_ASSET_CONTAINER="qwen38-flash-next"
       MODEL_ASSET_IMAGE="vllm-skinny-tp1:v1"
       MODEL_ASSET_RETIRE_IMAGE=1
       ;;
     mazinb)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-flash-next-mazinb"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-flash-next-mazinb"
       MODEL_ASSET_CONTAINER="qwen38-mazinb-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029:v1"
       MODEL_ASSET_RETIRE_CHECKPOINT=1
       ;;
     hybrid-quant-layout)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-hybrid-quant-layout"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-hybrid-quant-layout"
       MODEL_ASSET_CONTAINER="qwen38-hybrid-quant-layout-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029:v1"
       MODEL_ASSET_RETIRE_CHECKPOINT=1
       MODEL_ASSET_CHECKPOINT_DEPENDS_ON="orcarouter"
       ;;
     hybrid-h4-all)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-h4-orca-all"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-h4-orca-all"
       MODEL_ASSET_CONTAINER="qwen38-h4-all-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029:v1"
       MODEL_ASSET_RETIRE_CHECKPOINT=1
       MODEL_ASSET_CHECKPOINT_DEPENDS_ON="hybrid-quant-layout orcarouter"
       ;;
     hybrid-h5-neutral-input)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-h5-neutral-input-scale"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-h5-neutral-input-scale"
       MODEL_ASSET_CONTAINER="qwen38-h5-neutral-input-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029:v1"
       MODEL_ASSET_RETIRE_CHECKPOINT=1
       MODEL_ASSET_CHECKPOINT_DEPENDS_ON="hybrid-h4-all hybrid-quant-layout orcarouter"
       ;;
     hybrid-h6-w4a16)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-h6-modelopt-w4a16"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-h6-modelopt-w4a16"
       MODEL_ASSET_CONTAINER="qwen38-h6-w4a16-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029:v1"
       MODEL_ASSET_RETIRE_CHECKPOINT=1
       MODEL_ASSET_CHECKPOINT_DEPENDS_ON="hybrid-h5-neutral-input hybrid-h4-all hybrid-quant-layout orcarouter"
       ;;
     hybrid-h7-group-metadata)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-h6-modelopt-w4a16"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-h6-modelopt-w4a16"
       MODEL_ASSET_CONTAINER="qwen38-h7-group-metadata-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h7-group:v1"
       MODEL_ASSET_RETIRE_IMAGE=1
@@ -189,7 +210,7 @@ describe_model_asset() {
       MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h12-ct-postload-preserve"
       ;;
     hybrid-h20-modelopt-convert-diag)
-      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-h6-modelopt-w4a16"
+      MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-h6-modelopt-w4a16"
       MODEL_ASSET_CONTAINER="qwen38-h20-modelopt-convert-diag-v029"
       MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h20-modelopt-convert-diag:v1"
       MODEL_ASSET_RETIRE_IMAGE=1
