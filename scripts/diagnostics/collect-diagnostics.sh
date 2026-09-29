@@ -5,6 +5,7 @@ set -uo pipefail
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+STATE_PARSER="${SCRIPT_ROOT}/lib/state_file.py"
 CONTAINER_NAME="qwen38-flash-next"
 SERVICE_UNIT="qwen38-flash-next.service"
 INCLUDE_LOGS=1
@@ -70,13 +71,128 @@ trap cleanup EXIT
 capture() {
   local destination="$1"; shift
   {
-    printf '$'; printf ' %q' "$@"; printf '\n\n'
+    printf '
+redact_file() {
+  local path="$1" temporary="${path}.redacted"
+  local host_name escaped_host
+  host_name="$(hostname 2>/dev/null || true)"
+  escaped_host="${host_name//./\\.}"
+  escaped_host="${escaped_host//#/\\#}"
+  sed -E \
+    -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1<REDACTED>/Ig' \
+    -e 's/hf_[A-Za-z0-9]{10,}/<REDACTED_HF_TOKEN>/g' \
+    -e 's/((TOKEN|PASSWORD|SECRET|API_KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1<REDACTED>/Ig' \
+    -e "s#${HOME//\#/\\#}#<HOME>#g" \
+    ${escaped_host:+-e "s#${escaped_host}#<HOST>#g"} \
+    "${path}" >"${temporary}"
+  mv -- "${temporary}" "${path}"
+}
+
+cat >"${bundle_dir}/ABOUT.txt" <<EOF
+Qwen3.8 Flash Next diagnostic bundle
+Created (UTC): $(date -u --iso-8601=seconds)
+Logs included: ${INCLUDE_LOGS}
+
+This archive excludes model weights, caches, full Docker environment variables and
+authentication files. Automated redaction is best-effort; review the archive before
+sharing it outside your organization.
+EOF
+
+capture system.txt uname -a
+capture os-release.txt sh -c 'test -r /etc/os-release && cat /etc/os-release'
+capture memory.txt free -h
+capture swap.txt swapon --show
+capture filesystems.txt df -hT
+capture docker-version.txt docker version
+capture service-status.txt systemctl status "${SERVICE_UNIT}" --no-pager
+capture proxy-status.txt systemctl status qwen38-openwebui-proxy.socket --no-pager
+capture listening-ports.txt sh -c 'command -v ss >/dev/null && ss -lntp || true'
+
+if [[ -x "${SCRIPT_ROOT}/doctor.sh" ]]; then
+  capture doctor.txt "${SCRIPT_ROOT}/doctor.sh"
+fi
+
+if [[ -r "${STATE_PARSER}" ]]; then
+  capture_state_file install-manifest.txt install-maintenance "${STATE_FILE}"
+  capture_state_file runtime-transition.txt runtime-transition "${STATE_DIR}/runtime-transition.env"
+  capture_state_file update-transition.txt update "${STATE_DIR}/update-transition.env"
+  capture_state_file profile-switch-transition.txt profile-switch "${STATE_DIR}/profile-switch-transition.env"
+  capture_state_file runtime-stop.txt runtime-stop "${STATE_DIR}/runtime-stop.env"
+  capture_state_file runtime-commit.txt runtime-commit "${STATE_DIR}/runtime-commit.env"
+  capture_state_file profile-switch-candidate.txt install-maintenance "${STATE_FILE}.profile-switch-candidate"
+  capture_state_file profile-switch-backup.txt install-maintenance "${STATE_FILE}.profile-switch-backup"
+else
+  printf 'state parser unavailable: %s\n' "${STATE_PARSER}" >"${bundle_dir}/state-parser-error.txt"
+fi
+
+if command -v docker >/dev/null 2>&1 && docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+  capture container.txt docker inspect --format \
+    'name={{.Name}} image={{.Config.Image}} status={{.State.Status}} started={{.State.StartedAt}} restart={{.HostConfig.RestartPolicy.Name}} restart_count={{.RestartCount}} oom={{.State.OOMKilled}} ports={{json .NetworkSettings.Ports}} mounts={{range .Mounts}}{{.Destination}}:{{.RW}} {{end}}' \
+    "${CONTAINER_NAME}"
+fi
+
+latest_validation=""
+for candidate in "${STATE_DIR}"/runtime-validation*.json; do
+  [[ -f "${candidate}" ]] || continue
+  [[ -z "${latest_validation}" || "${candidate}" -nt "${latest_validation}" ]] && latest_validation="${candidate}"
+done
+[[ -z "${latest_validation}" ]] || cp -- "${latest_validation}" "${bundle_dir}/runtime-validation.json"
+
+if [[ "${INCLUDE_LOGS}" == 1 ]]; then
+  capture service-journal.txt journalctl -u "${SERVICE_UNIT}" --no-pager -n 300
+  capture proxy-journal.txt journalctl -u qwen38-openwebui-proxy.service --no-pager -n 200
+  if command -v docker >/dev/null 2>&1; then
+    capture container-logs.txt docker logs --tail 300 --timestamps "${CONTAINER_NAME}"
+  fi
+fi
+
+for path in "${bundle_dir}"/*; do
+  [[ -f "${path}" ]] && redact_file "${path}"
+done
+chmod 0700 "${bundle_dir}"
+chmod 0600 "${bundle_dir}"/*
+
+temporary_archive="${work_dir}/bundle.tar.gz"
+tar --owner=0 --group=0 --numeric-owner -C "${work_dir}" -czf "${temporary_archive}" qwen38-diagnostics
+if [[ "${FORCE}" == 1 ]]; then
+  install -m 0600 "${temporary_archive}" "${OUTPUT}"
+else
+  (set -o noclobber; umask 077; : >"${OUTPUT}") 2>/dev/null || die "output appeared during collection: ${OUTPUT}"
+  install -m 0600 "${temporary_archive}" "${OUTPUT}"
+fi
+
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '진단 번들을 생성했습니다: %s\n공유하기 전에 압축 내용을 검토하십시오.\n' "${OUTPUT}"
+else
+  printf 'Diagnostic bundle created: %s\nReview the archive before sharing it.\n' "${OUTPUT}"
+fi
+; printf ' %q' "$@"; printf '\n\n'
     if command -v timeout >/dev/null 2>&1; then
       timeout 30 "$@"
     else
       "$@"
     fi
   } >"${bundle_dir}/${destination}" 2>&1 || true
+}
+
+capture_state_file() {
+  local destination="$1" schema="$2" path="$3" parsed key value
+  [[ -f "${path}" && ! -L "${path}" ]] || return 0
+  parsed="$(mktemp)"
+  if python3 "${STATE_PARSER}" "${schema}" "${path}" >"${parsed}" 2>"${bundle_dir}/${destination}.parser-error"; then
+    : >"${bundle_dir}/${destination}"
+    while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+      printf '%s=%q\n' "${key}" "${value}" >>"${bundle_dir}/${destination}"
+    done <"${parsed}"
+    rm -f -- "${bundle_dir}/${destination}.parser-error"
+  else
+    {
+      printf 'INVALID_STATE_FILE=%q\n' "${path}"
+      cat "${bundle_dir}/${destination}.parser-error"
+    } >"${bundle_dir}/${destination}"
+    rm -f -- "${bundle_dir}/${destination}.parser-error"
+  fi
+  rm -f -- "${parsed}"
 }
 
 redact_file() {
