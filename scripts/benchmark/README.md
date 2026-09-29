@@ -5576,3 +5576,14 @@ Repair gate:
    allocation failure, or hung-task symptoms before changing host-stability
    status back to PASS.
 
+Follow-up on 2026-09-29: the first CMA-aware protection revision treated the
+6 GiB non-CMA available warning floor as a protection trigger. On the real
+Hybrid runtime, steady-state health was reachable with roughly 2.8 GiB
+non-CMA available but about 3.0 GiB non-CMA free, so that policy stopped
+healthy startup candidates and left installation at `PHASE=service_ready`.
+The correction separates warning from protection: low non-CMA available alone
+warns, while protection requires the non-CMA free floor and available gate
+together (or low swap). A protected stop during candidate startup must also
+abort the transaction without restarting either the candidate or previous
+runtime.
+
