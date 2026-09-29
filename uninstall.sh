@@ -70,7 +70,9 @@ asset_preflight_full_purge() {
   while IFS=$'\t' read -r kind locator; do
     [[ "${kind}" == image ]] || continue
     refs="$(image_referenced_by_external_container "${locator}")"
-    [[ -z "${refs}" ]] || die "refusing image purge; ${locator} is referenced by other containers: ${refs//$'\n'/, }"
+    if [[ -n "${refs}" ]]; then
+      die "refusing image purge; ${locator} is referenced by other containers: ${refs}"
+    fi
   done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
 }
 
@@ -228,7 +230,13 @@ else
     python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" image "${VLLM_IMAGE}" || \
       die "refusing image deletion: active image is not safely recorded as installer-owned"
     image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")"
-    [[ -z "${image_refs}" ]] || die "refusing image deletion; ${VLLM_IMAGE} is referenced by other containers: ${image_refs// && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
+    if [[ -n "${image_refs}" ]]; then
+      die "refusing image deletion; ${VLLM_IMAGE} is referenced by other containers: ${image_refs}"
+    fi
+  fi
+fi
+
+if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
 fi
 if [[ "${YES}" != 1 ]]; then
