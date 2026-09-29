@@ -34,7 +34,8 @@ A normal installation has two kinds of persistent application state:
 └── previous -> releases/<commit> # rollback code, when available
 
 ~/.local/state/qwen38-spark/
-├── install.env                   # installation/resource ownership manifest
+├── install.env                   # active profile/runtime manifest (legacy active ownership flags)
+├── asset-ownership.json          # cumulative per-model/per-image ownership registry
 ├── config.vllm.json              # generated compatibility config, when owned
 ├── runtime-transition.env        # exists only during runtime replacement
 ├── update-transition.env         # exists only during release cutover
@@ -375,7 +376,7 @@ journalctl -fu qwen38-flash-next.service
 
 ## Uninstall
 
-A normal uninstall removes the runtime/service resources recorded by the installation manifest but intentionally keeps the immutable release history and the manifest so a later reinstall or full purge still knows what was owned:
+A normal uninstall removes the runtime/service resources recorded by the active installation manifest but intentionally keeps the immutable release history, `install.env`, and cumulative `asset-ownership.json` so a later reinstall or full purge still knows which model/image assets the installer actually created across profile switches:
 
 ```bash
 ./uninstall.sh
@@ -391,15 +392,17 @@ Preview a full purge:
 ./uninstall.sh --purge-all --yes --dry-run
 ```
 
-A full purge removes owned model/swap/image resources according to the installation manifest and also removes the application release/state lifecycle data:
+A full purge removes every model/image asset recorded as installer-owned in `asset-ownership.json`, plus the owned swap and application release/state lifecycle data:
 
 ```bash
 ./uninstall.sh --purge-all --yes
 ```
 
-`--purge-all` deletes the application-owned `~/.local/share/qwen38-spark` tree, including `releases`, `qualified`, `current`, and `previous`, after the managed runtime has been stopped and removed. It also clears transient runtime/update/monitor state and removes `install.env`.
+`--purge-all` first validates the ownership registry and all owned fingerprints, checks that retained/unowned model assets do not depend on an owned Hybrid parent, and checks that owned images are not referenced by other containers. Model deletion is ordered from dependents to dependencies (for example H6 → H5 → H4 → H3 → OrcaRouter base). Only after this preflight succeeds does deletion begin. It then deletes the application-owned `~/.local/share/qwen38-spark` tree, including `releases`, `qualified`, `current`, and `previous`, clears transient runtime/update/monitor state, and removes both `install.env` and `asset-ownership.json`.
 
-The uninstaller continues to refuse deletion of model, swap, or image resources that were not recorded as installer-owned.
+`MODEL_OWNED` and `IMAGE_OWNED` remain in `install.env` for compatibility with older lifecycle code, but they describe only the active profile. The cumulative registry is authoritative for multi-profile purge. On first use of the new lifecycle code, the currently recorded legacy ownership can be imported into the registry. Ownership already lost by older profile switches is **not inferred** from the presence of a managed manifest or image tag; that would turn provenance into a guess.
+
+The uninstaller continues to refuse deletion of assets that are not recorded as installer-owned, have drifted from their recorded manifest/image fingerprint, or are still required by retained dependents.
 
 ## Recommended maintenance sequence
 
