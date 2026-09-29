@@ -15,6 +15,8 @@ source "${WIZARD_UI}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
+ASSET_OWNERSHIP_TOOL="${ROOT_DIR}/scripts/lib/asset_ownership.py"
+ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"
 PROFILE_SWITCH_TRANSITION="${ROOT_DIR}/scripts/lifecycle/profile-switch-transition.sh"
 PROFILE_SWITCH_STATE="${STATE_DIR}/profile-switch-transition.env"
 OPERATION_LOCK_LIB="${ROOT_DIR}/scripts/lib/operation-lock.sh"
@@ -73,6 +75,56 @@ sudo_with_operation_lock() {
     QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
     QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
     "$@"
+}
+asset_bootstrap_install() {
+  [[ -r "${ASSET_OWNERSHIP_TOOL}" ]] || die "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
+  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
+}
+asset_model_owned() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 1
+  python3 "${ASSET_OWNERSHIP_TOOL}" owns-model "${ASSET_OWNERSHIP_FILE}" "$1"
+}
+asset_image_owned() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 1
+  python3 "${ASSET_OWNERSHIP_TOOL}" owns-image "${ASSET_OWNERSHIP_FILE}" "$1"
+}
+asset_track_model() {
+  local path="$1" root="$2" owned="$3"
+  shift 3
+  local args=(track-model "${ASSET_OWNERSHIP_FILE}" "${path}" "${root}" --owned "${owned}") dependency
+  for dependency in "$@"; do
+    args+=(--depends "${dependency}")
+  done
+  python3 "${ASSET_OWNERSHIP_TOOL}" "${args[@]}"
+}
+asset_track_image() {
+  local image="$1" owned="$2"
+  shift 2
+  local args=(track-image "${ASSET_OWNERSHIP_FILE}" "${image}" --owned "${owned}") dependency
+  for dependency in "$@"; do
+    args+=(--depends "${dependency}")
+  done
+  python3 "${ASSET_OWNERSHIP_TOOL}" "${args[@]}"
+}
+asset_model_ownership_for_path() {
+  local path="$1"
+  if asset_model_owned "${path}"; then
+    printf '1\n'
+  elif [[ ! -e "${path}" && ! -L "${path}" ]]; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+asset_image_ownership_for_name() {
+  local image="$1"
+  if asset_image_owned "${image}"; then
+    printf '1\n'
+  elif ! docker image inspect "${image}" >/dev/null 2>&1; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
 }
 parse_install_manifest() {
   local parsed key value
