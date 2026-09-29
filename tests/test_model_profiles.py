@@ -32,7 +32,7 @@ class ModelProfileTests(unittest.TestCase):
             answers = "\n".join(
                 [
                     choice,  # model profile
-                    "",      # default model directory
+                    "",      # default model storage root
                     "n",     # no separate config override
                     "n",     # runtime memory monitor disabled
                     "1",     # local-only API
@@ -86,6 +86,24 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("f2c21eb", result.stdout)
         self.assertIn("qwen3.8-flash-next-mazinb", result.stdout)
 
+    def test_profile_registry_honors_shared_model_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "models"
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    'source scripts/model-profiles.sh; load_download_profile mazinb; printf "%s\\n" "$PROFILE_MODEL_DIR"',
+                ],
+                cwd=ROOT,
+                env={**os.environ, "QWEN38_MODEL_ROOT": str(root)},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), str(root / "qwen3.8-flash-next-mazinb"))
+
     def test_candidate_download_requires_explicit_flag(self) -> None:
         help_result = subprocess.run(
             [str(ROOT / "scripts" / "download-weights.sh"), "--help"],
@@ -133,12 +151,164 @@ class ModelProfileTests(unittest.TestCase):
                 self.assertIn(model_dir, result.stdout)
                 self.assertIn("DRY-RUN complete", result.stdout)
 
-    def test_wizard_labels_hybrid_composition_concisely(self) -> None:
+    def test_clean_host_defaults_to_repository_local_model_root(self) -> None:
+        result = self.run_install("nvidia")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"storage root: {ROOT / 'models'}", result.stdout)
+        self.assertIn(str(ROOT / "models" / "qwen3.8-flash-next-nvidia"), result.stdout)
+
+    def test_explicit_model_root_overrides_clean_host_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            root = home / "custom-models"
+            result = subprocess.run(
+                [
+                    str(ROOT / "install.sh"),
+                    "--model",
+                    "nvidia",
+                    "--model-root",
+                    str(root),
+                    "--lang",
+                    "en",
+                    "--yes",
+                    "--no-start",
+                    "--dry-run",
+                ],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"storage root: {root}", result.stdout)
+            self.assertIn(str(root / "qwen3.8-flash-next-nvidia"), result.stdout)
+
+    def test_existing_home_model_store_is_reused_automatically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            existing = home / "models" / "qwen3.8-flash-next-orcarouter"
+            existing.mkdir(parents=True)
+            (existing / ".qwen38-model-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "status": "complete",
+                        "repository": "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                        "revision": "c1209bda15a6bbc4c68b585e93d40c0d85f50306",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    str(ROOT / "install.sh"),
+                    "--model",
+                    "nvidia",
+                    "--lang",
+                    "en",
+                    "--yes",
+                    "--no-start",
+                    "--dry-run",
+                ],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"storage root: {home / 'models'}", result.stdout)
+            self.assertIn(str(home / "models" / "qwen3.8-flash-next-nvidia"), result.stdout)
+
+    def test_uninstalled_manifest_reprompts_language_and_defaults_to_korean(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state" / "qwen38-spark"
+            state.mkdir(parents=True)
+            (state / "install.env").write_text(
+                "\n".join(
+                    [
+                        "SCHEMA_VERSION=4",
+                        "PHASE=uninstalled",
+                        f"INSTALL_ROOT={ROOT}",
+                        "MODEL_PROFILE=orcarouter-hybrid",
+                        "MODEL_REPO=local/orcarouter-mazinb-h6-w4a16",
+                        "MODEL_REVISION=h6-modelopt-w4a16-v1",
+                        f"MODEL_DIR={home / 'models/qwen3.8-h6-modelopt-w4a16'}",
+                        "MODEL_OWNED=0",
+                        "SWAP_FILE=/swap-ple.img",
+                        "SWAP_OWNED=0",
+                        "VLLM_IMAGE=vllm-orcarouter-v029:v1",
+                        "IMAGE_OWNED=0",
+                        "SERVED_NAME=orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+                        "CONTAINER_NAME=qwen38-flash-next",
+                        "CONFIG_OVERRIDE=",
+                        "CONFIG_OWNED=0",
+                        "MONITOR_PROTECT=0",
+                        "MONITOR_ENABLED=0",
+                        "MONITOR_MIN_AVAILABLE_GIB=6",
+                        "MONITOR_MIN_FREE_GIB=2",
+                        "MONITOR_FREE_GATE_GIB=10",
+                        "MONITOR_MIN_SWAP_FREE_GIB=8",
+                        "MONITOR_CONSECUTIVE=5",
+                        "MONITOR_HEARTBEAT=60",
+                        "API_ACCESS_MODE=docker",
+                        "API_DOCKER_PORT=8000",
+                        "API_LAN_ADDRESS=",
+                        "API_LAN_PORT=8001",
+                        "PROXY_ENABLED=1",
+                        "PROXY_OWNED=0",
+                        "PROXY_PORT=8000",
+                        "SERVICE_ENABLED=1",
+                        "SERVICE_OWNED=0",
+                        "SERVICE_UNIT=qwen38-flash-next.service",
+                        "UI_LANG=en",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            answers = "\n".join(
+                [
+                    "",   # Korean default
+                    "1",  # OrcaRouter
+                    "",   # repository-local model root
+                    "n",  # config override
+                    "n",  # monitor
+                    "1",  # local API
+                    "y",  # systemd
+                    "y",  # continue
+                    "",
+                ]
+            )
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--no-start", "--dry-run"],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                input=answers,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[1/6] 언어 선택 / Language", result.stdout)
+            self.assertIn("[2/6] 모델 선택", result.stdout)
+            self.assertIn("[6/6] 설치 계획 확인", result.stdout)
+            self.assertNotIn("[2/6] Model selection", result.stdout)
+
+    def test_wizard_uses_vertical_model_and_api_menus(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
-        self.assertEqual(
-            installer.count("OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)"),
-            2,
-        )
+        wizard = (ROOT / "scripts" / "lib" / "wizard-ui.sh").read_text(encoding="utf-8")
+
+        self.assertIn("wizard_step 2 6 '모델 선택'", installer)
+        self.assertIn("wizard_menu_option 1 'OrcaRouter Uncensored'", installer)
+        self.assertIn("wizard_menu_option 4 'OrcaRouter Hybrid H6'", installer)
+        self.assertIn("OrcaRouter + mazinb experts / W4A16 NVFP4", installer)
+        self.assertIn("wizard_step 5 6 'API 및 서비스'", installer)
+        self.assertIn("wizard_menu_option 1 '이 PC에서만 사용'", installer)
+        self.assertIn("wizard_menu_option()", wizard)
+        self.assertIn("wizard_input()", wizard)
+        self.assertIn("wizard_yes_no()", wizard)
 
     def test_clean_host_gated_profiles_do_not_require_hf_cli(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
@@ -292,7 +462,9 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("MODEL_PROFILE=orcarouter", installer)
         self.assertIn("MODEL_PROFILE=mazinb", installer)
         self.assertIn("H6_W4A16_MODEL_DIR", installer)
-        self.assertIn("OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)", installer)
+        self.assertIn('HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"', installer)
+        serve = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        self.assertIn('HYBRID_MODEL_ROOT="${QWEN38_MODEL_ROOT:-$(dirname -- "${MODEL_DIR}")}"', serve)
 
     def test_installer_builds_local_v029_image_for_mazinb(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")

@@ -109,10 +109,15 @@ Examples:
 ./scripts/manage-models.sh migrate-orcarouter --yes
 ```
 
-Deletion is intentionally limited to managed model manifests under `$HOME/models` or this repository's `./model` directory.
+Deletion is intentionally limited to managed model manifests under `$HOME/models`,
+the repository-local `./models` store, or the historical `./model` compatibility
+path. New clean installs default to `./models`; an existing complete `$HOME/models`
+store is reused automatically, and `QWEN38_MODEL_ROOT` / `--model-root` can select
+another root.
 
-The OrcaRouter migration action is for installations that predate the canonical model
-path. It accepts only a complete checkpoint for
+The OrcaRouter migration action is for installations that predate the current
+configurable model-root layout and still have a real repository-local `./model`
+directory. It accepts only a complete checkpoint for
 `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` at revision
 `c1209bda15a6bbc4c68b585e93d40c0d85f50306`, verifies every shard referenced by
 the safetensors index, and uses a same-filesystem rename. A matching interrupted

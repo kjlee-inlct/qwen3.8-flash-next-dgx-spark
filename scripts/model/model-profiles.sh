@@ -72,6 +72,7 @@ print_model_profiles() {
 
 load_download_profile() {
   describe_model_profile "$1" || return
+  local model_root="${QWEN38_MODEL_ROOT:-${HOME}/models}"
   PROFILE_LOCAL_BUILD=0
   PROFILE_BASE_PROFILE=""
   PROFILE_OVERLAY_PROFILE=""
@@ -79,7 +80,7 @@ load_download_profile() {
   case "$1" in
     orcarouter)
       PROFILE_REVISION="c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-flash-next-orcarouter"
+      PROFILE_MODEL_DIR="${model_root}/qwen3.8-flash-next-orcarouter"
       PROFILE_IMAGE="vllm-skinny-tp1:v1"
       PROFILE_SERVED_NAME="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       PROFILE_GATED=1
@@ -87,7 +88,7 @@ load_download_profile() {
       ;;
     nvidia)
       PROFILE_REVISION="fc694b54fb0174e0913e6adf86691ef85a4ead47"
-      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-flash-next-nvidia"
+      PROFILE_MODEL_DIR="${model_root}/qwen3.8-flash-next-nvidia"
       PROFILE_IMAGE="vllm-nv-mixed:v2"
       PROFILE_SERVED_NAME="qwen3.8-flash-next"
       PROFILE_GATED=0
@@ -97,7 +98,7 @@ load_download_profile() {
       # Short immutable Hugging Face commit ID verified for the qualified checkpoint.
       # download-weights.sh records the resolved full SHA in its local manifest.
       PROFILE_REVISION="f2c21eb"
-      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-flash-next-mazinb"
+      PROFILE_MODEL_DIR="${model_root}/qwen3.8-flash-next-mazinb"
       PROFILE_IMAGE="vllm-orcarouter-v029:v1"
       PROFILE_SERVED_NAME="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       PROFILE_GATED=0
@@ -105,7 +106,7 @@ load_download_profile() {
       ;;
     orcarouter-hybrid)
       PROFILE_REVISION="h6-modelopt-w4a16-v1"
-      PROFILE_MODEL_DIR="${HOME}/models/qwen3.8-h6-modelopt-w4a16"
+      PROFILE_MODEL_DIR="${model_root}/qwen3.8-h6-modelopt-w4a16"
       PROFILE_IMAGE="vllm-orcarouter-v029:v1"
       PROFILE_SERVED_NAME="orcarouter-hybrid/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       PROFILE_GATED=1
