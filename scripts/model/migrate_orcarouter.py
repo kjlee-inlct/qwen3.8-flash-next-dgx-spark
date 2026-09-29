@@ -81,8 +81,22 @@ def backup_candidate(canonical: Path) -> Path:
         index += 1
 
 
+def nearest_existing_parent(path: Path) -> Path:
+    current = path
+    while not current.exists():
+        if current.parent == current:
+            raise MigrationError(f"cannot find existing parent for: {path}")
+        current = current.parent
+    return current
+
+
 def same_filesystem(source: Path, destination_parent: Path) -> bool:
-    return source.stat().st_dev == destination_parent.stat().st_dev
+    probe = nearest_existing_parent(destination_parent)
+    return source.stat().st_dev == probe.stat().st_dev
+
+
+def absolute_path(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(path.expanduser())))
 
 
 def running_container_mounts(target: Path) -> list[str]:
@@ -139,10 +153,10 @@ def prepare_plan(
     *,
     mount_checker: Callable[[Path], list[str]] = running_container_mounts,
 ) -> MigrationPlan:
-    legacy = legacy.expanduser().resolve(strict=False)
-    canonical = canonical.expanduser().resolve(strict=False)
+    legacy = absolute_path(legacy)
+    canonical = absolute_path(canonical)
 
-    if legacy == canonical:
+    if legacy.resolve(strict=False) == canonical.resolve(strict=False) and not legacy.is_symlink():
         raise MigrationError("legacy and canonical paths resolve to the same path")
 
     if legacy.is_symlink():
@@ -182,7 +196,6 @@ def prepare_plan(
             + ", ".join(sorted(legacy_owners))
         )
 
-    canonical.parent.mkdir(parents=True, exist_ok=True)
     if not same_filesystem(legacy, canonical.parent):
         raise MigrationError(
             "legacy and canonical locations are on different filesystems; "
@@ -241,6 +254,8 @@ def apply_plan(plan: MigrationPlan, *, dry_run: bool) -> None:
             print(f"DRY-RUN: ln -s {plan.canonical} {plan.legacy}")
         print("DRY-RUN: no files changed.")
         return
+
+    plan.canonical.parent.mkdir(parents=True, exist_ok=True)
 
     if plan.backup is not None:
         os.replace(plan.canonical, plan.backup)
