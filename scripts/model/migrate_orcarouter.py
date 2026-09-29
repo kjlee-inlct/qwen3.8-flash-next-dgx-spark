@@ -119,13 +119,7 @@ def running_container_mounts(target: Path) -> list[str]:
         if not container_id:
             continue
         inspected = subprocess.run(
-            [
-                docker,
-                "inspect",
-                "--format",
-                "{{.Name}}\t{{range .Mounts}}{{println .Source}}{{end}}",
-                container_id,
-            ],
+            [docker, "inspect", container_id],
             text=True,
             capture_output=True,
             check=False,
@@ -134,10 +128,20 @@ def running_container_mounts(target: Path) -> list[str]:
             raise MigrationError(
                 f"cannot inspect running Docker container: {container_id}"
             )
-        lines = inspected.stdout.splitlines()
-        name = lines[0].split("\t", 1)[0].lstrip("/") if lines else container_id
-        for source in lines[1:]:
-            source = source.strip()
+        try:
+            payload = json.loads(inspected.stdout)
+            container = payload[0]
+            name = str(container.get("Name") or container_id).lstrip("/")
+            mounts = container.get("Mounts") or []
+        except (json.JSONDecodeError, IndexError, TypeError, AttributeError) as exc:
+            raise MigrationError(
+                f"cannot parse Docker inspect output for: {container_id}"
+            ) from exc
+
+        for mount in mounts:
+            if not isinstance(mount, dict):
+                continue
+            source = str(mount.get("Source") or "")
             if not source:
                 continue
             source_path = Path(source)
@@ -145,7 +149,6 @@ def running_container_mounts(target: Path) -> list[str]:
                 owners.append(name)
                 break
     return owners
-
 
 def prepare_plan(
     legacy: Path,
