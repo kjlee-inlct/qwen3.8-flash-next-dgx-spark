@@ -64,6 +64,13 @@ The final H6 checkpoint retains the validated parent-link layout. Runtime
 validation therefore requires the OrcaRouter base, H3, H4-all, H5, and H6
 directories; mazinb is a build-time input and is not a final runtime mount.
 
+When an existing H3 manifest proves the pinned OrcaRouter base revision, the pinned
+mazinb revision prefix `f2c21eb`, and the expected H3 tensor/provenance counts, the
+installer may reuse that H3 without retaining or re-downloading the mazinb source
+checkpoint. This is fail-closed: an absent, stale, mismatched, or incomplete H3 falls
+back to the normal source-download path. A genuinely clean host has no H3, so it still
+downloads both pinned source checkpoints before building H3 -> H6.
+
 The canonical orchestration/validation helpers are:
 
 ```text

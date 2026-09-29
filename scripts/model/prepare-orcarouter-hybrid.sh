@@ -22,9 +22,14 @@ usage() {
 Usage:
   bash scripts/model/prepare-orcarouter-hybrid.sh build
   bash scripts/model/prepare-orcarouter-hybrid.sh validate
+  bash scripts/model/prepare-orcarouter-hybrid.sh reuse-check
 
 The installer-facing hybrid is the proven H6 ModelOpt W4A16 checkpoint:
   OrcaRouter + mazinb -> H3 quant-layout -> H4 orca-all -> H5 input_scale=1 -> H6 W4A16.
+
+A complete H3 with pinned OrcaRouter/mazinb provenance can replace the mazinb
+build-time source for reuse of H3 and later stages. Clean hosts without that H3
+still require the pinned mazinb source checkpoint.
 
 Existing complete stages are reused. A non-empty incomplete stage is never
 deleted automatically; clean it explicitly after inspection before retrying.
@@ -43,17 +48,38 @@ print(data["revision"])
 PY
 }
 
+overlay_source_available() {
+  [[ -r "${OVERLAY}/.qwen38-model-manifest.json" && -f "${OVERLAY}/model.safetensors.index.json" ]]
+}
+
+reuse_h3_ok() {
+  python3 "${VALIDATOR}" \
+    --h3-source-reuse-check \
+    --h3-dir "${H3}" >/dev/null
+}
+
+run_validator() {
+  local stage="${1:-h6}"
+  local args=(
+    --through "${stage}"
+    --base-dir "${BASE}"
+    --h3-dir "${H3}"
+    --h4-dir "${H4}"
+    --h5-dir "${H5}"
+    --model-dir "${OUTPUT}"
+  )
+  if overlay_source_available; then
+    args+=(--overlay-dir "${OVERLAY}")
+  else
+    args+=(--runtime-only)
+  fi
+  python3 "${VALIDATOR}" "${args[@]}"
+}
+
 stage_ok() {
   local path="$1" stage="$2"
   [[ -r "${path}/.qwen38-hybrid-manifest.json" ]] || return 1
-  python3 "${VALIDATOR}" \
-    --through "${stage}" \
-    --base-dir "${BASE}" \
-    --overlay-dir "${OVERLAY}" \
-    --h3-dir "${H3}" \
-    --h4-dir "${H4}" \
-    --h5-dir "${H5}" \
-    --model-dir "${OUTPUT}" >/dev/null
+  run_validator "${stage}" >/dev/null
 }
 
 require_source() {
@@ -83,16 +109,25 @@ port_owner() {
 }
 
 validate_final() {
-  python3 "${VALIDATOR}"     --base-dir "${BASE}"     --overlay-dir "${OVERLAY}"     --h3-dir "${H3}"     --h4-dir "${H4}"     --h5-dir "${H5}"     --model-dir "${OUTPUT}"
+  run_validator h6
 }
 
 case "${ACTION}" in
+  reuse-check)
+    python3 "${VALIDATOR}" \
+      --h3-source-reuse-check \
+      --h3-dir "${H3}"
+    ;;
   validate)
     validate_final
     ;;
   build)
     require_source "${BASE}" OrcaRouter
-    require_source "${OVERLAY}" mazinb
+    if reuse_h3_ok; then
+      printf 'reuse pinned mazinb provenance from H3: %s\n' "${H3}"
+    else
+      require_source "${OVERLAY}" mazinb
+    fi
     if validate_final >/dev/null 2>&1; then
       printf 'reuse complete OrcaRouter hybrid H6 chain: %s\n' "${OUTPUT}"
       validate_final
@@ -108,11 +143,20 @@ case "${ACTION}" in
       exit 1
     }
     BASE_REVISION="$(model_revision "${BASE}")"
-    OVERLAY_REVISION="$(model_revision "${OVERLAY}")"
 
-    if ! require_empty_or_stage "${H3}" h3 quant-layout-mazinb-experts; then
-      mkdir -p "${H3}"
-      docker run --pull=never --rm         --user "$(id -u):$(id -g)" -e HOME=/tmp         -v "${BASE}:/base:ro" -v "${OVERLAY}:/overlay:ro" -v "${H3}:/output"         -v "${H3_TOOL}:/tool.py:ro" --entrypoint python3 "${IMAGE}"         /tool.py build --base /base --overlay /overlay --output /output         --base-revision "${BASE_REVISION}" --overlay-revision "${OVERLAY_REVISION}"
+    if reuse_h3_ok; then
+      require_empty_or_stage "${H3}" h3 quant-layout-mazinb-experts
+    else
+      OVERLAY_REVISION="$(model_revision "${OVERLAY}")"
+      if ! require_empty_or_stage "${H3}" h3 quant-layout-mazinb-experts; then
+        mkdir -p "${H3}"
+        docker run --pull=never --rm \
+          --user "$(id -u):$(id -g)" -e HOME=/tmp \
+          -v "${BASE}:/base:ro" -v "${OVERLAY}:/overlay:ro" -v "${H3}:/output" \
+          -v "${H3_TOOL}:/tool.py:ro" --entrypoint python3 "${IMAGE}" \
+          /tool.py build --base /base --overlay /overlay --output /output \
+          --base-revision "${BASE_REVISION}" --overlay-revision "${OVERLAY_REVISION}"
+      fi
     fi
 
     if ! require_empty_or_stage "${H4}" h4 h4-orca-all; then

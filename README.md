@@ -534,6 +534,10 @@ pending for its own clean-host managed E2E qualification.
 directory. H6 keeps the validated parent-link layout, so the managed runtime
 mounts the retained OrcaRouter base plus H3, H4-all, and H5 parents read-only.
 The mazinb source is needed to build H3 but is not required by the final runtime.
+If a retained H3 independently proves the pinned OrcaRouter/mazinb provenance and
+expected H3 tensor counts, the installer can reuse that stage without downloading
+mazinb again. Clean hosts still download both pinned sources because no reusable H3
+exists yet.
 
 
 > **H38 runtime status:** the validated OrcaRouter H38 decoder-only production profile lives

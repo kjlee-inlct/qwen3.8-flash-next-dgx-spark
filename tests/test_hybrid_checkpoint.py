@@ -343,7 +343,7 @@ class HybridCheckpointTests(unittest.TestCase):
                 )
 
             base_revision = "c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-            overlay_revision = "f" * 40
+            overlay_revision = "f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f"
             (base / ".qwen38-model-manifest.json").write_text(
                 json.dumps({
                     "status": "complete",
@@ -414,7 +414,7 @@ class HybridCheckpointTests(unittest.TestCase):
                 )
 
             base_revision = "c1209bda15a6bbc4c68b585e93d40c0d85f50306"
-            overlay_revision = "f" * 40
+            overlay_revision = "f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f"
             (base / ".qwen38-model-manifest.json").write_text(
                 json.dumps({
                     "status": "complete",

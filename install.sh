@@ -484,6 +484,13 @@ HYBRID_OVERLAY_DIR="$(realpath -m -- "${HYBRID_OVERLAY_DIR}")"
 HYBRID_H3_DIR="$(realpath -m -- "${HYBRID_H3_DIR}")"
 HYBRID_H4_DIR="$(realpath -m -- "${HYBRID_H4_DIR}")"
 HYBRID_H5_DIR="$(realpath -m -- "${HYBRID_H5_DIR}")"
+HYBRID_REUSE_H3=0
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  if HYBRID_QUANT_LAYOUT_MODEL_DIR="${HYBRID_H3_DIR}" \
+    bash "${ROOT_DIR}/scripts/model/prepare-orcarouter-hybrid.sh" reuse-check >/dev/null 2>&1; then
+    HYBRID_REUSE_H3=1
+  fi
+fi
 [[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
 printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
 printf '  profile     : %s\n' "${MODEL_PROFILE}"
@@ -501,7 +508,12 @@ else
 fi
 printf '  config      : %s\n' "${config_plan}"
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
-  printf '  hybrid base : %s\n  hybrid mix  : %s\n' "${HYBRID_BASE_DIR}" "${HYBRID_OVERLAY_DIR}"
+  printf '  hybrid base : %s\n' "${HYBRID_BASE_DIR}"
+  if [[ "${HYBRID_REUSE_H3}" == 1 ]]; then
+    printf '  hybrid mix  : pinned mazinb provenance already captured in %s (source download skipped)\n' "${HYBRID_H3_DIR}"
+  else
+    printf '  hybrid mix  : %s\n' "${HYBRID_OVERLAY_DIR}"
+  fi
 fi
 printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
 printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s GiB, %s samples, heartbeat=%ss)\n\n' \
@@ -544,39 +556,45 @@ fi
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
-  base_required_bytes="$(MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
-    "${ROOT_DIR}/scripts/download-weights.sh" --required-bytes)"
-  overlay_required_bytes="$(MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
-    "${ROOT_DIR}/scripts/download-weights.sh" --required-bytes)"
+  if [[ "${HYBRID_REUSE_H3}" == 1 ]]; then
+    printf 'Pinned H3 provenance is reusable; mazinb source checkpoint download is not required.\n'
+    MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
+      "${ROOT_DIR}/scripts/download-weights.sh" --check
+  else
+    base_required_bytes="$(MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
+      "${ROOT_DIR}/scripts/download-weights.sh" --required-bytes)"
+    overlay_required_bytes="$(MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
+      "${ROOT_DIR}/scripts/download-weights.sh" --required-bytes)"
 
-  base_probe="${HYBRID_BASE_DIR}"
-  while [[ ! -e "${base_probe}" ]]; do base_probe="$(dirname -- "${base_probe}")"; done
-  overlay_probe="${HYBRID_OVERLAY_DIR}"
-  while [[ ! -e "${overlay_probe}" ]]; do overlay_probe="$(dirname -- "${overlay_probe}")"; done
-  base_fs="$(df --output=source "${base_probe}" | tail -n1 | tr -d ' ')"
-  overlay_fs="$(df --output=source "${overlay_probe}" | tail -n1 | tr -d ' ')"
+    base_probe="${HYBRID_BASE_DIR}"
+    while [[ ! -e "${base_probe}" ]]; do base_probe="$(dirname -- "${base_probe}")"; done
+    overlay_probe="${HYBRID_OVERLAY_DIR}"
+    while [[ ! -e "${overlay_probe}" ]]; do overlay_probe="$(dirname -- "${overlay_probe}")"; done
+    base_fs="$(df --output=source "${base_probe}" | tail -n1 | tr -d ' ')"
+    overlay_fs="$(df --output=source "${overlay_probe}" | tail -n1 | tr -d ' ')"
 
-  if [[ "${base_fs}" == "${overlay_fs}" ]]; then
-    available_bytes="$(df --output=avail -B1 "${base_probe}" | tail -n1 | tr -d ' ')"
-    base_existing_bytes=0
-    overlay_existing_bytes=0
-    [[ ! -d "${HYBRID_BASE_DIR}" ]] || base_existing_bytes="$(du -sb "${HYBRID_BASE_DIR}" | cut -f1)"
-    [[ ! -d "${HYBRID_OVERLAY_DIR}" ]] || overlay_existing_bytes="$(du -sb "${HYBRID_OVERLAY_DIR}" | cut -f1)"
-    reserve_bytes=$((20 * 1024 * 1024 * 1024))
-    combined_required_bytes=$((base_required_bytes + overlay_required_bytes + reserve_bytes))
-    combined_capacity_bytes=$((available_bytes + base_existing_bytes + overlay_existing_bytes))
-    if (( combined_capacity_bytes < combined_required_bytes )); then
-      shortfall_bytes=$((combined_required_bytes - combined_capacity_bytes))
-      die "insufficient disk space for hybrid source checkpoints plus 20 GiB reserve; free an additional $(awk -v n="${shortfall_bytes}" 'BEGIN {printf "%.2f", n/1073741824}') GiB"
+    if [[ "${base_fs}" == "${overlay_fs}" ]]; then
+      available_bytes="$(df --output=avail -B1 "${base_probe}" | tail -n1 | tr -d ' ')"
+      base_existing_bytes=0
+      overlay_existing_bytes=0
+      [[ ! -d "${HYBRID_BASE_DIR}" ]] || base_existing_bytes="$(du -sb "${HYBRID_BASE_DIR}" | cut -f1)"
+      [[ ! -d "${HYBRID_OVERLAY_DIR}" ]] || overlay_existing_bytes="$(du -sb "${HYBRID_OVERLAY_DIR}" | cut -f1)"
+      reserve_bytes=$((20 * 1024 * 1024 * 1024))
+      combined_required_bytes=$((base_required_bytes + overlay_required_bytes + reserve_bytes))
+      combined_capacity_bytes=$((available_bytes + base_existing_bytes + overlay_existing_bytes))
+      if (( combined_capacity_bytes < combined_required_bytes )); then
+        shortfall_bytes=$((combined_required_bytes - combined_capacity_bytes))
+        die "insufficient disk space for hybrid source checkpoints plus 20 GiB reserve; free an additional $(awk -v n="${shortfall_bytes}" 'BEGIN {printf "%.2f", n/1073741824}') GiB"
+      fi
+      printf 'Hybrid combined disk preflight passed: %.2f GiB sources + 20 GiB reserve on %s\n' \
+        "$(awk -v n="$((base_required_bytes + overlay_required_bytes))" 'BEGIN {printf "%.2f", n/1073741824}')" "${base_fs}"
     fi
-    printf 'Hybrid combined disk preflight passed: %.2f GiB sources + 20 GiB reserve on %s\n' \
-      "$(awk -v n="$((base_required_bytes + overlay_required_bytes))" 'BEGIN {printf "%.2f", n/1073741824}')" "${base_fs}"
-  fi
 
-  MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
-    "${ROOT_DIR}/scripts/download-weights.sh" --check
-  MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
-    "${ROOT_DIR}/scripts/download-weights.sh" --check
+    MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
+      "${ROOT_DIR}/scripts/download-weights.sh" --check
+    MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
+      "${ROOT_DIR}/scripts/download-weights.sh" --check
+  fi
 else
   MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
     "${ROOT_DIR}/scripts/download-weights.sh" --check
@@ -597,8 +615,10 @@ write_state downloading
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
   MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}" \
     "${ROOT_DIR}/scripts/download-weights.sh"
-  MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
-    "${ROOT_DIR}/scripts/download-weights.sh"
+  if [[ "${HYBRID_REUSE_H3}" != 1 ]]; then
+    MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}" \
+      "${ROOT_DIR}/scripts/download-weights.sh"
+  fi
   if ! docker image inspect vllm-orcarouter-v029:v1 >/dev/null 2>&1; then
     printf '\nPreparing vLLM v0.29 hybrid builder/runtime image...\n'
     docker build -t vllm-orcarouter-v029:v1 -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
@@ -625,13 +645,19 @@ if [[ -z "${CONFIG_OVERRIDE}" && "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
 fi
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
   printf '\nValidating generated OrcaRouter hybrid checkpoint chain...\n'
-  python3 "${ROOT_DIR}/scripts/model/validate-orcarouter-hybrid.py" \
-    --base-dir "${HYBRID_BASE_DIR}" \
-    --overlay-dir "${HYBRID_OVERLAY_DIR}" \
-    --h3-dir "${HYBRID_H3_DIR}" \
-    --h4-dir "${HYBRID_H4_DIR}" \
-    --h5-dir "${HYBRID_H5_DIR}" \
+  hybrid_validate_args=(
+    --base-dir "${HYBRID_BASE_DIR}"
+    --h3-dir "${HYBRID_H3_DIR}"
+    --h4-dir "${HYBRID_H4_DIR}"
+    --h5-dir "${HYBRID_H5_DIR}"
     --model-dir "${MODEL_DIR}"
+  )
+  if [[ "${HYBRID_REUSE_H3}" == 1 ]]; then
+    hybrid_validate_args+=(--runtime-only)
+  else
+    hybrid_validate_args+=(--overlay-dir "${HYBRID_OVERLAY_DIR}")
+  fi
+  python3 "${ROOT_DIR}/scripts/model/validate-orcarouter-hybrid.py" "${hybrid_validate_args[@]}"
 else
   printf '\nInspecting checkpoint tensor headers...\n'
   inspect_args=(--offline --repo "${REPO}" --model-dir "${MODEL_DIR}")
