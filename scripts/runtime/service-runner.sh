@@ -43,6 +43,16 @@ log_runtime_phase() {
   printf 'Runtime phase: %s (elapsed=%ss)\n' "${phase}" "$((SECONDS - RUNTIME_PHASE_START_SECONDS))"
 }
 
+protected_stop_matches_container() {
+  local container_id="$1"
+  [[ -n "${container_id}" && -r "${STOP_REASON_FILE}" ]] || return 1
+  unset RUNTIME_STOP_SCHEMA_VERSION STOP_REASON STOP_CONTAINER_NAME STOP_CONTAINER_ID UPDATED_AT
+  parse_state_into_vars runtime-stop "${STOP_REASON_FILE}" || return 1
+  [[ "${STOP_REASON:-}" == memory-protection &&
+     "${STOP_CONTAINER_NAME:-}" == "${CONTAINER_NAME}" &&
+     "${STOP_CONTAINER_ID:-}" == "${container_id}" ]]
+}
+
 write_runtime_commit_attestation() {
   local container_id="$1" temporary="${RUNTIME_COMMIT_FILE}.tmp"
   [[ "${container_id}" =~ ^[0-9a-f]{12,128}$ ]] || return 1
@@ -117,7 +127,19 @@ for attempt in $(seq 1 180); do
     break
   fi
   state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  [[ "${state}" == running ]] || { printf 'FATAL: candidate container stopped during startup (state=%s)\n' "${state:-missing}" >&2; false; }
+  if [[ "${state}" != running ]]; then
+    candidate_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+    if protected_stop_matches_container "${candidate_id}"; then
+      printf 'Candidate runtime was stopped by memory protection during startup; leaving managed runtime stopped.\n' >&2
+      bash "${RUNTIME_TRANSITION}" abort-protected
+      transition_active=0
+      rm -f -- "${STOP_REASON_FILE}"
+      trap - ERR INT TERM
+      exit 0
+    fi
+    printf 'FATAL: candidate container stopped during startup (state=%s)\n' "${state:-missing}" >&2
+    false
+  fi
   if (( attempt % 6 == 0 )); then
     printf 'Waiting for Qwen readiness: %d/1800 seconds\n' "$((attempt * 10))"
   fi
@@ -150,11 +172,7 @@ container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/nul
 rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
 
 if [[ -r "${STOP_REASON_FILE}" ]]; then
-  unset RUNTIME_STOP_SCHEMA_VERSION STOP_REASON STOP_CONTAINER_NAME STOP_CONTAINER_ID UPDATED_AT
-  if parse_state_into_vars runtime-stop "${STOP_REASON_FILE}" && \
-     [[ "${STOP_REASON:-}" == memory-protection && \
-        "${STOP_CONTAINER_NAME:-}" == "${CONTAINER_NAME}" && \
-        "${STOP_CONTAINER_ID:-}" == "${container_id}" && -n "${container_id}" ]]; then
+  if protected_stop_matches_container "${container_id}"; then
     rm -f -- "${STOP_REASON_FILE}"
     printf 'Inference container stopped intentionally by memory protection; leaving service stopped.\n' >&2
     exit 0
