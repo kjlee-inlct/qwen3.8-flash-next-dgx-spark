@@ -27,6 +27,7 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 - `model-profiles.sh`
 - `inspect_model.py`
 - `checkpoint_integrity.py`
+- `migrate_orcarouter.py`
 - `prepare_config.py`
 
 Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/prepare-config.py` are compatibility entry points.
