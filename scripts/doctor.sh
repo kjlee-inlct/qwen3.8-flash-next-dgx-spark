@@ -6,6 +6,9 @@ set -u
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 TRANSITION_STATE_FILE="${STATE_DIR}/runtime-transition.env"
+PROFILE_SWITCH_STATE_FILE="${STATE_DIR}/profile-switch-transition.env"
+PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
+PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
 CHECKPOINT_INTEGRITY="${SCRIPT_DIR}/model/checkpoint_integrity.py"
@@ -33,6 +36,24 @@ parse_install_manifest() {
     printf -v "${key}" '%s' "${value}"
   done <"${parsed}"
   rm -f -- "${parsed}"
+}
+
+parse_lifecycle_state_value() {
+  local schema="$1" path="$2" wanted="$3" parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" "${schema}" "${path}" >"${parsed}" 2>/dev/null; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    if [[ "${key}" == "${wanted}" ]]; then
+      printf '%s\n' "${value}"
+      rm -f -- "${parsed}"
+      return 0
+    fi
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  return 1
 }
 
 while [[ $# -gt 0 ]]; do
@@ -167,7 +188,28 @@ if [[ -d "${MODEL_DIR:-}" ]]; then
   if (( disk_available_kib >= 20 * 1048576 )); then pass "model filesystem has at least 20 GiB free ($((disk_available_kib / 1048576)) GiB)"; elif (( disk_available_kib >= 5 * 1048576 )); then warn "model filesystem has less than 20 GiB free ($((disk_available_kib / 1048576)) GiB)"; else fail "model filesystem has less than 5 GiB free ($((disk_available_kib / 1024)) MiB)"; fi
 fi
 
-if [[ -r "${TRANSITION_STATE_FILE}" ]]; then transition_state="$(awk -F= '$1=="TRANSACTION_STATE" {print $2; exit}' "${TRANSITION_STATE_FILE}" 2>/dev/null || true)"; fail "runtime transition is incomplete (${transition_state:-unknown}); run runtime-transition.sh recover before maintenance"; else pass "no incomplete runtime transition exists"; fi
+if [[ -r "${TRANSITION_STATE_FILE}" ]]; then
+  if transition_state="$(parse_lifecycle_state_value runtime-transition "${TRANSITION_STATE_FILE}" TRANSACTION_STATE)"; then
+    fail "runtime transition is incomplete (${transition_state}); run runtime-transition.sh recover before maintenance"
+  else
+    fail "runtime transition state is malformed; inspect ${TRANSITION_STATE_FILE} before maintenance"
+  fi
+else
+  pass "no incomplete runtime transition exists"
+fi
+
+if [[ -r "${PROFILE_SWITCH_STATE_FILE}" ]]; then
+  if profile_switch_state="$(parse_lifecycle_state_value profile-switch "${PROFILE_SWITCH_STATE_FILE}" PROFILE_SWITCH_STATE)"; then
+    fail "profile-switch transition is incomplete (${profile_switch_state}); run scripts/profile-switch-transition.sh recover before maintenance"
+  else
+    fail "profile-switch transition state is malformed; inspect ${PROFILE_SWITCH_STATE_FILE} before maintenance"
+  fi
+elif [[ -e "${PROFILE_SWITCH_BACKUP}" || -L "${PROFILE_SWITCH_BACKUP}" ||
+        -e "${PROFILE_SWITCH_CANDIDATE}" || -L "${PROFILE_SWITCH_CANDIDATE}" ]]; then
+  fail "profile-switch candidate/backup artifacts exist without transaction state; automatic cleanup is intentionally disabled"
+else
+  pass "no incomplete profile-switch transition exists"
+fi
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   pass "Docker daemon is available"
