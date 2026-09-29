@@ -534,7 +534,10 @@ class ModelProfileTests(unittest.TestCase):
         self.assertNotIn("uninstall it before selecting", installer)
         self.assertIn('PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"', installer)
         self.assertIn('STATE_WRITE_FILE="${PROFILE_SWITCH_CANDIDATE}"', installer)
-        self.assertIn("activate_profile_switch_manifest", installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" prepare', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" activate', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" runtime-committed', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" commit', installer)
         self.assertIn("PROFILE_SWITCH_COMMITTED=1", installer)
         self.assertIn(
             "transactional profile switch requires an owned managed systemd service",
