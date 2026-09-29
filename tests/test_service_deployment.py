@@ -94,6 +94,16 @@ class ServiceDeploymentTests(unittest.TestCase):
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         self.assertIn('"${value}" == service_ready || "${value}" == complete', manager)
 
+    def test_service_runner_recovers_profile_switch_before_manifest_parse(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+
+        self.assertIn("profile-switch-transition.sh", runner)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" service-recover', runner)
+        self.assertLess(
+            runner.index('bash "${PROFILE_SWITCH_TRANSITION}" service-recover'),
+            runner.index('parse_state_into_vars install-service-runtime "${STATE_FILE}"'),
+        )
+
     def test_service_runner_uses_service_runtime_schema_for_initial_start(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn('parse_state_into_vars install-service-runtime "${STATE_FILE}"', runner)
