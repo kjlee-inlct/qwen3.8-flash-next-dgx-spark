@@ -146,6 +146,15 @@ else
   printf '  releases : %s\n' "$([[ "${PURGE_ALL}" == 1 ]] && printf purge || printf keep)"
 fi
 if [[ "${DRY_RUN}" == 1 ]]; then
+  if [[ "${PURGE_ALL}" == 1 ]]; then
+    if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" && -r "${ASSET_OWNERSHIP_TOOL}" ]]; then
+      printf '\nCumulative installer-owned assets selected by --purge-all:\n'
+      python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all 2>/dev/null || \
+        printf '  ownership registry is invalid; real purge would stop before deletion\n'
+    else
+      printf '\nNo cumulative ownership registry exists yet; a real purge can migrate only the current manifest ownership flags.\n'
+    fi
+  fi
   if [[ "${UI_LANG}" == ko ]]; then
     printf '\nDRY-RUN 완료: container, monitor, proxy, release, 모델, swap, image 및 manifest를 변경하지 않았습니다.\n'
   else
