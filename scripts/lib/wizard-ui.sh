@@ -81,15 +81,15 @@ wizard_read_raw() {
 }
 
 wizard_input() {
-  local variable="$1" prompt="$2" default="${3:-}" answer=""
-  wizard_read_raw answer "${WIZARD_BLUE}${prompt}${WIZARD_RESET} [${default}]: "
-  printf -v "${variable}" '%s' "${answer:-${default}}"
+  local variable="$1" prompt="$2" default="${3:-}" input_value=""
+  wizard_read_raw input_value "${WIZARD_BLUE}${prompt}${WIZARD_RESET} [${default}]: "
+  printf -v "${variable}" '%s' "${input_value:-${default}}"
 }
 
 wizard_secret() {
-  local variable="$1" prompt="$2" answer=""
-  wizard_read_raw answer "${WIZARD_BLUE}${prompt}${WIZARD_RESET}: " 1
-  printf -v "${variable}" '%s' "${answer}"
+  local variable="$1" prompt="$2" secret_value=""
+  wizard_read_raw secret_value "${WIZARD_BLUE}${prompt}${WIZARD_RESET}: " 1
+  printf -v "${variable}" '%s' "${secret_value}"
 }
 
 wizard_yes_no() {
