@@ -111,6 +111,7 @@ esac
 ACTIVE_MODEL=""
 ACTIVE_IMAGE=""
 ACTIVE_PROFILE=""
+INSTALL_PHASE=""
 if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]]; then
   parsed="$(mktemp)"
   trap 'rm -f -- "${parsed:-}"' EXIT
