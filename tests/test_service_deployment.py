@@ -175,6 +175,8 @@ class ServiceDeploymentTests(unittest.TestCase):
 
     def test_doctor_checks_runtime_lifecycle_drift(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        self.assertIn('realpath -m -- "${expected_hybrid_mounts[${destination}]}"', doctor)
+        self.assertIn('actual_source_canonical', doctor)
         self.assertIn("runtime-transition.env", doctor)
         self.assertIn("no incomplete runtime transition exists", doctor)
         self.assertIn("no stale rollback container exists", doctor)
