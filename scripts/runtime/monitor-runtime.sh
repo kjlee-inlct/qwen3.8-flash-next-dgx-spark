@@ -90,12 +90,13 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   swap_free="$(awk '$1=="SwapFree:" {print $2}' "${MEMINFO_PATH}")"
   cma_free="${cma_free:-0}"
   (( mem_free >= cma_free )) && noncma_free=$((mem_free - cma_free)) || noncma_free=0
-  if (( mem_available < available_floor || swap_free < swap_free_floor || (noncma_free < free_floor && mem_available < free_gate) )); then
+  (( mem_available >= cma_free )) && noncma_available=$((mem_available - cma_free)) || noncma_available=0
+  if (( noncma_available < available_floor || swap_free < swap_free_floor || (noncma_free < free_floor && noncma_available < free_gate) )); then
     low_count=$((low_count + 1))
-    printf '%s WARNING memory margin low %d/%d: available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
+    printf '%s WARNING memory margin low %d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
       "$(date '+%F %T')" "${low_count}" "${CONSECUTIVE}" \
-      "$((mem_available / 1024))" "$((mem_free / 1024))" "$((cma_free / 1024))" \
-      "$((noncma_free / 1024))" "$((swap_free / 1024))"
+      "$((mem_available / 1024))" "$((noncma_available / 1024))" "$((mem_free / 1024))" \
+      "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
     if [[ "${PROTECT}" == 1 && "${low_count}" -ge "${CONSECUTIVE}" ]]; then
       printf '%s PROTECT stopping %s gracefully to preserve host stability\n' "$(date '+%F %T')" "${CONTAINER}" >&2
       docker logs --tail 1000 "${CONTAINER}" 2>&1 || true
@@ -109,15 +110,15 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
     fi
   else
     if (( low_count > 0 )); then
-      printf '%s memory margin recovered: available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB\n' \
-        "$(date '+%F %T')" "$((mem_available / 1024))" "$((mem_free / 1024))" \
-        "$((cma_free / 1024))" "$((noncma_free / 1024))"
+      printf '%s memory margin recovered: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB\n' \
+        "$(date '+%F %T')" "$((mem_available / 1024))" "$((noncma_available / 1024))" \
+        "$((mem_free / 1024))" "$((cma_free / 1024))" "$((noncma_free / 1024))"
     fi
     low_count=0
     if (( HEARTBEAT > 0 && SECONDS >= next_heartbeat )); then
-      printf '%s HEARTBEAT healthy: available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
-        "$(date '+%F %T')" "$((mem_available / 1024))" "$((mem_free / 1024))" \
-        "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
+      printf '%s HEARTBEAT healthy: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
+        "$(date '+%F %T')" "$((mem_available / 1024))" "$((noncma_available / 1024))" \
+        "$((mem_free / 1024))" "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
       next_heartbeat=$((SECONDS + HEARTBEAT))
     fi
   fi
