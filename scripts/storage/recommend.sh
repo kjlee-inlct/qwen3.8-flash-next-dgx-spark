@@ -64,7 +64,7 @@ human_bytes() {
 
 managed_model_candidates() {
   declare -A seen=()
-  local -a roots=("${HOME}/models" "${SCRIPT_ROOT}/model")
+  local -a roots=("${HOME}/models" "${SCRIPT_ROOT}/models" "${SCRIPT_ROOT}/model")
   local root path canonical manifest
   [[ -n "${ACTIVE_MODEL}" ]] && roots+=("${ACTIVE_MODEL}")
   for root in "${roots[@]}"; do
