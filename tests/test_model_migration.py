@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ TOOL = ROOT / "scripts" / "model" / "migrate_orcarouter.py"
 SPEC = importlib.util.spec_from_file_location("migrate_orcarouter", TOOL)
 assert SPEC is not None and SPEC.loader is not None
 migrate = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = migrate
 SPEC.loader.exec_module(migrate)
 
 
