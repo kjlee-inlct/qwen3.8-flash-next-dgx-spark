@@ -172,7 +172,10 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
       )
       for destination in "/base-model" "/h3-model" "/h4-all" "/h5-parent"; do
         actual_source="$(docker inspect --format "{{range .Mounts}}{{if eq .Destination \"${destination}\"}}{{.Source}}{{end}}{{end}}" "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
-        [[ "${actual_source}" == "${expected_hybrid_mounts[${destination}]}" ]] && pass "hybrid parent mount matches (${destination})" || fail "hybrid parent mount drift at ${destination}: ${actual_source:-missing}"
+        expected_source="$(realpath -m -- "${expected_hybrid_mounts[${destination}]}" 2>/dev/null || printf '%s' "${expected_hybrid_mounts[${destination}]}")"
+        actual_source_canonical=""
+        [[ -z "${actual_source}" ]] || actual_source_canonical="$(realpath -m -- "${actual_source}" 2>/dev/null || printf '%s' "${actual_source}")"
+        [[ -n "${actual_source_canonical}" && "${actual_source_canonical}" == "${expected_source}" ]] && pass "hybrid parent mount matches (${destination})" || fail "hybrid parent mount drift at ${destination}: ${actual_source:-missing}"
       done
       runtime_env="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
       grep -Fxq 'VLLM_PLE_MMAP=1' <<<"${runtime_env}" && pass "hybrid runtime uses PLE mmap" || fail "hybrid runtime PLE mmap setting is missing"
