@@ -126,6 +126,50 @@ asset_image_ownership_for_name() {
     printf '0\n'
   fi
 }
+asset_track_profile_models() {
+  local owned
+  if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+    owned="$(asset_model_ownership_for_path "${HYBRID_BASE_DIR}")"
+    asset_track_model "${HYBRID_BASE_DIR}" "$(dirname -- "${HYBRID_BASE_DIR}")" "${owned}"
+
+    if [[ "${HYBRID_REUSE_H3}" != 1 ]]; then
+      owned="$(asset_model_ownership_for_path "${HYBRID_OVERLAY_DIR}")"
+      asset_track_model "${HYBRID_OVERLAY_DIR}" "$(dirname -- "${HYBRID_OVERLAY_DIR}")" "${owned}"
+    fi
+
+    owned="$(asset_model_ownership_for_path "${HYBRID_H3_DIR}")"
+    asset_track_model "${HYBRID_H3_DIR}" "$(dirname -- "${HYBRID_H3_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}"
+
+    owned="$(asset_model_ownership_for_path "${HYBRID_H4_DIR}")"
+    asset_track_model "${HYBRID_H4_DIR}" "$(dirname -- "${HYBRID_H4_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}"
+
+    owned="$(asset_model_ownership_for_path "${HYBRID_H5_DIR}")"
+    asset_track_model "${HYBRID_H5_DIR}" "$(dirname -- "${HYBRID_H5_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}" "${HYBRID_H4_DIR}"
+
+    owned="$(asset_model_ownership_for_path "${MODEL_DIR}")"
+    asset_track_model "${MODEL_DIR}" "$(dirname -- "${MODEL_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}" "${HYBRID_H4_DIR}" "${HYBRID_H5_DIR}"
+  else
+    owned="$(asset_model_ownership_for_path "${MODEL_DIR}")"
+    asset_track_model "${MODEL_DIR}" "$(dirname -- "${MODEL_DIR}")" "${owned}"
+  fi
+
+  if asset_model_owned "${MODEL_DIR}"; then MODEL_OWNED=1; else MODEL_OWNED=0; fi
+}
+
+asset_track_profile_images() {
+  local owned
+  owned="$(asset_image_ownership_for_name "${IMAGE}")"
+  asset_track_image "${IMAGE}" "${owned}"
+  if [[ "${MODEL_PROFILE}" == nvidia ]]; then
+    owned="$(asset_image_ownership_for_name vllm-skinny-tp1:v1)"
+    asset_track_image vllm-skinny-tp1:v1 "${owned}"
+  fi
+  if asset_image_owned "${IMAGE}"; then IMAGE_OWNED=1; else IMAGE_OWNED=0; fi
+}
 parse_install_manifest() {
   local parsed key value
   parsed="$(mktemp)"
