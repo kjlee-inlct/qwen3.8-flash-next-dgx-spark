@@ -215,6 +215,11 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("partial-backup", helper)
         self.assertIn("already migrated", helper)
 
+    def test_repo_model_ignore_covers_directory_and_compatibility_symlink(self) -> None:
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn("/model", gitignore)
+        self.assertNotIn("/model/", gitignore)
+
     def test_storage_recommend_discovers_hybrid_manifests(self) -> None:
         source = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8")
         self.assertIn(".qwen38-hybrid-manifest.json", source)
