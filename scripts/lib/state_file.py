@@ -53,6 +53,32 @@ def nonempty_text(value: str) -> bool:
 
 
 SCHEMAS: dict[str, dict[str, Validator]] = {
+    "profile-switch": {
+        "PROFILE_SWITCH_SCHEMA_VERSION": exact("1"),
+        "PROFILE_SWITCH_STATE": one_of("preparing", "activated", "runtime_committed", "committing"),
+        "FROM_PROFILE": one_of("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid"),
+        "TO_PROFILE": one_of("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid"),
+        "BACKUP_MANIFEST": absolute_path,
+        "TARGET_MANIFEST": absolute_path,
+        "BACKUP_SHA256": optional(matches(SHA256)),
+        "TARGET_SHA256": optional(matches(SHA256)),
+        "UPDATED_AT": matches(TIMESTAMP),
+    },
+    "runtime-transition": {
+        "RUNTIME_SCHEMA_VERSION": exact("1"),
+        "TRANSACTION_STATE": one_of(
+            "preparing",
+            "previous_preserved",
+            "candidate_started",
+            "validating",
+            "committing",
+            "rolling_back",
+        ),
+        "CURRENT_CONTAINER": matches(SAFE_NAME),
+        "ROLLBACK_CONTAINER": matches(SAFE_NAME),
+        "HAD_PREVIOUS": one_of("0", "1"),
+        "UPDATED_AT": matches(TIMESTAMP),
+    },
     "update": {
         "UPDATE_SCHEMA_VERSION": exact("1"),
         "UPDATE_STATE": one_of("preparing", "staged"),
