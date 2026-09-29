@@ -205,8 +205,9 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("migrate-orcarouter", script)
         self.assertIn("migrate_orcarouter()", script)
         self.assertIn("migrate_orcarouter.py", script)
+        self.assertIn('model_asset_root()', registry)
         self.assertIn(
-            'MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-flash-next-orcarouter"',
+            'MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-flash-next-orcarouter"',
             registry,
         )
         self.assertIn("ORCA_REVISION", helper)
@@ -215,10 +216,19 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("partial-backup", helper)
         self.assertIn("already migrated", helper)
 
-    def test_repo_model_ignore_covers_directory_and_compatibility_symlink(self) -> None:
+    def test_repo_model_ignore_covers_legacy_symlink_and_model_store(self) -> None:
         gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
         self.assertIn("/model", gitignore)
+        self.assertIn("/models", gitignore)
         self.assertNotIn("/model/", gitignore)
+
+        manager = MODEL_MANAGER.read_text(encoding="utf-8")
+        recommender = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"${SCRIPT_ROOT}/models"', manager)
+        self.assertIn('"${SCRIPT_ROOT}/models"', recommender)
+        self.assertIn('"${path}" == "${SCRIPT_ROOT}/models/"*', manager)
 
     def test_uninstalled_manifest_is_not_reported_as_active_assets(self) -> None:
         sources = [
