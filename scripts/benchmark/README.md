@@ -5620,3 +5620,85 @@ This PASS closes the specific host-stability repair gate for the reproduced
 failure mode. It does not claim indefinite soak stability or prove safety for
 arbitrarily larger concurrent workloads.
 
+### 2026-09-30 managed profile-switch live acceptance
+
+Live acceptance is being run on a single DGX Spark after updating the immutable
+managed release to
+`dd3127b54f4f5d817c4e8abfbc09e83180f21124`. This section records each
+completed profile-switch leg as evidence arrives; incomplete legs remain
+explicitly pending rather than being inferred from unit coverage.
+
+#### Leg 1: OrcaRouter Hybrid -> OrcaRouter
+
+Result: **PASS**.
+
+Pre-switch state:
+
+- active profile: `orcarouter-hybrid`;
+- update, runtime, and profile-switch transactions: all `idle`;
+- cumulative asset-ownership registry: absent, because this host predated the
+  registry rollout;
+- target OrcaRouter checkpoint and `vllm-skinny-tp1:v1` image were already
+  present on the host;
+- immutable current release:
+  `dd3127b54f4f5d817c4e8abfbc09e83180f21124`.
+
+Observed switch:
+
+- started at `2026-09-30T08:19:33+09:00`;
+- profile-switch transaction prepared
+  `orcarouter-hybrid -> orcarouter`;
+- target manifest activated before runtime cutover;
+- the managed replacement runtime reached committed healthy state;
+- runtime commit was recorded for `orcarouter`;
+- the target manifest was recovered/finalized to `PHASE=complete`;
+- switch command returned `0`;
+- completed at `2026-09-30T08:35:31+09:00`;
+- measured wall time: 958 seconds.
+
+Post-switch lifecycle state:
+
+- active profile: `orcarouter`;
+- model:
+  `models/qwen3.8-flash-next-orcarouter` at pinned revision
+  `c1209bda15a6bbc4c68b585e93d40c0d85f50306`;
+- image: `vllm-skinny-tp1:v1`;
+- update transaction: `idle`;
+- runtime transaction: `idle`;
+- profile-switch transaction: `idle`;
+- no candidate or backup profile-switch transient file remained.
+
+Ownership behavior:
+
+- the first cumulative registry was created successfully;
+- the pre-existing OrcaRouter model and image were recorded with
+  `owned=false`;
+- no ownership was synthesized for assets that existed before registry
+  adoption. This is the intended fail-closed legacy migration behavior.
+
+Post-switch validation:
+
+- `doctor.sh`: 0 failures, 1 warning;
+- warning: non-CMA available reserve was 5554 MiB, below the 6 GiB warning
+  floor;
+- non-CMA free memory: 5162 MiB, above the 2 GiB protection floor;
+- swap free: 44 GiB, above the 8 GiB protection floor;
+- runtime attestation matched the immutable release and live container;
+- health endpoint passed;
+- `validate-runtime.py`: PASS;
+- chat, concurrency=3, health, models, streaming, and tool-call checks: all
+  PASS;
+- runtime validation elapsed time: 5.064 seconds.
+
+Current live matrix:
+
+```text
+Hybrid -> OrcaRouter              PASS
+OrcaRouter -> Hybrid              PENDING
+Hybrid -> mazinb                  PENDING
+mazinb -> OrcaRouter              PENDING
+OrcaRouter -> Hybrid (final)      PENDING
+```
+
+This evidence validates the normal committed path only. Physical hard-power-loss
+recovery remains separate from the repository's mock crash-boundary coverage.
