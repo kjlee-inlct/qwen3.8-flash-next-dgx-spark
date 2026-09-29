@@ -11,6 +11,8 @@ PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
+ASSET_OWNERSHIP_TOOL="${SCRIPT_DIR}/lib/asset_ownership.py"
+ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"
 CHECKPOINT_INTEGRITY="${SCRIPT_DIR}/model/checkpoint_integrity.py"
 HYBRID_VALIDATOR="${SCRIPT_DIR}/model/validate-orcarouter-hybrid.py"
 # shellcheck source=model-profiles.sh
@@ -85,6 +87,27 @@ if [[ "${MODEL_REPO:-}" == "${EXPECTED_REPO}" ]]; then pass "model repository is
 if [[ "${MODEL_REVISION:-}" == "${EXPECTED_REVISION}" ]]; then pass "model revision is pinned"; else fail "unexpected model revision: ${MODEL_REVISION:-missing}"; fi
 if [[ "${PHASE:-}" == complete ]]; then pass "installation phase is complete"; else warn "installation phase is ${PHASE:-unknown}"; fi
 if (( ${SCHEMA_VERSION:-0} >= 3 )); then pass "installation manifest schema supports runtime safety settings"; else warn "installation manifest schema is ${SCHEMA_VERSION:-missing}; run ./install.sh --migrate-manifest to migrate it"; fi
+
+if [[ -e "${ASSET_OWNERSHIP_FILE}" || -L "${ASSET_OWNERSHIP_FILE}" ]]; then
+  if [[ ! -r "${ASSET_OWNERSHIP_TOOL}" ]]; then
+    fail "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
+  elif [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] &&
+       python3 "${ASSET_OWNERSHIP_TOOL}" verify "${ASSET_OWNERSHIP_FILE}" >/dev/null 2>&1; then
+    pass "multi-profile asset ownership registry is valid"
+    if [[ "${MODEL_OWNED:-0}" == 1 ]] &&
+       ! python3 "${ASSET_OWNERSHIP_TOOL}" owns-model "${ASSET_OWNERSHIP_FILE}" "${MODEL_DIR:-}" >/dev/null 2>&1; then
+      fail "active MODEL_OWNED flag is not backed by the ownership registry"
+    fi
+    if [[ "${IMAGE_OWNED:-0}" == 1 ]] &&
+       ! python3 "${ASSET_OWNERSHIP_TOOL}" owns-image "${ASSET_OWNERSHIP_FILE}" "${VLLM_IMAGE:-}" >/dev/null 2>&1; then
+      fail "active IMAGE_OWNED flag is not backed by the ownership registry"
+    fi
+  else
+    fail "multi-profile asset ownership registry is malformed or unsafe: ${ASSET_OWNERSHIP_FILE}"
+  fi
+else
+  pass "asset ownership registry is not present; legacy active-asset ownership remains in install.env"
+fi
 
 MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
 MONITOR_MIN_AVAILABLE_GIB="${MONITOR_MIN_AVAILABLE_GIB:-6}"
