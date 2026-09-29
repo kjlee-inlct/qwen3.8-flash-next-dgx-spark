@@ -138,7 +138,11 @@ It performs a same-filesystem atomic rename and is intentionally fail-closed:
 
 - every top-level source entry must be a managed model/hybrid directory with
   `status=complete`;
-- any safetensors index present must resolve to non-empty local shards;
+- ordinary downloaded model checkpoints must resolve every safetensors shard to a
+  non-empty local file;
+- linked hybrid H3/H4/H5/H6 stages are validated with the canonical
+  `validate-orcarouter-hybrid.py --runtime-only` provenance/parent/config chain rather
+  than treating container mount targets such as `/base-model` as host-local shard paths;
 - running Docker mounts and an active `qwen38-flash-next.service` block the move;
 - a held lifecycle operation lock, cross-filesystem destination, existing destination,
   or unexpected `./model` symlink blocks the move;

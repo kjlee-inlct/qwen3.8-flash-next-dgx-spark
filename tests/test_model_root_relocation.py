@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -72,6 +73,113 @@ class ModelRootRelocationTests(unittest.TestCase):
 
                 again = relocate_model_root.plan_relocation(source, destination, repo)
                 self.assertTrue(again.already_relocated)
+
+    def test_linked_hybrid_uses_chain_validator_instead_of_raw_shard_check(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source, _ = self.make_managed_root(base)
+            h4 = source / "qwen3.8-h4-orca-all"
+            h4.mkdir()
+            (h4 / ".qwen38-hybrid-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "status": "complete",
+                        "variant": "h4-orca-all",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (h4 / "model.safetensors.index.json").write_text(
+                json.dumps(
+                    {
+                        "weight_map": {
+                            "x": "/base-model/model-00001-of-00017.safetensors"
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(
+                    relocate_model_root,
+                    "validate_checkpoint_index",
+                    wraps=relocate_model_root.validate_checkpoint_index,
+                ) as checkpoint_validator,
+                mock.patch.object(
+                    relocate_model_root,
+                    "validate_hybrid_chain",
+                    return_value=None,
+                ) as hybrid_validator,
+            ):
+                entries = relocate_model_root.inspect_root(source)
+
+            self.assertEqual(len(entries), 2)
+            checkpoint_validator.assert_called_once()
+            self.assertEqual(
+                checkpoint_validator.call_args.args[0].name,
+                "qwen3.8-flash-next-orcarouter",
+            )
+            hybrid_validator.assert_called_once()
+
+    def test_hybrid_chain_validator_selects_highest_present_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entries = []
+            for dirname, variant in (
+                ("qwen3.8-hybrid-quant-layout", "quant-layout-mazinb-experts"),
+                ("qwen3.8-h4-orca-all", "h4-orca-all"),
+                ("qwen3.8-h5-neutral-input-scale", "h5-neutral-input-scale"),
+            ):
+                path = root / dirname
+                path.mkdir()
+                manifest = path / ".qwen38-hybrid-manifest.json"
+                manifest.write_text(
+                    json.dumps({"status": "complete", "variant": variant}),
+                    encoding="utf-8",
+                )
+                entries.append(
+                    relocate_model_root.ManagedEntry(path, manifest, "hybrid")
+                )
+
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="OrcaRouter hybrid chain is valid through H5\n",
+                stderr="",
+            )
+            with mock.patch.object(
+                relocate_model_root.subprocess,
+                "run",
+                return_value=completed,
+            ) as runner:
+                relocate_model_root.validate_hybrid_chain(root, tuple(entries))
+
+            command = runner.call_args.args[0]
+            self.assertIn("--runtime-only", command)
+            self.assertEqual(command[command.index("--through") + 1], "h5")
+            self.assertEqual(
+                command[command.index("--base-dir") + 1],
+                str(root / "qwen3.8-flash-next-orcarouter"),
+            )
+
+    def test_unknown_hybrid_variant_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "unknown-hybrid"
+            path.mkdir()
+            manifest = path / ".qwen38-hybrid-manifest.json"
+            manifest.write_text(
+                json.dumps({"status": "complete", "variant": "future-hybrid"}),
+                encoding="utf-8",
+            )
+            entry = relocate_model_root.ManagedEntry(path, manifest, "hybrid")
+
+            with self.assertRaisesRegex(
+                relocate_model_root.RelocationError,
+                "unsupported hybrid variant",
+            ):
+                relocate_model_root.validate_hybrid_chain(root, (entry,))
 
     def test_unmanaged_top_level_entry_refuses_whole_root_move(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
