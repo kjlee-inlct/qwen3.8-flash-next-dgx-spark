@@ -7,6 +7,7 @@ This directory contains low-level reusable helpers shared across script categori
 - Parse and validate persistent state files as data, not executable shell input.
 - Validate immutable release manifests and qualification markers.
 - Provide lifecycle operation-lock semantics.
+- Persist and validate low-level per-asset ownership evidence used by destructive lifecycle operations.
 
 ## Dependency direction
 
@@ -24,6 +25,7 @@ Higher-level categories may depend on `lib/`.
 ## Canonical files
 
 - `state_file.py`
+- `asset_ownership.py`
 - `release_manifest.py`
 - `qualification_marker.py`
 - `operation-lock.sh`
