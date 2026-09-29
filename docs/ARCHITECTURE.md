@@ -80,11 +80,15 @@ payload is inherited through the validated parent-link chain. The managed
 runtime therefore uses vLLM v0.29 with PLE mmap, exact QSA, MTP k=2, and
 read-only mounts for the OrcaRouter base, H3, H4-all, and H5 parents.
 
-This profile is experimental and non-default. The H3→H6 checkpoint construction path has
-been integrated into the installer, but the complete clean-host managed installation has
-not yet been qualified on DGX Spark. Its historical checkpoint/determinism evidence does
-not substitute for that lifecycle gate, and it is distinct from the separate H38
-decoder-only runtime qualification track below.
+This profile is experimental and non-default. The managed warm/reuse path has passed
+functional/restart validation, the no-uninstall Hybrid -> OrcaRouter -> Hybrid round trip
+has passed without checkpoint redownload/rebuild, and the 2026-09-29 CMA-aware
+host-stability repair gate passed 30/30 repeated runtime validations. Those gates are
+narrower than a clean-host qualification: the complete source-download + H3→H6 build +
+managed-service lifecycle on a genuinely clean DGX Spark has not yet been qualified.
+Historical checkpoint/determinism evidence also does not substitute for that clean-host
+gate, and this installer profile remains distinct from the separate H38 decoder-only
+runtime qualification track below.
 
 ### lychee888 — planned
 
