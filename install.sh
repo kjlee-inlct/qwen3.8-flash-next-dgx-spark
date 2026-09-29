@@ -485,8 +485,11 @@ HYBRID_H3_DIR="$(realpath -m -- "${HYBRID_H3_DIR}")"
 HYBRID_H4_DIR="$(realpath -m -- "${HYBRID_H4_DIR}")"
 HYBRID_H5_DIR="$(realpath -m -- "${HYBRID_H5_DIR}")"
 HYBRID_REUSE_H3=0
-if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]] &&    HYBRID_QUANT_LAYOUT_MODEL_DIR="${HYBRID_H3_DIR}"      bash "${ROOT_DIR}/scripts/model/prepare-orcarouter-hybrid.sh" reuse-check >/dev/null 2>&1; then
-  HYBRID_REUSE_H3=1
+if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+  if HYBRID_QUANT_LAYOUT_MODEL_DIR="${HYBRID_H3_DIR}" \
+    bash "${ROOT_DIR}/scripts/model/prepare-orcarouter-hybrid.sh" reuse-check >/dev/null 2>&1; then
+    HYBRID_REUSE_H3=1
+  fi
 fi
 [[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
 printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
