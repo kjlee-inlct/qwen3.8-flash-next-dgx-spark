@@ -242,7 +242,15 @@ A memory monitor that was intentionally disabled at install time is reported as 
 [PASS] runtime memory monitor is disabled by configuration
 ```
 
-If the monitor is configured as enabled, a missing or stale monitor PID remains a failure. A low memory/swap reserve remains a warning or failure according to the configured thresholds.
+If the monitor is configured as enabled, a missing or stale monitor PID remains a failure. Memory margins are CMA-aware on DGX Spark: the monitor and doctor subtract `CmaFree` from both `MemAvailable` and `MemFree` before applying the normal available/free thresholds. This avoids treating CMA-reserved pages as a safe host-allocation margin for NVIDIA system-page allocation.
+
+Fresh `orcarouter-hybrid` installs enable the monitor in protection mode by default. Existing manifests are not silently rewritten; enable protection explicitly when upgrading an older Hybrid install:
+
+```bash
+./install.sh --model orcarouter-hybrid --protect --yes
+```
+
+A protected stop writes `runtime-stop.env` and gracefully stops the inference container so systemd does not immediately restart the same memory-pressure workload. Operators can intentionally select warn-only mode with `--monitor`, or disable monitoring with `--no-monitor`.
 
 Use strict mode when maintenance automation should fail on warnings as well as hard failures:
 
