@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from typing import Any
 ORCA_REPO = "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 ORCA_REVISION = "c1209bda15a6bbc4c68b585e93d40c0d85f50306"
 MAZINB_REPO = "mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+MAZINB_REVISION = "f2c21eb"
 
 
 class HybridValidationError(RuntimeError):
@@ -33,14 +35,29 @@ def require(condition: bool, message: str) -> None:
         raise HybridValidationError(message)
 
 
-def model_manifest(root: Path, *, repository: str, revision: str | None = None) -> dict[str, Any]:
+def revision_matches(actual: str, expected: str) -> bool:
+    """Match a full SHA exactly or an immutable abbreviated SHA by prefix."""
+    if len(expected) == 40:
+        return actual == expected
+    return bool(re.fullmatch(r"[0-9a-f]{40}", actual)) and actual.startswith(expected)
+
+
+def model_manifest(
+    root: Path,
+    *,
+    repository: str,
+    revision: str | None = None,
+) -> dict[str, Any]:
     data = load_json(root / ".qwen38-model-manifest.json")
     require(data.get("status") == "complete", f"incomplete model manifest: {root}")
     require(data.get("repository") == repository, f"unexpected repository in {root}")
     actual_revision = str(data.get("revision") or "")
     require(bool(actual_revision), f"missing model revision in {root}")
     if revision is not None:
-        require(actual_revision == revision, f"unexpected revision in {root}: {actual_revision}")
+        require(
+            revision_matches(actual_revision, revision),
+            f"unexpected revision in {root}: {actual_revision}",
+        )
     require((root / "model.safetensors.index.json").is_file(), f"model index missing: {root}")
     return data
 
@@ -53,26 +70,56 @@ def hybrid_manifest(root: Path, variant: str) -> dict[str, Any]:
     return data
 
 
-def validate(args: argparse.Namespace) -> None:
-    stage_order = {"h3": 3, "h4": 4, "h5": 5, "h6": 6}
-    through = stage_order[args.through]
-    base = model_manifest(args.base_dir, repository=ORCA_REPO, revision=ORCA_REVISION)
-    overlay = None
-    if not args.runtime_only:
-        require(args.overlay_dir is not None, "--overlay-dir is required without --runtime-only")
-        overlay = model_manifest(args.overlay_dir, repository=MAZINB_REPO)
-
-    h3 = hybrid_manifest(args.h3_dir, "quant-layout-mazinb-experts")
-    require(h3.get("base_revision") == base.get("revision"), "H3 base revision mismatch")
-    require(bool(h3.get("overlay_revision")), "H3 overlay revision is missing")
-    if overlay is not None:
-        require(h3.get("overlay_revision") == overlay.get("revision"), "H3 overlay revision mismatch")
+def validate_h3_provenance(h3: dict[str, Any]) -> None:
+    """Validate that H3 alone proves the pinned OrcaRouter/mazinb source lineage."""
+    require(h3.get("base_revision") == ORCA_REVISION, "H3 base revision mismatch")
+    overlay_revision = str(h3.get("overlay_revision") or "")
+    require(bool(overlay_revision), "H3 overlay revision is missing")
+    require(
+        revision_matches(overlay_revision, MAZINB_REVISION),
+        f"H3 overlay revision is not pinned mazinb {MAZINB_REVISION}: {overlay_revision}",
+    )
     require(h3.get("group0_bf16_weights") == 300, "H3 group-0 BF16 count mismatch")
     require(h3.get("group0_fp8_scales_removed") == 300, "H3 removed FP8 scale count mismatch")
     require(h3.get("base_expert_tensors_removed") == 221184, "H3 removed expert tensor count mismatch")
     require(h3.get("overlay_expert_tensors_added") == 294912, "H3 overlay expert tensor count mismatch")
     require(h3.get("quantization_config_source") == "mazinb-modelopt-nvfp4", "H3 quantization source mismatch")
     require(h3.get("mtp_tensors_changed") == 0, "H3 unexpectedly changes MTP")
+
+
+def validate_h3_source_reuse(args: argparse.Namespace) -> None:
+    h3 = hybrid_manifest(args.h3_dir, "quant-layout-mazinb-experts")
+    validate_h3_provenance(h3)
+    print(
+        "H3 safely replaces the mazinb build-time source "
+        f"(base={h3.get('base_revision')}, overlay={h3.get('overlay_revision')})"
+    )
+
+
+def require_runtime_paths(args: argparse.Namespace) -> None:
+    for name in ("base_dir", "h4_dir", "h5_dir", "model_dir"):
+        require(getattr(args, name) is not None, f"--{name.replace('_', '-')} is required")
+
+
+def validate(args: argparse.Namespace) -> None:
+    require_runtime_paths(args)
+    stage_order = {"h3": 3, "h4": 4, "h5": 5, "h6": 6}
+    through = stage_order[args.through]
+    base = model_manifest(args.base_dir, repository=ORCA_REPO, revision=ORCA_REVISION)
+    overlay = None
+    if not args.runtime_only:
+        require(args.overlay_dir is not None, "--overlay-dir is required without --runtime-only")
+        overlay = model_manifest(
+            args.overlay_dir,
+            repository=MAZINB_REPO,
+            revision=MAZINB_REVISION,
+        )
+
+    h3 = hybrid_manifest(args.h3_dir, "quant-layout-mazinb-experts")
+    validate_h3_provenance(h3)
+    require(h3.get("base_revision") == base.get("revision"), "H3 base revision mismatch")
+    if overlay is not None:
+        require(h3.get("overlay_revision") == overlay.get("revision"), "H3 overlay revision mismatch")
     if through == 3:
         print(
             "OrcaRouter hybrid chain is valid through H3 "
@@ -126,9 +173,14 @@ def validate(args: argparse.Namespace) -> None:
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--base-dir", type=Path, required=True)
+    p.add_argument("--base-dir", type=Path)
     p.add_argument("--overlay-dir", type=Path)
     p.add_argument("--runtime-only", action="store_true")
+    p.add_argument(
+        "--h3-source-reuse-check",
+        action="store_true",
+        help="validate only whether H3 safely replaces the pinned mazinb build-time source",
+    )
     p.add_argument(
         "--through",
         choices=("h3", "h4", "h5", "h6"),
@@ -136,16 +188,19 @@ def parser() -> argparse.ArgumentParser:
         help="validate provenance through this generated stage",
     )
     p.add_argument("--h3-dir", type=Path, required=True)
-    p.add_argument("--h4-dir", type=Path, required=True)
-    p.add_argument("--h5-dir", type=Path, required=True)
-    p.add_argument("--model-dir", type=Path, required=True)
+    p.add_argument("--h4-dir", type=Path)
+    p.add_argument("--h5-dir", type=Path)
+    p.add_argument("--model-dir", type=Path)
     return p
 
 
 def main() -> int:
     args = parser().parse_args()
     try:
-        validate(args)
+        if args.h3_source_reuse_check:
+            validate_h3_source_reuse(args)
+        else:
+            validate(args)
     except HybridValidationError as exc:
         print(f"ERROR: {exc}")
         return 1
