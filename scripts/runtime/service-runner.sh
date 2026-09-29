@@ -23,8 +23,8 @@ parse_state_into_vars() {
 
 # install.env is data, not executable shell input. The strict parser validates
 # the closed installer key set and emits only runtime-required fields.
-parse_state_into_vars install-runtime "${STATE_FILE}" || {
-  printf 'FATAL: installation manifest failed strict runtime parsing: %s\n' "${STATE_FILE}" >&2
+parse_state_into_vars install-service-runtime "${STATE_FILE}" || {
+  printf 'FATAL: installation manifest failed strict service-runtime parsing: %s\n' "${STATE_FILE}" >&2
   exit 1
 }
 
