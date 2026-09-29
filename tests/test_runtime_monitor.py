@@ -68,6 +68,7 @@ esac
 
             result = subprocess.run(
                 [
+                    "bash",
                     str(MONITOR),
                     "--container",
                     "qwen38-flash-next",
