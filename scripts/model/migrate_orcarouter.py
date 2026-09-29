@@ -150,6 +150,7 @@ def running_container_mounts(target: Path) -> list[str]:
                 break
     return owners
 
+
 def prepare_plan(
     legacy: Path,
     canonical: Path,
@@ -219,11 +220,17 @@ def prepare_plan(
             )
 
         manifest = validate_manifest(canonical, require_complete=False)
-        if manifest.get("status") == "complete":
+        status = manifest.get("status")
+        if status == "complete":
             validate_complete_checkpoint(canonical)
             raise MigrationError(
                 "canonical path already contains a complete pinned checkpoint while "
                 "legacy is still a real directory; manual reconciliation is required"
+            )
+        if status != "downloading":
+            raise MigrationError(
+                "canonical checkpoint has an unexpected non-complete status; "
+                f"refusing to treat it as an interrupted download: {status}"
             )
         backup = backup_candidate(canonical)
     else:
@@ -258,16 +265,20 @@ def apply_plan(plan: MigrationPlan, *, dry_run: bool) -> None:
         print("DRY-RUN: no files changed.")
         return
 
-    plan.canonical.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        plan.canonical.parent.mkdir(parents=True, exist_ok=True)
+        plan.legacy.parent.mkdir(parents=True, exist_ok=True)
 
-    if plan.backup is not None:
-        os.replace(plan.canonical, plan.backup)
+        if plan.backup is not None:
+            os.replace(plan.canonical, plan.backup)
 
-    if plan.legacy.is_dir():
-        os.replace(plan.legacy, plan.canonical)
+        if plan.legacy.is_dir():
+            os.replace(plan.legacy, plan.canonical)
 
-    if plan.create_legacy_link:
-        plan.legacy.symlink_to(plan.canonical, target_is_directory=True)
+        if plan.create_legacy_link:
+            plan.legacy.symlink_to(plan.canonical, target_is_directory=True)
+    except OSError as exc:
+        raise MigrationError(f"filesystem migration failed: {exc}") from exc
 
     validate_complete_checkpoint(plan.canonical)
     if not plan.legacy.is_symlink() or plan.legacy.resolve(strict=False) != plan.canonical:
