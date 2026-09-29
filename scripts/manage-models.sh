@@ -95,6 +95,9 @@ if [[ "${INSTALL_PHASE}" == uninstalled ]]; then
   ACTIVE_PROFILE=""
   ACTIVE_IMAGE=""
 fi
+if [[ -n "${ACTIVE_MODEL}" && -z "${QWEN38_MODEL_ROOT:-}" ]]; then
+  export QWEN38_MODEL_ROOT="$(dirname -- "${ACTIVE_MODEL}")"
+fi
 
 manifest_path() {
   local path="$1"
@@ -283,7 +286,9 @@ discover() {
   declare -A seen=()
   local -a candidates=()
   local -a paths=()
-  [[ -n "${ACTIVE_MODEL}" ]] && candidates+=("${ACTIVE_MODEL}")
+  if [[ -n "${ACTIVE_MODEL}" ]]; then
+    candidates+=("${ACTIVE_MODEL}" "$(dirname -- "${ACTIVE_MODEL}")")
+  fi
   candidates+=("${HOME}/models" "${SCRIPT_ROOT}/models" "${SCRIPT_ROOT}/model")
 
   local base path canonical
