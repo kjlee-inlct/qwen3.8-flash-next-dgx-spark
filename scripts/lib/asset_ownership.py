@@ -414,30 +414,30 @@ def preflight_one(registry: Path, kind: str, locator: str) -> None:
 
 def _purge_order(data: dict[str, Any], kind: str) -> list[dict[str, Any]]:
     candidates = _selected_owned(data, kind)
-    by_key = {(item["kind"], item["locator"]): item for item in candidates}
-    visited: set[tuple[str, str]] = set()
-    visiting: set[tuple[str, str]] = set()
+    remaining = {(item["kind"], item["locator"]): item for item in candidates}
     ordered: list[dict[str, Any]] = []
 
-    def visit(item: dict[str, Any]) -> None:
-        key = (item["kind"], item["locator"])
-        if key in visited:
-            return
-        if key in visiting:
-            raise RegistryError(f"asset dependency cycle detected at {item['locator']}")
-        visiting.add(key)
-        # Append the dependent before its dependencies so deletion is safe.
-        ordered.append(item)
-        for dependency in item["depends_on"]:
-            dep = by_key.get((item["kind"], dependency))
-            if dep is not None:
-                visit(dep)
-        visiting.remove(key)
-        visited.add(key)
-
-    # More-dependent entries first makes the plan deterministic for the H3->H6 chain.
-    for item in sorted(candidates, key=lambda value: (-len(value["depends_on"]), value["kind"], value["locator"])):
-        visit(item)
+    while remaining:
+        depended_on = {
+            (item["kind"], dependency)
+            for item in remaining.values()
+            for dependency in item["depends_on"]
+            if (item["kind"], dependency) in remaining
+        }
+        leaves = [
+            item
+            for key, item in remaining.items()
+            if key not in depended_on
+        ]
+        if not leaves:
+            cycle = ", ".join(sorted(item["locator"] for item in remaining.values()))
+            raise RegistryError(f"asset dependency cycle detected: {cycle}")
+        for item in sorted(
+            leaves,
+            key=lambda value: (-len(value["depends_on"]), value["kind"], value["locator"]),
+        ):
+            ordered.append(item)
+            remaining.pop((item["kind"], item["locator"]))
     return ordered
 
 
