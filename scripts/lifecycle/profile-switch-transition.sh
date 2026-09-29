@@ -122,7 +122,8 @@ operation_lock_busy() {
   return 0
 }
 
-# Compare runtime-relevant fields through the strict parser; PHASE may differ after recovery finalizes the target.\nmanifest_runtime_equal() {
+# Compare runtime-relevant fields through the strict parser; PHASE may differ after recovery finalizes the target.
+manifest_runtime_equal() {
   python3 - "${STATE_PARSER}" "$1" "$2" <<'PY'
 import importlib.util
 import pathlib
