@@ -10,6 +10,8 @@ ACTION="${1:-list}"
 TARGET="${2:-}"
 YES=0
 DRY_RUN=0
+SOURCE_ROOT=""
+DESTINATION_ROOT=""
 
 [[ -r "${MODEL_ASSETS}" ]] || { printf 'ERROR: model asset registry missing: %s\n' "${MODEL_ASSETS}" >&2; exit 1; }
 # shellcheck source=scripts/model-assets.sh
@@ -23,6 +25,7 @@ Usage:
   ./scripts/manage-models.sh remove PATH [--yes] [--dry-run]
   ./scripts/manage-models.sh retire PROFILE [--yes] [--dry-run]
   ./scripts/manage-models.sh migrate-orcarouter [--yes] [--dry-run]
+  ./scripts/manage-models.sh relocate-root [--source PATH] [--destination PATH] [--yes] [--dry-run]
 
 list:
   Shows managed checkpoint directories discovered from the active installation,
@@ -43,12 +46,17 @@ retire:
   present profile are protected. Use --dry-run to inspect the plan first.
 
 migrate-orcarouter:
-  Moves a complete pinned repository-local ./model checkpoint to the canonical
+  Moves a complete pinned repository-local ./model checkpoint to the historical
   $HOME/models/qwen3.8-flash-next-orcarouter path using a same-filesystem rename.
-  An interrupted canonical download is preserved as a partial-backup directory.
-  The legacy ./model path becomes a compatibility symlink. The migration is
-  fail-closed on wrong identity, incomplete shards, running-container mounts,
-  different filesystems, or conflicting complete checkpoints.
+
+relocate-root:
+  Atomically moves the managed model root (default: $HOME/models) to the
+  repository-local ./models directory. It validates managed manifests/shards,
+  refuses unmanaged top-level entries, active service/container mounts, lifecycle
+  lock conflicts, cross-filesystem moves, or a conflicting destination. After
+  relocation, $HOME/models remains as a compatibility symlink to ./models and
+  the legacy ./model symlink is refreshed to the relocated OrcaRouter checkpoint.
+  Reruns are idempotent. Use --dry-run first.
 EOF
 }
 
@@ -65,6 +73,16 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes) YES=1 ;;
     --dry-run) DRY_RUN=1 ;;
+    --source)
+      [[ $# -ge 2 ]] || die "--source requires PATH"
+      SOURCE_ROOT="$2"
+      shift
+      ;;
+    --destination)
+      [[ $# -ge 2 ]] || die "--destination requires PATH"
+      DESTINATION_ROOT="$2"
+      shift
+      ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -344,6 +362,19 @@ migrate_orcarouter() {
   python3 "${helper}" "${args[@]}"
 }
 
+relocate_model_root() {
+  local helper="${SCRIPT_ROOT}/scripts/model/relocate_model_root.py"
+  local -a args=()
+
+  [[ -r "${helper}" ]] || die "model-root relocation helper missing: ${helper}"
+  [[ "${DRY_RUN}" == 1 ]] && args+=(--dry-run)
+  [[ "${YES}" == 1 ]] && args+=(--yes)
+  [[ -z "${SOURCE_ROOT}" ]] || args+=(--source "${SOURCE_ROOT}")
+  [[ -z "${DESTINATION_ROOT}" ]] || args+=(--destination "${DESTINATION_ROOT}")
+
+  python3 "${helper}" "${args[@]}"
+}
+
 remove_model() {
   local path manifest status kind repo revision files size allowed
   path="$(realpath -m -- "${TARGET}")"
@@ -388,6 +419,7 @@ case "${ACTION}" in
   remove) remove_model ;;
   retire) retire_profile ;;
   migrate-orcarouter) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "migrate-orcarouter takes no target"; migrate_orcarouter ;;
+  relocate-root) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "relocate-root takes flags, not a positional target"; relocate_model_root ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 2 ;;
 esac
