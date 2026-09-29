@@ -534,13 +534,14 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
     if [[ "${UI_LANG}" == ko ]]; then
       if wizard_yes_no '별도의 config.json override를 사용합니까?' no; then
         wizard_input CONFIG_OVERRIDE '절대 경로 또는 ~/path/to/config.json' ''
+        [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
       fi
     else
       if wizard_yes_no 'Use a separate config.json override?' no; then
         wizard_input CONFIG_OVERRIDE 'Absolute path or ~/path/to/config.json' ''
+        [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
       fi
     fi
-    [[ -z "${CONFIG_OVERRIDE}" ]] || [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
   fi
 
   if [[ "${UI_LANG}" == ko ]]; then
