@@ -43,16 +43,19 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 |---|---|---:|
 | `orcarouter` | stable/default, qualified | yes |
 | `nvidia` | experimental | yes |
-| `mazinb` | experimental, managed E2E pending | yes |
-| `orcarouter-hybrid` | experimental, generated H6, managed E2E pending | yes |
+| `mazinb` | experimental, clean managed DGX lifecycle pending | yes |
+| `orcarouter-hybrid` | experimental, generated H6; warm/reuse E2E + round-trip switch + host repair gate PASS; clean-host full build pending | yes |
 | `lychee888` | planned | no |
 
 A profile is not made installable merely because checkpoint metadata exists.
 The registry must also have a defined preparation/runtime path and the managed
 lifecycle must accept the profile. However, `installable=yes` is an implementation
 state, not proof that the full DGX managed-service qualification has passed.
-`orcarouter-hybrid` now uses the H3 -> H4-all -> H5 -> H6 preparation chain;
-`lychee888` remains blocked.
+`orcarouter-hybrid` uses the H3 -> H4-all -> H5 -> H6 preparation chain and has
+passed warm/reuse managed operation, the Hybrid -> OrcaRouter -> Hybrid transactional
+round trip, and the 2026-09-29 CMA-aware host-stability repair gate. Its genuinely
+clean-host source-download/build/service lifecycle is still pending, so it remains
+experimental. `lychee888` remains blocked.
 
 
 ### OrcaRouter hybrid installer profile
