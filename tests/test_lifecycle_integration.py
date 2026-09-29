@@ -288,6 +288,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
             "scripts/update-release.sh",
             "scripts/update-transition.sh",
             "scripts/runtime-transition.sh",
+            "scripts/profile-switch-transition.sh",
             "scripts/doctor.sh",
             "scripts/manage-proxy.sh",
         ):
@@ -297,6 +298,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn("./uninstall.sh --purge-all --yes", operations)
         self.assertIn("UPDATE_STATE=idle", operations)
         self.assertIn("TRANSACTION_STATE=idle", operations)
+        self.assertIn("PROFILE_SWITCH_STATE=idle", operations)
         self.assertIn("LAN port `8001` is recommended", operations)
         self.assertIn("enter `8000` as the LAN port", operations)
 
