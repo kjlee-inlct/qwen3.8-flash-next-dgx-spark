@@ -19,7 +19,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/monitor-runtime.sh [options]
   --container NAME             Container to monitor (default: qwen38-flash-next)
-  --min-available-gib N        MemAvailable warning floor (default: 6)
+  --min-available-gib N        Non-CMA available floor (MemAvailable-CmaFree, default: 6)
   --min-free-gib N             Non-CMA free-memory floor (MemFree-CmaFree, default: 2)
   --free-gate-gib N            Apply non-CMA free floor below this MemAvailable (default: 10)
   --min-swap-free-gib N        SwapFree warning floor (default: 8)
