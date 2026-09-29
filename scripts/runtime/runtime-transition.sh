@@ -8,7 +8,7 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/runtime-transition.env"
 
 usage() {
-  printf 'Usage: %s prepare|candidate-started|validating|commit|rollback|recover|status\n' "$0"
+  printf 'Usage: %s prepare|candidate-started|validating|commit|rollback|abort-protected|recover|status\n' "$0"
 }
 die() { printf 'FATAL: %s\n' "$*" >&2; exit 1; }
 container_exists() { docker inspect "$1" >/dev/null 2>&1; }
@@ -118,6 +118,24 @@ case "$1" in
       fi
     fi
     clear_state
+    ;;
+  abort-protected)
+    [[ -r "${STATE_FILE}" ]] || { printf 'No runtime transition to abort.\n'; exit 0; }
+    load_state
+    [[ "${TRANSACTION_STATE:-}" != committing ]] || die 'cannot abort a committing runtime transition as protected'
+    if container_exists "${CONTAINER}"; then
+      docker rm -f "${CONTAINER}" >/dev/null
+    fi
+    if [[ "${HAD_PREVIOUS}" == 1 ]]; then
+      container_exists "${ROLLBACK_CONTAINER}" || die "rollback container is missing: ${ROLLBACK_CONTAINER}"
+      docker rename "${ROLLBACK_CONTAINER}" "${CONTAINER}"
+      if container_running "${CONTAINER}"; then
+        docker stop --timeout 30 "${CONTAINER}" >/dev/null
+      fi
+      printf 'Previous runtime container restored but left stopped after memory protection.\n'
+    fi
+    clear_state
+    printf 'Runtime transition aborted by memory protection (state=idle).\n'
     ;;
   recover)
     current_exists=0
