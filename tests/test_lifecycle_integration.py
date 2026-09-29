@@ -152,6 +152,10 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn('"${STATE_DIR}/runtime-commit.env"', uninstaller)
         self.assertIn('"${STATE_DIR}/runtime-transition.env"', uninstaller)
         self.assertIn('"${STATE_DIR}/update-transition.env"', uninstaller)
+        self.assertIn('"${ASSET_OWNERSHIP_FILE}"', uninstaller)
+        self.assertIn("asset_preflight_full_purge", uninstaller)
+        self.assertIn("asset_apply_full_purge", uninstaller)
+        self.assertIn('plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all', uninstaller)
         self.assertIn("PHASE=uninstalled", uninstaller)
         self.assertIn("manifest is retained in the uninstalled state", uninstaller)
 
@@ -244,12 +248,30 @@ class LifecycleIntegrationTests(unittest.TestCase):
             self.assertNotIn("Resuming installation", result.stdout)
             self.assertEqual(state.read_bytes(), before)
 
-    def test_uninstaller_accepts_managed_hybrid_manifest_for_owned_model_purge(self) -> None:
+    def test_uninstaller_delegates_owned_model_safety_to_asset_registry(self) -> None:
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
-        self.assertIn(".qwen38-model-manifest.json", uninstaller)
-        self.assertIn(".qwen38-hybrid-manifest.json", uninstaller)
-        self.assertIn("managed model/hybrid manifest missing", uninstaller)
+        ownership = (ROOT / "scripts" / "lib" / "asset_ownership.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('preflight-one "${ASSET_OWNERSHIP_FILE}" model "${MODEL_DIR}"', uninstaller)
+        self.assertIn(".qwen38-model-manifest.json", ownership)
+        self.assertIn(".qwen38-hybrid-manifest.json", ownership)
+        self.assertIn("owned model manifest drift detected", ownership)
 
+    def test_installer_keeps_cumulative_asset_ownership_across_profile_switches(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        diagnostics = (
+            ROOT / "scripts" / "diagnostics" / "collect-diagnostics.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"', installer)
+        self.assertIn("asset_bootstrap_install", installer)
+        self.assertIn("asset_track_profile_models", installer)
+        self.assertIn("asset_track_profile_images", installer)
+        self.assertIn("HYBRID_H5_DIR", installer)
+        self.assertIn("multi-profile asset ownership registry is valid", doctor)
+        self.assertIn("asset-ownership.json", diagnostics)
 
     def test_profile_switch_uses_persisted_lifecycle_transaction(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")

@@ -6,6 +6,8 @@ SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${SCRIPT_ROOT}/lib/state_file.py"
+ASSET_OWNERSHIP_TOOL="${SCRIPT_ROOT}/lib/asset_ownership.py"
+ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"
 CONTAINER_NAME="qwen38-flash-next"
 SERVICE_UNIT="qwen38-flash-next.service"
 INCLUDE_LOGS=1
@@ -150,6 +152,13 @@ if [[ -r "${STATE_PARSER}" ]]; then
   capture_state_file profile-switch-backup.txt install-maintenance "${STATE_FILE}.profile-switch-backup"
 else
   printf 'state parser unavailable: %s\n' "${STATE_PARSER}" >"${bundle_dir}/state-parser-error.txt"
+fi
+
+if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
+  if [[ -r "${ASSET_OWNERSHIP_TOOL}" ]]; then
+    capture asset-ownership-verify.txt python3 "${ASSET_OWNERSHIP_TOOL}" verify "${ASSET_OWNERSHIP_FILE}"
+  fi
+  cp -- "${ASSET_OWNERSHIP_FILE}" "${bundle_dir}/asset-ownership.json" 2>/dev/null || true
 fi
 
 if command -v docker >/dev/null 2>&1 && docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then

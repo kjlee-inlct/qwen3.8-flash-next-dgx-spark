@@ -15,6 +15,8 @@ source "${WIZARD_UI}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
+ASSET_OWNERSHIP_TOOL="${ROOT_DIR}/scripts/lib/asset_ownership.py"
+ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"
 PROFILE_SWITCH_TRANSITION="${ROOT_DIR}/scripts/lifecycle/profile-switch-transition.sh"
 PROFILE_SWITCH_STATE="${STATE_DIR}/profile-switch-transition.env"
 OPERATION_LOCK_LIB="${ROOT_DIR}/scripts/lib/operation-lock.sh"
@@ -73,6 +75,100 @@ sudo_with_operation_lock() {
     QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
     QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
     "$@"
+}
+asset_bootstrap_install() {
+  [[ -r "${ASSET_OWNERSHIP_TOOL}" ]] || die "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
+  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
+}
+asset_model_owned() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 1
+  python3 "${ASSET_OWNERSHIP_TOOL}" owns-model "${ASSET_OWNERSHIP_FILE}" "$1"
+}
+asset_image_owned() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 1
+  python3 "${ASSET_OWNERSHIP_TOOL}" owns-image "${ASSET_OWNERSHIP_FILE}" "$1"
+}
+asset_track_model() {
+  local path="$1" root="$2" owned="$3"
+  shift 3
+  local args=(track-model "${ASSET_OWNERSHIP_FILE}" "${path}" "${root}" --owned "${owned}") dependency
+  for dependency in "$@"; do
+    args+=(--depends "${dependency}")
+  done
+  python3 "${ASSET_OWNERSHIP_TOOL}" "${args[@]}"
+}
+asset_track_image() {
+  local image="$1" owned="$2"
+  shift 2
+  local args=(track-image "${ASSET_OWNERSHIP_FILE}" "${image}" --owned "${owned}") dependency
+  for dependency in "$@"; do
+    args+=(--depends "${dependency}")
+  done
+  python3 "${ASSET_OWNERSHIP_TOOL}" "${args[@]}"
+}
+asset_model_ownership_for_path() {
+  local path="$1"
+  if asset_model_owned "${path}"; then
+    printf '1\n'
+  elif [[ ! -e "${path}" && ! -L "${path}" ]]; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+asset_image_ownership_for_name() {
+  local image="$1"
+  if asset_image_owned "${image}"; then
+    printf '1\n'
+  elif ! docker image inspect "${image}" >/dev/null 2>&1; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+asset_track_profile_models() {
+  local owned
+  if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
+    owned="$(asset_model_ownership_for_path "${HYBRID_BASE_DIR}")"
+    asset_track_model "${HYBRID_BASE_DIR}" "$(dirname -- "${HYBRID_BASE_DIR}")" "${owned}"
+
+    if [[ "${HYBRID_REUSE_H3}" != 1 ]]; then
+      owned="$(asset_model_ownership_for_path "${HYBRID_OVERLAY_DIR}")"
+      asset_track_model "${HYBRID_OVERLAY_DIR}" "$(dirname -- "${HYBRID_OVERLAY_DIR}")" "${owned}"
+    fi
+
+    owned="$(asset_model_ownership_for_path "${HYBRID_H3_DIR}")"
+    asset_track_model "${HYBRID_H3_DIR}" "$(dirname -- "${HYBRID_H3_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}"
+
+    owned="$(asset_model_ownership_for_path "${HYBRID_H4_DIR}")"
+    asset_track_model "${HYBRID_H4_DIR}" "$(dirname -- "${HYBRID_H4_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}"
+
+    owned="$(asset_model_ownership_for_path "${HYBRID_H5_DIR}")"
+    asset_track_model "${HYBRID_H5_DIR}" "$(dirname -- "${HYBRID_H5_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}" "${HYBRID_H4_DIR}"
+
+    owned="$(asset_model_ownership_for_path "${MODEL_DIR}")"
+    asset_track_model "${MODEL_DIR}" "$(dirname -- "${MODEL_DIR}")" "${owned}" \
+      "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}" "${HYBRID_H4_DIR}" "${HYBRID_H5_DIR}"
+  else
+    owned="$(asset_model_ownership_for_path "${MODEL_DIR}")"
+    asset_track_model "${MODEL_DIR}" "$(dirname -- "${MODEL_DIR}")" "${owned}"
+  fi
+
+  if asset_model_owned "${MODEL_DIR}"; then MODEL_OWNED=1; else MODEL_OWNED=0; fi
+}
+
+asset_track_profile_images() {
+  local owned
+  owned="$(asset_image_ownership_for_name "${IMAGE}")"
+  asset_track_image "${IMAGE}" "${owned}"
+  if [[ "${MODEL_PROFILE}" == nvidia ]]; then
+    owned="$(asset_image_ownership_for_name vllm-skinny-tp1:v1)"
+    asset_track_image vllm-skinny-tp1:v1 "${owned}"
+  fi
+  if asset_image_owned "${IMAGE}"; then IMAGE_OWNED=1; else IMAGE_OWNED=0; fi
 }
 parse_install_manifest() {
   local parsed key value
@@ -793,14 +889,12 @@ docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks perm
 git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "installer must run from a git checkout to create an immutable release baseline"
 ensure_profile_auth
 
-if [[ "${RESUME}" != 1 ]]; then
-  [[ -e "${MODEL_DIR}" ]] || MODEL_OWNED=1
-  docker image inspect "${IMAGE}" >/dev/null 2>&1 || IMAGE_OWNED=1
-elif [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
-  # Profile-default refresh is intentionally conservative about image ownership:
-  # the shared skinny image may already belong to another profile/install.
-  IMAGE_OWNED=0
-fi
+# Bootstrap schema-4 MODEL_OWNED/IMAGE_OWNED into the cumulative registry once,
+# then derive the active compatibility flags from per-asset ownership. A profile
+# switch therefore cannot erase ownership of assets created by earlier profiles.
+asset_bootstrap_install
+asset_track_profile_models
+asset_track_profile_images
 
 printf '\nChecking gated access, pinned revision and disk capacity...\n'
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
@@ -883,6 +977,9 @@ else
   MODEL_PROFILE="${MODEL_PROFILE}" REPO="${REPO}" REVISION="${REVISION}" DEST="${MODEL_DIR}" \
     "${ROOT_DIR}/scripts/download-weights.sh"
 fi
+# Refresh fingerprints after successful downloads/builds. Claimed assets become
+# ready only after their managed model/hybrid manifest exists.
+asset_track_profile_models
 write_state weights_ready
 if [[ -z "${CONFIG_OVERRIDE}" && "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
   CONFIG_OVERRIDE="${STATE_DIR}/config.vllm.json"
@@ -932,6 +1029,8 @@ elif [[ ( "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybri
 else
   docker pull "${IMAGE}"
 fi
+# Bind installer ownership to the concrete image IDs now present locally.
+asset_track_profile_images
 write_state image_ready
 
 if [[ "${API_ACCESS_MODE}" != local ]]; then

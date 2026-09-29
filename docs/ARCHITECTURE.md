@@ -106,6 +106,40 @@ will be added behind a dedicated registry/adapter boundary. Do not add a manifes
 `SERVING_BACKEND` field until an actual second backend can install, run, validate, and
 uninstall end to end; doing so earlier would add migration risk without runtime value.
 
+## Cumulative asset ownership
+
+`install.env` remains the active runtime/profile manifest, but its historical
+`MODEL_OWNED` and `IMAGE_OWNED` fields are necessarily single-asset views.
+Profile switching therefore uses a separate
+`~/.local/state/qwen38-spark/asset-ownership.json` registry for cumulative
+destructive authority.
+
+The registry is asset-centric rather than profile-centric. Each model directory
+or Docker image is recorded independently with:
+
+- explicit owned vs observed/unowned state;
+- a claimed/ready state so interrupted creation is distinguishable;
+- a model-manifest SHA-256 or Docker image ID once ready;
+- exact dependency locators for linked Hybrid stages.
+
+Ownership is claimed before the installer creates a previously absent asset and
+is finalized only after the managed manifest or image ID exists. Reusing an
+existing asset never upgrades it to owned. If an already-owned manifest or image
+ID changes unexpectedly, install/purge fails closed rather than silently
+adopting the drift.
+
+For Hybrid H6 the retained runtime dependency graph is recorded explicitly:
+H6 depends on H5/H4/H3/OrcaRouter, H5 on H4/H3/OrcaRouter, H4 on
+H3/OrcaRouter, and H3 on OrcaRouter. `--purge-all` deletes dependents before
+dependencies and refuses the entire purge if an unowned retained asset still
+depends on an owned candidate. The mazinb checkpoint is a build-time input and
+is not a retained H3-H6 runtime dependency.
+
+Legacy migration is deliberately conservative. The current
+`MODEL_OWNED=1`/`IMAGE_OWNED=1` values may seed the registry once, but assets
+whose ownership was already lost by an older profile switch are not inferred
+from filenames, managed manifests, or image tags.
+
 ## Persisted profile-switch lifecycle
 
 Managed model-profile replacement is a transaction above the existing runtime

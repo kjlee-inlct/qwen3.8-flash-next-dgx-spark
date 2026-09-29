@@ -4,8 +4,10 @@ set -euo pipefail
 
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
+ASSET_OWNERSHIP_TOOL="${SCRIPT_ROOT}/scripts/lib/asset_ownership.py"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
+ASSET_OWNERSHIP_FILE="${STATE_DIR}/asset-ownership.json"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 RUNTIME_TRANSITION_FILE="${STATE_DIR}/runtime-transition.env"
 UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
@@ -31,6 +33,72 @@ sudo_with_operation_lock() {
     "$@"
 }
 
+asset_bootstrap_install() {
+  [[ -r "${ASSET_OWNERSHIP_TOOL}" ]] || die "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
+  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
+}
+asset_model_owned() {
+  if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
+    python3 "${ASSET_OWNERSHIP_TOOL}" owns-model "${ASSET_OWNERSHIP_FILE}" "$1"
+  else
+    return 1
+  fi
+}
+asset_image_owned() {
+  if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
+    python3 "${ASSET_OWNERSHIP_TOOL}" owns-image "${ASSET_OWNERSHIP_FILE}" "$1"
+  else
+    return 1
+  fi
+}
+asset_forget() {
+  python3 "${ASSET_OWNERSHIP_TOOL}" forget "${ASSET_OWNERSHIP_FILE}" "$1" "$2"
+}
+image_referenced_by_external_container() {
+  local image="$1" name
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    [[ "${name}" == "${CONTAINER_NAME}" ]] && continue
+    printf '%s\n' "${name}"
+  done < <(docker ps -a --filter "ancestor=${image}" --format '{{.Names}}' 2>/dev/null)
+}
+
+asset_preflight_full_purge() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
+  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${ASSET_OWNERSHIP_FILE}" --kind all
+  local kind locator refs
+  while IFS=$'\t' read -r kind locator; do
+    [[ "${kind}" == image ]] || continue
+    refs="$(image_referenced_by_external_container "${locator}")"
+    if [[ -n "${refs}" ]]; then
+      die "refusing image purge; ${locator} is referenced by other containers: ${refs}"
+    fi
+  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+}
+
+asset_apply_full_purge() {
+  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
+  local kind locator
+  while IFS=$'\t' read -r kind locator; do
+    case "${kind}" in
+      model)
+        if [[ -e "${locator}" || -L "${locator}" ]]; then
+          rm -rf --one-file-system -- "${locator}"
+          printf 'Removed owned model asset: %s\n' "${locator}"
+        fi
+        asset_forget model "${locator}"
+        ;;
+      image)
+        if docker image inspect "${locator}" >/dev/null 2>&1; then
+          docker image rm "${locator}" || die "owned image is still in use: ${locator}"
+          printf 'Removed owned image asset: %s\n' "${locator}"
+        fi
+        asset_forget image "${locator}"
+        ;;
+      *) die "invalid asset purge plan kind: ${kind}" ;;
+    esac
+  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+}
 mark_manifest_uninstalled() {
   python3 - "${STATE_FILE}" <<'PY'
 import os
@@ -115,6 +183,15 @@ else
   printf '  releases : %s\n' "$([[ "${PURGE_ALL}" == 1 ]] && printf purge || printf keep)"
 fi
 if [[ "${DRY_RUN}" == 1 ]]; then
+  if [[ "${PURGE_ALL}" == 1 ]]; then
+    if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" && -r "${ASSET_OWNERSHIP_TOOL}" ]]; then
+      printf '\nCumulative installer-owned assets selected by --purge-all:\n'
+      python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all 2>/dev/null || \
+        printf '  ownership registry is invalid; real purge would stop before deletion\n'
+    else
+      printf '\nNo cumulative ownership registry exists yet; a real purge can migrate only the current manifest ownership flags.\n'
+    fi
+  fi
   if [[ "${UI_LANG}" == ko ]]; then
     printf '\nDRY-RUN 완료: container, monitor, proxy, release, 모델, swap, image 및 manifest를 변경하지 않았습니다.\n'
   else
@@ -137,6 +214,27 @@ acquire_operation_lock "${STATE_DIR}" "uninstall" || exit $?
 [[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" &&
    ! -e "${PROFILE_SWITCH_CANDIDATE}" && ! -L "${PROFILE_SWITCH_CANDIDATE}" ]] || \
   die "profile-switch artifacts exist without an active transaction; run doctor before uninstalling"
+
+# Migrate the current manifest's legacy single-asset ownership into the cumulative
+# registry before any destructive decision. This cannot infer assets whose
+# ownership was already lost by older profile switches.
+asset_bootstrap_install
+if [[ "${PURGE_ALL}" == 1 ]]; then
+  asset_preflight_full_purge
+else
+  if [[ "${PURGE_MODEL}" == 1 ]]; then
+    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" model "${MODEL_DIR}" || \
+      die "refusing model deletion: active model is not safely recorded as installer-owned"
+  fi
+  if [[ "${PURGE_IMAGE}" == 1 ]]; then
+    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" image "${VLLM_IMAGE}" || \
+      die "refusing image deletion: active image is not safely recorded as installer-owned"
+    image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")"
+    if [[ -n "${image_refs}" ]]; then
+      die "refusing image deletion; ${VLLM_IMAGE} is referenced by other containers: ${image_refs}"
+    fi
+  fi
+fi
 
 if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
@@ -163,18 +261,14 @@ fi
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp" "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
 
-if [[ "${PURGE_MODEL}" == 1 ]]; then
-  [[ "${MODEL_OWNED}" == 1 ]] || die "refusing model deletion: directory was not created by this installer"
-  if [[ -e "${MODEL_DIR}" ]]; then
-    if [[ ! -f "${MODEL_DIR}/.qwen38-model-manifest.json" && ! -f "${MODEL_DIR}/.qwen38-hybrid-manifest.json" ]]; then
-      die "refusing model deletion: managed model/hybrid manifest missing"
-    fi
-    if [[ "${MODEL_DIR}" != "${HOME}/models/"* && "${MODEL_DIR}" != "${INSTALL_ROOT}/model" ]]; then
-      die "refusing model deletion outside ${HOME}/models or the install root's model directory"
-    fi
+if [[ "${PURGE_ALL}" == 1 ]]; then
+  asset_apply_full_purge
+elif [[ "${PURGE_MODEL}" == 1 ]]; then
+  if [[ -e "${MODEL_DIR}" || -L "${MODEL_DIR}" ]]; then
     rm -rf --one-file-system -- "${MODEL_DIR}"
     printf 'Removed model directory: %s\n' "${MODEL_DIR}"
   fi
+  asset_forget model "${MODEL_DIR}"
 fi
 if [[ "${PURGE_SWAP}" == 1 ]]; then
   [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
@@ -183,11 +277,11 @@ if [[ "${PURGE_SWAP}" == 1 ]]; then
     sudo "${INSTALL_ROOT}/scripts/manage-swap.sh" "${swap_args[@]}"
   fi
 fi
-if [[ "${PURGE_IMAGE}" == 1 ]]; then
-  [[ "${IMAGE_OWNED}" == 1 ]] || die "refusing image deletion: image existed before this installation"
+if [[ "${PURGE_ALL}" != 1 && "${PURGE_IMAGE}" == 1 ]]; then
   if docker image inspect "${VLLM_IMAGE}" >/dev/null 2>&1; then
     docker image rm "${VLLM_IMAGE}" || die "image is still in use"
   fi
+  asset_forget image "${VLLM_IMAGE}"
 fi
 if [[ "${PURGE_ALL}" == 1 ]]; then
   [[ "${DATA_HOME}" == "${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark" ]] || die "refusing unsafe release-data purge path: ${DATA_HOME}"
@@ -201,7 +295,8 @@ if [[ "${PURGE_ALL}" == 1 ]]; then
     "${STATE_DIR}/runtime-transition.env" "${STATE_DIR}/runtime-transition.env.tmp" \
     "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp" \
     "${STATE_DIR}/profile-switch-transition.env" "${STATE_DIR}/profile-switch-transition.env.tmp" \
-    "${STATE_FILE}.profile-switch-backup" "${STATE_FILE}.profile-switch-candidate" "${STATE_FILE}.profile-switch-candidate.tmp"
+    "${STATE_FILE}.profile-switch-backup" "${STATE_FILE}.profile-switch-candidate" "${STATE_FILE}.profile-switch-candidate.tmp" \
+    "${ASSET_OWNERSHIP_FILE}"
   rm -f -- "${STATE_FILE}"
   rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
   [[ "${UI_LANG}" == ko ]] && printf '전체 제거 완료; immutable release 데이터와 설치 manifest를 삭제했습니다.\n' || \
