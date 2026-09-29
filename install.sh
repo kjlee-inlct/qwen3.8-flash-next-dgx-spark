@@ -8,6 +8,10 @@ source "${ROOT_DIR}/scripts/model-profiles.sh"
 BACKEND_REGISTRY="${ROOT_DIR}/scripts/backend/backends.sh"
 # shellcheck source=scripts/backend/backends.sh
 source "${BACKEND_REGISTRY}"
+WIZARD_UI="${ROOT_DIR}/scripts/lib/wizard-ui.sh"
+[[ -r "${WIZARD_UI}" ]] || { printf 'ERROR: wizard UI helper missing: %s\n' "${WIZARD_UI}" >&2; exit 1; }
+# shellcheck source=scripts/lib/wizard-ui.sh
+source "${WIZARD_UI}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
@@ -37,6 +41,10 @@ API_LAN_PORT="${API_LAN_PORT:-8001}"
 API_ACCESS_CLI=""; API_DOCKER_PORT_CLI=""; API_LAN_ADDRESS_CLI=""; API_LAN_PORT_CLI=""
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
+MODEL_ROOT_CLI=""
+MODEL_ROOT_ENV="${QWEN38_MODEL_ROOT:-}"
+MODEL_ROOT=""
+MODEL_ROOT_SOURCE=""
 MONITOR_ENABLED_CLI=""; MONITOR_PROTECT_CLI=""; MONITOR_MIN_AVAILABLE_CLI=""
 MONITOR_MIN_FREE_CLI=""; MONITOR_FREE_GATE_CLI=""; MONITOR_MIN_SWAP_FREE_CLI=""
 MONITOR_CONSECUTIVE_CLI=""; MONITOR_HEARTBEAT_CLI=""
@@ -105,6 +113,47 @@ expand_user_path() {
   esac
 }
 
+model_root_has_complete_assets() {
+  local root="$1" manifest
+  [[ -d "${root}" ]] || return 1
+  while IFS= read -r manifest; do
+    [[ -n "${manifest}" ]] || continue
+    grep -Eq '"status"[[:space:]]*:[[:space:]]*"complete"' "${manifest}" && return 0
+  done < <(
+    find "${root}" -mindepth 1 -maxdepth 2 -type f \
+      \( -name .qwen38-model-manifest.json -o -name .qwen38-hybrid-manifest.json \) \
+      -print 2>/dev/null
+  )
+  return 1
+}
+
+choose_default_model_root() {
+  if [[ -n "${MODEL_ROOT_CLI}" ]]; then
+    MODEL_ROOT="$(realpath -m -- "$(expand_user_path "${MODEL_ROOT_CLI}")")"
+    MODEL_ROOT_SOURCE=cli
+  elif [[ -n "${MODEL_ROOT_ENV}" ]]; then
+    MODEL_ROOT="$(realpath -m -- "$(expand_user_path "${MODEL_ROOT_ENV}")")"
+    MODEL_ROOT_SOURCE=environment
+  elif model_root_has_complete_assets "${HOME}/models"; then
+    MODEL_ROOT="$(realpath -m -- "${HOME}/models")"
+    MODEL_ROOT_SOURCE=existing-home
+  else
+    MODEL_ROOT="$(realpath -m -- "${ROOT_DIR}/models")"
+    MODEL_ROOT_SOURCE=repo-default
+  fi
+  export QWEN38_MODEL_ROOT="${MODEL_ROOT}"
+}
+
+reload_profile_for_model_root() {
+  export QWEN38_MODEL_ROOT="${MODEL_ROOT}"
+  load_model_profile "${MODEL_PROFILE}" || return
+  REPO="${PROFILE_REPO}"
+  REVISION="${PROFILE_REVISION}"
+  MODEL_DIR="${PROFILE_MODEL_DIR}"
+  IMAGE="${PROFILE_IMAGE}"
+  SERVED_NAME="${PROFILE_SERVED_NAME}"
+}
+
 discover_hf_token() {
   local token="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"
   if [[ -n "${token}" ]]; then
@@ -132,10 +181,10 @@ ensure_profile_auth() {
     if [[ "${YES}" != 1 && -t 0 ]]; then
       if [[ "${UI_LANG}" == ko ]]; then
         printf 'OrcaRouter 계열은 Hugging Face gated 모델입니다. 브라우저에서 모델 이용 약관을 먼저 승인해야 합니다.\n'
-        read -r -s -p 'Hugging Face read token (입력 내용은 저장하지 않음): ' token
+        wizard_secret token 'Hugging Face read token (입력 내용은 저장하지 않음)'
       else
         printf 'OrcaRouter-family profiles use a gated Hugging Face model. Accept the model terms in a browser first.\n'
-        read -r -s -p 'Hugging Face read token (not stored by this installer): ' token
+        wizard_secret token 'Hugging Face read token (not stored by this installer)'
       fi
       printf '\n'
     else
@@ -212,14 +261,13 @@ write_state() {
   mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
 }
 usage() {
-  printf 'Usage: ./install.sh [--model PROFILE] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model PROFILE] [--model-root PATH] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
-  local prompt="$1" answer
+  local prompt="$1"
   [[ "${YES}" == 1 ]] && return 0
-  read -r -p "${prompt} [Y/n]: " answer
-  [[ -z "${answer}" || "${answer}" == y || "${answer}" == Y ]]
+  wizard_yes_no "${prompt}" yes
 }
 positive_integer() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 nonnegative_integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
@@ -238,6 +286,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
+    --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
     --list-models) LIST_MODELS=1 ;;
     --list-backends) LIST_BACKENDS=1 ;;
     --monitor) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=0 ;;
@@ -293,6 +342,7 @@ if [[ -r "${STATE_FILE}" ]]; then
     VLLM_IMAGE=""; IMAGE_OWNED=0; SERVED_NAME=""
     CONFIG_OVERRIDE=""; CONFIG_OWNED=0
     PROXY_OWNED=0; SERVICE_OWNED=0
+    UI_LANG=""
     PHASE=""
     RESUME=0
   elif [[ -n "${MODEL_CLI}" && "${MODEL_CLI}" != "${manifest_profile}" ]]; then
@@ -314,6 +364,13 @@ MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
 [[ -z "${MONITOR_HEARTBEAT_CLI}" ]] || MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT_CLI}"
 validate_monitor_settings
 [[ -z "${MODEL_CLI}" ]] || MODEL_PROFILE="${MODEL_CLI}"
+if [[ "${RESUME}" == 1 && -n "${MODEL_DIR:-}" ]]; then
+  MODEL_ROOT="$(realpath -m -- "$(dirname -- "${MODEL_DIR}")")"
+  MODEL_ROOT_SOURCE=manifest
+  export QWEN38_MODEL_ROOT="${MODEL_ROOT}"
+else
+  choose_default_model_root
+fi
 load_model_profile "${MODEL_PROFILE}" || exit $?
 REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
 MODEL_DIR="${MODEL_DIR:-${PROFILE_MODEL_DIR}}"
@@ -345,25 +402,49 @@ API_LAN_PORT="${API_LAN_PORT:-8001}"
 [[ -z "${API_LAN_PORT_CLI}" ]] || API_LAN_PORT="${API_LAN_PORT_CLI}"
 
 [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
-if [[ -z "${UI_LANG}" ]]; then
-  if [[ "${YES}" == 0 && -t 0 ]]; then
-    read -r -p 'Language / 언어 [1: English, 2: 한국어] (2): ' answer
-    [[ "${answer}" == 1 || "${answer}" == en ]] && UI_LANG=en || UI_LANG=ko
-  elif [[ "${LANG:-}" == ko_* ]]; then UI_LANG=ko; else UI_LANG=en; fi
+
+if [[ "${RESUME}" == 0 && "${YES}" != 1 && -z "${CLI_LANG}" ]]; then
+  wizard_header 'Qwen3.8 Flash Next - DGX Spark Setup'
+  wizard_step 1 6 '언어 선택 / Language'
+  wizard_menu_option 1 '한국어' '기본값 / Default'
+  wizard_menu_option 2 'English'
+  wizard_input answer '선택 / Select' 1
+  case "${answer}" in
+    2|en|EN|English|english) UI_LANG=en ;;
+    *) UI_LANG=ko ;;
+  esac
+elif [[ -z "${UI_LANG}" ]]; then
+  UI_LANG=ko
 fi
 [[ "${UI_LANG}" == en || "${UI_LANG}" == ko ]] || die "--lang must be en or ko"
-if [[ "${UI_LANG}" == ko ]]; then
-  printf 'Qwen3.8 Flash Next — DGX Spark 설치 마법사\n\n'
-  [[ "${RESUME}" == 0 ]] || printf '설치 재개 단계: %s\n' "${PHASE:-알 수 없음}"
-else
-  printf 'Qwen3.8 Flash Next — DGX Spark installer wizard\n\n'
-  [[ "${RESUME}" == 0 ]] || printf 'Resuming installation from phase: %s\n' "${PHASE:-unknown}"
+
+if [[ "${RESUME}" == 1 ]]; then
+  if [[ "${UI_LANG}" == ko ]]; then
+    wizard_header 'Qwen3.8 Flash Next - DGX Spark 설치'
+    wizard_info "설치 재개 단계: ${PHASE:-알 수 없음}"
+  else
+    wizard_header 'Qwen3.8 Flash Next - DGX Spark Setup'
+    wizard_info "Resuming installation from phase: ${PHASE:-unknown}"
+  fi
+elif [[ "${YES}" == 1 || -n "${CLI_LANG}" ]]; then
+  [[ "${UI_LANG}" == ko ]] && wizard_header 'Qwen3.8 Flash Next - DGX Spark 설치' || wizard_header 'Qwen3.8 Flash Next - DGX Spark Setup'
 fi
+
 if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
-    read -r -p '모델 [1: OrcaRouter Uncensored, 2: NVIDIA 공식 NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)] (1): ' answer
+    wizard_step 2 6 '모델 선택'
+    wizard_menu_option 1 'OrcaRouter Uncensored' 'Stable / 기본 프로필 / NVFP4'
+    wizard_menu_option 2 'NVIDIA Official NVFP4' 'Experimental / NVIDIA 비교 프로필'
+    wizard_menu_option 3 'mazinb NVFP4' 'Experimental / BF16 PLE + NVFP4 experts'
+    wizard_menu_option 4 'OrcaRouter Hybrid H6' 'Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
+    wizard_input answer '선택' 1
   else
-    read -r -p 'Model [1: OrcaRouter Uncensored, 2: official NVIDIA NVFP4, 3: mazinb NVFP4, 4: OrcaRouter Hybrid H6 (OrcaRouter + mazinb experts, W4A16 NVFP4)] (1): ' answer
+    wizard_step 2 6 'Model selection'
+    wizard_menu_option 1 'OrcaRouter Uncensored' 'Stable / default profile / NVFP4'
+    wizard_menu_option 2 'NVIDIA Official NVFP4' 'Experimental / NVIDIA comparison profile'
+    wizard_menu_option 3 'mazinb NVFP4' 'Experimental / BF16 PLE + NVFP4 experts'
+    wizard_menu_option 4 'OrcaRouter Hybrid H6' 'Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
+    wizard_input answer 'Select' 1
   fi
   case "${answer}" in
     2|nvidia) MODEL_PROFILE=nvidia ;;
@@ -371,11 +452,56 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
     4|orcarouter-hybrid) MODEL_PROFILE=orcarouter-hybrid ;;
     *) MODEL_PROFILE=orcarouter ;;
   esac
-  load_model_profile "${MODEL_PROFILE}" || exit $?
-  REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
-  [[ -n "${MODEL_DIR:-}" && "${MODEL_DIR}" != "$HOME/models/qwen3.8-flash-next-orcarouter" ]] || MODEL_DIR="${PROFILE_MODEL_DIR}"
-  IMAGE="${PROFILE_IMAGE}"; SERVED_NAME="${PROFILE_SERVED_NAME}"
+  reload_profile_for_model_root || exit $?
 fi
+
+if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_ROOT_CLI}" && -z "${MODEL_ROOT_ENV}" ]]; then
+  if [[ "${UI_LANG}" == ko ]]; then
+    wizard_step 3 6 '모델 저장 위치'
+  else
+    wizard_step 3 6 'Model storage'
+  fi
+
+  repo_model_root="$(realpath -m -- "${ROOT_DIR}/models")"
+  existing_home_root="$(realpath -m -- "${HOME}/models")"
+  if model_root_has_complete_assets "${existing_home_root}" && [[ "${existing_home_root}" != "${repo_model_root}" ]]; then
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_info "기존 검증 모델 저장소 발견: ${existing_home_root}"
+      wizard_info "새 설치 기본 위치: ${repo_model_root}"
+      wizard_menu_option 1 '기존 모델 저장소 재사용 (권장)' "${existing_home_root}"
+      wizard_menu_option 2 '현재 저장소의 models 폴더 사용' "${repo_model_root}"
+      wizard_menu_option 3 '직접 입력'
+      wizard_input answer '선택' 1
+    else
+      wizard_info "Existing verified model store found: ${existing_home_root}"
+      wizard_info "Fresh-install default: ${repo_model_root}"
+      wizard_menu_option 1 'Reuse existing model store (recommended)' "${existing_home_root}"
+      wizard_menu_option 2 'Use repository-local models directory' "${repo_model_root}"
+      wizard_menu_option 3 'Enter another path'
+      wizard_input answer 'Select' 1
+    fi
+    case "${answer}" in
+      2) MODEL_ROOT="${repo_model_root}"; MODEL_ROOT_SOURCE=repo-default ;;
+      3)
+        [[ "${UI_LANG}" == ko ]] && wizard_input MODEL_ROOT '모델 저장 루트' "${repo_model_root}" || wizard_input MODEL_ROOT 'Model storage root' "${repo_model_root}"
+        MODEL_ROOT_SOURCE=custom
+        ;;
+      *) MODEL_ROOT="${existing_home_root}"; MODEL_ROOT_SOURCE=existing-home ;;
+    esac
+  else
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_info "모델은 현재 저장소 아래 models 폴더에 저장됩니다."
+      wizard_input MODEL_ROOT '모델 저장 루트' "${repo_model_root}"
+    else
+      wizard_info "Models are stored under the repository-local models directory by default."
+      wizard_input MODEL_ROOT 'Model storage root' "${repo_model_root}"
+    fi
+    MODEL_ROOT_SOURCE=repo-default
+  fi
+  MODEL_ROOT="$(realpath -m -- "$(expand_user_path "${MODEL_ROOT}")")"
+  reload_profile_for_model_root || exit $?
+fi
+
 MODEL_OWNED="${MODEL_OWNED:-0}"; SWAP_OWNED="${SWAP_OWNED:-0}"; IMAGE_OWNED="${IMAGE_OWNED:-0}"
 CONFIG_OWNED="${CONFIG_OWNED:-0}"
 PROXY_ENABLED="${PROXY_ENABLED:-0}"; PROXY_OWNED="${PROXY_OWNED:-0}"; PROXY_PORT="${PROXY_PORT:-8000}"
@@ -397,8 +523,7 @@ if [[ "${MIGRATE_MANIFEST}" == 1 ]]; then
 fi
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
 if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
-  [[ "${UI_LANG}" == ko ]] && prompt="모델 디렉터리 [${MODEL_DIR}]: " || prompt="Model directory [${MODEL_DIR}]: "
-  read -r -p "${prompt}" answer; MODEL_DIR="${answer:-${MODEL_DIR}}"
+  [[ "${UI_LANG}" == ko ]] && wizard_step 4 6 '런타임 설정' || wizard_step 4 6 'Runtime settings'
   if [[ -n "${CONFIG_OVERRIDE}" ]]; then
     [[ "${UI_LANG}" == ko ]] && prompt="설정된 config.json override를 사용합니까 (${CONFIG_OVERRIDE})? [Y/n]: " || prompt="Use the configured config.json override (${CONFIG_OVERRIDE})? [Y/n]: "
     read -r -p "${prompt}" answer
@@ -434,11 +559,17 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   fi
 
   if [[ "${UI_LANG}" == ko ]]; then
-    printf '\nAPI 접근 방식\n  1) 이 PC에서만 사용 (127.0.0.1:8888)\n  2) Docker 앱에서도 사용 (예: OpenWebUI, 기본 8000)\n  3) Docker 앱 + LAN의 다른 PC에서도 사용\n'
-    read -r -p '선택 (2): ' answer
+    wizard_step 5 6 'API 및 서비스'
+    wizard_menu_option 1 '이 PC에서만 사용' '127.0.0.1:8888'
+    wizard_menu_option 2 'Docker 앱에서도 사용' 'OpenWebUI 등 / 기본 포트 8000'
+    wizard_menu_option 3 'Docker 앱 + LAN의 다른 PC에서도 사용'
+    wizard_input answer '선택' 2
   else
-    printf '\nAPI access\n  1) This PC only (127.0.0.1:8888)\n  2) Also available to Docker apps (for example OpenWebUI, default 8000)\n  3) Docker apps + other PCs on the LAN\n'
-    read -r -p 'Select (2): ' answer
+    wizard_step 5 6 'API and service'
+    wizard_menu_option 1 'This PC only' '127.0.0.1:8888'
+    wizard_menu_option 2 'Also available to Docker apps' 'OpenWebUI etc. / default port 8000'
+    wizard_menu_option 3 'Docker apps + other PCs on the LAN'
+    wizard_input answer 'Select' 2
   fi
   case "${answer:-2}" in
     1|local) API_ACCESS_MODE=local ;;
@@ -474,11 +605,11 @@ MODEL_DIR="$(expand_user_path "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(expand_user_path "${CONFIG_OVERRIDE}")"
 MODEL_DIR="$(realpath -m -- "${MODEL_DIR}")"
 [[ -z "${CONFIG_OVERRIDE}" ]] || CONFIG_OVERRIDE="$(realpath -m -- "${CONFIG_OVERRIDE}")"
-HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
-HYBRID_OVERLAY_DIR="${MAZINB_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-mazinb}"
-HYBRID_H3_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
-HYBRID_H4_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
-HYBRID_H5_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
+HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"
+HYBRID_OVERLAY_DIR="${MAZINB_MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-mazinb}"
+HYBRID_H3_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-${MODEL_ROOT}/qwen3.8-hybrid-quant-layout}"
+HYBRID_H4_DIR="${H4_ORCA_ALL_MODEL_DIR:-${MODEL_ROOT}/qwen3.8-h4-orca-all}"
+HYBRID_H5_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-${MODEL_ROOT}/qwen3.8-h5-neutral-input-scale}"
 HYBRID_BASE_DIR="$(realpath -m -- "${HYBRID_BASE_DIR}")"
 HYBRID_OVERLAY_DIR="$(realpath -m -- "${HYBRID_OVERLAY_DIR}")"
 HYBRID_H3_DIR="$(realpath -m -- "${HYBRID_H3_DIR}")"
@@ -491,42 +622,71 @@ if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
     HYBRID_REUSE_H3=1
   fi
 fi
-[[ "${UI_LANG}" == ko ]] && heading='설치 계획' || heading='Installation plan'
-printf '%s\n  model       : %s\n  revision    : %s\n  directory   : %s\n' "${heading}" "${REPO}" "${REVISION}" "${MODEL_DIR}"
-printf '  profile     : %s\n' "${MODEL_PROFILE}"
-printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n  image       : %s\n' "${SWAP_FILE}" "${IMAGE}"
-if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${OLD_PROFILE_IMAGE:-${IMAGE}}" != "${IMAGE}" ]]; then
-  printf '  image change: %s -> %s\n' "${OLD_PROFILE_IMAGE}" "${IMAGE}"
-fi
-printf '\n'
+[[ "${UI_LANG}" == ko ]] && wizard_step 6 6 '설치 계획 확인' || wizard_step 6 6 'Review installation plan'
 if [[ -n "${CONFIG_OVERRIDE}" ]]; then
   config_plan="${CONFIG_OVERRIDE}"
 elif [[ "${PROFILE_CONFIG_OVERRIDE}" == 1 ]]; then
-  config_plan="automatic vLLM compatibility override"
+  [[ "${UI_LANG}" == ko ]] && config_plan='자동 vLLM 호환 설정' || config_plan='automatic vLLM compatibility override'
 else
-  config_plan="checkpoint config (no override)"
+  [[ "${UI_LANG}" == ko ]] && config_plan='체크포인트 기본 설정' || config_plan='checkpoint config'
 fi
-printf '  config      : %s\n' "${config_plan}"
+
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '모델\n'
+  printf '  프로필       : %s\n' "${MODEL_PROFILE}"
+  printf '  저장 루트    : %s\n' "${MODEL_ROOT}"
+  printf '  모델 경로    : %s\n' "${MODEL_DIR}"
+  printf '  리비전       : %s\n' "${REVISION}"
+  printf '  이미지       : %s\n' "${IMAGE}"
+else
+  printf 'Model\n'
+  printf '  profile      : %s\n' "${MODEL_PROFILE}"
+  printf '  storage root : %s\n' "${MODEL_ROOT}"
+  printf '  model path   : %s\n' "${MODEL_DIR}"
+  printf '  revision     : %s\n' "${REVISION}"
+  printf '  image        : %s\n' "${IMAGE}"
+fi
+if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 && "${OLD_PROFILE_IMAGE:-${IMAGE}}" != "${IMAGE}" ]]; then
+  printf '  image change : %s -> %s\n' "${OLD_PROFILE_IMAGE}" "${IMAGE}"
+fi
 if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then
-  printf '  hybrid base : %s\n' "${HYBRID_BASE_DIR}"
+  printf '  hybrid base  : %s\n' "${HYBRID_BASE_DIR}"
   if [[ "${HYBRID_REUSE_H3}" == 1 ]]; then
-    printf '  hybrid mix  : pinned mazinb provenance already captured in %s (source download skipped)\n' "${HYBRID_H3_DIR}"
+    [[ "${UI_LANG}" == ko ]] && printf '  hybrid mix   : 기존 H3 provenance 재사용 (mazinb source 다운로드 생략)\n' || printf '  hybrid mix   : reuse pinned H3 provenance (skip mazinb source download)\n'
   else
-    printf '  hybrid mix  : %s\n' "${HYBRID_OVERLAY_DIR}"
+    printf '  hybrid mix   : %s\n' "${HYBRID_OVERLAY_DIR}"
   fi
 fi
-printf '  protection  : %s\n\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
-printf '  monitor     : %s (available=%s GiB, free=%s/%s GiB gate, swapfree=%s GiB, %s samples, heartbeat=%ss)\n\n' \
-  "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)" "${MONITOR_MIN_AVAILABLE_GIB}" \
-  "${MONITOR_MIN_FREE_GIB}" "${MONITOR_FREE_GATE_GIB}" "${MONITOR_MIN_SWAP_FREE_GIB}" \
-  "${MONITOR_CONSECUTIVE}" "${MONITOR_HEARTBEAT}"
+printf '\n'
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '런타임\n'
+  printf '  config       : %s\n' "${config_plan}"
+  printf '  PLE swap     : %s (128 GiB, 기존 swap 보존)\n' "${SWAP_FILE}"
+  printf '  메모리 모니터: %s\n' "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf 사용 || printf 사용\ 안함)"
+  printf '  자동 보호    : %s\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf 사용 || printf 사용\ 안함)"
+else
+  printf 'Runtime\n'
+  printf '  config       : %s\n' "${config_plan}"
+  printf '  PLE swap     : %s (128 GiB; existing swap preserved)\n' "${SWAP_FILE}"
+  printf '  monitor      : %s\n' "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)"
+  printf '  protection   : %s\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf disabled)"
+fi
 case "${API_ACCESS_MODE}" in
-  local) api_plan='local only: 127.0.0.1:8888' ;;
+  local) api_plan='127.0.0.1:8888' ;;
   docker) api_plan="Docker apps: ${API_DOCKER_PORT} -> 127.0.0.1:8888" ;;
   lan) api_plan="Docker apps: ${API_DOCKER_PORT}; LAN: ${API_LAN_ADDRESS}:${API_LAN_PORT} -> 127.0.0.1:8888" ;;
 esac
-printf '  API access  : %s\n\n' "${api_plan}"
-printf '  service     : %s\n\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service via immutable current release' || printf 'Docker container via immutable current release')"
+printf '\n'
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '접근 / 서비스\n'
+  printf '  API          : %s\n' "${api_plan}"
+  printf '  systemd      : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf '설치 및 부팅 시 자동 시작' || printf '사용 안 함')"
+else
+  printf 'Access / service\n'
+  printf '  API          : %s\n' "${api_plan}"
+  printf '  systemd      : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'install and start at boot' || printf disabled)"
+fi
+printf '\n'
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
 ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
