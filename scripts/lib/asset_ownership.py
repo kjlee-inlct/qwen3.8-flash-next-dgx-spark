@@ -216,11 +216,19 @@ def track_model(
     else:
         if entry["root"] != ownership_root:
             raise RegistryError(f"ownership root changed for {locator}")
-        entry["owned"] = bool(entry["owned"] or owned)
+        was_owned = bool(entry["owned"])
+        if was_owned and entry["state"] == "ready" and marker is not None:
+            if not entry["fingerprint"] or fingerprint != entry["fingerprint"]:
+                raise RegistryError(f"owned model manifest drift detected: {locator}")
+        if owned and not was_owned and marker is None:
+            entry["state"] = "claimed"
+            entry["fingerprint"] = ""
+        entry["owned"] = bool(was_owned or owned)
         entry["depends_on"] = sorted(set(entry["depends_on"]) | set(dependencies))
         if marker is not None:
-            entry["state"] = "ready"
-            entry["fingerprint"] = fingerprint
+            if not was_owned or entry["state"] == "claimed":
+                entry["state"] = "ready"
+                entry["fingerprint"] = fingerprint
         elif entry["state"] != "ready":
             entry["state"] = "claimed"
     save_registry(registry, data)
@@ -246,11 +254,19 @@ def track_image(registry: Path, name: str, owned: bool, dependencies: list[str])
         }
         data["assets"].append(entry)
     else:
-        entry["owned"] = bool(entry["owned"] or owned)
+        was_owned = bool(entry["owned"])
+        if was_owned and entry["state"] == "ready" and image_id:
+            if not entry["fingerprint"] or image_id != entry["fingerprint"]:
+                raise RegistryError(f"owned image ID drift detected: {locator}")
+        if owned and not was_owned and not image_id:
+            entry["state"] = "claimed"
+            entry["fingerprint"] = ""
+        entry["owned"] = bool(was_owned or owned)
         entry["depends_on"] = sorted(set(entry["depends_on"]) | set(dependencies))
         if image_id:
-            entry["state"] = "ready"
-            entry["fingerprint"] = image_id
+            if not was_owned or entry["state"] == "claimed":
+                entry["state"] = "ready"
+                entry["fingerprint"] = image_id
         elif entry["state"] != "ready":
             entry["state"] = "claimed"
     save_registry(registry, data)
