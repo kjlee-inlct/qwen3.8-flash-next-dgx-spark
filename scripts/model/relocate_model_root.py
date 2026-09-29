@@ -71,7 +71,7 @@ def manifest_for(root: Path) -> Path | None:
     return None
 
 
-def validate_manifest(path: Path) -> str:
+def load_managed_manifest(path: Path) -> dict[str, object]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -83,6 +83,11 @@ def validate_manifest(path: Path) -> str:
         raise RelocationError(
             f"managed checkpoint is not complete: {path.parent} (status={status})"
         )
+    return data
+
+
+def validate_manifest(path: Path) -> str:
+    load_managed_manifest(path)
     return "hybrid" if path.name == ".qwen38-hybrid-manifest.json" else "model"
 
 
@@ -101,6 +106,76 @@ def validate_checkpoint_index(root: Path) -> None:
         )
 
 
+HYBRID_VARIANTS = {
+    "quant-layout-mazinb-experts": ("h3", "h3_dir"),
+    "h4-orca-all": ("h4", "h4_dir"),
+    "h5-neutral-input-scale": ("h5", "h5_dir"),
+    "h6-modelopt-w4a16": ("h6", "model_dir"),
+}
+HYBRID_STAGE_ORDER = {"h3": 3, "h4": 4, "h5": 5, "h6": 6}
+
+
+def validate_hybrid_chain(root: Path, entries: tuple[ManagedEntry, ...]) -> None:
+    hybrid_entries = [entry for entry in entries if entry.kind == "hybrid"]
+    if not hybrid_entries:
+        return
+
+    stage_paths: dict[str, Path] = {}
+    highest_stage = "h3"
+    for entry in hybrid_entries:
+        data = load_managed_manifest(entry.manifest)
+        variant = str(data.get("variant") or "")
+        mapping = HYBRID_VARIANTS.get(variant)
+        if mapping is None:
+            raise RelocationError(
+                f"unsupported hybrid variant for relocation validation: {variant or '-'}"
+            )
+        stage, argument_name = mapping
+        stage_paths[argument_name] = entry.path
+        if HYBRID_STAGE_ORDER[stage] > HYBRID_STAGE_ORDER[highest_stage]:
+            highest_stage = stage
+
+    expected_names = {
+        "h3_dir": root / "qwen3.8-hybrid-quant-layout",
+        "h4_dir": root / "qwen3.8-h4-orca-all",
+        "h5_dir": root / "qwen3.8-h5-neutral-input-scale",
+        "model_dir": root / "qwen3.8-h6-modelopt-w4a16",
+    }
+    for key, default_path in expected_names.items():
+        stage_paths.setdefault(key, default_path)
+
+    validator = Path(__file__).resolve().with_name("validate-orcarouter-hybrid.py")
+    command = [
+        sys.executable,
+        os.fspath(validator),
+        "--runtime-only",
+        "--through",
+        highest_stage,
+        "--base-dir",
+        os.fspath(root / ORCA_DIRNAME),
+        "--h3-dir",
+        os.fspath(stage_paths["h3_dir"]),
+        "--h4-dir",
+        os.fspath(stage_paths["h4_dir"]),
+        "--h5-dir",
+        os.fspath(stage_paths["h5_dir"]),
+        "--model-dir",
+        os.fspath(stage_paths["model_dir"]),
+    ]
+    result = subprocess.run(
+        command,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip()
+        raise RelocationError(
+            "hybrid chain validation failed before relocation"
+            + (f": {detail}" if detail else "")
+        )
+
+
 def inspect_root(root: Path) -> tuple[ManagedEntry, ...]:
     if not root.is_dir() or root.is_symlink():
         raise RelocationError(f"model root must be a real directory: {root}")
@@ -116,7 +191,8 @@ def inspect_root(root: Path) -> tuple[ManagedEntry, ...]:
             unmanaged.append(child.name)
             continue
         kind = validate_manifest(manifest)
-        validate_checkpoint_index(child)
+        if kind == "model":
+            validate_checkpoint_index(child)
         entries.append(ManagedEntry(child, manifest, kind))
 
     if unmanaged:
@@ -126,7 +202,9 @@ def inspect_root(root: Path) -> tuple[ManagedEntry, ...]:
         )
     if not entries:
         raise RelocationError(f"no managed model directories found under: {root}")
-    return tuple(entries)
+    managed_entries = tuple(entries)
+    validate_hybrid_chain(root, managed_entries)
+    return managed_entries
 
 
 def path_is_within(path: Path, root: Path) -> bool:
