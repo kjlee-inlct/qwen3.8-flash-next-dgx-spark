@@ -2,6 +2,8 @@
 # Transactionally preserve the current runtime container while a replacement is validated.
 set -euo pipefail
 
+SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
 CONTAINER="${CONTAINER_NAME:-qwen38-flash-next}"
 ROLLBACK_CONTAINER="${ROLLBACK_CONTAINER_NAME:-${CONTAINER}.rollback}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
@@ -31,13 +33,21 @@ clear_state() { rm -f -- "${STATE_FILE}" "${STATE_FILE}.tmp"; }
 load_state() {
   local expected_container="${CONTAINER}"
   local expected_rollback_container="${ROLLBACK_CONTAINER}"
+  local parsed key value
   [[ -r "${STATE_FILE}" ]] || die 'no runtime transition is active'
-  # shellcheck disable=SC1090
-  source "${STATE_FILE}"
-  [[ "${RUNTIME_SCHEMA_VERSION:-}" == 1 ]] || die 'unsupported runtime transition schema'
+  [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" runtime-transition "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    die 'invalid runtime transition state file'
+  fi
+  unset RUNTIME_SCHEMA_VERSION TRANSACTION_STATE CURRENT_CONTAINER HAD_PREVIOUS UPDATED_AT
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "${key}" '%s' "${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
   [[ "${CURRENT_CONTAINER:-}" == "${expected_container}" ]] || die 'runtime transition current-container mismatch'
   [[ "${ROLLBACK_CONTAINER:-}" == "${expected_rollback_container}" ]] || die 'runtime transition rollback-container mismatch'
-  [[ "${HAD_PREVIOUS:-}" == 0 || "${HAD_PREVIOUS:-}" == 1 ]] || die 'invalid HAD_PREVIOUS in runtime transition state'
   CONTAINER="${expected_container}"
   ROLLBACK_CONTAINER="${expected_rollback_container}"
 }
