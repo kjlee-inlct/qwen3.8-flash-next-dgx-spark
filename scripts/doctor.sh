@@ -144,8 +144,22 @@ fi
 if command -v swapon >/dev/null 2>&1 && swapon --show=NAME --noheadings | awk '{$1=$1};1' | grep -Fxq "${SWAP_FILE:-}"; then pass "dedicated PLE swap is active (${SWAP_FILE})"; else fail "dedicated PLE swap is not active (${SWAP_FILE:-unset})"; fi
 
 if [[ -r /proc/meminfo ]]; then
-  mem_available_kib="$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"; swap_free_kib="$(awk '$1=="SwapFree:" {print $2}' /proc/meminfo)"
-  if (( mem_available_kib >= MONITOR_MIN_AVAILABLE_GIB * 1048576 )); then pass "memory reserve is healthy ($((mem_available_kib / 1048576)) GiB available)"; else warn "memory reserve is below ${MONITOR_MIN_AVAILABLE_GIB} GiB ($((mem_available_kib / 1024)) MiB available)"; fi
+  mem_available_kib="$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"
+  mem_free_kib="$(awk '$1=="MemFree:" {print $2}' /proc/meminfo)"
+  cma_free_kib="$(awk '$1=="CmaFree:" {print $2}' /proc/meminfo)"; cma_free_kib="${cma_free_kib:-0}"
+  swap_free_kib="$(awk '$1=="SwapFree:" {print $2}' /proc/meminfo)"
+  (( mem_available_kib >= cma_free_kib )) && noncma_available_kib=$((mem_available_kib - cma_free_kib)) || noncma_available_kib=0
+  (( mem_free_kib >= cma_free_kib )) && noncma_free_kib=$((mem_free_kib - cma_free_kib)) || noncma_free_kib=0
+  if (( noncma_available_kib >= MONITOR_MIN_AVAILABLE_GIB * 1048576 )); then
+    pass "non-CMA memory reserve is healthy ($((noncma_available_kib / 1048576)) GiB available; CmaFree=$((cma_free_kib / 1048576)) GiB)"
+  else
+    warn "non-CMA memory reserve is below ${MONITOR_MIN_AVAILABLE_GIB} GiB ($((noncma_available_kib / 1024)) MiB available after excluding $((cma_free_kib / 1024)) MiB CmaFree)"
+  fi
+  if (( noncma_free_kib >= MONITOR_MIN_FREE_GIB * 1048576 || noncma_available_kib >= MONITOR_FREE_GATE_GIB * 1048576 )); then
+    pass "non-CMA free-memory floor is healthy ($((noncma_free_kib / 1024)) MiB free)"
+  else
+    warn "non-CMA free memory is below ${MONITOR_MIN_FREE_GIB} GiB while non-CMA available is below ${MONITOR_FREE_GATE_GIB} GiB ($((noncma_free_kib / 1024)) MiB free)"
+  fi
   if (( swap_free_kib >= MONITOR_MIN_SWAP_FREE_GIB * 1048576 )); then pass "swap reserve is healthy ($((swap_free_kib / 1048576)) GiB free)"; elif (( swap_free_kib >= 2 * 1048576 )); then warn "swap reserve is below ${MONITOR_MIN_SWAP_FREE_GIB} GiB ($((swap_free_kib / 1024)) MiB free)"; else fail "swap reserve is critically low ($((swap_free_kib / 1024)) MiB free)"; fi
 fi
 if [[ -d "${MODEL_DIR:-}" ]]; then
@@ -193,6 +207,9 @@ if command -v systemctl >/dev/null 2>&1 && systemctl cat "${SERVICE_UNIT}" >/dev
 if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   if [[ -r "${STATE_DIR}/monitor.pid" ]]; then monitor_pid="$(<"${STATE_DIR}/monitor.pid")"; if [[ "${monitor_pid}" =~ ^[0-9]+$ && -r "/proc/${monitor_pid}/cmdline" ]] && tr '\0' ' ' <"/proc/${monitor_pid}/cmdline" | grep -Fq monitor-runtime.sh; then pass "memory monitor is running (protect=${MONITOR_PROTECT:-0}, heartbeat=${MONITOR_HEARTBEAT}s)"; else fail "memory protection monitor PID is stale"; fi; else fail "memory protection monitor PID file is missing"; fi
 else pass "runtime memory monitor is disabled by configuration"; fi
+if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid && "${MONITOR_PROTECT:-0}" != 1 ]]; then
+  warn "OrcaRouter hybrid host protection is disabled; use ./install.sh --model orcarouter-hybrid --protect --yes"
+fi
 
 if [[ "${PROXY_ENABLED:-0}" == 1 ]]; then if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet qwen38-openwebui-proxy.socket; then pass "managed API access socket is active"; else fail "managed API access was selected but its socket is not active"; fi; fi
 if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 5 http://127.0.0.1:8888/health >/dev/null 2>&1; then pass "health endpoint responds"; else fail "health endpoint does not respond"; fi
