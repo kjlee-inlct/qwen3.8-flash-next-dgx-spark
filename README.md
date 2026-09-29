@@ -17,6 +17,8 @@ Model checkpoint and serving backend are intentionally separate axes:
 Use `./install.sh --list-models` and `./install.sh --list-backends` for the registry,
 and see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for promotion/qualification rules.
 
+Managed profile switches preserve cumulative model/image ownership in a separate state registry, so `./uninstall.sh --purge-all --yes` can remove installer-created assets from earlier profiles without treating merely-present checkpoints or image tags as owned. See [OPERATIONS.md](OPERATIONS.md) for the destructive-operation rules.
+
 The repository still keeps detailed NVIDIA and earlier checkpoint measurements below as
 engineering history and comparison data. Those numbers are not the current default
 OrcaRouter qualification result.
