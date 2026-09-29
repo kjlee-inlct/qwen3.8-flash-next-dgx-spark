@@ -11,6 +11,7 @@ from unittest import mock
 
 ROOT = Path(__file__).parents[1]
 MODULE_PATH = ROOT / "scripts" / "model" / "relocate_model_root.py"
+sys.path.insert(0, str(MODULE_PATH.parent))
 
 spec = importlib.util.spec_from_file_location("relocate_model_root", MODULE_PATH)
 assert spec is not None and spec.loader is not None
