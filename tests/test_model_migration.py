@@ -39,12 +39,12 @@ def write_checkpoint(root: Path, *, status: str = "complete", revision: str | No
     )
 
 
-def write_partial(root: Path) -> None:
+def write_partial(root: Path, *, status: str = "downloading") -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / ".qwen38-model-manifest.json").write_text(
         json.dumps(
             {
-                "status": "downloading",
+                "status": status,
                 "repository": migrate.ORCA_REPOSITORY,
                 "revision": migrate.ORCA_REVISION,
                 "files": [],
@@ -151,6 +151,21 @@ class OrcaRouterMigrationTests(unittest.TestCase):
             write_checkpoint(legacy, status="downloading")
 
             with self.assertRaisesRegex(migrate.MigrationError, "not complete"):
+                migrate.prepare_plan(
+                    legacy,
+                    canonical,
+                    mount_checker=lambda _: [],
+                )
+
+    def test_ambiguous_canonical_status_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy = root / "repo" / "model"
+            canonical = root / "models" / "qwen3.8-flash-next-orcarouter"
+            write_checkpoint(legacy)
+            write_partial(canonical, status="failed")
+
+            with self.assertRaisesRegex(migrate.MigrationError, "unexpected non-complete status"):
                 migrate.prepare_plan(
                     legacy,
                     canonical,
