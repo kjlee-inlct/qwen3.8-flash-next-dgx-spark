@@ -21,6 +21,7 @@ Validator = Callable[[str], bool]
 
 HEX_RELEASE = re.compile(r"[0-9a-f]{12,40}\Z")
 HEX_CONTAINER = re.compile(r"[0-9a-f]{12,128}\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\\Z")
 TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
 SAFE_NAME = re.compile(r"[A-Za-z0-9_.-]+\Z")
 POSITIVE_INTEGER = re.compile(r"[1-9][0-9]*\Z")
