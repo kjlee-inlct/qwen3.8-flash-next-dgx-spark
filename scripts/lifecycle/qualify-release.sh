@@ -39,6 +39,7 @@ bash -n "${release_dir}/install.sh" "${release_dir}/uninstall.sh" "${release_dir
     -u QWEN38_OPERATION_LOCK_HELD \
     -u QWEN38_OPERATION_LOCK_FILE \
     -u QWEN38_OPERATION_LOCK_OWNER_PID \
+    -u QWEN38_MODEL_ROOT \
     PYTHONDONTWRITEBYTECODE=1 \
     python3 -m unittest discover -s tests -v
 )

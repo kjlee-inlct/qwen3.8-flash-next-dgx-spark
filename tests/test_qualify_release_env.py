@@ -18,6 +18,10 @@ class QualifyReleaseEnvironmentTests(unittest.TestCase):
         ):
             self.assertIn(f"-u {name}", script)
 
+    def test_unit_tests_do_not_inherit_installer_model_root(self) -> None:
+        script = QUALIFIER.read_text(encoding="utf-8")
+        self.assertIn("-u QWEN38_MODEL_ROOT", script)
+
 
 if __name__ == "__main__":
     unittest.main()
