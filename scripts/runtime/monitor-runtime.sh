@@ -78,6 +78,7 @@ free_floor=$((MIN_FREE_GIB * 1048576))
 free_gate=$((FREE_GATE_GIB * 1048576))
 swap_free_floor=$((MIN_SWAP_FREE_GIB * 1048576))
 low_count=0
+warning_active=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
 printf '%s monitor started: container=%s mode=%s available=%sGiB noncma-free=%sGiB/%sGiB gate swapfree=%sGiB\n' \
   "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_SWAP_FREE_GIB}"
@@ -101,15 +102,31 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   fi
 
   if (( warning_low == 1 )); then
+    previous_low_count="${low_count}"
     if (( protection_low == 1 )); then
       low_count=$((low_count + 1))
     else
       low_count=0
     fi
-    printf '%s WARNING memory margin low protect=%d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
-      "$(date '+%F %T')" "${low_count}" "${CONSECUTIVE}" \
-      "$((mem_available / 1024))" "$((noncma_available / 1024))" "$((mem_free / 1024))" \
-      "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
+
+    should_log_warning=0
+    if (( protection_low == 1 || warning_active == 0 || previous_low_count > 0 )); then
+      should_log_warning=1
+    elif (( HEARTBEAT > 0 && SECONDS >= next_heartbeat )); then
+      should_log_warning=1
+    fi
+
+    if (( should_log_warning == 1 )); then
+      printf '%s WARNING memory margin low protect=%d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
+        "$(date '+%F %T')" "${low_count}" "${CONSECUTIVE}" \
+        "$((mem_available / 1024))" "$((noncma_available / 1024))" "$((mem_free / 1024))" \
+        "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
+      warning_active=1
+      if (( HEARTBEAT > 0 )); then
+        next_heartbeat=$((SECONDS + HEARTBEAT))
+      fi
+    fi
+
     if [[ "${PROTECT}" == 1 && "${protection_low}" == 1 && "${low_count}" -ge "${CONSECUTIVE}" ]]; then
       printf '%s PROTECT stopping %s gracefully to preserve host stability\n' "$(date '+%F %T')" "${CONTAINER}" >&2
       docker logs --tail 1000 "${CONTAINER}" 2>&1 || true
@@ -122,12 +139,13 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
       exit 2
     fi
   else
-    if (( low_count > 0 )); then
+    if (( warning_active == 1 || low_count > 0 )); then
       printf '%s memory margin recovered: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB\n' \
         "$(date '+%F %T')" "$((mem_available / 1024))" "$((noncma_available / 1024))" \
         "$((mem_free / 1024))" "$((cma_free / 1024))" "$((noncma_free / 1024))"
     fi
     low_count=0
+    warning_active=0
     if (( HEARTBEAT > 0 && SECONDS >= next_heartbeat )); then
       printf '%s HEARTBEAT healthy: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
         "$(date '+%F %T')" "$((mem_available / 1024))" "$((noncma_available / 1024))" \

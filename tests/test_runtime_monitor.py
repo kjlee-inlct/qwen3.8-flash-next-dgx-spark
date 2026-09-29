@@ -203,5 +203,90 @@ esac
             self.assertFalse(stop_marker.exists())
 
 
+    def test_warning_only_state_is_rate_limited_when_heartbeat_is_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            state_home = root / "state"
+            bin_dir.mkdir()
+
+            inspect_count = root / "inspect-count"
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  inspect)
+    if [[ "${2:-}" == "-f" ]]; then
+      count=0
+      [[ ! -f "$FAKE_DOCKER_INSPECT_COUNT" ]] || count="$(cat "$FAKE_DOCKER_INSPECT_COUNT")"
+      if (( count >= 3 )); then
+        printf 'false\\n'
+      else
+        printf '%d\\n' "$((count + 1))" > "$FAKE_DOCKER_INSPECT_COUNT"
+        printf 'true\\n'
+      fi
+    elif [[ "${2:-}" == "--format" ]]; then
+      printf '%064d\\n' 0
+    fi
+    ;;
+  logs|stop)
+    ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
+
+            meminfo = root / "meminfo"
+            meminfo.write_text(
+                "\n".join(
+                    [
+                        "MemTotal:       127506432 kB",
+                        "MemFree:          7340032 kB",
+                        "MemAvailable:     7130317 kB",
+                        "CmaFree:           4194304 kB",
+                        "SwapFree:        104857600 kB",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(MONITOR),
+                    "--container",
+                    "qwen38-flash-next",
+                    "--protect",
+                    "--consecutive",
+                    "5",
+                    "--interval",
+                    "1",
+                    "--heartbeat",
+                    "0",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+                    "XDG_STATE_HOME": str(state_home),
+                    "QWEN38_MEMINFO_PATH": str(meminfo),
+                    "FAKE_DOCKER_INSPECT_COUNT": str(inspect_count),
+                },
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            output = result.stdout + result.stderr
+            self.assertEqual(output.count("WARNING memory margin low"), 1, output)
+            self.assertIn("protect=0/5", output)
+            self.assertNotIn("PROTECT stopping", output)
+
+
 if __name__ == "__main__":
     unittest.main()

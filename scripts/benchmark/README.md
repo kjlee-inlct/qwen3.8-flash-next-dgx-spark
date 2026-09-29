@@ -5587,3 +5587,36 @@ together (or low swap). A protected stop during candidate startup must also
 abort the transaction without restarting either the candidate or previous
 runtime.
 
+Closure on 2026-09-29:
+
+- immutable release under test:
+  `c65a99d5f7e613fb6bc79a2bcb166f04452d822a`;
+- managed Hybrid H6 completed 30 consecutive `validate-runtime.py` iterations
+  with chat, concurrency=3, health, models, streaming, and tool-call checks all
+  passing;
+- the test window ran from 18:43:59 through 19:01:15 KST with no protected stop
+  during the window;
+- non-CMA available memory remained roughly 2.6-3.0 GiB and non-CMA free
+  remained above the 2 GiB protection floor, so the monitor stayed at
+  `protect=0/5`;
+- swap remained approximately 138 GiB free;
+- a privileged kernel-journal scan covering 18:43-19:05 KST returned no
+  `NV_ERR_NO_MEMORY`, NVRM/Xid, OOM, killed-process, hung-task, lockup, or
+  watchdog matches;
+- final doctor result was 0 failures and one expected warning for the 6 GiB
+  non-CMA available warning floor.
+
+Updated classification:
+
+```text
+Managed Hybrid functional E2E        PASS
+Managed Hybrid restart E2E           PASS
+Managed Hybrid CMA protection        PASS
+Managed Hybrid repeated validation   PASS (30/30)
+Managed Hybrid host stability        PASS (2026-09-29 repair gate)
+```
+
+This PASS closes the specific host-stability repair gate for the reproduced
+failure mode. It does not claim indefinite soak stability or prove safety for
+arbitrarily larger concurrent workloads.
+
