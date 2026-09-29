@@ -525,34 +525,50 @@ fi
 if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && wizard_step 4 6 '런타임 설정' || wizard_step 4 6 'Runtime settings'
   if [[ -n "${CONFIG_OVERRIDE}" ]]; then
-    [[ "${UI_LANG}" == ko ]] && prompt="설정된 config.json override를 사용합니까 (${CONFIG_OVERRIDE})? [Y/n]: " || prompt="Use the configured config.json override (${CONFIG_OVERRIDE})? [Y/n]: "
-    read -r -p "${prompt}" answer
-    [[ "${answer}" == n || "${answer}" == N ]] && CONFIG_OVERRIDE=""
-  else
-    [[ "${UI_LANG}" == ko ]] && prompt="별도의 config.json override를 사용합니까? [y/N]: " || prompt="Use a separate config.json override? [y/N]: "
-    read -r -p "${prompt}" answer
-    if [[ "${answer}" == y || "${answer}" == Y ]]; then
-      [[ "${UI_LANG}" == ko ]] && prompt='절대 경로 또는 ~/path/to/config.json: ' || prompt='Absolute path or ~/path/to/config.json: '
-      read -r -p "${prompt}" CONFIG_OVERRIDE
-      [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_yes_no "설정된 config.json override를 사용합니까? (${CONFIG_OVERRIDE})" yes || CONFIG_OVERRIDE=""
+    else
+      wizard_yes_no "Use the configured config.json override? (${CONFIG_OVERRIDE})" yes || CONFIG_OVERRIDE=""
     fi
+  else
+    if [[ "${UI_LANG}" == ko ]]; then
+      if wizard_yes_no '별도의 config.json override를 사용합니까?' no; then
+        wizard_input CONFIG_OVERRIDE '절대 경로 또는 ~/path/to/config.json' ''
+      fi
+    else
+      if wizard_yes_no 'Use a separate config.json override?' no; then
+        wizard_input CONFIG_OVERRIDE 'Absolute path or ~/path/to/config.json' ''
+      fi
+    fi
+    [[ -z "${CONFIG_OVERRIDE}" ]] || [[ -n "${CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
   fi
-  [[ "${UI_LANG}" == ko ]] && prompt='런타임 메모리 모니터를 활성화합니까? [Y/n]: ' || prompt='Enable the runtime memory monitor? [Y/n]: '
-  read -r -p "${prompt}" answer
-  [[ "${answer}" == n || "${answer}" == N ]] && MONITOR_ENABLED=0 || MONITOR_ENABLED=1
+
+  if [[ "${UI_LANG}" == ko ]]; then
+    wizard_yes_no '런타임 메모리 모니터를 활성화합니까?' yes && MONITOR_ENABLED=1 || MONITOR_ENABLED=0
+  else
+    wizard_yes_no 'Enable the runtime memory monitor?' yes && MONITOR_ENABLED=1 || MONITOR_ENABLED=0
+  fi
   if [[ "${MONITOR_ENABLED}" == 1 ]]; then
-    [[ "${UI_LANG}" == ko ]] && prompt='지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까? [y/N]: ' || prompt='Stop the container safely after sustained low memory? [y/N]: '
-    read -r -p "${prompt}" answer
-    [[ "${answer}" == y || "${answer}" == Y ]] && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
-    [[ "${UI_LANG}" == ko ]] && prompt='권장 모니터 임계값과 heartbeat를 변경합니까? [y/N]: ' || prompt='Customize the recommended monitor thresholds and heartbeat? [y/N]: '
-    read -r -p "${prompt}" answer
-    if [[ "${answer}" == y || "${answer}" == Y ]]; then
-      read -r -p "MemAvailable GiB [${MONITOR_MIN_AVAILABLE_GIB}]: " answer; MONITOR_MIN_AVAILABLE_GIB="${answer:-${MONITOR_MIN_AVAILABLE_GIB}}"
-      read -r -p "MemFree GiB [${MONITOR_MIN_FREE_GIB}]: " answer; MONITOR_MIN_FREE_GIB="${answer:-${MONITOR_MIN_FREE_GIB}}"
-      read -r -p "MemAvailable gate GiB [${MONITOR_FREE_GATE_GIB}]: " answer; MONITOR_FREE_GATE_GIB="${answer:-${MONITOR_FREE_GATE_GIB}}"
-      read -r -p "SwapFree GiB [${MONITOR_MIN_SWAP_FREE_GIB}]: " answer; MONITOR_MIN_SWAP_FREE_GIB="${answer:-${MONITOR_MIN_SWAP_FREE_GIB}}"
-      read -r -p "Consecutive samples [${MONITOR_CONSECUTIVE}]: " answer; MONITOR_CONSECUTIVE="${answer:-${MONITOR_CONSECUTIVE}}"
-      read -r -p "Heartbeat seconds, 0 disables [${MONITOR_HEARTBEAT}]: " answer; MONITOR_HEARTBEAT="${answer:-${MONITOR_HEARTBEAT}}"
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_yes_no '지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까?' no && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+      if wizard_yes_no '권장 모니터 임계값과 heartbeat를 변경합니까?' no; then
+        wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
+        wizard_input MONITOR_MIN_FREE_GIB 'MemFree GiB' "${MONITOR_MIN_FREE_GIB}"
+        wizard_input MONITOR_FREE_GATE_GIB 'MemAvailable gate GiB' "${MONITOR_FREE_GATE_GIB}"
+        wizard_input MONITOR_MIN_SWAP_FREE_GIB 'SwapFree GiB' "${MONITOR_MIN_SWAP_FREE_GIB}"
+        wizard_input MONITOR_CONSECUTIVE 'Consecutive samples' "${MONITOR_CONSECUTIVE}"
+        wizard_input MONITOR_HEARTBEAT 'Heartbeat seconds (0 disables)' "${MONITOR_HEARTBEAT}"
+      fi
+    else
+      wizard_yes_no 'Stop the container safely after sustained low memory?' no && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
+      if wizard_yes_no 'Customize the recommended monitor thresholds and heartbeat?' no; then
+        wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
+        wizard_input MONITOR_MIN_FREE_GIB 'MemFree GiB' "${MONITOR_MIN_FREE_GIB}"
+        wizard_input MONITOR_FREE_GATE_GIB 'MemAvailable gate GiB' "${MONITOR_FREE_GATE_GIB}"
+        wizard_input MONITOR_MIN_SWAP_FREE_GIB 'SwapFree GiB' "${MONITOR_MIN_SWAP_FREE_GIB}"
+        wizard_input MONITOR_CONSECUTIVE 'Consecutive samples' "${MONITOR_CONSECUTIVE}"
+        wizard_input MONITOR_HEARTBEAT 'Heartbeat seconds (0 disables)' "${MONITOR_HEARTBEAT}"
+      fi
     fi
   else
     MONITOR_PROTECT=0
@@ -578,26 +594,25 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
     *) die "invalid API access selection" ;;
   esac
   if [[ "${API_ACCESS_MODE}" == docker || "${API_ACCESS_MODE}" == lan ]]; then
-    [[ "${UI_LANG}" == ko ]] && prompt="Docker 앱 API 포트 [${API_DOCKER_PORT}]: " || prompt="Docker-app API port [${API_DOCKER_PORT}]: "
-    read -r -p "${prompt}" answer; API_DOCKER_PORT="${answer:-${API_DOCKER_PORT}}"
+    [[ "${UI_LANG}" == ko ]] && wizard_input API_DOCKER_PORT 'Docker 앱 API 포트' "${API_DOCKER_PORT}" || wizard_input API_DOCKER_PORT 'Docker-app API port' "${API_DOCKER_PORT}"
   fi
   if [[ "${API_ACCESS_MODE}" == lan ]]; then
     detected_lan="$(detect_lan_ipv4)"
-    [[ "${UI_LANG}" == ko ]] && prompt="LAN에서 사용할 DGX IPv4 주소 [${detected_lan}]: " || prompt="DGX IPv4 address to expose on the LAN [${detected_lan}]: "
-    read -r -p "${prompt}" answer; API_LAN_ADDRESS="${answer:-${detected_lan}}"
+    [[ "${UI_LANG}" == ko ]] && wizard_input API_LAN_ADDRESS 'LAN에서 사용할 DGX IPv4 주소' "${detected_lan}" || wizard_input API_LAN_ADDRESS 'DGX IPv4 address to expose on the LAN' "${detected_lan}"
     if [[ "${UI_LANG}" == ko ]]; then
-      read -r -p "LAN API 포트 [${API_LAN_PORT}] (신규 권장 8001, 기존 URL 호환은 8000): " answer
+      wizard_input API_LAN_PORT 'LAN API 포트 (신규 권장 8001, 기존 URL 호환은 8000)' "${API_LAN_PORT}"
     else
-      read -r -p "LAN API port [${API_LAN_PORT}] (8001 recommended for new installs; use 8000 for legacy URL compatibility): " answer
+      wizard_input API_LAN_PORT 'LAN API port (8001 recommended; 8000 for legacy compatibility)' "${API_LAN_PORT}"
     fi
-    API_LAN_PORT="${answer:-${API_LAN_PORT}}"
   else
     API_LAN_ADDRESS=""
   fi
 
-  [[ "${UI_LANG}" == ko ]] && prompt='부팅 시 자동 시작되는 systemd 서비스를 등록합니까? [Y/n]: ' || prompt='Install a systemd service that starts at boot? [Y/n]: '
-  read -r -p "${prompt}" answer
-  [[ "${answer}" == n || "${answer}" == N ]] && SERVICE_ENABLED=0 || SERVICE_ENABLED=1
+  if [[ "${UI_LANG}" == ko ]]; then
+    wizard_yes_no '부팅 시 자동 시작되는 systemd 서비스를 등록합니까?' yes && SERVICE_ENABLED=1 || SERVICE_ENABLED=0
+  else
+    wizard_yes_no 'Install a systemd service that starts at boot?' yes && SERVICE_ENABLED=1 || SERVICE_ENABLED=0
+  fi
 fi
 validate_monitor_settings
 validate_api_access_settings
