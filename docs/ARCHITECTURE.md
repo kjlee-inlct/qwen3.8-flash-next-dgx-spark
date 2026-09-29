@@ -106,6 +106,42 @@ will be added behind a dedicated registry/adapter boundary. Do not add a manifes
 `SERVING_BACKEND` field until an actual second backend can install, run, validate, and
 uninstall end to end; doing so earlier would add migration risk without runtime value.
 
+## Persisted profile-switch lifecycle
+
+Managed model-profile replacement is a transaction above the existing runtime
+container transaction. Model preparation does not mutate the canonical
+`install.env`; the target is built in
+`install.env.profile-switch-candidate`. The durable profile state machine is:
+
+```text
+preparing
+  -> activated
+  -> runtime_committed
+  -> committing
+  -> idle
+```
+
+`preparing` is written before target preparation. `activated` records both
+the previous manifest backup and the digest of the service-ready target before
+the target manifest becomes the live service input. The nested runtime
+transaction then preserves the old container, starts and validates the target,
+and writes `runtime-commit.env`. The profile transaction accepts the target
+only when the attestation matches the current container ID, immutable runtime
+root, image, model mount, and exact served-model name.
+
+Recovery follows proof rather than process-exit traps. If target commit evidence
+is complete, recovery finishes the target manifest. If the target is not
+committed and the old runtime still matches the backed-up manifest, recovery
+restores the previous profile. A boundary that cannot prove either side remains
+persisted and fails closed; doctor reports it and uninstall refuses mutation.
+This includes the deliberately ambiguous interval after a runtime transaction
+commit but before its runtime attestation is durable.
+
+The installer recovers this transaction at startup. The systemd service also
+checks it before parsing the install manifest, but defers while the installer
+holds the global lifecycle operation lock so a normal in-flight cutover is not
+mistaken for a crash.
+
 ## Promotion flow
 
 ```text
