@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -33,6 +37,84 @@ class WaitReadyDiagnosticsTests(unittest.TestCase):
         self.assertIn("docker events", script)
         self.assertIn('--filter "container=${CONTAINER}"', script)
 
+
+
+    def test_managed_restart_waits_through_stopped_container(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            counter = root / "inspect-count"
+
+            (bin_dir / "docker").write_text(
+                textwrap.dedent(
+                    f"""\
+                    #!/usr/bin/env bash
+                    set -e
+                    if [[ "$1" == inspect && "$2" != --format ]]; then
+                      exit 0
+                    fi
+                    if [[ "$1" == inspect && "$2" == --format ]]; then
+                      count=0
+                      [[ -r "{counter}" ]] && count="$(cat "{counter}")"
+                      count=$((count + 1))
+                      printf '%s' "$count" >"{counter}"
+                      if (( count == 1 )); then
+                        printf 'exited\\n'
+                      else
+                        printf 'running\\n'
+                      fi
+                      exit 0
+                    fi
+                    if [[ "$1" == logs || "$1" == events ]]; then
+                      exit 0
+                    fi
+                    exit 0
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (bin_dir / "systemctl").write_text(
+                "#!/usr/bin/env bash\nprintf 'active\\n'\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "curl").write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    case "$*" in
+                      *"/v1/models"*) printf '{"object":"list","data":[{"id":"test/model"}]}\\n' ;;
+                      *) exit 0 ;;
+                    esac
+                    """
+                ),
+                encoding="utf-8",
+            )
+            for path in bin_dir.iterdir():
+                path.chmod(0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(SCRIPT),
+                    "--container",
+                    "qwen38-flash-next",
+                    "--model",
+                    "test/model",
+                    "--timeout",
+                    "5",
+                    "--interval",
+                    "1",
+                ],
+                env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("managed-service=replacing", result.stdout)
+            self.assertIn("READY after", result.stdout)
 
     def test_wait_ready_rejects_missing_initial_container(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
