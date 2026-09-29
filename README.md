@@ -573,6 +573,14 @@ inspects tensor headers, records an installation manifest, and starts the select
 ./install.sh
 ```
 
+The interactive installer uses a six-step vertical wizard: language, model, model
+storage, runtime settings, API/service, and a final installation-plan review. Korean is
+the fresh-install default; `--lang en|ko` bypasses the language prompt for automation.
+On a clean clone, the default model root is the repository-local `./models` directory.
+If a complete managed checkpoint already exists under `$HOME/models`, the wizard
+offers/reuses that existing store by default to avoid a duplicate multi-hundred-GiB
+download. Use `--model-root PATH` or `QWEN38_MODEL_ROOT` to choose another root.
+
 The model revision is pinned to `c1209bda15a6bbc4c68b585e93d40c0d85f50306`.
 For gated OrcaRouter-family profiles, the model terms must be accepted in a browser first.
 The Hugging Face CLI is optional: the installer reuses `HF_TOKEN`,
@@ -599,8 +607,9 @@ shared resources:
 ./uninstall.sh --purge-all
 ```
 
-Destructive model removal is allowed only below `$HOME/models` and only when the download
-manifest exists. Dedicated swap removal delegates to `manage-swap.sh`; `/swap.img` is
+Destructive model removal is allowed only below `$HOME/models`, below the
+repository-local `./models` store, or for the legacy `./model` compatibility path,
+and only when a managed model/hybrid manifest exists. Dedicated swap removal delegates to `manage-swap.sh`; `/swap.img` is
 never selected. Use `--yes` only for already-reviewed automation.
 
 ### Inspect a checkpoint before downloading or serving
@@ -974,8 +983,8 @@ Stable operator helpers cover recurring operations that should not require ad-ho
 # Preview removal of an inactive managed checkpoint.
 ./scripts/manage-models.sh remove "$HOME/models/old-qwen38" --dry-run
 
-# Safely migrate a complete legacy repo-local OrcaRouter checkpoint to the
-# canonical installer path. Dry-run first; reruns are idempotent.
+# Safely migrate the historical repo-local ./model OrcaRouter checkpoint to
+# the legacy $HOME/models canonical location. Dry-run first; reruns are idempotent.
 ./scripts/manage-models.sh migrate-orcarouter --dry-run
 ./scripts/manage-models.sh migrate-orcarouter --yes
 
