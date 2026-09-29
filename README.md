@@ -988,12 +988,19 @@ Stable operator helpers cover recurring operations that should not require ad-ho
 ./scripts/manage-models.sh migrate-orcarouter --dry-run
 ./scripts/manage-models.sh migrate-orcarouter --yes
 
+# Move the entire managed model root into this repository's ./models directory.
+# This is an atomic same-filesystem rename, not a copy. It refuses unmanaged
+# top-level entries, active service/container mounts, lock conflicts, or a
+# conflicting destination. $HOME/models remains as a compatibility symlink.
+./scripts/manage-models.sh relocate-root --dry-run
+./scripts/manage-models.sh relocate-root --yes
+
 # Wait for the canonical runtime and exact served-model identity.
 ./scripts/wait-ready.sh \
   --container qwen38-flash-next \
   --model orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4
 ```
 
-`manage-models.sh` only considers directories with a local Qwen model manifest and refuses to delete the active installation model; use `uninstall.sh --purge-model` for that lifecycle operation. Its `migrate-orcarouter` action validates the pinned OrcaRouter identity and referenced shards, refuses running-container mounts and cross-filesystem moves, preserves an interrupted canonical download as a `.partial-backup*` directory, moves the complete checkpoint to `$HOME/models/qwen3.8-flash-next-orcarouter`, and leaves `./model` as a compatibility symlink. `wait-ready.sh` checks container state, `/health`, and `/v1/models`, and prints recent logs if a container exits before becoming ready.
+`manage-models.sh` only considers directories with a local Qwen model manifest and refuses to delete the active installation model; use `uninstall.sh --purge-model` for that lifecycle operation. Its `migrate-orcarouter` action validates the pinned OrcaRouter identity and referenced shards, refuses running-container mounts and cross-filesystem moves, preserves an interrupted canonical download as a `.partial-backup*` directory, moves the complete checkpoint to `$HOME/models/qwen3.8-flash-next-orcarouter`, and leaves `./model` as a compatibility symlink. The newer `relocate-root` action moves the whole managed `$HOME/models` tree to repository-local `./models` using an atomic rename, verifies every managed top-level entry is complete, leaves `$HOME/models -> ./models` for compatibility, and refreshes `./model` to the relocated OrcaRouter checkpoint. `wait-ready.sh` checks container state, `/health`, and `/v1/models`, and prints recent logs if a container exits before becoming ready.
 
 Repository maintenance policy: when a workflow repeatedly needs manual commands, add or extend a reusable operator helper and update its tests and documentation in the same change.
