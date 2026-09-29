@@ -11,6 +11,7 @@ from unittest import mock
 
 ROOT = Path(__file__).parents[1]
 TOOL = ROOT / "scripts" / "model" / "migrate_orcarouter.py"
+sys.path.insert(0, str(TOOL.parent))
 SPEC = importlib.util.spec_from_file_location("migrate_orcarouter", TOOL)
 assert SPEC is not None and SPEC.loader is not None
 migrate = importlib.util.module_from_spec(SPEC)
