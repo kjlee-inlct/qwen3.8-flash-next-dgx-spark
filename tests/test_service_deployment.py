@@ -75,8 +75,8 @@ class ServiceDeploymentTests(unittest.TestCase):
 
     def test_service_runner_strictly_parses_install_manifest(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
-        self.assertIn('parse_state_into_vars install-runtime "${STATE_FILE}"', runner)
-        self.assertIn("installation manifest failed strict runtime parsing", runner)
+        self.assertIn('parse_state_into_vars install-service-runtime "${STATE_FILE}"', runner)
+        self.assertIn("installation manifest failed strict service-runtime parsing", runner)
         self.assertNotIn('source "${STATE_FILE}"', runner)
         self.assertNotIn("shellcheck disable=SC1090", runner)
 
@@ -93,6 +93,11 @@ class ServiceDeploymentTests(unittest.TestCase):
     def test_service_manager_accepts_service_ready_phase(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         self.assertIn('"${value}" == service_ready || "${value}" == complete', manager)
+
+    def test_service_runner_uses_service_runtime_schema_for_initial_start(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        self.assertIn('parse_state_into_vars install-service-runtime "${STATE_FILE}"', runner)
+        self.assertNotIn('parse_state_into_vars install-runtime "${STATE_FILE}"', runner)
 
     def test_service_readiness_requires_runtime_commit_attestation(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
