@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # checkpoint declares quant_algo=MIXED_PRECISION, which the pinned image cannot load
 # (PLE) and cannot draft with (FP8_PB_WO MTP). Build both Dockerfiles in scripts/ first.
 MODEL_PROFILE="${MODEL_PROFILE:-nvidia}"
+MODEL_ROOT="${QWEN38_MODEL_ROOT:-${HOME}/models}"
 DEFAULT_QSA_EXACT_TOPK=0
 PLE_MODE=cpu-offload
 KV_MEMORY_FLAG=--kv-cache-memory
@@ -24,21 +25,21 @@ HYBRID_MOUNTS=()
 case "${MODEL_PROFILE}" in
   orcarouter)
     IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
-    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
+    MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
     DEFAULT_GPU_UTIL=0.85; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
     SERVED_NAME="${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   nvidia)
     IMAGE="${VLLM_IMAGE:-vllm-nv-mixed:v2}"
-    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-nvidia}"
+    MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-nvidia}"
     DEFAULT_MAXLEN=524288; DEFAULT_NSPEC=3; DEFAULT_INDEX_SHARE=1
     DEFAULT_GPU_UTIL=0.78; DEFAULT_KV_MEM=16106127360; DEFAULT_MAXSEQS=8; DEFAULT_AUTOTUNE=1
     SERVED_NAME="${SERVED_NAME:-qwen3.8-flash-next}"
     ;;
   mazinb)
     IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029:v1}"
-    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-flash-next-mazinb}"
+    MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-mazinb}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
     DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
     DEFAULT_QSA_EXACT_TOPK=1
@@ -50,7 +51,7 @@ case "${MODEL_PROFILE}" in
     ;;
   orcarouter-hybrid)
     IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029:v1}"
-    MODEL_DIR="${MODEL_DIR:-$HOME/models/qwen3.8-h6-modelopt-w4a16}"
+    MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-h6-modelopt-w4a16}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
     DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
     DEFAULT_QSA_EXACT_TOPK=1
@@ -58,10 +59,11 @@ case "${MODEL_PROFILE}" in
     KV_MEMORY_FLAG=--kv-cache-memory-bytes
     VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
     FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
-    HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
-    HYBRID_H3_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-$HOME/models/qwen3.8-hybrid-quant-layout}"
-    HYBRID_H4_DIR="${H4_ORCA_ALL_MODEL_DIR:-$HOME/models/qwen3.8-h4-orca-all}"
-    HYBRID_H5_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-$HOME/models/qwen3.8-h5-neutral-input-scale}"
+    HYBRID_MODEL_ROOT="${QWEN38_MODEL_ROOT:-$(dirname -- "${MODEL_DIR}")}"
+    HYBRID_BASE_DIR="${ORCAROUTER_MODEL_DIR:-${HYBRID_MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"
+    HYBRID_H3_DIR="${HYBRID_QUANT_LAYOUT_MODEL_DIR:-${HYBRID_MODEL_ROOT}/qwen3.8-hybrid-quant-layout}"
+    HYBRID_H4_DIR="${H4_ORCA_ALL_MODEL_DIR:-${HYBRID_MODEL_ROOT}/qwen3.8-h4-orca-all}"
+    HYBRID_H5_DIR="${H5_NEUTRAL_INPUT_MODEL_DIR:-${HYBRID_MODEL_ROOT}/qwen3.8-h5-neutral-input-scale}"
     for hybrid_dir in "${HYBRID_BASE_DIR}" "${HYBRID_H3_DIR}" "${HYBRID_H4_DIR}" "${HYBRID_H5_DIR}"; do
       [[ -d "${hybrid_dir}" ]] || { echo "FATAL: hybrid parent checkpoint missing: ${hybrid_dir}" >&2; exit 1; }
     done
