@@ -59,14 +59,27 @@ done
 command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
-if ! docker inspect "${CONTAINER}" >/dev/null 2>&1; then
-  printf 'ERROR: container not found before readiness wait: %s\n' "${CONTAINER}" >&2
-  exit 1
-fi
+managed_service_state() {
+  [[ "${CONTAINER}" == qwen38-flash-next ]] || return 1
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl show qwen38-flash-next.service --property=ActiveState --value 2>/dev/null || true
+}
+
+managed_replacement_expected() {
+  local service_state
+  service_state="$(managed_service_state)"
+  [[ "${service_state}" == active || "${service_state}" == activating || "${service_state}" == reloading ]]
+}
 
 started="$(date +%s)"
 next_report=0
-seen_container=1
+seen_container=0
+if docker inspect "${CONTAINER}" >/dev/null 2>&1; then
+  seen_container=1
+elif ! managed_replacement_expected; then
+  printf 'ERROR: container not found before readiness wait: %s\n' "${CONTAINER}" >&2
+  exit 1
+fi
 
 print_container_events() {
   local since="$1" until
@@ -92,14 +105,27 @@ while :; do
   state="$(docker inspect --format '{{.State.Status}}' "${CONTAINER}" 2>/dev/null || true)"
   if [[ -n "${state}" ]]; then
     seen_container=1
-  elif [[ "${seen_container}" == 1 ]]; then
+  elif [[ "${seen_container}" == 1 ]] && ! managed_replacement_expected; then
     printf 'CONTAINER DISAPPEARED: %s was present earlier but no longer exists\n' "${CONTAINER}" >&2
     print_container_events "${started}"
     exit 1
   fi
-  if [[ -n "${state}" && "${state}" != running ]]; then
-    printf 'CONTAINER STOPPED: %s status=%s\n' "${CONTAINER}" "${state}" >&2
-    print_failure_diagnostics "${CONTAINER}"
+  if [[ -z "${state}" || "${state}" != running ]]; then
+    if managed_replacement_expected; then
+      if (( elapsed >= next_report )); then
+        printf 'waiting... %s/%ss container=%s managed-service=replacing\n' "${elapsed}" "${TIMEOUT}" "${state:-missing}"
+        next_report=$((elapsed + 60))
+      fi
+      sleep "${INTERVAL}"
+      continue
+    fi
+    if [[ -n "${state}" ]]; then
+      printf 'CONTAINER STOPPED: %s status=%s\n' "${CONTAINER}" "${state}" >&2
+      print_failure_diagnostics "${CONTAINER}"
+    else
+      printf 'CONTAINER MISSING: %s and managed service is not replacing it\n' "${CONTAINER}" >&2
+      print_container_events "${started}"
+    fi
     exit 1
   fi
 
