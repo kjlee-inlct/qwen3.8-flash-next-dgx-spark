@@ -27,6 +27,7 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 - `model-profiles.sh`
 - `inspect_model.py`
 - `checkpoint_integrity.py`
+- `migrate_orcarouter.py`
 - `prepare_config.py`
 
 Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/prepare-config.py` are compatibility entry points.
@@ -104,6 +105,18 @@ Examples:
 ./scripts/manage-models.sh list
 ./scripts/manage-models.sh remove "$HOME/models/old-qwen38" --dry-run
 ./scripts/manage-models.sh remove "$HOME/models/old-qwen38"
+./scripts/manage-models.sh migrate-orcarouter --dry-run
+./scripts/manage-models.sh migrate-orcarouter --yes
 ```
 
 Deletion is intentionally limited to managed model manifests under `$HOME/models` or this repository's `./model` directory.
+
+The OrcaRouter migration action is for installations that predate the canonical model
+path. It accepts only a complete checkpoint for
+`orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` at revision
+`c1209bda15a6bbc4c68b585e93d40c0d85f50306`, verifies every shard referenced by
+the safetensors index, and uses a same-filesystem rename. A matching interrupted
+canonical download is preserved as `.partial-backup*`; complete conflicts, unexpected
+symlinks, running-container mounts, and cross-filesystem migrations are rejected.
+After migration, `./model` is retained as a compatibility symlink and rerunning the
+command is idempotent.

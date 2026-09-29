@@ -22,6 +22,7 @@ Usage:
   ./scripts/manage-models.sh assets
   ./scripts/manage-models.sh remove PATH [--yes] [--dry-run]
   ./scripts/manage-models.sh retire PROFILE [--yes] [--dry-run]
+  ./scripts/manage-models.sh migrate-orcarouter [--yes] [--dry-run]
 
 list:
   Shows managed checkpoint directories discovered from the active installation,
@@ -40,6 +41,14 @@ retire:
   profile-owned disposable images/checkpoints are removed when safe. Active
   installation assets, running containers, and assets required by another
   present profile are protected. Use --dry-run to inspect the plan first.
+
+migrate-orcarouter:
+  Moves a complete pinned repository-local ./model checkpoint to the canonical
+  $HOME/models/qwen3.8-flash-next-orcarouter path using a same-filesystem rename.
+  An interrupted canonical download is preserved as a partial-backup directory.
+  The legacy ./model path becomes a compatibility symlink. The migration is
+  fail-closed on wrong identity, incomplete shards, running-container mounts,
+  different filesystems, or conflicting complete checkpoints.
 EOF
 }
 
@@ -311,6 +320,17 @@ list_models() {
   [[ "${found}" == 1 ]] || printf '(none found)\n'
 }
 
+migrate_orcarouter() {
+  local helper="${SCRIPT_ROOT}/scripts/model/migrate_orcarouter.py"
+  local -a args=()
+
+  [[ -r "${helper}" ]] || die "OrcaRouter migration helper missing: ${helper}"
+  [[ "${DRY_RUN}" == 1 ]] && args+=(--dry-run)
+  [[ "${YES}" == 1 ]] && args+=(--yes)
+
+  python3 "${helper}" "${args[@]}"
+}
+
 remove_model() {
   local path manifest status kind repo revision files size allowed
   path="$(realpath -m -- "${TARGET}")"
@@ -353,6 +373,7 @@ case "${ACTION}" in
   assets) [[ -z "${TARGET}" ]] || die "assets takes no target"; list_assets ;;
   remove) remove_model ;;
   retire) retire_profile ;;
+  migrate-orcarouter) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "migrate-orcarouter takes no target"; migrate_orcarouter ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 2 ;;
 esac

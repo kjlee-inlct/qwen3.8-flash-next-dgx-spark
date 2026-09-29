@@ -40,7 +40,7 @@ describe_model_asset() {
 
   case "$profile" in
     orcarouter)
-      MODEL_ASSET_CHECKPOINT="${SCRIPT_ROOT}/model"
+      MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-flash-next-orcarouter"
       MODEL_ASSET_CONTAINER="qwen38-flash-next"
       MODEL_ASSET_IMAGE="vllm-skinny-tp1:v1"
       MODEL_ASSET_RETIRE_IMAGE=1
