@@ -250,6 +250,35 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn(".qwen38-hybrid-manifest.json", uninstaller)
         self.assertIn("managed model/hybrid manifest missing", uninstaller)
 
+
+    def test_profile_switch_uses_persisted_lifecycle_transaction(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        diagnostics = (ROOT / "scripts" / "diagnostics" / "collect-diagnostics.sh").read_text(encoding="utf-8")
+        parser = (ROOT / "scripts" / "lib" / "state_file.py").read_text(encoding="utf-8")
+
+        self.assertIn("profile-switch-transition.sh", installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" recover', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" prepare', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" activate', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" runtime-committed', installer)
+        self.assertIn('bash "${PROFILE_SWITCH_TRANSITION}" commit', installer)
+        self.assertIn("profile-switch-transition.env", uninstaller)
+        self.assertIn("a profile-switch transition is active", uninstaller)
+        self.assertIn("profile-switch-transition.txt", diagnostics)
+        self.assertIn("profile-switch-candidate.txt", diagnostics)
+        self.assertIn("profile-switch-backup.txt", diagnostics)
+        self.assertNotIn('source "${STATE_FILE}"', diagnostics)
+        self.assertIn('"profile-switch": {', parser)
+
+    def test_runtime_transition_uses_strict_state_parser(self) -> None:
+        transition = (ROOT / "scripts" / "runtime" / "runtime-transition.sh").read_text(encoding="utf-8")
+        parser = (ROOT / "scripts" / "lib" / "state_file.py").read_text(encoding="utf-8")
+
+        self.assertIn('python3 "${STATE_PARSER}" runtime-transition', transition)
+        self.assertNotIn('source "${STATE_FILE}"', transition)
+        self.assertIn('"runtime-transition": {', parser)
+
     def test_operations_runbook_matches_supported_commands(self) -> None:
         operations = (ROOT / "OPERATIONS.md").read_text(encoding="utf-8")
 
