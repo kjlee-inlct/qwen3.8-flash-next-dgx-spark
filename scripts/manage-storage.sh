@@ -111,12 +111,14 @@ esac
 ACTIVE_MODEL=""
 ACTIVE_IMAGE=""
 ACTIVE_PROFILE=""
+INSTALL_PHASE=""
 if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]]; then
   parsed="$(mktemp)"
   trap 'rm -f -- "${parsed:-}"' EXIT
   if python3 "${STATE_PARSER}" install-maintenance "${STATE_FILE}" >"${parsed}" 2>/dev/null; then
     while IFS= read -r -d '' key && IFS= read -r -d '' value; do
       case "${key}" in
+        PHASE) INSTALL_PHASE="${value}" ;;
         MODEL_DIR) ACTIVE_MODEL="${value}" ;;
         VLLM_IMAGE) ACTIVE_IMAGE="${value}" ;;
         MODEL_PROFILE) ACTIVE_PROFILE="${value}" ;;
@@ -125,6 +127,12 @@ if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]]; then
   fi
   rm -f -- "${parsed}"
   trap - EXIT
+fi
+
+if [[ "${INSTALL_PHASE}" == uninstalled ]]; then
+  ACTIVE_MODEL=""
+  ACTIVE_PROFILE=""
+  ACTIVE_IMAGE=""
 fi
 
 human_du() {

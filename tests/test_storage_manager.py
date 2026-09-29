@@ -220,6 +220,20 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("/model", gitignore)
         self.assertNotIn("/model/", gitignore)
 
+    def test_uninstalled_manifest_is_not_reported_as_active_assets(self) -> None:
+        sources = [
+            MODEL_MANAGER.read_text(encoding="utf-8"),
+            SCRIPT.read_text(encoding="utf-8"),
+            (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8"),
+        ]
+        for source in sources:
+            self.assertIn('INSTALL_PHASE=""', source)
+            self.assertIn('PHASE) INSTALL_PHASE="${value}"', source)
+            self.assertIn('if [[ "${INSTALL_PHASE}" == uninstalled ]]; then', source)
+            self.assertIn('ACTIVE_MODEL=""', source)
+            self.assertIn('ACTIVE_PROFILE=""', source)
+            self.assertIn('ACTIVE_IMAGE=""', source)
+
     def test_storage_recommend_discovers_hybrid_manifests(self) -> None:
         source = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8")
         self.assertIn(".qwen38-hybrid-manifest.json", source)
