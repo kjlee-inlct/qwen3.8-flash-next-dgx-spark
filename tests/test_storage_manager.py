@@ -195,6 +195,26 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("docker inspect --format", script)
         self.assertIn("checkpoint is mounted by a running Docker container", script)
 
+    def test_model_manager_exposes_orcarouter_canonical_migration(self) -> None:
+        script = MODEL_MANAGER.read_text(encoding="utf-8")
+        registry = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "model" / "migrate_orcarouter.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("migrate-orcarouter", script)
+        self.assertIn("migrate_orcarouter()", script)
+        self.assertIn("migrate_orcarouter.py", script)
+        self.assertIn(
+            'MODEL_ASSET_CHECKPOINT="${HOME}/models/qwen3.8-flash-next-orcarouter"',
+            registry,
+        )
+        self.assertIn("ORCA_REVISION", helper)
+        self.assertIn("same_filesystem", helper)
+        self.assertIn("running_container_mounts", helper)
+        self.assertIn("partial-backup", helper)
+        self.assertIn("already migrated", helper)
+
     def test_storage_recommend_discovers_hybrid_manifests(self) -> None:
         source = (ROOT / "scripts" / "storage" / "recommend.sh").read_text(encoding="utf-8")
         self.assertIn(".qwen38-hybrid-manifest.json", source)
