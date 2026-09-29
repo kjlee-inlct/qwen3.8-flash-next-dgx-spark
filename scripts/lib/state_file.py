@@ -103,6 +103,11 @@ INSTALL_RUNTIME_SCHEMA: dict[str, Validator] = {
     "MONITOR_CONSECUTIVE": matches(POSITIVE_INTEGER), "MONITOR_HEARTBEAT": matches(NONNEGATIVE_INTEGER),
 }
 
+INSTALL_SERVICE_RUNTIME_SCHEMA: dict[str, Validator] = {
+    **INSTALL_RUNTIME_SCHEMA,
+    "PHASE": one_of("service_ready", "complete"),
+}
+
 INSTALL_SERVICE_SCHEMA: dict[str, Validator] = {
     "SCHEMA_VERSION": one_of("3", "4"), "PHASE": one_of("service_ready", "complete"), "INSTALL_ROOT": absolute_path,
     "SERVED_NAME": nonempty_text, "CONTAINER_NAME": exact("qwen38-flash-next"),
@@ -140,6 +145,7 @@ INSTALL_UNINSTALL_SCHEMA: dict[str, Validator] = {
 
 INSTALL_SCHEMAS = {
     "install-runtime": INSTALL_RUNTIME_SCHEMA,
+    "install-service-runtime": INSTALL_SERVICE_RUNTIME_SCHEMA,
     "install-service": INSTALL_SERVICE_SCHEMA,
     "install-doctor": INSTALL_DOCTOR_SCHEMA,
     "install-uninstall": INSTALL_UNINSTALL_SCHEMA,
