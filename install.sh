@@ -25,6 +25,8 @@ MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
 PROFILE_SWITCH=0; PROFILE_SWITCH_COMMITTED=0; SWITCH_FROM_PROFILE=""; SWITCH_MODEL_ROOT=""
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
+PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
+STATE_WRITE_FILE="${STATE_FILE}"
 LIST_MODELS=0; LIST_BACKENDS=0
 MONITOR_ENABLED="${MONITOR_ENABLED:-}"
 MONITOR_PROTECT="${MONITOR_PROTECT:-0}"
@@ -230,7 +232,7 @@ validate_api_access_settings() {
   sync_legacy_proxy_fields
 }
 write_state() {
-  local phase="$1"
+  local phase="$1" target="${STATE_WRITE_FILE:-${STATE_FILE}}"
   mkdir -p "${STATE_DIR}"; umask 077
   {
     printf 'SCHEMA_VERSION=%q\n' 4; printf 'PHASE=%q\n' "${phase}"
@@ -259,9 +261,31 @@ write_state() {
     printf 'SERVICE_ENABLED=%q\n' "${SERVICE_ENABLED}"; printf 'SERVICE_OWNED=%q\n' "${SERVICE_OWNED}"
     printf 'SERVICE_UNIT=%q\n' qwen38-flash-next.service
     printf 'UI_LANG=%q\n' "${UI_LANG}"
-  } > "${STATE_FILE}.tmp"
-  mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
+  } > "${target}.tmp"
+  mv -- "${target}.tmp" "${target}"
 }
+
+restore_profile_switch_manifest_on_exit() {
+  local rc="$?"
+  if [[ "${PROFILE_SWITCH}" == 1 && "${PROFILE_SWITCH_COMMITTED}" != 1 && -f "${PROFILE_SWITCH_BACKUP}" ]]; then
+    cp -p -- "${PROFILE_SWITCH_BACKUP}" "${STATE_FILE}.tmp"
+    mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
+    printf 'Profile switch did not commit; restored previous installation manifest (%s).\n' "${SWITCH_FROM_PROFILE}" >&2
+  fi
+  rm -f -- "${PROFILE_SWITCH_CANDIDATE}" "${PROFILE_SWITCH_CANDIDATE}.tmp"
+  if [[ "${PROFILE_SWITCH_COMMITTED}" == 1 ]]; then
+    rm -f -- "${PROFILE_SWITCH_BACKUP}"
+  fi
+  return "${rc}"
+}
+
+activate_profile_switch_manifest() {
+  [[ "${PROFILE_SWITCH}" == 1 ]] || return 0
+  [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "installed manifest became unavailable before profile switch activation"
+  cp -p -- "${STATE_FILE}" "${PROFILE_SWITCH_BACKUP}"
+  STATE_WRITE_FILE="${STATE_FILE}"
+}
+
 usage() {
   printf 'Usage: ./install.sh [--model PROFILE] [--model-root PATH] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
@@ -368,7 +392,10 @@ if [[ -r "${STATE_FILE}" ]]; then
         die "an update transition is active; finish or recover it before switching profiles"
       [[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" ]] || \
         die "stale profile-switch manifest backup exists: ${PROFILE_SWITCH_BACKUP}"
-      cp -p -- "${STATE_FILE}" "${PROFILE_SWITCH_BACKUP}"
+      [[ ! -e "${PROFILE_SWITCH_CANDIDATE}" && ! -L "${PROFILE_SWITCH_CANDIDATE}" ]] || \
+        die "stale profile-switch candidate manifest exists: ${PROFILE_SWITCH_CANDIDATE}"
+      STATE_WRITE_FILE="${PROFILE_SWITCH_CANDIDATE}"
+      trap restore_profile_switch_manifest_on_exit EXIT
     fi
   else
     parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
@@ -748,22 +775,6 @@ if [[ "${DRY_RUN}" == 1 ]]; then
   exit 0
 fi
 
-restore_profile_switch_manifest_on_exit() {
-  local rc="$?"
-  if [[ "${PROFILE_SWITCH}" == 1 && "${PROFILE_SWITCH_COMMITTED}" != 1 && -f "${PROFILE_SWITCH_BACKUP}" ]]; then
-    cp -p -- "${PROFILE_SWITCH_BACKUP}" "${STATE_FILE}.tmp"
-    mv -- "${STATE_FILE}.tmp" "${STATE_FILE}"
-    printf 'Profile switch did not commit; restored previous installation manifest (%s).\n' "${SWITCH_FROM_PROFILE}" >&2
-  fi
-  if [[ "${PROFILE_SWITCH_COMMITTED}" == 1 ]]; then
-    rm -f -- "${PROFILE_SWITCH_BACKUP}"
-  fi
-  return "${rc}"
-}
-if [[ "${PROFILE_SWITCH}" == 1 ]]; then
-  trap restore_profile_switch_manifest_on_exit EXIT
-fi
-
 for command in python3 curl docker sudo git; do command -v "${command}" >/dev/null || die "${command} is required"; done
 docker info >/dev/null 2>&1 || die "Docker daemon unavailable or user lacks permission"
 git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "installer must run from a git checkout to create an immutable release baseline"
@@ -950,6 +961,9 @@ RUNTIME_ROOT="$(readlink -f -- "${CURRENT_RELEASE_LINK}")"
 write_state release_ready
 
 if [[ "${SERVICE_ENABLED}" == 1 ]]; then
+  if [[ "${PROFILE_SWITCH}" == 1 ]]; then
+    activate_profile_switch_manifest
+  fi
   SERVICE_OWNED=1
   write_state service_ready
   service_args=(create --runtime-root "${CURRENT_RELEASE_LINK}" --yes)
@@ -971,7 +985,7 @@ elif [[ "${START}" == 1 ]]; then
 fi
 write_state complete
 if [[ "${PROFILE_SWITCH}" == 1 ]]; then
-  rm -f -- "${PROFILE_SWITCH_BACKUP}"
+  rm -f -- "${PROFILE_SWITCH_BACKUP}" "${PROFILE_SWITCH_CANDIDATE}" "${PROFILE_SWITCH_CANDIDATE}.tmp"
   trap - EXIT
 fi
 if [[ "${UI_LANG}" == ko ]]; then
