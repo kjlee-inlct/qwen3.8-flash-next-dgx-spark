@@ -353,6 +353,8 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
         self.assertIn("profile     : orcarouter-hybrid", result.stdout)
         self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
+        self.assertIn("protection  : enabled", result.stdout)
+        self.assertIn("monitor     : enabled", result.stdout)
         self.assertIn("hybrid base", result.stdout)
         self.assertIn("hybrid mix", result.stdout)
 
