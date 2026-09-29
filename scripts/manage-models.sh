@@ -284,7 +284,7 @@ discover() {
   local -a candidates=()
   local -a paths=()
   [[ -n "${ACTIVE_MODEL}" ]] && candidates+=("${ACTIVE_MODEL}")
-  candidates+=("${HOME}/models" "${SCRIPT_ROOT}/model")
+  candidates+=("${HOME}/models" "${SCRIPT_ROOT}/models" "${SCRIPT_ROOT}/model")
 
   local base path canonical
   for base in "${candidates[@]}"; do
@@ -355,8 +355,9 @@ remove_model() {
 
   allowed=0
   [[ "${path}" == "${HOME}/models/"* ]] && allowed=1
+  [[ "${path}" == "${SCRIPT_ROOT}/models/"* ]] && allowed=1
   [[ "${path}" == "${SCRIPT_ROOT}/model" ]] && allowed=1
-  [[ "${allowed}" == 1 ]] || die "refusing deletion outside $HOME/models or repository ./model"
+  [[ "${allowed}" == 1 ]] || die "refusing deletion outside $HOME/models, repository ./models, or legacy ./model"
 
   IFS=$'\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
   [[ "${status}" != INVALID ]] || die "refusing deletion: invalid model manifest"
