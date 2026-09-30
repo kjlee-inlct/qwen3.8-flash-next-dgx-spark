@@ -5771,10 +5771,11 @@ available-memory gate suppressing protection when immediately free non-CMA
 pages are already critically low.
 
 Repair direction: keep low non-CMA available by itself warning-only, but make
-the configured non-CMA free floor independently protection-significant. Do not
-continue to the mazinb live-switch leg until that repair is merged, advanced
-through the immutable release path, and the Hybrid host-stability gate passes
-again.
+the configured non-CMA free floor independently protection-significant. That
+repair was merged as
+`1188a96939c8df6ba506b1ccc24b248b7477e41c` (#245). Do not continue to the
+mazinb live-switch leg until this release is advanced through the immutable
+release path and the Hybrid host-stability gate passes again.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
