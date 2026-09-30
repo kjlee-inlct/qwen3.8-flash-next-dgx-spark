@@ -5977,10 +5977,47 @@ this deterministic state and regression tests for both pre- and post-rename
 rollback interruption points. It passed CI and was squash-merged as
 `f5e41aa4fa79c74e6652c04becc8d4c8cba077c1`.
 
-Until lifecycle state is recovered and the post-update 6.17 cold-start is run,
-do not create another monitor-threshold repair. The memory monitor remains a
-safety mechanism, not evidence that the underlying kernel allocation path is
-healthy.
+Lifecycle recovery was then exercised with merged #247
+(`f5e41aa4fa79c74e6652c04becc8d4c8cba077c1`). The observed
+`rolling_back` current-only state recovered exactly as intended to
+`TRANSACTION_STATE=idle`; no rollback container remained, and the canonical
+container was intentionally stopped again for the controlled A/B.
+
+#### Post-update 6.17 + 580.178.04 + KHO-off cold-start
+
+The controlled Hybrid cold-start on the updated host stack still reproduced
+the NVIDIA RM allocation failure:
+
+- kernel: `6.17.0-1032-nvidia`;
+- driver: `580.178.04`;
+- command line: `kho=off`;
+- CMA: 128 MiB total;
+- lifecycle precondition: update/runtime/profile-switch all idle;
+- cold-start window: 14:18:08-14:31:09 KST;
+- at 14:30:15 the monitor still reported about 32.3 GiB available and
+  9.2 GiB free;
+- at 14:30:25 the kernel emitted
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- by 14:30:27 available had collapsed to about 8.6 GiB and non-CMA free to
+  about 1.1 GiB;
+- the old deployed protection policy then accumulated 5/5 low-free +
+  low-available samples and stopped the runtime at 14:30:46;
+- runtime never reached health; doctor failures after the protected stop are
+  expected consequences of the intentionally stopped managed runtime rather
+  than independent root causes.
+
+This falsifies a single-cause explanation based only on the
+`7.0.0-1019-nvidia` KHO regression for this workload. The 7.0/KHO issue may
+still worsen host behavior, but the same RM allocation failure is reachable on
+6.17 with KHO disabled and the newer driver.
+
+The sharper failure signature is now a short allocation-pressure transition:
+available memory drops by more than 20 GiB within roughly 12 seconds near the
+late startup phase, and RM fails before the monitor can react. Do not tune the
+monitor threshold again yet. First capture the exact vLLM phase and allocation
+operation spanning 14:29:30-14:30:50 from the preserved container log and
+kernel journal. The next repair target should be the startup allocation path
+unless that evidence points elsewhere.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
