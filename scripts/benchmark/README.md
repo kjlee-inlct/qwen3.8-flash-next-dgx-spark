@@ -6013,11 +6013,23 @@ still worsen host behavior, but the same RM allocation failure is reachable on
 
 The sharper failure signature is now a short allocation-pressure transition:
 available memory drops by more than 20 GiB within roughly 12 seconds near the
-late startup phase, and RM fails before the monitor can react. Do not tune the
-monitor threshold again yet. First capture the exact vLLM phase and allocation
-operation spanning 14:29:30-14:30:50 from the preserved container log and
-kernel journal. The next repair target should be the startup allocation path
-unless that evidence points elsewhere.
+late startup phase, and RM fails before the monitor can react.
+
+A stronger startup-allocation hypothesis is now visible. The vLLM progress
+sample immediately before the failure reported `Using BLNHC KV cache layout`.
+The managed Hybrid profile pins `--kv-cache-memory-bytes` to
+25769803776 bytes (24 GiB). The monitor then moved from about 32.3 GiB
+available at 14:30:15 to about 8.7 GiB at 14:30:27, a roughly 23.6 GiB drop.
+The magnitude and timing closely match the configured KV pool. This makes the
+late KV-cache allocation burst the highest-priority hypothesis for the RM
+failure on GB10 unified memory.
+
+Do not change the managed default from this correlation alone. Preserve the
+exited candidate's full timestamped log and inspect its actual command line
+first. If the log confirms the failure occurs during KV-cache allocation, run
+a controlled host-identical startup with only KV memory reduced (16 GiB is the
+first useful control) while leaving model, PLE mmap, MTP, graph mode, driver,
+kernel, and KHO state unchanged. The monitor remains protection, not the repair.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
