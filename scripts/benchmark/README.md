@@ -6123,16 +6123,30 @@ Classification:
 KV allocation-size threshold                supported; boundary is between 8 and 16 GiB
 ```
 
-The control cleanup command itself suffered a shell-paste syntax error after
-evidence collection, so the experiment container may still be running and must
-be stopped explicitly before the next control. This does not invalidate the
-startup result.
+The 8 GiB control was then closed cleanly and the entire run was re-scanned.
+The container was already exited with exit code 0 and was not OOM-killed.
+A post-ready kernel scan through 15:49:49 KST and a complete kernel-window scan
+from 15:31:51 onward returned no `NV_ERR_NO_MEMORY`,
+`_memdescAllocInternal`, NVRM/Xid, OOM, killed-process, hung-task, or lockup
+matches. Final host memory returned to roughly 124.6 GiB available, and managed
+update/runtime/profile-switch state remained idle with the managed service
+disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid functional startup   PASS
+8 GiB isolated Hybrid host stability        PASS (complete run)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 8 and 16 GiB
+```
 
 Next use 12 GiB as the midpoint boundary control with the same host/runtime
 conditions. If 12 GiB reproduces the RM failure, narrow downward between 8 and
 12 GiB; if it remains clean, narrow upward between 12 and 16 GiB. Do not change
-the managed default until the boundary is bracketed and repeated startup
-stability is demonstrated.
+the managed default until the boundary is bracketed more tightly and repeated
+startup stability is demonstrated.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
