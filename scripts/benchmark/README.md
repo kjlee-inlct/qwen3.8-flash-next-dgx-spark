@@ -5630,7 +5630,8 @@ explicitly pending rather than being inferred from unit coverage.
 
 #### Leg 1: OrcaRouter Hybrid -> OrcaRouter
 
-Result: **PASS**.
+Result: **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
+
 
 Pre-switch state:
 
@@ -5681,7 +5682,8 @@ Post-switch validation:
 - `doctor.sh`: 0 failures, 1 warning;
 - warning: non-CMA available reserve was 5554 MiB, below the 6 GiB warning
   floor;
-- non-CMA free memory: 5162 MiB, above the 2 GiB protection floor;
+- non-CMA free memory: 5162 MiB, above the 2 GiB protection floor at the
+  final doctor snapshot;
 - swap free: 44 GiB, above the 8 GiB protection floor;
 - runtime attestation matched the immutable release and live container;
 - health endpoint passed;
@@ -5690,10 +5692,18 @@ Post-switch validation:
   PASS;
 - runtime validation elapsed time: 5.064 seconds.
 
+The later privileged kernel-journal reconstruction shows that this first leg
+was not host-stable despite its functional success. NVIDIA RM emitted
+`NV_ERR_NO_MEMORY` at 08:34:35-08:34:44 KST while the OrcaRouter replacement
+runtime was still starting. Monitor samples immediately around that window
+showed critically low non-CMA free memory while non-CMA available remained
+above the then-current gate for part of the startup. The same protection gap
+therefore affected both profile-switch directions, not only Hybrid restart.
+
 Current live matrix:
 
 ```text
-Hybrid -> OrcaRouter              PASS
+Hybrid -> OrcaRouter              FUNCTIONAL PASS / HOST-STABILITY FAIL
 OrcaRouter -> Hybrid              FUNCTIONAL PASS / HOST-STABILITY FAIL
 Hybrid same-profile restart       FUNCTIONAL PASS / HOST-STABILITY FAIL
 Hybrid -> mazinb                  BLOCKED pending memory-protection repair
