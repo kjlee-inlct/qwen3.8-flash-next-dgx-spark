@@ -5816,7 +5816,8 @@ policy, the restored Hybrid runtime again emitted NVIDIA RM
 problem: #245 closes the high-available low-free blind spot, but treating every
 such sample as immediately protection-significant prevents a normal cold load.
 
-A second repair is therefore required. PR #246 uses the live evidence to
+A second repair was merged as `ae7df5adb82077439dfbbd937b77924b0aa7805d`
+(#246). It uses the live evidence to
 distinguish the two cases without relying on a fixed startup timer:
 
 - low free + low available: protection-significant;
@@ -5829,9 +5830,9 @@ distinguish the two cases without relying on a fixed startup timer:
 The 256 MiB activity gate is evidence-driven: the failed #245 candidate reached
 low-free with only a few MiB of swap change, while the earlier RM-failure runs
 showed swap consumption growing by hundreds of MiB to multiple GiB before the
-allocation failures. Do not continue to the mazinb live-switch leg until #246
-is merged, promoted through the immutable release path, and the Hybrid
-host-stability gate passes.
+allocation failures. #246 passed repository CI before squash merge. Do not
+continue to the mazinb live-switch leg until this merge commit is promoted
+through the immutable release path and the Hybrid host-stability gate passes.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
