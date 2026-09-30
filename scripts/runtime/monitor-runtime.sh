@@ -78,6 +78,7 @@ docker inspect "${CONTAINER}" >/dev/null 2>&1 || die "container not found: ${CON
 
 available_floor=$((MIN_AVAILABLE_GIB * 1048576))
 free_floor=$((MIN_FREE_GIB * 1048576))
+free_gate=$((FREE_GATE_GIB * 1048576))
 swap_free_floor=$((MIN_SWAP_FREE_GIB * 1048576))
 swap_activity_gate=$((SWAP_ACTIVITY_GATE_MIB * 1024))
 initial_swap_free="$(awk '$1=="SwapFree:" {print $2}' "${MEMINFO_PATH}")"
