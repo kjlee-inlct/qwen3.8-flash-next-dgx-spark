@@ -5830,9 +5830,39 @@ distinguish the two cases without relying on a fixed startup timer:
 The 256 MiB activity gate is evidence-driven: the failed #245 candidate reached
 low-free with only a few MiB of swap change, while the earlier RM-failure runs
 showed swap consumption growing by hundreds of MiB to multiple GiB before the
-allocation failures. #246 passed repository CI before squash merge. Do not
-continue to the mazinb live-switch leg until this merge commit is promoted
-through the immutable release path and the Hybrid host-stability gate passes.
+allocation failures. #246 passed repository CI before squash merge.
+
+#### #246 live release qualification, first attempt
+
+The live immutable-release qualification started at 13:21:06 KST with the
+expected target `ae7df5adb82077439dfbbd937b77924b0aa7805d`. Repository
+qualification passed 361 tests, and the release was staged, qualified, and
+verified before cutover.
+
+The replacement Hybrid candidate progressed further than #245 but was still
+stopped by memory protection during checkpoint loading:
+
+- the replacement container remained active through 8/81 shards at about
+  3:51 of checkpoint loading;
+- it reached 10/81 shards at about 5:06;
+- by the 420-second cutover poll the container was already being removed;
+- the service explicitly reported
+  `Candidate runtime was stopped by memory protection during startup`;
+- release cutover failed readiness and update-release began restoring the
+  previous release pointer.
+
+The captured operator transcript ends immediately after
+`Update release pointers rolled back.` It does **not** contain the monitor
+samples for this attempt, the exact `swapgrowth`/non-CMA trigger values, the
+kernel-journal result, or the final post-rollback lifecycle/health checks.
+Therefore this attempt establishes that the #246 policy still stopped a normal
+cold-load candidate, but it does not yet establish which branch of the
+two-signal rule fired. Do not change thresholds from this transcript alone.
+Capture the monitor delta and final rollback state first.
+
+Do not continue to the mazinb live-switch leg until the exact #246 trigger is
+identified, any required repair is merged and promoted, and the Hybrid
+host-stability gate passes.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
