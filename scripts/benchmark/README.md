@@ -5891,10 +5891,41 @@ regression on GB10 that can produce the same
 reported single-node TP=1 vLLM case still failed with `kho=off` and stopped
 failing after booting 6.17.0-1032.
 
-Until the local kernel/driver/CMA/KHO inventory is captured and this regression
-is ruled in or out, do not create another monitor-threshold repair. The memory
-monitor remains a safety mechanism, not evidence that the underlying kernel
-allocation path is healthy.
+The local inventory is now captured:
+
+- rollback completed cleanly: update/runtime/profile-switch transactions are
+  all idle;
+- the restored `dd3127b` Hybrid runtime reached health-ready, committed its
+  runtime transition, wrote attestation, and is healthy;
+- running kernel: `7.0.0-1019-nvidia`;
+- driver: `580.173.02`;
+- Secure Boot: enabled;
+- `6.17.0-1032-nvidia` kernel, headers, initrd, vmlinuz, and GRUB entry are
+  installed;
+- the running command line does not contain `kho=off`;
+- `/sys/kernel/debug/kho/out` exists, so KHO is active on this boot;
+- `/proc/meminfo` reports the anomalous combination `CmaTotal: 0 kB` while
+  `CmaFree` is non-zero (about 3.7 GiB);
+- current VM settings include `vm.swappiness=60`,
+  `vm.min_free_kbytes=45056`, `vm.watermark_scale_factor=10`, and
+  `vm.watermark_boost_factor=15000`.
+
+This strengthens the case for an OS/kernel A/B before any further application
+threshold changes, but it does not by itself prove the kernel is the root
+cause. Recent NVIDIA forum evidence is mixed: multiple GB10 users report the
+same `_memdescAllocInternal / NV_ERR_NO_MEMORY` signature on
+`7.0.0-1019-nvidia`, including a single-node TP=1 case where 6.17 removed the
+hang, while later reports also show at least one vLLM failure reproducing on
+6.17 under a CUDA-graph path. NVIDIA's current DGX Spark release documentation
+still lists Canonical kernel 6.17 for the 7.5.0 stack.
+
+Before a one-shot 6.17 boot, verify that the matching signed NVIDIA kernel
+module package is installed; recent OTA reports show systems where old 6.17
+kernel images remained in GRUB but the matching NVIDIA modules had been
+removed. Until that preflight passes and a controlled kernel/KHO A/B is run,
+do not create another monitor-threshold repair. The memory monitor remains a
+safety mechanism, not evidence that the underlying kernel allocation path is
+healthy.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
