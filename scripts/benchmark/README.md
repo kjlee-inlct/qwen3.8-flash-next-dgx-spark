@@ -5879,6 +5879,23 @@ still loading, NVIDIA RM again emitted `NV_ERR_NO_MEMORY`. This independently
 confirms that simply allowing the cold-load pressure to continue under the old
 gate does not meet the host-stability acceptance criterion.
 
+#### Host-kernel regression hypothesis
+
+The host reports DGX Spark 7.5.0 while booted on
+`7.0.0-1019-nvidia`. This is now a higher-priority environmental hypothesis
+than further monitor-threshold tuning. NVIDIA's current DGX Spark release
+documentation lists the 7.5.0 Canonical kernel as 6.17, and recent NVIDIA
+Developer Forum reports describe a reproducible `7.0.0-1019-nvidia`
+regression on GB10 that can produce the same
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal` signature. Importantly, a
+reported single-node TP=1 vLLM case still failed with `kho=off` and stopped
+failing after booting 6.17.0-1032.
+
+Until the local kernel/driver/CMA/KHO inventory is captured and this regression
+is ruled in or out, do not create another monitor-threshold repair. The memory
+monitor remains a safety mechanism, not evidence that the underlying kernel
+allocation path is healthy.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
