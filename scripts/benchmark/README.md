@@ -5940,13 +5940,24 @@ The one-shot 6.17 preflight has now passed:
   repositories but is not installed.
 
 This is sufficient to proceed with a one-shot kernel A/B without changing the
-persistent GRUB default. The next test must verify after boot that the running
-kernel is exactly 6.17.0-1032, the 580.173.02 modules load successfully under
-Secure Boot, KHO/CMA state differs as expected, and the same managed Hybrid
-cold-start no longer emits `NV_ERR_NO_MEMORY`. Until that controlled A/B is
-run, do not create another monitor-threshold repair. The memory monitor remains
-a safety mechanism, not evidence that the underlying kernel allocation path is
-healthy.
+persistent GRUB default.
+
+The one-shot boot has now been armed successfully:
+
+- lifecycle precondition: update/runtime/profile-switch all idle;
+- current Hybrid health: PASS;
+- the managed service was disabled for controlled post-boot startup while
+  remaining active until reboot;
+- GRUB `next_entry` was set to
+  `Advanced options for DGX OS GNU/Linux>DGX OS GNU/Linux, with Linux 6.17.0-1032-nvidia`;
+- pre-reboot identity remained `7.0.0-1019-nvidia` with driver 580.173.02.
+
+The next test must verify after boot that the running kernel is exactly
+6.17.0-1032, the 580.173.02 modules load successfully under Secure Boot,
+KHO/CMA state differs as expected, and the same managed Hybrid cold-start no
+longer emits `NV_ERR_NO_MEMORY`. Until that controlled A/B is run, do not
+create another monitor-threshold repair. The memory monitor remains a safety
+mechanism, not evidence that the underlying kernel allocation path is healthy.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
