@@ -5694,11 +5694,60 @@ Current live matrix:
 
 ```text
 Hybrid -> OrcaRouter              PASS
-OrcaRouter -> Hybrid              PENDING
-Hybrid -> mazinb                  PENDING
+OrcaRouter -> Hybrid              NOT QUALIFIED (precondition mismatch)
+Hybrid same-profile restart       FUNCTIONAL PASS / HOST-STABILITY FAIL
+Hybrid -> mazinb                  BLOCKED pending host-stability investigation
 mazinb -> OrcaRouter              PENDING
 OrcaRouter -> Hybrid (final)      PENDING
 ```
+
+#### Attempted leg 2: OrcaRouter -> Hybrid
+
+This run is **not valid evidence for an OrcaRouter -> Hybrid profile switch**.
+The pre-flight manifest already reported `MODEL_PROFILE=orcarouter-hybrid`, and
+the installer reported `Resuming installation from phase: complete` rather
+than preparing a profile-switch transaction. No switch transaction was
+prepared. The cause of the unexpected active-profile change between the
+previous completed leg and this pre-flight remains to be established from host
+history and lifecycle logs.
+
+The same-profile Hybrid restart nevertheless completed functionally:
+
+- command exit code: 0;
+- start: `2026-09-30T09:36:58+09:00`;
+- end: `2026-09-30T09:51:28+09:00`;
+- elapsed: 870 seconds;
+- update/runtime/profile-switch transactions ended `idle`;
+- manifest ended `PHASE=complete` with `MODEL_PROFILE=orcarouter-hybrid`;
+- doctor: 0 failures, 1 expected non-CMA warning;
+- `validate-runtime.py`: PASS for chat, concurrency=3, health, models,
+  streaming, and tool calls.
+
+However, the host-stability gate **failed** during this restart. The kernel log
+contained repeated NVIDIA RM allocation failures:
+
+```text
+NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory
+[NV_ERR_NO_MEMORY] ... _memdescAllocInternal
+```
+
+Occurrences were observed at 09:39:41-09:39:44, 09:48:55-09:49:06, and
+09:50:13-09:50:41 KST. The final snapshot still showed about 138 GiB of swap
+free, while `MemAvailable` was about 6.5 GiB and `CmaFree` about 4.0 GiB.
+This reproduces the same NVIDIA RM / non-CMA host-memory failure class that the
+2026-09-29 repair gate was intended to prevent.
+
+Classification for this run:
+
+```text
+Hybrid same-profile functional restart     PASS
+Doctor / API runtime validation            PASS
+Profile-switch leg                         NOT QUALIFIED
+Host-stability gate                        FAIL (NV_ERR_NO_MEMORY recurrence)
+```
+
+Do not continue to the mazinb live-switch leg until this recurrence is
+investigated and a repaired host-stability gate passes again.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
