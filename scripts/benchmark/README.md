@@ -6051,14 +6051,55 @@ The strongest remaining correlation is unchanged: the managed command pins
 about a 23.6 GiB fall in available memory across the late-startup transition.
 That is sufficient to justify a falsification control, not to claim root cause.
 
-Next run an isolated Hybrid H6 startup on the same
-6.17.0-1032 + 580.178.04 + KHO-off host with only KV memory changed from
-24 GiB to 16 GiB. Keep the managed service disabled/inactive, use a separate
-container name and port, disable the managed monitor integration, and attach a
-separate experiment-state protection monitor so no managed
-`runtime-stop.env` marker is written. Keep model, PLE mmap, MTP k=2,
-PIECEWISE CUDA graph mode, max model length, and all other runtime settings
-unchanged. The monitor remains protection, not the repair.
+The isolated 16 GiB KV control completed and changed the diagnosis:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- model/runtime settings were held constant, with only
+  `--kv-cache-memory-bytes` changed from 25769803776 (24 GiB) to
+  17179869184 (16 GiB);
+- the candidate reached health READY successfully;
+- vLLM reported `Model loading took 79.41 GiB`;
+- at 15:05:15.193 KST vLLM reported
+  `reserved 16.0 GiB memory for KV Cache`;
+- it then reported a 579,086-token GPU KV cache (2.21x the configured
+  262,144-token maximum request length);
+- at 15:05:15.668 KST, only about 0.48 seconds after the 16 GiB reservation
+  log, the kernel still emitted
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- CUDA graph capture did not begin until about 15:05:20, so this RM error
+  precedes graph capture and should not be attributed to cudagraph capture;
+- despite the RM error, initialization continued, graph capture completed,
+  and health became ready at 15:05:52;
+- the isolated protection monitor never advanced above `protect=0/3`;
+- the experiment container was stopped only after evidence collection;
+- managed update/runtime/profile-switch state remained idle, the managed
+  service remained disabled/inactive, and no managed `runtime-stop.env`
+  marker was created.
+
+Classification:
+
+```text
+16 GiB isolated Hybrid functional startup   PASS
+16 GiB isolated Hybrid host-stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB as sole root cause                    FALSIFIED
+KV-init allocation path                     highest-priority failure region
+CUDA graph capture                          not the trigger for this RM error
+```
+
+The explicit KV size therefore affects severity but does not explain the
+existence of the RM failure by itself. vLLM's worker API separates
+`determine_available_memory` from `initialize_from_config`, and
+`initialize_from_config` is the operation that allocates the device KV cache.
+The observed ordering is consistent with the failure occurring during that
+initialization region.
+
+Next run one more isolated size control at 8 GiB while holding the same host,
+model, PLE mmap, MTP k=2, max model length, and PIECEWISE mode. The 16 GiB
+control produced 579,086 KV tokens, so an approximately linear 8 GiB pool
+should still cover roughly 289k tokens, leaving modest headroom above the
+262,144 configured maximum request length. This control answers whether the RM
+failure disappears when the KV allocation is reduced near the minimum useful
+capacity. Do not change the managed default yet.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
