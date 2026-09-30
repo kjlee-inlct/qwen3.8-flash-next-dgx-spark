@@ -218,6 +218,29 @@ class RuntimeTransitionTests(unittest.TestCase):
         self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
         self.assertFalse(self.transition_file.exists())
 
+    def test_recover_rolling_back_before_restore_finishes(self) -> None:
+        self.set_container("qwen38-flash-next", "running")
+        self.set_container("qwen38-flash-next.rollback", "stopped")
+        self.write_transition_state("rolling_back", 1)
+
+        result = self.run_transition("recover")
+
+        self.assertIn("recovery complete", result.stdout)
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
+        self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
+        self.assertFalse(self.transition_file.exists())
+
+    def test_recover_rolling_back_after_restore_rename(self) -> None:
+        self.set_container("qwen38-flash-next", "stopped")
+        self.write_transition_state("rolling_back", 1)
+
+        result = self.run_transition("recover")
+
+        self.assertIn("completed interrupted rollback", result.stdout)
+        self.assertEqual(self.container_path("qwen38-flash-next").read_text(), "running")
+        self.assertFalse(self.container_path("qwen38-flash-next.rollback").exists())
+        self.assertFalse(self.transition_file.exists())
+
     def test_recover_committing_before_rollback_delete_restores_previous(self) -> None:
         self.set_container("qwen38-flash-next", "running")
         self.set_container("qwen38-flash-next.rollback", "stopped")

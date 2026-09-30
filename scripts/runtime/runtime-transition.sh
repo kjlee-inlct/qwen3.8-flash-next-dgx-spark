@@ -187,6 +187,22 @@ case "$1" in
       die 'cannot recover committing runtime transition safely'
     fi
 
+    if [[ "${TRANSACTION_STATE:-}" == rolling_back && "${HAD_PREVIOUS}" == 1 ]]; then
+      if [[ "${rollback_exists}" == 1 ]]; then
+        restore_previous
+        clear_state
+        printf 'Runtime transition recovery complete (state=idle).\n'
+        exit 0
+      fi
+      if [[ "${current_exists}" == 1 && "${rollback_exists}" == 0 ]]; then
+        container_running "${CONTAINER}" || docker start "${CONTAINER}" >/dev/null
+        clear_state
+        printf 'Runtime transition recovery completed interrupted rollback (state=idle).\n'
+        exit 0
+      fi
+      die 'cannot recover rolling-back runtime transition safely'
+    fi
+
     if [[ "${HAD_PREVIOUS}" == 1 ]]; then
       if [[ "${rollback_exists}" == 1 ]]; then
         restore_previous
