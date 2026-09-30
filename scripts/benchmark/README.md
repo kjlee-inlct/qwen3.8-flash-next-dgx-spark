@@ -6093,13 +6093,46 @@ existence of the RM failure by itself. vLLM's worker API separates
 The observed ordering is consistent with the failure occurring during that
 initialization region.
 
-Next run one more isolated size control at 8 GiB while holding the same host,
-model, PLE mmap, MTP k=2, max model length, and PIECEWISE mode. The 16 GiB
-control produced 579,086 KV tokens, so an approximately linear 8 GiB pool
-should still cover roughly 289k tokens, leaving modest headroom above the
-262,144 configured maximum request length. This control answers whether the RM
-failure disappears when the KV allocation is reduced near the minimum useful
-capacity. Do not change the managed default yet.
+The isolated 8 GiB KV control passed the startup host-stability gate:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- model/runtime settings were held constant, with only
+  `--kv-cache-memory-bytes` changed to 8589934592 (8 GiB);
+- the candidate reached health READY successfully;
+- vLLM reported `Model loading took 79.41 GiB`;
+- vLLM reported `reserved 8.0 GiB memory for KV Cache`;
+- the resulting KV capacity was 288,802 tokens, or 1.10x the configured
+  262,144-token maximum request length;
+- CUDA graph capture completed normally;
+- the kernel scan for the exact startup window returned no
+  `NV_ERR_NO_MEMORY`, `_memdescAllocInternal`, NVRM/Xid, OOM, or hung-task
+  matches;
+- the isolated protection monitor remained at `protect=0/3` throughout;
+- post-ready memory settled near 23 GiB available while immediately-free
+  non-CMA memory stayed around 1.6-1.7 GiB;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Classification:
+
+```text
+8 GiB isolated Hybrid functional startup   PASS
+8 GiB isolated Hybrid host stability        PASS (startup window)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size threshold                supported; boundary is between 8 and 16 GiB
+```
+
+The control cleanup command itself suffered a shell-paste syntax error after
+evidence collection, so the experiment container may still be running and must
+be stopped explicitly before the next control. This does not invalidate the
+startup result.
+
+Next use 12 GiB as the midpoint boundary control with the same host/runtime
+conditions. If 12 GiB reproduces the RM failure, narrow downward between 8 and
+12 GiB; if it remains clean, narrow upward between 12 and 16 GiB. Do not change
+the managed default until the boundary is bracketed and repeated startup
+stability is demonstrated.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
