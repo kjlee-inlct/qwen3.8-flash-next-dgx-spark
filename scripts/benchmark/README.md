@@ -5694,28 +5694,66 @@ Current live matrix:
 
 ```text
 Hybrid -> OrcaRouter              PASS
-OrcaRouter -> Hybrid              NOT QUALIFIED (precondition mismatch)
+OrcaRouter -> Hybrid              FUNCTIONAL PASS / HOST-STABILITY FAIL
 Hybrid same-profile restart       FUNCTIONAL PASS / HOST-STABILITY FAIL
-Hybrid -> mazinb                  BLOCKED pending host-stability investigation
+Hybrid -> mazinb                  BLOCKED pending memory-protection repair
 mazinb -> OrcaRouter              PENDING
 OrcaRouter -> Hybrid (final)      PENDING
 ```
 
-#### Attempted leg 2: OrcaRouter -> Hybrid
+#### Leg 2: OrcaRouter -> Hybrid
 
-This run is **not valid evidence for an OrcaRouter -> Hybrid profile switch**.
-The pre-flight manifest already reported `MODEL_PROFILE=orcarouter-hybrid`, and
-the installer reported `Resuming installation from phase: complete` rather
-than preparing a profile-switch transaction. No switch transaction was
-prepared. The cause of the unexpected active-profile change between the
-previous completed leg and this pre-flight remains to be established from host
-history and lifecycle logs.
+The later investigation recovered the missing operator timeline and confirms
+that the actual reverse switch was run before the duplicate same-profile
+restart. Shell history records:
 
-The same-profile Hybrid restart nevertheless completed functionally:
+- `./install.sh --model orcarouter-hybrid --lang en --yes` at
+  `2026-09-30T08:58:39+09:00`;
+- profile-switch status/post-gate commands at
+  `2026-09-30T09:13:29+09:00`.
+
+The service journal confirms that the switch held the installer lifecycle lock,
+stopped the previous runtime, started the Hybrid candidate, reached health,
+validated the model list, committed the nested runtime transaction, and wrote
+runtime attestation by `09:13:28+09:00`. The resulting active manifest was
+`orcarouter-hybrid`, which explains why the later 09:36 invocation was a
+same-profile resume rather than another profile switch.
+
+Functional classification:
+
+```text
+OrcaRouter -> Hybrid profile-switch path   PASS
+Runtime commit / attestation               PASS
+Hybrid API validation                      PASS
+Host-stability gate                        FAIL
+```
+
+The host-stability failure is not speculative. During the actual reverse switch
+the kernel emitted NVIDIA RM `NV_ERR_NO_MEMORY` at 09:11:00, 09:11:12, and
+09:12:38 KST. Monitor evidence shows why the protection policy missed the
+earlier pressure:
+
+- 09:04:48: non-CMA free 703 MiB, non-CMA available 36.4 GiB;
+- 09:06:49: non-CMA free 1110 MiB, non-CMA available 35.9 GiB;
+- 09:08:51: non-CMA free 1233 MiB, non-CMA available 37.0 GiB;
+- 09:09:51: non-CMA free 848 MiB, non-CMA available 39.0 GiB;
+- 09:11:52: non-CMA free 1049 MiB, non-CMA available 27.4 GiB.
+
+Because the then-current protection rule required both
+`noncma_free < 2 GiB` and `noncma_available < 10 GiB`, these low-free/high-
+available samples were not counted toward protection. Near 09:12 the available
+margin also collapsed and the counter reached 3/5 before memory recovered, but
+the RM failures had already occurred.
+
+#### Duplicate Hybrid same-profile restart
+
+A later command at `2026-09-30T09:36:58+09:00` ran
+`./install.sh --model orcarouter-hybrid --lang en --yes` while Hybrid was
+already active. It therefore resumed the complete Hybrid profile rather than
+performing a profile switch. The restart completed functionally:
 
 - command exit code: 0;
-- start: `2026-09-30T09:36:58+09:00`;
-- end: `2026-09-30T09:51:28+09:00`;
+- completed at `2026-09-30T09:51:28+09:00`;
 - elapsed: 870 seconds;
 - update/runtime/profile-switch transactions ended `idle`;
 - manifest ended `PHASE=complete` with `MODEL_PROFILE=orcarouter-hybrid`;
@@ -5723,31 +5761,20 @@ The same-profile Hybrid restart nevertheless completed functionally:
 - `validate-runtime.py`: PASS for chat, concurrency=3, health, models,
   streaming, and tool calls.
 
-However, the host-stability gate **failed** during this restart. The kernel log
-contained repeated NVIDIA RM allocation failures:
+This restart independently reproduced the same host-memory failure class. The
+kernel logged additional `NV_ERR_NO_MEMORY` events at 09:39:41-09:39:44,
+09:48:55-09:49:06, and 09:50:13-09:50:41 KST. The monitor eventually reached
+`protect=5/5` at 09:37:24 on the previous Hybrid runtime and stopped it
+gracefully, demonstrating that the stop/transaction integration works when both
+the free and available conditions become low. The remaining defect is the
+available-memory gate suppressing protection when immediately free non-CMA
+pages are already critically low.
 
-```text
-NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory
-[NV_ERR_NO_MEMORY] ... _memdescAllocInternal
-```
-
-Occurrences were observed at 09:39:41-09:39:44, 09:48:55-09:49:06, and
-09:50:13-09:50:41 KST. The final snapshot still showed about 138 GiB of swap
-free, while `MemAvailable` was about 6.5 GiB and `CmaFree` about 4.0 GiB.
-This reproduces the same NVIDIA RM / non-CMA host-memory failure class that the
-2026-09-29 repair gate was intended to prevent.
-
-Classification for this run:
-
-```text
-Hybrid same-profile functional restart     PASS
-Doctor / API runtime validation            PASS
-Profile-switch leg                         NOT QUALIFIED
-Host-stability gate                        FAIL (NV_ERR_NO_MEMORY recurrence)
-```
-
-Do not continue to the mazinb live-switch leg until this recurrence is
-investigated and a repaired host-stability gate passes again.
+Repair direction: keep low non-CMA available by itself warning-only, but make
+the configured non-CMA free floor independently protection-significant. Do not
+continue to the mazinb live-switch leg until that repair is merged, advanced
+through the immutable release path, and the Hybrid host-stability gate passes
+again.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
