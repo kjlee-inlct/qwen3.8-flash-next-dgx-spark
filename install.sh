@@ -856,7 +856,7 @@ else
   printf '  PLE swap    : %s (128 GiB; existing swap preserved)\n' "${SWAP_FILE}"
 fi
 printf '  protection  : %s\n' "$([[ "${MONITOR_PROTECT}" == 1 ]] && printf enabled || printf warn-only/manual)"
-printf '  monitor     : %s (available-warn=%s GiB, noncma-free-protect=%s GiB, swapfree=%s GiB, %s samples, heartbeat=%ss)\n' \
+printf '  monitor     : %s (available=%s GiB warn, free=%s GiB protect, swapfree=%s GiB, %s samples, heartbeat=%ss)\n' \
   "$([[ "${MONITOR_ENABLED}" == 1 ]] && printf enabled || printf disabled)" "${MONITOR_MIN_AVAILABLE_GIB}" \
   "${MONITOR_MIN_FREE_GIB}" "${MONITOR_MIN_SWAP_FREE_GIB}" "${MONITOR_CONSECUTIVE}" "${MONITOR_HEARTBEAT}"
 
