@@ -6039,11 +6039,25 @@ the same Hybrid H6 profile. vLLM 0.29 semantics also make the explicit
 `kv_cache_memory_bytes` value authoritative over
 `gpu_memory_utilization`.
 
-Before running the 16 GiB control, recover the removed candidate's late-startup
-phase from the systemd service journal for 14:28:30-14:31:10. If that journal
-confirms the transition into KV-cache allocation around the RM failure, run a
-controlled host-identical startup with only KV memory reduced to 16 GiB while
-leaving model, PLE mmap, MTP, graph mode, driver, kernel, and KHO state
+A follow-up query of the managed systemd journal for 14:28-14:31 did not
+recover the candidate's vLLM stdout/stderr. It contained only the service
+runner readiness poll, the memory-protection stop decision, rollback restore,
+and service deactivation. The kernel correlation still places
+`NV_ERR_NO_MEMORY` at 14:30:25. Therefore the exact vLLM allocation call at
+failure time remains unproven.
+
+The strongest remaining correlation is unchanged: the managed command pins
+`--kv-cache-memory-bytes 25769803776` (24 GiB), and the monitor observed
+about a 23.6 GiB fall in available memory across the late-startup transition.
+That is sufficient to justify a falsification control, not to claim root cause.
+
+Next run an isolated Hybrid H6 startup on the same
+6.17.0-1032 + 580.178.04 + KHO-off host with only KV memory changed from
+24 GiB to 16 GiB. Keep the managed service disabled/inactive, use a separate
+container name and port, disable the managed monitor integration, and attach a
+separate experiment-state protection monitor so no managed
+`runtime-stop.env` marker is written. Keep model, PLE mmap, MTP k=2,
+PIECEWISE CUDA graph mode, max model length, and all other runtime settings
 unchanged. The monitor remains protection, not the repair.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
