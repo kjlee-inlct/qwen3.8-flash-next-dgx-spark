@@ -5706,7 +5706,7 @@ Current live matrix:
 Hybrid -> OrcaRouter              FUNCTIONAL PASS / HOST-STABILITY FAIL
 OrcaRouter -> Hybrid              FUNCTIONAL PASS / HOST-STABILITY FAIL
 Hybrid same-profile restart       FUNCTIONAL PASS / HOST-STABILITY FAIL
-Hybrid -> mazinb                  BLOCKED pending #246 live requalification
+Hybrid -> mazinb                  BLOCKED pending #246 trigger diagnosis/repair
 mazinb -> OrcaRouter              PENDING
 OrcaRouter -> Hybrid (final)      PENDING
 ```
