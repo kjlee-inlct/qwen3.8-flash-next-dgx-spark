@@ -6024,12 +6024,27 @@ The magnitude and timing closely match the configured KV pool. This makes the
 late KV-cache allocation burst the highest-priority hypothesis for the RM
 failure on GB10 unified memory.
 
-Do not change the managed default from this correlation alone. Preserve the
-exited candidate's full timestamped log and inspect its actual command line
-first. If the log confirms the failure occurs during KV-cache allocation, run
-a controlled host-identical startup with only KV memory reduced (16 GiB is the
-first useful control) while leaving model, PLE mmap, MTP, graph mode, driver,
-kernel, and KHO state unchanged. The monitor remains protection, not the repair.
+Do not change the managed default from this correlation alone. A forensic
+follow-up confirmed that the canonical container currently visible after the
+protected stop is not the failed candidate: it is the previously preserved
+container restored by `abort-protected` (container ID
+`80653aeddd0a...`). This explains why a timestamp-filtered
+`docker logs qwen38-flash-next` query for the 14:28-14:31 failure window was
+empty. The failed candidate was removed during protected abort, while its
+stdout/stderr had already been followed by the managed systemd service.
+
+The restored container still confirms the managed command shape, including
+`--kv-cache-memory-bytes 25769803776`, PIECEWISE CUDA graphs, MTP k=2, and
+the same Hybrid H6 profile. vLLM 0.29 semantics also make the explicit
+`kv_cache_memory_bytes` value authoritative over
+`gpu_memory_utilization`.
+
+Before running the 16 GiB control, recover the removed candidate's late-startup
+phase from the systemd service journal for 14:28:30-14:31:10. If that journal
+confirms the transition into KV-cache allocation around the RM failure, run a
+controlled host-identical startup with only KV memory reduced to 16 GiB while
+leaving model, PLE mmap, MTP, graph mode, driver, kernel, and KHO state
+unchanged. The monitor remains protection, not the repair.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
