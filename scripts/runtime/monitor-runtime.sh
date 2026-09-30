@@ -100,7 +100,9 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   warning_low=0
   protection_low=0
   swap_consumed=0
-  (( initial_swap_free > swap_free )) && swap_consumed=$((initial_swap_free - swap_free))
+  if (( initial_swap_free > swap_free )); then
+    swap_consumed=$((initial_swap_free - swap_free))
+  fi
   (( noncma_available < available_floor )) && warning_low=1
   (( swap_free < swap_free_floor )) && warning_low=1 && protection_low=1
   # Low immediately-free non-CMA memory occurs transiently during large shard
