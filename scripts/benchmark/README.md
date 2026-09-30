@@ -5919,12 +5919,33 @@ hang, while later reports also show at least one vLLM failure reproducing on
 6.17 under a CUDA-graph path. NVIDIA's current DGX Spark release documentation
 still lists Canonical kernel 6.17 for the 7.5.0 stack.
 
-Before a one-shot 6.17 boot, verify that the matching signed NVIDIA kernel
-module package is installed; recent OTA reports show systems where old 6.17
-kernel images remained in GRUB but the matching NVIDIA modules had been
-removed. Until that preflight passes and a controlled kernel/KHO A/B is run,
-do not create another monitor-threshold repair. The memory monitor remains a
-safety mechanism, not evidence that the underlying kernel allocation path is
+The one-shot 6.17 preflight has now passed:
+
+- target: `6.17.0-1032-nvidia`;
+- kernel image, initrd, config, and headers are present;
+- `linux-modules-6.17.0-1032-nvidia` is installed;
+- matching `linux-modules-nvidia-580-open-6.17.0-1032-nvidia` is installed;
+- `nvidia`, `nvidia_uvm`, `nvidia_modeset`, and `nvidia_drm` all report
+  driver 580.173.02 and vermagic `6.17.0-1032-nvidia`;
+- all four NVIDIA modules are signed by Canonical, so the Secure Boot path is
+  qualified for the A/B;
+- GRUB contains an explicit 6.17.0-1032 advanced entry and `grub-reboot` is
+  available;
+- the running 7.0 config has
+  `CONFIG_KEXEC_HANDOVER_ENABLE_DEFAULT=y` and
+  `CONFIG_CMA_SIZE_MBYTES=0`, while the installed 6.17 config has
+  `CONFIG_CMA_SIZE_MBYTES=128` and does not show the default-enable KHO
+  symbol in the captured comparison;
+- `nvidia-spark-grub-kho` is available from the configured NVIDIA
+  repositories but is not installed.
+
+This is sufficient to proceed with a one-shot kernel A/B without changing the
+persistent GRUB default. The next test must verify after boot that the running
+kernel is exactly 6.17.0-1032, the 580.173.02 modules load successfully under
+Secure Boot, KHO/CMA state differs as expected, and the same managed Hybrid
+cold-start no longer emits `NV_ERR_NO_MEMORY`. Until that controlled A/B is
+run, do not create another monitor-threshold repair. The memory monitor remains
+a safety mechanism, not evidence that the underlying kernel allocation path is
 healthy.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
