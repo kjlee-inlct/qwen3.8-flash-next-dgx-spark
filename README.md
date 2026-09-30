@@ -710,17 +710,23 @@ MONITOR_CONSECUTIVE=5
 MONITOR_HEARTBEAT=60
 ```
 
-Low non-CMA available memory by itself is a warning, not a stop condition. Protection
-counts whenever non-CMA free is below 2 GiB, regardless of reclaimable non-CMA
-available memory, or when swap-free is below 8 GiB. Five consecutive protection samples
-trigger a graceful container stop. `MONITOR_FREE_GATE_GIB` remains in the manifest and
-CLI for schema/backward compatibility, but it no longer suppresses the hard non-CMA free
-protection floor. Warning-only state is logged once on entry and then at the heartbeat
-interval; protection-counter samples are logged individually.
+Low non-CMA available memory by itself is a warning, not a stop condition.
+Low non-CMA free memory is also warning-only during the transient shard-loading pattern
+where reclaimable non-CMA available stays above the 10 GiB gate and swap usage has not
+meaningfully grown. Protection counts when non-CMA free is below 2 GiB and either
+non-CMA available is below the 10 GiB gate or swap consumption since monitor start has
+grown by at least 256 MiB. Swap-free below 8 GiB remains an independent protection
+condition. Five consecutive protection samples trigger a graceful container stop.
+Warning-only state is logged once on entry and then at the heartbeat interval;
+protection-counter samples are logged individually and include the observed swap-growth
+value.
 
-This distinction was tightened after a 2026-09-30 live Hybrid restart reproduced NVIDIA
-RM `NV_ERR_NO_MEMORY` while non-CMA free repeatedly fell below 2 GiB even though
-non-CMA available remained well above the former 10 GiB gate.
+The two-signal rule comes from the 2026-09-30 live Hybrid evidence. NVIDIA RM
+`NV_ERR_NO_MEMORY` occurred after low non-CMA free coincided with increasing swap
+consumption, while an earlier healthy checkpoint-loading transient reached the same
+low-free range with essentially unchanged swap-free. An intermediate repair that made
+low-free independently fatal stopped the candidate at 8/81 checkpoint shards and was
+therefore not promoted.
 
 ```bash
 ./scripts/monitor-runtime.sh

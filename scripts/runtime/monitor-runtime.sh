@@ -7,6 +7,7 @@ MIN_AVAILABLE_GIB=6
 MIN_FREE_GIB=2
 FREE_GATE_GIB=10
 MIN_SWAP_FREE_GIB=8
+SWAP_ACTIVITY_GATE_MIB=256
 CONSECUTIVE=5
 INTERVAL=2
 HEARTBEAT=60
@@ -21,8 +22,9 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --container NAME             Container to monitor (default: qwen38-flash-next)
   --min-available-gib N        Non-CMA available warning floor (default: 6)
   --min-free-gib N             Non-CMA free protection floor (default: 2)
-  --free-gate-gib N            Legacy compatibility field; no longer suppresses low-free protection (default: 10)
-  --min-swap-free-gib N        SwapFree warning floor (default: 8)
+  --free-gate-gib N            Non-CMA available gate for immediate low-free protection (default: 10)
+  --min-swap-free-gib N        SwapFree protection floor (default: 8)
+  --swap-activity-gate-mib N   Swap consumption since monitor start that arms high-available low-free protection (default: 256)
   --consecutive N              Consecutive low samples before protection (default: 5)
   --interval N                 Sampling interval in seconds (default: 2)
   --heartbeat N                Healthy status interval in seconds; 0 disables (default: 60)
@@ -55,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --min-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MIN_FREE_GIB="$2"; shift ;;
     --free-gate-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; FREE_GATE_GIB="$2"; shift ;;
     --min-swap-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MIN_SWAP_FREE_GIB="$2"; shift ;;
+    --swap-activity-gate-mib) [[ $# -ge 2 ]] || die "$1 requires a value"; SWAP_ACTIVITY_GATE_MIB="$2"; shift ;;
     --consecutive) [[ $# -ge 2 ]] || die "$1 requires a value"; CONSECUTIVE="$2"; shift ;;
     --interval) [[ $# -ge 2 ]] || die "$1 requires a value"; INTERVAL="$2"; shift ;;
     --heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; HEARTBEAT="$2"; shift ;;
@@ -65,7 +68,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 [[ -n "${CONTAINER}" && "${CONTAINER}" != */* ]] || die "invalid container name"
-for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_SWAP_FREE_GIB}" "${CONSECUTIVE}" "${INTERVAL}"; do
+for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_SWAP_FREE_GIB}" "${SWAP_ACTIVITY_GATE_MIB}" "${CONSECUTIVE}" "${INTERVAL}"; do
   positive_integer "${value}" || die "thresholds and intervals must be positive integers"
 done
 nonnegative_integer "${HEARTBEAT}" || die "heartbeat must be a non-negative integer"
@@ -75,12 +78,16 @@ docker inspect "${CONTAINER}" >/dev/null 2>&1 || die "container not found: ${CON
 
 available_floor=$((MIN_AVAILABLE_GIB * 1048576))
 free_floor=$((MIN_FREE_GIB * 1048576))
+free_gate=$((FREE_GATE_GIB * 1048576))
 swap_free_floor=$((MIN_SWAP_FREE_GIB * 1048576))
+swap_activity_gate=$((SWAP_ACTIVITY_GATE_MIB * 1024))
+initial_swap_free="$(awk '$1=="SwapFree:" {print $2}' "${MEMINFO_PATH}")"
+[[ -n "${initial_swap_free}" ]] || die "SwapFree is missing from ${MEMINFO_PATH}"
 low_count=0
 warning_active=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
-printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free-protect=%sGiB swapfree=%sGiB legacy-free-gate=%sGiB\n' \
-  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${MIN_SWAP_FREE_GIB}" "${FREE_GATE_GIB}"
+printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free=%sGiB free-gate=%sGiB swap-growth=%sMiB swapfree=%sGiB\n' \
+  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${SWAP_ACTIVITY_GATE_MIB}" "${MIN_SWAP_FREE_GIB}"
 next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
@@ -93,16 +100,23 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   (( mem_available >= cma_free )) && noncma_available=$((mem_available - cma_free)) || noncma_available=0
   warning_low=0
   protection_low=0
+  swap_consumed=0
+  if (( initial_swap_free > swap_free )); then
+    swap_consumed=$((initial_swap_free - swap_free))
+  fi
   (( noncma_available < available_floor )) && warning_low=1
   (( swap_free < swap_free_floor )) && warning_low=1 && protection_low=1
-  # NVIDIA RM system-page allocation can fail while reclaimable MemAvailable is
-  # still large. The 2026-09-30 live Hybrid restart reproduced
-  # NV_ERR_NO_MEMORY with non-CMA free below 2 GiB but non-CMA available well
-  # above the former 10 GiB gate. Keep low available alone warning-only, but
-  # never let high available suppress the hard non-CMA free protection floor.
+  # Low immediately-free non-CMA memory occurs transiently during large shard
+  # loading. It becomes protection-significant when reclaimable available
+  # memory is also low, or when swap consumption since monitor start shows that
+  # the workload has entered sustained unified-memory pressure. This preserves
+  # normal checkpoint loading while covering the 2026-09-30 RM allocation
+  # failures that appeared after swap activity began.
   if (( noncma_free < free_floor )); then
     warning_low=1
-    protection_low=1
+    if (( noncma_available < free_gate || swap_consumed >= swap_activity_gate )); then
+      protection_low=1
+    fi
   fi
 
   if (( warning_low == 1 )); then
@@ -121,10 +135,10 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
     fi
 
     if (( should_log_warning == 1 )); then
-      printf '%s WARNING memory margin low protect=%d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB\n' \
+      printf '%s WARNING memory margin low protect=%d/%d: available=%dMiB noncma_available=%dMiB free=%dMiB cmafree=%dMiB noncmafree=%dMiB swapfree=%dMiB swapgrowth=%dMiB\n' \
         "$(date '+%F %T')" "${low_count}" "${CONSECUTIVE}" \
         "$((mem_available / 1024))" "$((noncma_available / 1024))" "$((mem_free / 1024))" \
-        "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))"
+        "$((cma_free / 1024))" "$((noncma_free / 1024))" "$((swap_free / 1024))" "$((swap_consumed / 1024))"
       warning_active=1
       if (( HEARTBEAT > 0 )); then
         next_heartbeat=$((SECONDS + HEARTBEAT))

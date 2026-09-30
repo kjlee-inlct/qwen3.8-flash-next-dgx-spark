@@ -106,7 +106,7 @@ esac
             self.assertIn("STOP_REASON=memory-protection", stop_reason.read_text(encoding="utf-8"))
 
 
-    def test_low_noncma_free_protects_even_when_available_is_high(self) -> None:
+    def test_high_available_low_free_without_swap_growth_warns_without_stopping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             bin_dir = root / "bin"
@@ -115,6 +115,7 @@ esac
 
             docker_log = root / "docker.log"
             stop_marker = root / "docker-stopped"
+            inspect_count = root / "inspect-count"
             fake_docker = bin_dir / "docker"
             fake_docker.write_text(
                 """#!/usr/bin/env bash
@@ -123,7 +124,14 @@ printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
 case "${1:-}" in
   inspect)
     if [[ "${2:-}" == "-f" ]]; then
-      printf 'true\\n'
+      count=0
+      [[ ! -f "$FAKE_DOCKER_INSPECT_COUNT" ]] || count="$(cat "$FAKE_DOCKER_INSPECT_COUNT")"
+      if (( count >= 1 )); then
+        printf 'false\\n'
+      else
+        printf '1\\n' > "$FAKE_DOCKER_INSPECT_COUNT"
+        printf 'true\\n'
+      fi
     elif [[ "${2:-}" == "--format" ]]; then
       printf '%064d\\n' 0
     fi
@@ -139,9 +147,9 @@ esac
             )
             fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
 
-            # Regression for the 2026-09-30 live Hybrid restart: NVIDIA RM
-            # allocation failures occurred while reclaimable available memory
-            # remained high, so low non-CMA free must protect independently.
+            # Large checkpoints transiently drive immediately-free non-CMA
+            # pages below 2 GiB while reclaimable available memory remains
+            # large and swap is not yet growing. That phase must not stop.
             meminfo = root / "meminfo"
             meminfo.write_text(
                 "\n".join(
@@ -179,6 +187,123 @@ esac
                     "QWEN38_MEMINFO_PATH": str(meminfo),
                     "FAKE_DOCKER_LOG": str(docker_log),
                     "FAKE_DOCKER_STOP_MARKER": str(stop_marker),
+                    "FAKE_DOCKER_INSPECT_COUNT": str(inspect_count),
+                },
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            output = result.stdout + result.stderr
+            self.assertIn("protect=0/1", output)
+            self.assertIn("noncma_available=40448MiB", output)
+            self.assertIn("noncmafree=1024MiB", output)
+            self.assertIn("swapgrowth=0MiB", output)
+            self.assertNotIn("PROTECT stopping", output)
+            self.assertFalse(stop_marker.exists())
+
+    def test_high_available_low_free_with_swap_growth_triggers_protection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            state_home = root / "state"
+            bin_dir.mkdir()
+
+            docker_log = root / "docker.log"
+            stop_marker = root / "docker-stopped"
+            inspect_count = root / "inspect-count"
+            meminfo = root / "meminfo"
+
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
+case "${1:-}" in
+  inspect)
+    if [[ "${2:-}" == "-f" ]]; then
+      count=0
+      [[ ! -f "$FAKE_DOCKER_INSPECT_COUNT" ]] || count="$(cat "$FAKE_DOCKER_INSPECT_COUNT")"
+      printf '%d\\n' "$((count + 1))" > "$FAKE_DOCKER_INSPECT_COUNT"
+      printf 'true\\n'
+    elif [[ "${2:-}" == "--format" ]]; then
+      printf '%064d\\n' 0
+    fi
+    ;;
+  logs)
+    ;;
+  stop)
+    : > "$FAKE_DOCKER_STOP_MARKER"
+    ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
+
+            # First sample establishes low-free/high-available with no swap
+            # growth. The fake sleep then simulates 512 MiB of swap
+            # consumption before the next sample.
+            fake_sleep = bin_dir / "sleep"
+            fake_sleep.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+python3 - "$FAKE_MEMINFO" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+text = text.replace(
+    "SwapFree:        104857600 kB",
+    "SwapFree:        104333312 kB",
+)
+path.write_text(text, encoding="utf-8")
+PY
+""",
+                encoding="utf-8",
+            )
+            fake_sleep.chmod(fake_sleep.stat().st_mode | stat.S_IXUSR)
+
+            meminfo.write_text(
+                "\n".join(
+                    [
+                        "MemTotal:       127506432 kB",
+                        "MemFree:          1572864 kB",   # 1.5 GiB
+                        "MemAvailable:    41943040 kB",   # 40.0 GiB
+                        "CmaFree:           524288 kB",   # 0.5 GiB
+                        "SwapFree:        104857600 kB",  # 100 GiB baseline
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(MONITOR),
+                    "--container",
+                    "qwen38-flash-next",
+                    "--protect",
+                    "--consecutive",
+                    "1",
+                    "--interval",
+                    "1",
+                    "--heartbeat",
+                    "0",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+                    "XDG_STATE_HOME": str(state_home),
+                    "QWEN38_MEMINFO_PATH": str(meminfo),
+                    "FAKE_DOCKER_LOG": str(docker_log),
+                    "FAKE_DOCKER_STOP_MARKER": str(stop_marker),
+                    "FAKE_DOCKER_INSPECT_COUNT": str(inspect_count),
+                    "FAKE_MEMINFO": str(meminfo),
                 },
                 text=True,
                 capture_output=True,
@@ -188,8 +313,9 @@ esac
 
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             output = result.stdout + result.stderr
-            self.assertIn("noncma_available=40448MiB", output)
-            self.assertIn("noncmafree=1024MiB", output)
+            self.assertIn("protect=0/1", output)
+            self.assertIn("protect=1/1", output)
+            self.assertIn("swapgrowth=512MiB", output)
             self.assertIn("PROTECT stopping qwen38-flash-next", output)
             self.assertTrue(stop_marker.exists(), docker_log.read_text(encoding="utf-8"))
 
