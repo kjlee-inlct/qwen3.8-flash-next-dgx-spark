@@ -5972,9 +5972,10 @@ system came back with `TRANSACTION_STATE=rolling_back`,
 `HAD_PREVIOUS=1`, the canonical current container present and the rollback
 container absent. This is consistent with rollback having completed the
 candidate removal and rollback-container rename, but being interrupted before
-the transaction state file was cleared. PR #247 adds explicit recovery for
+the transaction state file was cleared. PR #247 added explicit recovery for
 this deterministic state and regression tests for both pre- and post-rename
-rollback interruption points.
+rollback interruption points. It passed CI and was squash-merged as
+`f5e41aa4fa79c74e6652c04becc8d4c8cba077c1`.
 
 Until lifecycle state is recovered and the post-update 6.17 cold-start is run,
 do not create another monitor-threshold repair. The memory monitor remains a
