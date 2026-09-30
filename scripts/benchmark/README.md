@@ -5952,12 +5952,34 @@ The one-shot boot has now been armed successfully:
   `Advanced options for DGX OS GNU/Linux>DGX OS GNU/Linux, with Linux 6.17.0-1032-nvidia`;
 - pre-reboot identity remained `7.0.0-1019-nvidia` with driver 580.173.02.
 
-The next test must verify after boot that the running kernel is exactly
-6.17.0-1032, the 580.173.02 modules load successfully under Secure Boot,
-KHO/CMA state differs as expected, and the same managed Hybrid cold-start no
-longer emits `NV_ERR_NO_MEMORY`. Until that controlled A/B is run, do not
-create another monitor-threshold repair. The memory monitor remains a safety
-mechanism, not evidence that the underlying kernel allocation path is healthy.
+The reboot completed on `6.17.0-1032-nvidia`, but the environment changed
+more than the intended kernel-only A/B. The login banner now reports DGX Spark
+7.6.0, the loaded NVIDIA driver is 580.178.04, and the boot command line now
+contains `kho=off`. KHO debugfs is absent and CMA is reported normally as
+128 MiB total with a small free remainder. The GRUB one-shot entry was consumed
+successfully, and the managed runtime service remained disabled/inactive as
+intended.
+
+Therefore this boot is **not** a pure 7.0-vs-6.17 kernel comparison. It is a
+post-update stack combining 6.17.0-1032, driver 580.178.04, and KHO disabled.
+This is still useful: after lifecycle recovery, validate the same Hybrid
+cold-start on this stack. A subsequent ordinary boot can then return to the
+persistent 7.0.0-1019 entry while retaining the same updated driver/KHO
+mitigation, allowing a cleaner kernel-only comparison.
+
+The reboot also exposed a separate runtime lifecycle crash boundary. The
+system came back with `TRANSACTION_STATE=rolling_back`,
+`HAD_PREVIOUS=1`, the canonical current container present and the rollback
+container absent. This is consistent with rollback having completed the
+candidate removal and rollback-container rename, but being interrupted before
+the transaction state file was cleared. PR #247 adds explicit recovery for
+this deterministic state and regression tests for both pre- and post-rename
+rollback interruption points.
+
+Until lifecycle state is recovered and the post-update 6.17 cold-start is run,
+do not create another monitor-threshold repair. The memory monitor remains a
+safety mechanism, not evidence that the underlying kernel allocation path is
+healthy.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
