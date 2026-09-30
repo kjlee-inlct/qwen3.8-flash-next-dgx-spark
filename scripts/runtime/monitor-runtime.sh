@@ -21,7 +21,7 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --container NAME             Container to monitor (default: qwen38-flash-next)
   --min-available-gib N        Non-CMA available warning floor (default: 6)
   --min-free-gib N             Non-CMA free protection floor (default: 2)
-  --free-gate-gib N            Protect on low free only below this non-CMA available gate (default: 10)
+  --free-gate-gib N            Legacy compatibility field; no longer suppresses low-free protection (default: 10)
   --min-swap-free-gib N        SwapFree warning floor (default: 8)
   --consecutive N              Consecutive low samples before protection (default: 5)
   --interval N                 Sampling interval in seconds (default: 2)
@@ -75,13 +75,12 @@ docker inspect "${CONTAINER}" >/dev/null 2>&1 || die "container not found: ${CON
 
 available_floor=$((MIN_AVAILABLE_GIB * 1048576))
 free_floor=$((MIN_FREE_GIB * 1048576))
-free_gate=$((FREE_GATE_GIB * 1048576))
 swap_free_floor=$((MIN_SWAP_FREE_GIB * 1048576))
 low_count=0
 warning_active=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
-printf '%s monitor started: container=%s mode=%s available=%sGiB noncma-free=%sGiB/%sGiB gate swapfree=%sGiB\n' \
-  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_SWAP_FREE_GIB}"
+printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free-protect=%sGiB swapfree=%sGiB legacy-free-gate=%sGiB\n' \
+  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${MIN_SWAP_FREE_GIB}" "${FREE_GATE_GIB}"
 next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
@@ -96,7 +95,12 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   protection_low=0
   (( noncma_available < available_floor )) && warning_low=1
   (( swap_free < swap_free_floor )) && warning_low=1 && protection_low=1
-  if (( noncma_free < free_floor && noncma_available < free_gate )); then
+  # NVIDIA RM system-page allocation can fail while reclaimable MemAvailable is
+  # still large. The 2026-09-30 live Hybrid restart reproduced
+  # NV_ERR_NO_MEMORY with non-CMA free below 2 GiB but non-CMA available well
+  # above the former 10 GiB gate. Keep low available alone warning-only, but
+  # never let high available suppress the hard non-CMA free protection floor.
+  if (( noncma_free < free_floor )); then
     warning_low=1
     protection_low=1
   fi
