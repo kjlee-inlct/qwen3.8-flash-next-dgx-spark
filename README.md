@@ -711,10 +711,16 @@ MONITOR_HEARTBEAT=60
 ```
 
 Low non-CMA available memory by itself is a warning, not a stop condition. Protection
-counts only when non-CMA free is below 2 GiB while non-CMA available is below the
-10 GiB gate, or when swap-free is below 8 GiB. Five consecutive protection samples
-trigger a graceful container stop. Warning-only state is logged once on entry and then at
-the heartbeat interval; protection-counter samples are logged individually.
+counts whenever non-CMA free is below 2 GiB, regardless of reclaimable non-CMA
+available memory, or when swap-free is below 8 GiB. Five consecutive protection samples
+trigger a graceful container stop. `MONITOR_FREE_GATE_GIB` remains in the manifest and
+CLI for schema/backward compatibility, but it no longer suppresses the hard non-CMA free
+protection floor. Warning-only state is logged once on entry and then at the heartbeat
+interval; protection-counter samples are logged individually.
+
+This distinction was tightened after a 2026-09-30 live Hybrid restart reproduced NVIDIA
+RM `NV_ERR_NO_MEMORY` while non-CMA free repeatedly fell below 2 GiB even though
+non-CMA available remained well above the former 10 GiB gate.
 
 ```bash
 ./scripts/monitor-runtime.sh
