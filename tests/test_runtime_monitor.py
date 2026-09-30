@@ -106,6 +106,94 @@ esac
             self.assertIn("STOP_REASON=memory-protection", stop_reason.read_text(encoding="utf-8"))
 
 
+    def test_low_noncma_free_protects_even_when_available_is_high(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            state_home = root / "state"
+            bin_dir.mkdir()
+
+            docker_log = root / "docker.log"
+            stop_marker = root / "docker-stopped"
+            fake_docker = bin_dir / "docker"
+            fake_docker.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
+case "${1:-}" in
+  inspect)
+    if [[ "${2:-}" == "-f" ]]; then
+      printf 'true\\n'
+    elif [[ "${2:-}" == "--format" ]]; then
+      printf '%064d\\n' 0
+    fi
+    ;;
+  logs)
+    ;;
+  stop)
+    : > "$FAKE_DOCKER_STOP_MARKER"
+    ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
+
+            # Regression for the 2026-09-30 live Hybrid restart: NVIDIA RM
+            # allocation failures occurred while reclaimable available memory
+            # remained high, so low non-CMA free must protect independently.
+            meminfo = root / "meminfo"
+            meminfo.write_text(
+                "\n".join(
+                    [
+                        "MemTotal:       127506432 kB",
+                        "MemFree:          1572864 kB",   # 1.5 GiB
+                        "MemAvailable:    41943040 kB",   # 40.0 GiB
+                        "CmaFree:           524288 kB",   # 0.5 GiB
+                        "SwapFree:        104857600 kB",  # 100 GiB
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(MONITOR),
+                    "--container",
+                    "qwen38-flash-next",
+                    "--protect",
+                    "--consecutive",
+                    "1",
+                    "--interval",
+                    "1",
+                    "--heartbeat",
+                    "0",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+                    "XDG_STATE_HOME": str(state_home),
+                    "QWEN38_MEMINFO_PATH": str(meminfo),
+                    "FAKE_DOCKER_LOG": str(docker_log),
+                    "FAKE_DOCKER_STOP_MARKER": str(stop_marker),
+                },
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            output = result.stdout + result.stderr
+            self.assertIn("noncma_available=40448MiB", output)
+            self.assertIn("noncmafree=1024MiB", output)
+            self.assertIn("PROTECT stopping qwen38-flash-next", output)
+            self.assertTrue(stop_marker.exists(), docker_log.read_text(encoding="utf-8"))
+
+
     def test_low_available_with_healthy_noncma_free_warns_without_stopping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
