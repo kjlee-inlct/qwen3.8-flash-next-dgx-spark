@@ -6142,11 +6142,39 @@ Updated classification:
 KV allocation-size boundary                 bracketed between 8 and 16 GiB
 ```
 
-Next use 12 GiB as the midpoint boundary control with the same host/runtime
-conditions. If 12 GiB reproduces the RM failure, narrow downward between 8 and
-12 GiB; if it remains clean, narrow upward between 12 and 16 GiB. Do not change
-the managed default until the boundary is bracketed more tightly and repeated
-startup stability is demonstrated.
+The isolated 12 GiB midpoint control also passed the complete run:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- only `--kv-cache-memory-bytes` changed to 12884901888 (12 GiB);
+- health reached READY at 16:08:53 KST;
+- vLLM reported `reserved 12.0 GiB memory for KV Cache`;
+- KV capacity was 433,944 tokens, or 1.66x the configured 262,144-token
+  maximum request length;
+- CUDA graph capture completed normally;
+- a 180-second post-ready soak completed with memory stable at roughly
+  19.6 GiB available and about 2.5 GiB immediately free;
+- the complete kernel window returned no `NV_ERR_NO_MEMORY`,
+  `_memdescAllocInternal`, NVRM/Xid, OOM, killed-process, hung-task, or
+  lockup matches;
+- the container stopped cleanly with exit code 0 and was not OOM-killed;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 12 and 16 GiB
+```
+
+Next use 14 GiB as the midpoint boundary control under the same host/runtime
+conditions and the same 180-second post-ready soak. If 14 GiB is clean, narrow
+upward between 14 and 16 GiB; if it reproduces the RM failure, narrow downward
+between 12 and 14 GiB. Do not change the managed default until the boundary is
+bracketed more tightly and repeated startup stability is demonstrated.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
