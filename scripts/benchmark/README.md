@@ -5851,14 +5851,33 @@ stopped by memory protection during checkpoint loading:
 - release cutover failed readiness and update-release began restoring the
   previous release pointer.
 
-The captured operator transcript ends immediately after
-`Update release pointers rolled back.` It does **not** contain the monitor
-samples for this attempt, the exact `swapgrowth`/non-CMA trigger values, the
-kernel-journal result, or the final post-rollback lifecycle/health checks.
-Therefore this attempt establishes that the #246 policy still stopped a normal
-cold-load candidate, but it does not yet establish which branch of the
-two-signal rule fired. Do not change thresholds from this transcript alone.
-Capture the monitor delta and final rollback state first.
+Follow-up forensics identified the exact #246 protection trigger. The candidate
+monitor started with SwapFree 146171 MiB. During early shard loading, low
+non-CMA free samples remained warning-only while swap growth was 0-142 MiB.
+At 13:27:39 KST, with non-CMA available still 36305 MiB and non-CMA free
+1460 MiB, swap growth reached 327 MiB and the protection counter advanced to
+1/5. It then advanced every two seconds as swap growth rose through 391, 452,
+585, and 719 MiB, reaching 5/5 at 13:27:47 and stopping the candidate.
+
+This proves that the 256 MiB swap-activity gate is too sensitive for the normal
+Hybrid cold-load path. The low-available branch did not fire; reclaimable
+non-CMA available remained about 35-36 GiB throughout the stop sequence.
+
+The same forensic snapshot was taken while rollback service recovery was still
+in progress. The immutable release pointer had already returned to
+`dd3127b54f4f5d817c4e8abfbc09e83180f21124`, update state was idle, but the
+restored runtime transaction was still `validating` with its rollback
+container retained. The service was active and had reached 660 seconds of its
+1800-second readiness window. Doctor therefore reported missing runtime
+attestation, incomplete runtime transition, retained rollback container, and
+unhealthy API. These are consistent with an in-progress replacement runtime
+and must not be treated as proof of a stuck transaction without a later
+terminal-state observation.
+
+At 13:39:24-13:39:25 KST, while the restored old-policy Hybrid runtime was
+still loading, NVIDIA RM again emitted `NV_ERR_NO_MEMORY`. This independently
+confirms that simply allowing the cold-load pressure to continue under the old
+gate does not meet the host-stability acceptance criterion.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
