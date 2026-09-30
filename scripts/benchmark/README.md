@@ -5706,7 +5706,7 @@ Current live matrix:
 Hybrid -> OrcaRouter              FUNCTIONAL PASS / HOST-STABILITY FAIL
 OrcaRouter -> Hybrid              FUNCTIONAL PASS / HOST-STABILITY FAIL
 Hybrid same-profile restart       FUNCTIONAL PASS / HOST-STABILITY FAIL
-Hybrid -> mazinb                  BLOCKED pending memory-protection repair
+Hybrid -> mazinb                  BLOCKED pending #246 live requalification
 mazinb -> OrcaRouter              PENDING
 OrcaRouter -> Hybrid (final)      PENDING
 ```
@@ -5780,12 +5780,58 @@ the free and available conditions become low. The remaining defect is the
 available-memory gate suppressing protection when immediately free non-CMA
 pages are already critically low.
 
-Repair direction: keep low non-CMA available by itself warning-only, but make
-the configured non-CMA free floor independently protection-significant. That
-repair was merged as
-`1188a96939c8df6ba506b1ccc24b248b7477e41c` (#245). Do not continue to the
-mazinb live-switch leg until this release is advanced through the immutable
-release path and the Hybrid host-stability gate passes again.
+#### #245 live release qualification
+
+The first repair was merged as
+`1188a96939c8df6ba506b1ccc24b248b7477e41c` (#245) and then exercised through
+the normal immutable-release cutover on the live DGX.
+
+Repository qualification passed 360 unit tests and the target release was
+staged, qualified, and verified. During the replacement Hybrid startup, the new
+monitor correctly recognized high-available low-free samples that the previous
+policy had ignored, but the policy was too aggressive for normal checkpoint
+loading:
+
+- monitor start: 11:19:17 KST;
+- checkpoint loading was still at 8/81 shards;
+- 11:23:43-11:23:51: five consecutive low-free samples accumulated;
+- non-CMA available remained about 34-36 GiB;
+- swap-free remained essentially unchanged at about 146188-146191 MiB;
+- the candidate was stopped by memory protection at 11:23:51.
+
+The release update therefore failed readiness and automatically restored the
+previous immutable release. Final lifecycle state after rollback was clean:
+
+```text
+CURRENT_RELEASE=dd3127b54f4f5d817c4e8abfbc09e83180f21124
+UPDATE_STATE=idle
+TRANSACTION_STATE=idle
+PROFILE_SWITCH_STATE=idle
+```
+
+The restored runtime passed doctor (0 failures, 1 warning) and
+`validate-runtime.py`. However, because rollback returned to the old monitor
+policy, the restored Hybrid runtime again emitted NVIDIA RM
+`NV_ERR_NO_MEMORY` at 11:34:34 and 11:36:17 KST. This proves both sides of the
+problem: #245 closes the high-available low-free blind spot, but treating every
+such sample as immediately protection-significant prevents a normal cold load.
+
+A second repair is therefore required. PR #246 uses the live evidence to
+distinguish the two cases without relying on a fixed startup timer:
+
+- low free + low available: protection-significant;
+- low free + at least 256 MiB swap consumption since monitor start:
+  protection-significant;
+- low free + high available + essentially unchanged swap:
+  warning-only checkpoint-loading transient;
+- absolute low SwapFree: protection-significant.
+
+The 256 MiB activity gate is evidence-driven: the failed #245 candidate reached
+low-free with only a few MiB of swap change, while the earlier RM-failure runs
+showed swap consumption growing by hundreds of MiB to multiple GiB before the
+allocation failures. Do not continue to the mazinb live-switch leg until #246
+is merged, promoted through the immutable release path, and the Hybrid
+host-stability gate passes.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
