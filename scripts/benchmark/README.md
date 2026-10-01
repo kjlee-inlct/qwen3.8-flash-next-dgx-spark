@@ -6495,9 +6495,14 @@ startup. This is another NO-TEST result.
 Do not depend on reusing the interactive sudo timestamp from inside a
 trace-cmd dropped-user child. For the next trace attempt, keep privileged
 tracefs/journal work in the outer root-capable wrapper and make the dropped-user
-control path sudo-free. Before constructing that variant, inventory every sudo
-use in the generated base control script and only remove/replace the
-kernel-journal portions that the outer wrapper already captures.
+control path sudo-free.
+
+The generated R4 base control was audited: the only privileged operation is a
+single `sudo -n journalctl -k` block used for the complete kernel-window
+check. No other sudo usage is present. Therefore R5 can safely remove only that
+journal block from the dropped-user control path and rely on the outer wrapper
+for kernel journal capture and RM-error classification. The model/container
+control logic itself remains unprivileged and unchanged.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
