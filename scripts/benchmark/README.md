@@ -6201,25 +6201,40 @@ Updated classification:
 KV allocation-size boundary                 bracketed between 14 and 16 GiB
 ```
 
-A 15 GiB control container was subsequently discovered already present and
-must be treated as evidence rather than deleted. Its exact command pins
-`--kv-cache-memory-bytes 16106127360` (15 GiB), with the same H6 Hybrid
-profile, MTP k=2, max model length 262144, and PIECEWISE CUDA graphs. The
-container ran for roughly 10m51s, reached the late initialization path,
-reported `reserved 15.0 GiB memory for KV Cache`, produced a 542,060-token
-KV cache (2.07x the configured maximum request length), completed CUDA graph
-capture, and logged engine initialization completion.
+The preserved 15 GiB control was forensically resolved as a host-stability
+failure. Its exact command pins `--kv-cache-memory-bytes 16106127360`
+(15 GiB), with the same H6 Hybrid profile, MTP k=2, max model length 262144,
+and PIECEWISE CUDA graphs. It reached the late initialization path, reported
+`reserved 15.0 GiB memory for KV Cache`, produced a 542,060-token KV cache
+(2.07x the configured maximum request length), completed CUDA graph capture,
+and logged engine initialization completion.
 
-The container then exited about six seconds after engine initialization with
-exit code 137 while Docker reported `OOMKilled=false`. This is not enough to
-classify the 15 GiB point: exit 137 is consistent with an external SIGKILL
-(e.g. a watchdog/docker-stop timeout), while `OOMKilled=false` argues against
-a Docker cgroup OOM kill. Preserve the container and recover the host kernel,
-isolated monitor, RM-watchdog marker/log, and Docker event evidence around
-2026-10-01 09:20:40-09:21:10 KST before rerunning or deleting it.
+At 09:20:43.175604 KST the host kernel emitted the same
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal` failure seen at 16 and 24 GiB.
+The isolated memory monitor itself remained at `protect=0/3`, so it did not
+trigger the stop. Docker reported `OOMKilled=false`; its daemon log shows the
+container received SIGTERM and failed to exit within 10 seconds, after which
+Docker force-killed it. The resulting exit code 137 is therefore cleanup
+behavior, not evidence of a cgroup OOM kill. The independent RM marker file
+was absent, but that does not affect classification because the kernel failure
+is directly recorded.
 
-Until that evidence is recovered, keep the measured boundary at 14 GiB PASS
-versus 16 GiB FAIL and mark 15 GiB as UNCLASSIFIED.
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+14 GiB isolated Hybrid host stability       PASS
+15 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 14 and 15 GiB
+```
+
+Next use 14.5 GiB (15569256448 bytes) as the midpoint under the same host and
+runtime conditions. Preserve the 180-second post-ready soak and complete
+kernel-window scan. The 15 GiB evidence is now captured, so the stopped 15 GiB
+control container may be removed before starting the 14.5 GiB control.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
