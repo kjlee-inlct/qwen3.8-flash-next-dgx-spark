@@ -6472,10 +6472,22 @@ the control command with an environment in which the shell could not resolve
 even `mkdir`; the base control aborted immediately at line 11, no container
 was created, all trace event counts were zero, and the wall-clock run lasted
 about one second. The outer `trace-cmd` command returned zero, demonstrating
-that its exit status must not be used as the control-script result. Future
-trace runs must explicitly supply HOME/PATH/USER/LOGNAME to the dropped-user
-command and persist the child control exit status separately before accepting
-the run as valid.
+that its exit status must not be used as the control-script result.
+
+A dedicated dropped-user preflight then passed with an explicit environment:
+uid 1001/`inlc`, HOME `/home/inlc`, and PATH
+`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. The child
+resolved mkdir/docker/bash/grep/sed/curl/systemctl/uname/date and completed a
+Docker client smoke test while trace-cmd recorded sched events successfully.
+Therefore the R3 failure was environmental, not a trace-cmd or permissions
+limitation.
+
+A subsequent command containing a literal documentation placeholder (`...`)
+was rejected by trace-cmd with “no event or plugin was specified”; it was not a
+model run. Future trace commands must use the complete event list, explicitly
+supply HOME/PATH/USER/LOGNAME to the dropped-user command, verify
+`sudo -n true` in that child environment before the long run, and persist the
+child control exit status separately from the outer trace-cmd status.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
