@@ -6407,8 +6407,41 @@ The R2 high-frequency telemetry is intact in
 `/tmp/hybrid-6.17-kv8-instrumented-r2-20261001`:
 `memory-1s.log` (~382 KiB), `vmstat-1s.log` (~867 KiB), and
 `buddyinfo-5s.log` (~50 KiB), together with complete container and kernel
-logs. Do not rerun or delete this comparator. Use these preserved R2 files for
-the phase-aligned 8 GiB PASS vs 14 GiB FAIL allocator comparison.
+logs. Do not rerun or delete this comparator.
+
+The phase-aligned 8 GiB PASS vs 14 GiB FAIL comparison materially changes the
+allocator interpretation. Static memory pressure and buddy fragmentation do
+not discriminate the runs:
+
+- 8 GiB PASS reached a lower MemFree minimum (~886 MiB vs ~1057 MiB) and a
+  lower MemAvailable minimum (~23.6 GiB vs ~35.0 GiB);
+- both runs reached Normal-zone `highest_order=7` and `order9+=0 MiB`;
+- 8 GiB PASS reached ~725 MiB minimum Normal-zone buddy free vs ~568 MiB in
+  14 GiB FAIL;
+- the PASS run had far more major faults and swap-out activity
+  (`pgmajfault +64212`, `pswpout +49402`) than the FAIL run.
+
+The strongest discriminator is synchronous allocation/compaction pressure:
+the 14 GiB FAIL window recorded `allocstall_normal +82`,
+`compact_stall +295`, `compact_fail +85`, and
+`compact_success +210`, while the 8 GiB PASS window recorded
+`allocstall_normal +6` and zero `compact_stall/fail/success`. Direct file
+reclaim was also roughly 1.8x higher in the FAIL window
+(`pgscan_direct`/ `pgsteal_direct`).
+
+Therefore static high-order depletion is not sufficient to explain the RM
+failure. The leading host-side correlate is a burst of synchronous direct
+reclaim/compaction triggered around a demanding Normal-zone allocation. This
+may be the mechanism that causes the NVIDIA RM allocation to fail, or it may
+be a consequence of the same large/high-order allocation request; current
+counter data cannot distinguish cause from consequence.
+
+Next instrument the exact allocation episode with kernel tracepoints rather
+than further KV-size bisection. Capture compaction begin/end, page-allocation
+fragmentation/failure, and direct-reclaim begin/end events at sub-second
+resolution around one 8 GiB control and one failing higher-pressure control.
+This should reveal whether an RM request directly triggers synchronous
+compaction and which allocation order/migratetype/zone is involved.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
