@@ -6365,10 +6365,33 @@ under heavy file-cache reclaim/compaction, even while `MemAvailable` remains
 large. This is more specific than generic memory pressure and is consistent
 with the observed phase variability.
 
-Next compare against a fresh instrumented 8 GiB control using the same 1-second
-memory/vmstat and 5-second buddy telemetry. A clean 8 GiB run should show
-whether the same reclaim/compaction and high-order collapse occurs without an
-RM failure, or whether those signals discriminate failing runs.
+The fresh instrumented 8 GiB control completed successfully:
+
+- health reached PASS at 11:54:25 KST;
+- the full 180-second post-ready soak completed;
+- vLLM reported `reserved 8.0 GiB memory for KV Cache`, 288,802 KV tokens,
+  and 1.10x concurrency at the configured 262,144-token maximum request
+  length;
+- the complete kernel window contained no matched host/GPU failure signals;
+- clean stop exited 0 with `OOMKilled=false`;
+- `KV8I_RESULT=PASS`, `RM_ERROR_DETECTED=NO`, and managed lifecycle state
+  remained idle/idle/idle with the service disabled/inactive.
+
+This comparator also falsifies a simple immediate-free-memory threshold. During
+the clean 8 GiB startup, `MemFree` repeatedly fell below 1 GiB (roughly
+0.69-0.94 GiB at several points during checkpoint loading) while
+`MemAvailable` remained tens of GiB, yet the run recovered and completed
+without an RM failure. The failing 14 GiB run therefore cannot be explained by
+`MemFree < 1-2 GiB` alone.
+
+The next step is a same-metric comparison of the captured 8 GiB PASS and
+14 GiB FAIL telemetry, aligned to their late weight-loading / allocation
+pressure windows. Compare Normal-zone buddy high-order availability,
+`allocstall_*`, `compact_*`, `pgscan_*`, `pgsteal_*`, major faults,
+and swap activity. Only if the buddy/compaction behavior materially
+discriminates PASS from FAIL should fragmentation remain the leading host-side
+mechanism; otherwise pivot toward NVIDIA RM-specific pinned/mapped allocation
+semantics and GB10 unified-memory behavior.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
