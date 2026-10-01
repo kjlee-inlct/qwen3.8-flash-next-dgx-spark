@@ -261,11 +261,18 @@ if [[ ! -d "$OUT" ]]; then
     chown "$RUN_USER:$RUN_GROUP" "$OUT"
 fi
 
-cp "$TMP/start-epoch.txt" "$OUT/start-epoch.txt"
-cp "$TMP/end-epoch.txt" "$OUT/end-epoch.txt"
-cp "$TMP/trace-cmd.rc" "$OUT/trace-cmd.rc"
-cp "$TMP/control.log" "$OUT/control.log"
-cp "$TMP/allocator-trace.dat" "$OUT/allocator-trace.dat"
+sudo -n cp "$TMP/start-epoch.txt" "$OUT/start-epoch.txt"
+sudo -n cp "$TMP/end-epoch.txt" "$OUT/end-epoch.txt"
+sudo -n cp "$TMP/trace-cmd.rc" "$OUT/trace-cmd.rc"
+sudo -n cp "$TMP/control.log" "$OUT/control.log"
+sudo -n cp "$TMP/allocator-trace.dat" "$OUT/allocator-trace.dat"
+
+sudo -n chown "$RUN_USER:$RUN_GROUP" \
+    "$OUT/start-epoch.txt" \
+    "$OUT/end-epoch.txt" \
+    "$OUT/trace-cmd.rc" \
+    "$OUT/control.log" \
+    "$OUT/allocator-trace.dat"
 
 sudo -n trace-cmd report -i "$OUT/allocator-trace.dat"     >"$OUT/allocator-trace.txt"
 
