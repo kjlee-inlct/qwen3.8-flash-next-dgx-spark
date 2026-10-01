@@ -6384,14 +6384,22 @@ the clean 8 GiB startup, `MemFree` repeatedly fell below 1 GiB (roughly
 without an RM failure. The failing 14 GiB run therefore cannot be explained by
 `MemFree < 1-2 GiB` alone.
 
-The next step is a same-metric comparison of the captured 8 GiB PASS and
-14 GiB FAIL telemetry, aligned to their late weight-loading / allocation
-pressure windows. Compare Normal-zone buddy high-order availability,
-`allocstall_*`, `compact_*`, `pgscan_*`, `pgsteal_*`, major faults,
-and swap activity. Only if the buddy/compaction behavior materially
-discriminates PASS from FAIL should fragmentation remain the leading host-side
-mechanism; otherwise pivot toward NVIDIA RM-specific pinned/mapped allocation
-semantics and GB10 unified-memory behavior.
+The first attempt to perform the direct 8 GiB PASS vs 14 GiB FAIL telemetry
+comparison was invalid because the 8 GiB telemetry files had been overwritten
+by an accidental second invocation of the instrumentation wrapper. The first
+8 GiB run itself remains a valid functional/host-stability PASS, but its
+high-frequency `memory-1s.log`, `vmstat-1s.log`, and `buddyinfo-5s.log`
+cannot be used for the comparator.
+
+The second wrapper invocation reused the same evidence directory and opened
+those telemetry files for truncating output before the base control script
+failed its precondition on the already-existing stopped container. As a
+result, the comparator correctly produced no 8 GiB samples.
+
+Repeat the 8 GiB instrumented comparator once using a new container name, port,
+and evidence directory so the original PASS evidence is never overwritten.
+Then rerun the same phase-aligned comparator against the preserved 14 GiB FAIL
+telemetry.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
