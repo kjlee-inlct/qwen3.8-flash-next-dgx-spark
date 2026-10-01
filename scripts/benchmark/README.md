@@ -6511,6 +6511,14 @@ and combines that with the child's READY/functional result into the canonical
 PASS / FUNCTIONAL_PASS_HOST_FAIL / FAIL outcome. This cleanly separates
 unprivileged model control from privileged host evidence collection.
 
+
+A later attempt to launch the R5 wrapper was blocked by its evidence-protection
+guard because container `qwen38-h6-kv145-trace-r5` already existed. No new
+test was started by that invocation. Treat the pre-existing container and
+`/tmp/hybrid-6.17-kv145-trace-r5-20261001` as potentially valid evidence
+until inspected; do not delete or rerun R5 before checking container state,
+timestamps, arguments, logs, and evidence files.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
