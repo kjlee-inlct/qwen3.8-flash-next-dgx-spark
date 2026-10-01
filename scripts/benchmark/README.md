@@ -6571,10 +6571,12 @@ RM failure, not aggregate presence/absence of compaction.
 A subsequent 15 GiB R6 light-trace run progressed through the full model load,
 reserved the intended 15.0 GiB KV cache, completed CUDA graph capture and
 engine initialization, started the API server, and returned HTTP 200 from
-`/health`. At that point the run had entered the configured 180 s post-ready
-soak and had not yet produced a final host-stability classification. This is
-not a stalled startup; preserve the run until the wrapper prints its final
-summary and trace/kernel correlation.
+`/health`. It then completed the configured 180 s post-ready soak, returned
+HTTP 200 from `/v1/models`, and performed the expected clean shutdown. The
+container ended with exit code 0 and `OOMKilled=false`. This establishes a
+functional PASS for the 15 GiB R6 light-trace run. Host-stability classification
+still depends on the outer kernel-window and trace summary files; the expected
+post-shutdown health probe returning connection failure is not a test failure.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
