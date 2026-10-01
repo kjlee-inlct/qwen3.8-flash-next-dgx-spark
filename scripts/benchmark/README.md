@@ -6652,3 +6652,45 @@ journalctl-safe whole-second format, then perform the deferred RM/host
 classification and R6 comparator. This also identifies a tooling fix for
 future reusable trace wrappers: never pass locale-sensitive
 `date --iso-8601=ns` output directly to journalctl.
+
+
+The deferred R7 host classification has now been recovered from the preserved
+evidence without rerunning the model. Final classification is
+**FUNCTIONAL_PASS_HOST_FAIL**.
+
+Recovered evidence:
+
+- `control.rc=0`;
+- child result `FUNCTIONAL_PASS`;
+- trace result `TRACE_PASS`, `trace-cmd.rc=0`;
+- container exited 0 with `OOMKilled=false`;
+- the kernel window contains
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- first RM event:
+  wall time `2026-10-01T16:42:11.052575+09:00`,
+  monotonic `95871.841021`;
+- allocator event totals:
+  compaction try 8,772, compaction begin/end 7,102/7,102,
+  direct reclaim begin/end 6,784/6,784, and filtered extfrag 204,143.
+
+This run is especially valuable because the RM allocation failure did not kill
+the engine. The 16 GiB child subsequently reached health at 16:42:58 KST,
+completed the full 180-second post-ready soak, served the expected model, and
+clean-stopped with exit 0. Therefore `NV_ERR_NO_MEMORY` is not equivalent to
+immediate functional death in this environment, and watchdog-based immediate
+termination would have hidden useful post-error behavior.
+
+The R7 RM event occurred during late initialization, after model loading had
+completed and immediately around the KV/warmup/graph-init phase. The preserved
+R7 trace windows (`rm-trace-window.txt` and
+`rm-trace-window-10s.txt`) are now the primary evidence for the next causal
+comparison. Compare them against the R6 15 GiB PASS baseline for task/PID,
+order/GFP, non-THP high-order requests, direct-reclaim and compaction sequence,
+ownership-changing extfrag, fallback distance, and short bursts from
+`VLLM::Worker` and `UVM GPU1 BH`.
+
+Do not reinterpret the result as a fixed 16 GiB capacity boundary. A previous
+16 GiB run failed host stability, while this traced 16 GiB run still reached
+READY and served successfully after the RM error. The current evidence remains
+most consistent with a timing/state-sensitive RM/UVM/Linux-allocation
+interaction rather than a deterministic KV-size threshold.
