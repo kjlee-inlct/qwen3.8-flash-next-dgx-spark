@@ -6448,10 +6448,23 @@ mounted at `/sys/kernel/tracing`; the kernel exposes
 `mm_compaction_begin/end`, direct-reclaim begin/end,
 `mm_page_alloc_extfrag`, and `mm_page_alloc`, together with the broader
 compaction/vmscan event families. `trace-cmd`, `perf`, and `bpftrace`
-are all installed. Reading individual tracepoint `format` files as the
-unprivileged user was denied, so inspect those formats with sudo before
-constructing filters. Do not enable unfiltered `mm_page_alloc` over the full
-startup because of its potentially very high event rate.
+are all installed.
+
+Root format inspection confirms the required fields are present:
+
+- `mm_compaction_try_to_compact_pages`: `order`, `gfp_mask`, `prio`;
+- `mm_compaction_begin/end`: PFN range, `sync`, and end `status`;
+- `mm_compaction_finished`: `nid`, zone index, `order`, result;
+- direct reclaim begin/end: allocation `order`, `gfp_flags`, reclaimed pages;
+- `mm_page_alloc_extfrag`: `alloc_order`, `fallback_order`,
+  allocation/fallback migratetypes, and `change_ownership`;
+- `mm_page_alloc`: `order`, `gfp_flags`, and migratetype.
+
+This is sufficient to trace the allocation episode without enabling all page
+allocations. Use `mm_page_alloc` only with an `order > 0` filter, while
+recording compaction/direct-reclaim/extfrag events unfiltered. The resulting
+trace should identify whether the RM error is preceded by a specific high-order
+request, synchronous compaction, fallback fragmentation, or failed reclaim.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
