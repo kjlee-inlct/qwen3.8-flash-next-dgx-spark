@@ -6484,10 +6484,20 @@ limitation.
 
 A subsequent command containing a literal documentation placeholder (`...`)
 was rejected by trace-cmd with “no event or plugin was specified”; it was not a
-model run. Future trace commands must use the complete event list, explicitly
-supply HOME/PATH/USER/LOGNAME to the dropped-user command, verify
-`sudo -n true` in that child environment before the long run, and persist the
-child control exit status separately from the outer trace-cmd status.
+model run.
+
+The next R4 preflight confirmed the explicit dropped-user environment itself
+was correct (uid/user/HOME/PATH and command resolution), but `sudo -n true`
+inside the `trace-cmd --user inlc` child required authentication. Because the
+shell was running with `set -e`, this aborted the session before trace/model
+startup. This is another NO-TEST result.
+
+Do not depend on reusing the interactive sudo timestamp from inside a
+trace-cmd dropped-user child. For the next trace attempt, keep privileged
+tracefs/journal work in the outer root-capable wrapper and make the dropped-user
+control path sudo-free. Before constructing that variant, inventory every sudo
+use in the generated base control script and only remove/replace the
+kernel-journal portions that the outer wrapper already captures.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
