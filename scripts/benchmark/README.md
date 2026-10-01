@@ -6170,11 +6170,43 @@ Updated classification:
 KV allocation-size boundary                 bracketed between 12 and 16 GiB
 ```
 
-Next use 14 GiB as the midpoint boundary control under the same host/runtime
-conditions and the same 180-second post-ready soak. If 14 GiB is clean, narrow
-upward between 14 and 16 GiB; if it reproduces the RM failure, narrow downward
-between 12 and 14 GiB. Do not change the managed default until the boundary is
-bracketed more tightly and repeated startup stability is demonstrated.
+The isolated 14 GiB control also passed the complete run:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- only `--kv-cache-memory-bytes` changed to 15032385536 (14 GiB);
+- health reached READY at 16:40:01 KST;
+- vLLM reported `reserved 14.0 GiB memory for KV Cache`;
+- KV capacity was 506,515 tokens, or 1.93x the configured 262,144-token
+  maximum request length;
+- CUDA graph capture completed normally;
+- a 180-second post-ready soak completed with memory stable near 17.2 GiB
+  available and about 2.6 GiB immediately free;
+- the complete kernel window returned no `NV_ERR_NO_MEMORY`,
+  `_memdescAllocInternal`, NVRM/Xid, OOM, killed-process, hung-task, or
+  lockup matches;
+- an independent live kernel watchdog also reported
+  `RM_ERROR_DETECTED=NO`;
+- the container stopped cleanly with exit code 0 and was not OOM-killed;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+14 GiB isolated Hybrid host stability       PASS
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 14 and 16 GiB
+```
+
+Next use 15 GiB as the midpoint control under the same host/runtime conditions,
+the same live RM watchdog, and the same 180-second post-ready soak. If 15 GiB
+is clean, the observed failure boundary moves to (15,16] GiB; if it reproduces
+the RM failure, the boundary moves to (14,15] GiB. Do not change the managed
+default until this final 1 GiB boundary is measured and repeated stability is
+demonstrated.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
