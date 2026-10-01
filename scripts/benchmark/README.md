@@ -6267,11 +6267,42 @@ KV cache initialization. The prior 15/16 GiB failures near late initialization
 remain valid observations, but the simple size-threshold hypothesis is no
 longer sufficient.
 
-Before any further size bisection, repeat the identical 14.5 GiB control once
-on the same host/runtime with the same watchdog. The goal is phase
-reproducibility: determine whether the RM failure again appears during shard
-loading, moves to late/KV initialization, or disappears. Only resume size
-bisection if the failure phase is reproducible enough to support it.
+The identical 14.5 GiB control was repeated and failed again, but at a
+different startup phase. This second run completed model loading, reported
+`Model loading took 79.41 GiB`, then at 11:11:50.789992 KST logged
+`reserved 14.5 GiB memory for KV Cache` and a 524,288-token KV cache
+(2.00x the configured 262,144-token maximum request length). At
+11:11:51.611787 KST, only about 0.82 seconds after the explicit KV reservation
+log, the host kernel emitted the same
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal` failure. The watchdog stopped
+the container before readiness; Docker again reported `OOMKilled=false`.
+
+This differs materially from the first 14.5 GiB run, where the RM failure
+occurred while checkpoint shards were still loading and before the explicit KV
+reservation log. Therefore the same exact 14.5 GiB configuration can fail at
+different allocation phases. The evidence supports a pressure-sensitive,
+non-deterministic host/NVIDIA-RM allocation failure rather than a single
+deterministic KV-cache allocation boundary.
+
+Current interpretation:
+
+```text
+14.0 GiB run #1     PASS
+14.5 GiB run #1     FAIL during shard loading
+14.5 GiB run #2     FAIL ~0.82 s after explicit KV reservation
+15 GiB              FAIL during late initialization
+16 GiB              FAIL during late initialization
+24 GiB              FAIL
+```
+
+Do not continue simple size bisection yet. First repeat the 14.0 GiB control
+with higher-frequency host allocation telemetry around the entire startup
+window. The purpose is to determine whether the previously passing point is
+repeatably stable and to correlate any RM failure with free/available memory,
+swap activity, fragmentation/buddy state, and relevant kernel allocator state.
+If 14.0 GiB remains clean across repeated cold starts while 14.5 GiB continues
+to fail, size is still a useful pressure control variable even though the exact
+failure phase is non-deterministic.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
