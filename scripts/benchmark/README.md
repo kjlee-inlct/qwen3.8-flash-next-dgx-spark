@@ -6499,10 +6499,17 @@ control path sudo-free.
 
 The generated R4 base control was audited: the only privileged operation is a
 single `sudo -n journalctl -k` block used for the complete kernel-window
-check. No other sudo usage is present. Therefore R5 can safely remove only that
-journal block from the dropped-user control path and rely on the outer wrapper
-for kernel journal capture and RM-error classification. The model/container
-control logic itself remains unprivileged and unchanged.
+check. No other sudo usage is present.
+
+The downstream dependency was also audited. That block produces
+`KERNEL_ERRORS` and `KERNEL_PASS`; `KERNEL_PASS` is referenced only by
+the final result classification. Therefore R5 should not fake a kernel-pass
+value inside the dropped-user child. Instead, remove the kernel journal block
+and convert the child result to functional-only status. The outer privileged
+wrapper then captures the complete kernel window, classifies RM/host stability,
+and combines that with the child's READY/functional result into the canonical
+PASS / FUNCTIONAL_PASS_HOST_FAIL / FAIL outcome. This cleanly separates
+unprivileged model control from privileged host evidence collection.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
