@@ -48,18 +48,34 @@ PROBE_EVENTS=(
     "uvm_pmm_alloc_ret"
 )
 
-write_kprobe_control() {
-    sudo -n python3 - "$KPROBE_EVENTS" <<'PY'
+write_kprobe_commands() {
+    local source_file="$1"
+
+    sudo -n python3 - "$KPROBE_EVENTS" "$source_file" <<'PY'
 import os
+import pathlib
 import sys
 
 path = sys.argv[1]
-data = sys.stdin.buffer.read()
-fd = os.open(path, os.O_WRONLY)
-try:
-    os.write(fd, data)
-finally:
-    os.close(fd)
+source = pathlib.Path(sys.argv[2])
+
+for raw in source.read_bytes().splitlines():
+    command = raw.strip()
+    if not command:
+        continue
+
+    fd = os.open(path, os.O_WRONLY)
+    try:
+        written = os.write(fd, command + b"\n")
+    finally:
+        os.close(fd)
+
+    expected = len(command) + 1
+    if written != expected:
+        raise SystemExit(
+            f"short kprobe control write: {written}/{expected}: "
+            f"{command.decode(errors='replace')}"
+        )
 PY
 }
 
@@ -71,23 +87,7 @@ cleanup_probes() {
         printf '%s\n' "-:${GROUP}/${event}" >>"$tmp"
     done
 
-    if [[ -s "$tmp" ]]; then
-        sudo -n python3 - "$KPROBE_EVENTS" "$tmp" <<'PY' 2>/dev/null || true
-import os
-import pathlib
-import sys
-
-path = sys.argv[1]
-src = pathlib.Path(sys.argv[2])
-data = src.read_bytes()
-fd = os.open(path, os.O_WRONLY)
-try:
-    os.write(fd, data)
-finally:
-    os.close(fd)
-PY
-    fi
-
+    write_kprobe_commands "$tmp" >/dev/null 2>&1 || true
     rm -f "$tmp"
 }
 
@@ -117,24 +117,7 @@ p:r8_rmuvm/uvm_pmm_alloc_entry uvm_pmm_gpu_alloc_kernel num_chunks=$arg2:u64 chu
 r:r8_rmuvm/uvm_pmm_alloc_ret uvm_pmm_gpu_alloc_kernel ret=$retval:u32
 EOF
 
-    if ! sudo -n python3 - "$KPROBE_EVENTS" "$tmp" <<'PY'
-import os
-import pathlib
-import sys
-
-path = sys.argv[1]
-src = pathlib.Path(sys.argv[2])
-data = src.read_bytes()
-fd = os.open(path, os.O_WRONLY)
-try:
-    written = os.write(fd, data)
-finally:
-    os.close(fd)
-
-if written != len(data):
-    raise SystemExit(f"short kprobe control write: {written}/{len(data)}")
-PY
-    then
+    if ! write_kprobe_commands "$tmp"; then
         rm -f "$tmp"
         die "failed to install R8 kprobe definitions"
     fi
