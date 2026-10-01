@@ -11,7 +11,7 @@
 
 set -Eeuo pipefail
 
-OUT="${1:-/tmp/h6-rm-uvm-discovery-v2-$(date +%Y%m%d)}"
+OUT="${1:-/tmp/h6-rm-uvm-discovery-v3-$(date +%Y%m%d)}"
 
 if [[ -e "$OUT" ]]; then
     echo "DISCOVERY_OUTPUT_ALREADY_EXISTS=$OUT"
@@ -63,8 +63,10 @@ grep -Ei     '^(dma|iommu|gpu_mem|compaction|migrate|vmscan|kmem|filemap):'     
 : >"$OUT/rm-allocation-candidates.txt"
 : >"$OUT/uvm-allocation-candidates.txt"
 
-if [[ -r "$TRACEFS/available_filter_functions" ]]; then
-    sudo -n cat "$TRACEFS/available_filter_functions"         >"$OUT/available-filter-functions.txt"
+if [[ -e "$TRACEFS/available_filter_functions" ]]; then
+    if ! sudo -n cat "$TRACEFS/available_filter_functions" >"$OUT/available-filter-functions.txt"; then
+        echo "AVAILABLE_FILTER_FUNCTIONS_SUDO_READ_FAILED" >"$OUT/available-filter-functions.txt"
+    fi
 
     # Exact module ownership.
     grep -E '\[nvidia\]$'         "$OUT/available-filter-functions.txt"         >"$OUT/nvidia-module-functions.txt" || true
@@ -77,12 +79,12 @@ if [[ -r "$TRACEFS/available_filter_functions" ]]; then
 
     grep -Ei         'alloc|free|mem|page|phys|dma|map|fault|pin|migrat|va_|gpu_va|range|block|tracker'         "$OUT/nvidia-uvm-module-functions.txt"         >"$OUT/uvm-allocation-candidates.txt" || true
 else
-    echo "AVAILABLE_FILTER_FUNCTIONS_NOT_READABLE"         >"$OUT/available-filter-functions.txt"
+    echo "AVAILABLE_FILTER_FUNCTIONS_NOT_FOUND" >"$OUT/available-filter-functions.txt"
 fi
 
 {
     echo "============================================================"
-    echo "RM/UVM STATIC DISCOVERY V2 SUMMARY"
+    echo "RM/UVM STATIC DISCOVERY V3 SUMMARY"
     echo "============================================================"
 
     echo
