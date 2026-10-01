@@ -6628,3 +6628,27 @@ host-stability gate passes.
 
 This evidence validates the normal committed path only. Physical hard-power-loss
 recovery remains separate from the repository's mock crash-boundary coverage.
+
+
+The first live 16 GiB R7 light-trace execution completed the model-control path
+successfully but did not complete outer host classification because of a
+post-processing timestamp-format bug. The child reached READY, completed the
+180-second post-ready soak, served the expected model, reserved the requested
+16.0 GiB KV cache (579,086 tokens, 2.21x concurrency at max_model_len 262144),
+completed PIECEWISE CUDA graph capture and engine initialization, and then
+clean-stopped with container exit 0 and OOMKilled=false. The child emitted
+`KV16TR7_CHILD_RESULT=FUNCTIONAL_PASS`, and `trace-cmd` returned 0 with
+allocator trace data preserved.
+
+The outer wrapper then aborted while collecting the privileged journal window:
+GNU `date --iso-8601=ns` produced a locale-formatted fractional timestamp
+such as `2026-10-01T16:31:16,553377717+09:00`, and `journalctl --since`
+rejected the comma decimal separator with `Failed to parse timestamp`.
+Therefore this run is currently **FUNCTIONAL_PASS / HOST_NOT_CLASSIFIED**, not
+a final PASS and not a model failure. Do not rerun or delete R7. Preserve
+`/tmp/hybrid-6.17-kv16-trace-r7-20261001` and the outer temporary evidence,
+recover the kernel window from the saved epoch timestamps using a
+journalctl-safe whole-second format, then perform the deferred RM/host
+classification and R6 comparator. This also identifies a tooling fix for
+future reusable trace wrappers: never pass locale-sensitive
+`date --iso-8601=ns` output directly to journalctl.
