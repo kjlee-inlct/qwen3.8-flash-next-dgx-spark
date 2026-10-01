@@ -6613,6 +6613,15 @@ order-9 activity, ownership-changing extfrag with large fallback distance, and
 short bursts from `UVM GPU1 BH` or `VLLM::Worker` immediately before the RM
 error.
 
+
+The 16 GiB R7 child control was generated from the validated R6 child with only
+the intended comparator substitutions: container `qwen38-h6-kv16-trace-r7`,
+port 8902, KV 17179869184 bytes, R7 evidence path, and R7 result labels. The
+verification found no stale R6 identifiers, no child sudo usage, and no
+`KERNEL_PASS`/`KERNEL_ERRORS` dependency. R7 should therefore reuse the
+R6 light-trace profile unchanged so that 15 GiB PASS and 16 GiB can be compared
+1:1.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
