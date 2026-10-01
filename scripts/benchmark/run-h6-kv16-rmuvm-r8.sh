@@ -91,7 +91,7 @@ verify_probes() {
     local event format
     for event in "${PROBE_EVENTS[@]}"; do
         format="$TRACEFS/events/$GROUP/$event/format"
-        [[ -r "$format" ]] || die "probe format missing: $format"
+        sudo -n test -r "$format" || die "probe format unreadable: $format"
         echo "PRESENT $GROUP:$event"
     done
 }
@@ -103,6 +103,36 @@ preflight() {
     trap cleanup_probes EXIT
     create_probes
     verify_probes
+
+    local smoke
+    smoke="$(mktemp /tmp/h6-r8-probe-smoke.XXXXXX.dat)"
+    set +e
+    sudo -n trace-cmd record \
+        -C mono \
+        -o "$smoke" \
+        -e compaction:mm_compaction_try_to_compact_pages \
+        -e vmscan:mm_vmscan_direct_reclaim_begin \
+        -e kmem:mm_page_alloc_extfrag -f 'alloc_order >= 4' \
+        -e nvidia:nvidia_dev_xid \
+        -e "$GROUP:nv_alloc_pages_entry" \
+        -e "$GROUP:nv_alloc_pages_ret" \
+        -e "$GROUP:pma_alloc_entry" \
+        -e "$GROUP:pma_alloc_ret" \
+        -e "$GROUP:uvm_dma_alloc_entry" \
+        -e "$GROUP:uvm_dma_alloc_ret" \
+        -e "$GROUP:uvm_pmm_alloc_entry" \
+        -e "$GROUP:uvm_pmm_alloc_ret" \
+        --user "$RUN_USER" \
+        -- env -i \
+            HOME="$RUN_HOME" \
+            USER="$RUN_USER" \
+            LOGNAME="$RUN_USER" \
+            PATH="$FIXED_PATH" \
+            true >/dev/null 2>&1
+    local smoke_rc=$?
+    set -e
+    rm -f "$smoke"
+    [[ "$smoke_rc" == "0" ]] || die "trace-cmd probe smoke test failed: rc=$smoke_rc"
 
     echo
     echo "R8_PROBE_PREFLIGHT=PASS"
