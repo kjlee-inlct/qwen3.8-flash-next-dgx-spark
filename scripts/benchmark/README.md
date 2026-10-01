@@ -6443,6 +6443,16 @@ resolution around one 8 GiB control and one failing higher-pressure control.
 This should reveal whether an RM request directly triggers synchronous
 compaction and which allocation order/migratetype/zone is involved.
 
+Tracepoint discovery on the live 6.17.0-1032-nvidia host passed. Tracefs is
+mounted at `/sys/kernel/tracing`; the kernel exposes
+`mm_compaction_begin/end`, direct-reclaim begin/end,
+`mm_page_alloc_extfrag`, and `mm_page_alloc`, together with the broader
+compaction/vmscan event families. `trace-cmd`, `perf`, and `bpftrace`
+are all installed. Reading individual tracepoint `format` files as the
+unprivileged user was denied, so inspect those formats with sudo before
+constructing filters. Do not enable unfiltered `mm_page_alloc` over the full
+startup because of its potentially very high event rate.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
