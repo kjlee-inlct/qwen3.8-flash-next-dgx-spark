@@ -6724,3 +6724,54 @@ being driven by an earlier unobserved RM/UVM allocation state. Do not claim
 that the post-RM extfrag/reclaim burst caused the RM event. The next comparator
 should align the R6 PASS trace to the equivalent KV-reserve/late-init phase and
 use the same parser to determine which event sequence is unique to R7.
+
+
+Matched-phase comparison against the R6 15 GiB PASS baseline further weakens
+Linux allocator pressure as the direct trigger. The comparator aligned R6 to
+the same late-init phase as R7 by using the R7 KV-reserve-to-RM delay
+(+0.313407904 s). Monotonic calibration passed and both anchors lay inside
+their respective traces.
+
+In the +/-3 s matched windows, **all measured Linux allocator activity began
+after the phase anchor in both runs**. Pre-anchor counts were zero for
+compaction, direct reclaim, filtered extfrag, ownership-changing extfrag, and
+ownership-changing extfrag with fallback gap >= 2 in both R6 PASS and R7
+HOST_FAIL. The nearest ownership-changing extfrag was +97.403 ms in R6 PASS
+and +120.089 ms in R7 HOST_FAIL. The nearest compaction was +165.417 ms in R6
+and +218.679 ms in R7; the nearest direct reclaim was +166.194 ms in R6 and
++221.526 ms in R7.
+
+The post-anchor allocator pattern is not unique to the failing run. R6 PASS
+showed substantially *more* compaction and extfrag pressure than R7:
+14,189 vs 46 compaction attempts, 71,498 vs 21,032 filtered extfrag events,
+3,271 vs 738 ownership-changing extfrag events, and 2,048 vs 737 ownership
+changes with fallback gap >= 2. R6 PASS also exhibited the same characteristic
+order-4 ownership-changing fallback cascade through large blocks: first
+fallback 13, then 12, 11, and lower orders. That sequence began earlier in R6
+(+97 ms) than in R7 (+120 ms).
+
+The strongest qualitative difference is the *kind* of post-anchor recovery
+work, not a pre-RM precursor. R6 PASS entered an intense order-4 compaction
+phase almost immediately after the matched anchor, with 14,189 order-4
+compaction attempts and 1,285 order-4 direct-reclaim starts in the window.
+R7 HOST_FAIL had only 46 order-4 compaction attempts but later developed a
+large order-0 direct-reclaim storm: 4,422 of 4,462 reclaim starts were order 0,
+mostly from `VLLM::Worker`. The 100 ms timeline shows R6 heavy
+compaction/reclaim from roughly +0.1 s through +1.3 s while still passing,
+whereas R7's large VLLM order-0 reclaim burst begins mainly around +0.9 s and
+continues through +1.7 s after the RM event.
+
+Therefore the evidence does **not** support a causal model in which the
+measured Linux compaction/reclaim/extfrag burst precedes and triggers the RM
+`NV_ERR_NO_MEMORY`. The same or stronger post-anchor allocator stress exists
+in the PASS run, and no measured allocator precursor exists before either
+anchor. The primary remaining causal space is now an RM/UVM/internal physical
+allocation state that is not exposed by these Linux VM tracepoints, with the
+visible Linux allocator activity representing a common late-init response or
+downstream consequence rather than the unique cause of failure.
+
+Before adding more model runs, the next step should be static discovery of
+available NVIDIA/UVM tracepoints, trace events, and safe observable kernel
+symbols on this exact 6.17/580.178.04 host. Instrumentation should only be
+expanded if a concrete RM/UVM event or symbol can be identified; otherwise
+retain the current light-trace profile to avoid observer effects.
