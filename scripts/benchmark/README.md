@@ -6694,3 +6694,33 @@ Do not reinterpret the result as a fixed 16 GiB capacity boundary. A previous
 READY and served successfully after the RM error. The current evidence remains
 most consistent with a timing/state-sensitive RM/UVM/Linux-allocation
 interaction rather than a deterministic KV-size threshold.
+
+
+R7 RM-window analysis further narrows the causal ordering. In the recovered
+plus/minus-three-second window around RM monotonic 95871.841021, the analyzer
+parsed 30,106 events: 46 compaction attempts, 4,462 direct-reclaim begins, and
+21,032 filtered extfrag events. All 46 compaction attempts were from
+`VLLM::Worker` and were order 4. Direct reclaim was overwhelmingly
+`VLLM::Worker` (4,383 of 4,462), with 4,422 order-0 and only 40 order-4
+requests. No non-THP order-9-or-higher compaction/reclaim request was observed.
+
+The strongest timing observation is that the visible reclaim/compaction burst
+starts after the RM failure, not before it. The first high-signal
+ownership-changing extfrag event in the reported nearest-event list appears
+about +120 ms after the RM timestamp; the first reported compaction/reclaim
+bucket is +0.2 s, followed by a very large VLLM-worker reclaim storm from about
++0.9 s through +1.7 s. The nearest ownership-changing extfrag sequence is
+order-4 allocation falling back through very large blocks (including fallback
+orders 13, 12, 11, 10, and 9). In the full +/-3 s window,
+738 extfrag events changed ownership and 737 of those had fallback-order minus
+alloc-order >= 2.
+
+This ordering materially weakens a simple causal story in which a pre-existing
+Linux high-order allocator/fragmentation storm directly triggers the RM
+`NV_ERR_NO_MEMORY`. The currently observed sequence is instead compatible
+with the RM failure occurring first, followed roughly 0.1--0.2 s later by
+visible Linux allocator fallout under `VLLM::Worker`, or with both effects
+being driven by an earlier unobserved RM/UVM allocation state. Do not claim
+that the post-RM extfrag/reclaim burst caused the RM event. The next comparator
+should align the R6 PASS trace to the equivalent KV-reserve/late-init phase and
+use the same parser to determine which event sequence is unique to R7.
