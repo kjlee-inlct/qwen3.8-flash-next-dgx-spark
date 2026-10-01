@@ -52,7 +52,7 @@ cleanup_probes() {
     local event
     for event in "${PROBE_EVENTS[@]}"; do
         printf '%s\n' "-:${GROUP}/${event}" |
-            sudo -n tee "$KPROBE_EVENTS" >/dev/null 2>&1 || true
+            sudo -n tee -a "$KPROBE_EVENTS" >/dev/null 2>&1 || true
     done
 }
 
@@ -68,7 +68,7 @@ require_root_timestamp() {
 
 add_probe() {
     local spec="$1"
-    printf '%s\n' "$spec" | sudo -n tee "$KPROBE_EVENTS" >/dev/null
+    printf '%s\n' "$spec" | sudo -n tee -a "$KPROBE_EVENTS" >/dev/null
 }
 
 create_probes() {
