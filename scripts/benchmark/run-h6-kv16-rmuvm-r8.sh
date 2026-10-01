@@ -273,12 +273,14 @@ preflight() {
     create_probes
     verify_probes
 
-    local smoke smoke_log
-    smoke="$(mktemp /tmp/h6-r8-probe-smoke.XXXXXX.dat)"
-    smoke_log="$(mktemp /tmp/h6-r8-probe-smoke.XXXXXX.log)"
+    local smoke_dir smoke smoke_log
+    smoke_dir="$(mktemp -d /tmp/h6-r8-probe-smoke.XXXXXX)"
+    smoke="$smoke_dir/trace.dat"
+    smoke_log="$smoke_dir/trace-cmd.log"
 
     echo
     echo "=== trace-cmd smoke test ==="
+    echo "smoke.dir=$smoke_dir"
     echo "smoke.trace=$smoke"
     echo "smoke.log=$smoke_log"
 
@@ -317,7 +319,7 @@ preflight() {
         die "trace-cmd probe smoke test failed: rc=$smoke_rc"
     fi
 
-    rm -f "$smoke" "$smoke_log"
+    rm -rf "$smoke_dir"
 
     echo
     echo "R8_PROBE_PREFLIGHT=PASS"
