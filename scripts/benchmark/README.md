@@ -6255,13 +6255,23 @@ Updated classification:
 15 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
 16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
 24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
-KV allocation-size boundary                 bracketed between 14.0 and 14.5 GiB
 ```
 
-Next use 14.25 GiB (15300820992 bytes) under the same host/runtime conditions,
-the same live RM watchdog, and the same 180-second post-ready soak. If it
-passes, the boundary narrows to (14.25,14.5] GiB; if it fails, the boundary
-narrows to (14.0,14.25] GiB. Do not change the managed default yet.
+Important phase correction: the 14.5 GiB failure occurred while checkpoint
+shards were still loading (roughly 93% complete). The run never emitted
+`Model loading took ...`, `reserved 14.5 GiB memory for KV Cache`, or a KV
+capacity line. Therefore this run does **not** support a monotonic
+KV-allocation-size boundary between 14.0 and 14.5 GiB. It instead demonstrates
+that the RM allocation failure can occur earlier in startup, before explicit
+KV cache initialization. The prior 15/16 GiB failures near late initialization
+remain valid observations, but the simple size-threshold hypothesis is no
+longer sufficient.
+
+Before any further size bisection, repeat the identical 14.5 GiB control once
+on the same host/runtime with the same watchdog. The goal is phase
+reproducibility: determine whether the RM failure again appears during shard
+loading, moves to late/KV initialization, or disappears. Only resume size
+bisection if the failure phase is reproducible enough to support it.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
