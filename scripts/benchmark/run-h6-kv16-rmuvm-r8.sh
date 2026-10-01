@@ -273,10 +273,18 @@ preflight() {
     create_probes
     verify_probes
 
-    local smoke
+    local smoke smoke_log
     smoke="$(mktemp /tmp/h6-r8-probe-smoke.XXXXXX.dat)"
+    smoke_log="$(mktemp /tmp/h6-r8-probe-smoke.XXXXXX.log)"
+
+    echo
+    echo "=== trace-cmd smoke test ==="
+    echo "smoke.trace=$smoke"
+    echo "smoke.log=$smoke_log"
+
     set +e
     sudo -n trace-cmd record \
+        --verbose=debug \
         -C mono \
         -o "$smoke" \
         -e compaction:mm_compaction_try_to_compact_pages \
@@ -297,11 +305,19 @@ preflight() {
             USER="$RUN_USER" \
             LOGNAME="$RUN_USER" \
             PATH="$FIXED_PATH" \
-            true >/dev/null 2>&1
-    local smoke_rc=$?
+            true 2>&1 | tee "$smoke_log"
+    local smoke_rc=${PIPESTATUS[0]}
     set -e
-    rm -f "$smoke"
-    [[ "$smoke_rc" == "0" ]] || die "trace-cmd probe smoke test failed: rc=$smoke_rc"
+
+    echo "trace-cmd.smoke.rc=$smoke_rc"
+
+    if [[ "$smoke_rc" != "0" ]]; then
+        echo "R8_PROBE_SMOKE_LOG=$smoke_log"
+        echo "R8_PROBE_SMOKE_TRACE=$smoke"
+        die "trace-cmd probe smoke test failed: rc=$smoke_rc"
+    fi
+
+    rm -f "$smoke" "$smoke_log"
 
     echo
     echo "R8_PROBE_PREFLIGHT=PASS"
