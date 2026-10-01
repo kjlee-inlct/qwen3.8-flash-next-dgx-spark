@@ -6591,6 +6591,28 @@ without any matched host/GPU failure signal. The working hypothesis should
 therefore focus on timing-sensitive allocator/RM/UVM state interactions rather
 than a fixed KV-capacity threshold.
 
+
+The R6 PASS allocator baseline is now characterized. Compaction requests were
+18,739 total: order 4 = 15,226, order 6 = 2,123, and order 9 = 1,390.
+Of the order-9 requests, 1,380/1,390 (~99.3%) were `GFP_TRANSHUGE*`; only
+10 used the observed kernel high-order GFP combination. Direct reclaim was
+2,484 total: order 4 = 1,333, order 9 = 476, order 0 = 398, order 6 = 276,
+and order 2 = 1. Of the order-9 direct-reclaim events, 471/476 (~99.0%) were
+`GFP_TRANSHUGE*`.
+
+Filtered extfrag events totaled 227,933. Only 12,334 (~5.4%) changed pageblock
+ownership; only 58 (~0.025%) had alloc_order >= 9. The dominant extfrag
+patterns were alloc/fallback 4/4, 4/5, 4/6, and 6/6. Task attribution was also
+stable: `VLLM::Worker` generated 15,382 compaction requests and 1,613
+direct-reclaim events; `UVM GPU1 BH` generated 1,948 and 366 respectively.
+
+This means aggregate high-order pressure, synchronous reclaim, and even large
+fallback orders are all compatible with a clean PASS. The next failing trace
+should be compared against this baseline for rare sequence changes: non-THP
+order-9 activity, ownership-changing extfrag with large fallback distance, and
+short bursts from `UVM GPU1 BH` or `VLLM::Worker` immediately before the RM
+error.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
