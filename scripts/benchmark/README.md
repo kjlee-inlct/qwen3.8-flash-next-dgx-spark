@@ -6862,3 +6862,44 @@ Do not enable broad function tracing. The repository R8 runner derives its
 model-control child from the preserved validated local R7 child so the serving
 logic remains unchanged, and supports a probe-only `--preflight` mode before
 any model run.
+
+
+### R8 RM/UVM probe preflight PASS
+
+The live-host R8 probe preflight now passes on kernel
+`6.17.0-1032-nvidia` / driver `580.178.04`.
+
+The final validated dynamic probe set is:
+
+- `r8_rmuvm:nv_alloc_pages_entry/ret`;
+- `r8_rmuvm:pma_alloc_entry/ret`
+  (`nvUvmInterfacePmaAllocPages`);
+- `r8_rmuvm:uvm_dma_alloc_entry/ret`;
+- `r8_rmuvm:uvm_pmm_alloc_entry/ret`.
+
+Preflight evidence established all of the following:
+
+- stale R8 probes were absent before creation;
+- all eight kprobe/kretprobe definitions were accepted;
+- all eight event directories materialized under
+  `/sys/kernel/tracing/events/r8_rmuvm`;
+- all eight formats were readable;
+- `trace-cmd record` accepted the complete R8 event set and returned
+  `rc=0`;
+- the zero-byte CPU payloads in the smoke run are expected because the smoke
+  child is only `true` and does not exercise model/RM/UVM allocation paths;
+- cleanup disabled the group and every individual event before removal;
+- all eight dynamic probes were removed cleanly at preflight exit.
+
+The prior preflight failures were tooling-only and remain **NO TEST** results:
+output-file precreation caused trace-cmd `EACCES`; earlier control-file writes
+either truncated prior definitions or used unsupported append semantics; stale
+enabled probes then produced `EBUSY` until the cleanup sequence was corrected
+to disable-before-remove.
+
+The R8 model experiment may now proceed with the repository runner. Preserve
+the R7 model-control semantics and the R6/R7 light Linux allocator profile;
+the only intended new observability is the four narrow RM/UVM entry/return
+probe pairs above. Do not add an RM watchdog: if `NV_ERR_NO_MEMORY` appears,
+allow normal startup/READY/soak behavior to continue so functional and host
+classification remain separate.
