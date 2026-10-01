@@ -87,7 +87,31 @@ cleanup_probes() {
         printf '%s\n' "-:${GROUP}/${event}" >>"$tmp"
     done
 
-    write_kprobe_commands "$tmp" >/dev/null 2>&1 || true
+    sudo -n python3 - "$KPROBE_EVENTS" "$tmp" <<'PY' >/dev/null 2>&1 || true
+import os
+import pathlib
+import sys
+
+path = sys.argv[1]
+source = pathlib.Path(sys.argv[2])
+
+for raw in source.read_bytes().splitlines():
+    command = raw.strip()
+    if not command:
+        continue
+
+    try:
+        fd = os.open(path, os.O_WRONLY)
+        try:
+            os.write(fd, command + b"\n")
+        finally:
+            os.close(fd)
+    except OSError:
+        # Cleanup is best-effort per event. A missing event must not prevent
+        # deletion attempts for later stale events from earlier preflights.
+        continue
+PY
+
     rm -f "$tmp"
 }
 
@@ -104,6 +128,10 @@ require_root_timestamp() {
 create_probes() {
     local tmp
     cleanup_probes
+
+    echo "=== stale R8 probes after cleanup ==="
+    sudo -n cat "$KPROBE_EVENTS" | grep -F "$GROUP/" || true
+    echo
 
     tmp="$(mktemp /tmp/h6-r8-kprobe-create.XXXXXX)"
     cat >"$tmp" <<'EOF'
