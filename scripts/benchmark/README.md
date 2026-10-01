@@ -6539,6 +6539,26 @@ FAIL as if instrumentation were neutral. First summarize the preserved R5
 histograms/event phases, then reduce the trace set before attempting a traced
 FAIL comparator.
 
+
+The R5 trace summary further falsifies synchronous compaction/direct reclaim as
+a sufficient failure condition. The traced PASS contained 992 synchronous
+compaction begins and 1,993 direct-reclaim intervals. Normal-zone compaction
+reported tens of thousands of `no_suitable_page` results, including 46,669
+at order 9, yet no RM/host error occurred. Compaction requests were dominated
+by order 4 (9,003), order 6 (3,944), and order 9 (1,586); direct reclaim also
+included 497 order-9 requests.
+
+Task attribution is informative: `VLLM::Worker` generated most compaction
+requests (9,412) and direct reclaim events (1,257), while `UVM GPU1 BH`
+generated another 3,497 compaction requests and 211 direct-reclaim events.
+The extremely high event rate is mostly low-value extfrag/allocation traffic:
+~2.99M extfrag events are alloc_order 0. For a lower-overhead comparator, drop
+raw `mm_page_alloc` entirely and filter `mm_page_alloc_extfrag` to
+`alloc_order >= 4`; keep compaction try/begin/end and direct-reclaim begin/end.
+If still too heavy, further restrict extfrag to `alloc_order >= 6` or
+`change_ownership == 1`. The next objective is sequence attribution around an
+RM failure, not aggregate presence/absence of compaction.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
