@@ -6201,12 +6201,25 @@ Updated classification:
 KV allocation-size boundary                 bracketed between 14 and 16 GiB
 ```
 
-Next use 15 GiB as the midpoint control under the same host/runtime conditions,
-the same live RM watchdog, and the same 180-second post-ready soak. If 15 GiB
-is clean, the observed failure boundary moves to (15,16] GiB; if it reproduces
-the RM failure, the boundary moves to (14,15] GiB. Do not change the managed
-default until this final 1 GiB boundary is measured and repeated stability is
-demonstrated.
+A 15 GiB control container was subsequently discovered already present and
+must be treated as evidence rather than deleted. Its exact command pins
+`--kv-cache-memory-bytes 16106127360` (15 GiB), with the same H6 Hybrid
+profile, MTP k=2, max model length 262144, and PIECEWISE CUDA graphs. The
+container ran for roughly 10m51s, reached the late initialization path,
+reported `reserved 15.0 GiB memory for KV Cache`, produced a 542,060-token
+KV cache (2.07x the configured maximum request length), completed CUDA graph
+capture, and logged engine initialization completion.
+
+The container then exited about six seconds after engine initialization with
+exit code 137 while Docker reported `OOMKilled=false`. This is not enough to
+classify the 15 GiB point: exit 137 is consistent with an external SIGKILL
+(e.g. a watchdog/docker-stop timeout), while `OOMKilled=false` argues against
+a Docker cgroup OOM kill. Preserve the container and recover the host kernel,
+isolated monitor, RM-watchdog marker/log, and Docker event evidence around
+2026-10-01 09:20:40-09:21:10 KST before rerunning or deleting it.
+
+Until that evidence is recovered, keep the measured boundary at 14 GiB PASS
+versus 16 GiB FAIL and mark 15 GiB as UNCLASSIFIED.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
