@@ -6324,12 +6324,51 @@ Observed RM failures now span multiple startup phases and multiple KV settings:
 24 GiB     FAIL
 ```
 
-Stop size bisection. The next investigation is allocator-state correlation:
-extract the instrumented 1-second memory/vmstat and 5-second buddyinfo windows
-around the 14 GiB failure, then compare them with a fresh low-pressure 8 GiB
-control using the same instrumentation. The goal is to identify whether high
-order free blocks, compaction/reclaim activity, swap/pageout behavior, or other
-host allocator state distinguishes a clean run from an RM failure.
+Allocator telemetry around the instrumented 14 GiB failure materially
+narrows the host-side mechanism.
+
+At 11:24:44.814613 KST the RM emitted
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal`. During the preceding ~30 s,
+`MemAvailable` remained roughly 41-44 GiB until the immediate failure window,
+so the host was not globally out of reclaimable memory. In contrast, immediate
+free memory and Normal-zone buddy capacity collapsed sharply around the RM
+failure:
+
+- 11:24:41 buddy snapshot: Normal zone had ~2690 MiB buddy free and order-12
+  blocks available (largest represented block 16 MiB);
+- 11:24:44.713 memory sample: MemFree ~1966 MiB, MemAvailable ~40.4 GiB;
+- 11:24:44.814 RM allocation failure;
+- 11:24:45.719 memory sample: MemFree ~1079 MiB, MemAvailable ~35.9 GiB;
+- 11:24:46 buddy snapshot: Normal zone had only ~581 MiB buddy free and the
+  highest available order had fallen to order 10 (largest represented block
+  4 MiB).
+
+The 39-second vmstat window also shows active reclaim/compaction pressure:
+`allocstall_normal +82`, `allocstall_movable +16`,
+`compact_stall +295`, `compact_fail +85`, `compact_success +210`,
+~32.9 million pages scanned by compaction, ~2.15 million file pages scanned and
+stolen, and 4,879 major faults. Swap-out increased only 679 pages in the same
+window, so swap exhaustion or a large swap-out burst is not the primary
+correlate.
+
+The Normal-zone high-order state is also highly dynamic rather than simply
+monotonically depleted: the highest order moved from 13 to 11 to 12 to 7 to 12
+before the failure and then to 10 immediately after it. This supports a
+transient fragmentation/physical-allocation-pressure interpretation, but does
+not yet prove the exact order or contiguity requirement of the NVIDIA RM
+allocation because buddy snapshots are only 5-second samples and the RM's
+requested allocation geometry is unknown.
+
+Current host-side hypothesis: the RM failure is strongly associated with
+transient depletion/fragmentation of immediately allocatable Normal-zone pages
+under heavy file-cache reclaim/compaction, even while `MemAvailable` remains
+large. This is more specific than generic memory pressure and is consistent
+with the observed phase variability.
+
+Next compare against a fresh instrumented 8 GiB control using the same 1-second
+memory/vmstat and 5-second buddy telemetry. A clean 8 GiB run should show
+whether the same reclaim/compaction and high-order collapse occurs without an
+RM failure, or whether those signals discriminate failing runs.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
