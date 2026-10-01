@@ -79,9 +79,45 @@ for raw in source.read_bytes().splitlines():
 PY
 }
 
+disable_probe_events() {
+    sudo -n python3 - "$TRACEFS" "$GROUP" <<'PY'
+import os
+import pathlib
+import sys
+
+tracefs = pathlib.Path(sys.argv[1])
+group = sys.argv[2]
+
+targets = [tracefs / "events" / group / "enable"]
+group_dir = tracefs / "events" / group
+
+if group_dir.is_dir():
+    targets.extend(sorted(group_dir.glob("*/enable")))
+
+for target in targets:
+    if not target.exists():
+        continue
+    try:
+        fd = os.open(target, os.O_WRONLY)
+        try:
+            os.write(fd, b"0\n")
+        finally:
+            os.close(fd)
+        print(f"DISABLE_OK path={target}")
+    except OSError as exc:
+        print(
+            f"DISABLE_FAIL path={target} "
+            f"errno={exc.errno} message={exc.strerror}"
+        )
+PY
+}
+
 cleanup_probes() {
     local tmp event
     tmp="$(mktemp /tmp/h6-r8-kprobe-cleanup.XXXXXX)"
+
+    echo "=== disable existing R8 probe events ==="
+    disable_probe_events || true
 
     for event in "${PROBE_EVENTS[@]}"; do
         printf '%s\n' "-:${GROUP}/${event}" >>"$tmp"
@@ -131,6 +167,10 @@ for raw in source.read_bytes().splitlines():
         else:
             print(f"CLEANUP_OK event={event} enabled={state}")
     except OSError as exc:
+        if exc.errno == errno.ENOENT:
+            print(f"CLEANUP_ABSENT event={event} enabled={state}")
+            continue
+
         name = errno.errorcode.get(exc.errno, "UNKNOWN")
         print(
             f"CLEANUP_FAIL event={event} enabled={state} "
