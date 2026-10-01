@@ -89,10 +89,31 @@ create_probes() {
 
 verify_probes() {
     local event format
+
+    echo "=== active kprobe definitions ==="
+    sudo -n cat "$KPROBE_EVENTS" | grep -F "$GROUP/" || true
+
+    echo
+    echo "=== dynamic event directories ==="
+    sudo -n find "$TRACEFS/events" -maxdepth 2 -type d \
+        \( -path "*/$GROUP/*" -o -path "*/kprobes/*" \) \
+        -printf '%P\n' 2>/dev/null | sort || true
+
     for event in "${PROBE_EVENTS[@]}"; do
         format="$TRACEFS/events/$GROUP/$event/format"
-        sudo -n test -r "$format" || die "probe format unreadable: $format"
-        echo "PRESENT $GROUP:$event"
+
+        if sudo -n cat "$format" >/dev/null 2>&1; then
+            echo "PRESENT $GROUP:$event"
+            continue
+        fi
+
+        format="$TRACEFS/events/kprobes/$event/format"
+        if sudo -n cat "$format" >/dev/null 2>&1; then
+            echo "PRESENT kprobes:$event"
+            continue
+        fi
+
+        die "probe event not materialized: $event"
     done
 }
 
