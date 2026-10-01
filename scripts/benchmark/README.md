@@ -6466,6 +6466,17 @@ recording compaction/direct-reclaim/extfrag events unfiltered. The resulting
 trace should identify whether the RM error is preceded by a specific high-order
 request, synchronous compaction, fallback fragmentation, or failed reclaim.
 
+The first 14.5 GiB trace attempt was an execution-environment preflight
+failure, not a model or host-memory result. `trace-cmd record --user` invoked
+the control command with an environment in which the shell could not resolve
+even `mkdir`; the base control aborted immediately at line 11, no container
+was created, all trace event counts were zero, and the wall-clock run lasted
+about one second. The outer `trace-cmd` command returned zero, demonstrating
+that its exit status must not be used as the control-script result. Future
+trace runs must explicitly supply HOME/PATH/USER/LOGNAME to the dropped-user
+command and persist the child control exit status separately before accepting
+the run as valid.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
