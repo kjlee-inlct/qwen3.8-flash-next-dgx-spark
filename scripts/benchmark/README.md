@@ -6775,3 +6775,53 @@ available NVIDIA/UVM tracepoints, trace events, and safe observable kernel
 symbols on this exact 6.17/580.178.04 host. Instrumentation should only be
 expanded if a concrete RM/UVM event or symbol can be identified; otherwise
 retain the current light-trace profile to avoid observer effects.
+
+
+### RM/UVM ftrace discovery on 580.178.04
+
+The corrected V3 discovery verified that the current 6.17 / 580.178.04 host
+exposes substantial driver-owned ftrace coverage:
+
+- NVIDIA registered trace events: 1 (`nvidia:nvidia_dev_xid`);
+- `[nvidia]` ftrace-visible functions: 925;
+- `[nvidia_uvm]` ftrace-visible functions: 2,123;
+- broad RM allocation-name candidates: 220;
+- broad UVM allocation/fault-name candidates: 1,159.
+
+Important concrete RM-side symbols include `nv_alloc_pages`,
+`nv_alloc_system_pages`, and `nv_alloc_contig_pages`. On NVIDIA's exact
+580.178.04 open-kernel source, `nv_alloc_pages()` is the top-level system
+memory dispatcher: it creates an allocation object, selects contiguous vs
+non-contiguous allocation, and calls `nv_alloc_contig_pages()` or
+`nv_alloc_system_pages()`. Those lower functions directly use Linux page
+allocation primitives.
+
+The same source also exposes a more interesting UVM-to-RM physical-memory
+boundary: `nvUvmInterfacePmaAllocPages()` calls
+`rm_gpu_ops_pma_alloc_pages()` and returns its `NV_STATUS` unchanged.
+This is closer to UVM/RM GPU physical allocation than the generic Linux VM
+tracepoints used in R6/R7.
+
+On the UVM side, `uvm_gpu_dma_alloc()` directly wraps coherent DMA
+allocation and returns `NV_ERR_NO_MEMORY` on allocation failure.
+`uvm_mem_alloc()` is a higher-level UVM memory allocator. By contrast,
+`mem_get_chunk()` is only a vidmem chunk lookup helper and is not a primary
+probe candidate.
+
+Before R8, validate exact ftrace visibility for a narrow shortlist rather than
+instrumenting hundreds of driver functions. The repository helper is:
+
+`scripts/benchmark/check-rm-uvm-probe-targets.sh`
+
+The preferred first R8 probe set, subject to exact-host visibility, is:
+
+1. `nv_alloc_pages` -- RM system-memory allocation dispatcher;
+2. `nvUvmInterfacePmaAllocPages` / `rm_gpu_ops_pma_alloc_pages` -- UVM to
+   RM PMA boundary;
+3. `uvm_gpu_dma_alloc` -- UVM coherent DMA allocation;
+4. optionally `uvm_mem_alloc` as higher-level UVM context.
+
+Keep the existing R6/R7 Linux allocator trace profile unchanged and add only
+the minimum driver probes required to distinguish whether the failing
+`_memdescAllocInternal` event corresponds to system-memory, PMA, or UVM DMA
+allocation. Do not add broad function tracing.
