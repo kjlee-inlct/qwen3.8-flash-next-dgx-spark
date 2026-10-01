@@ -48,6 +48,21 @@ PROBE_EVENTS=(
     "uvm_pmm_alloc_ret"
 )
 
+write_kprobe_control() {
+    sudo -n python3 - "$KPROBE_EVENTS" <<'PY'
+import os
+import sys
+
+path = sys.argv[1]
+data = sys.stdin.buffer.read()
+fd = os.open(path, os.O_WRONLY)
+try:
+    os.write(fd, data)
+finally:
+    os.close(fd)
+PY
+}
+
 cleanup_probes() {
     local tmp event
     tmp="$(mktemp /tmp/h6-r8-kprobe-cleanup.XXXXXX)"
@@ -56,7 +71,23 @@ cleanup_probes() {
         printf '%s\n' "-:${GROUP}/${event}" >>"$tmp"
     done
 
-    sudo -n dd if="$tmp" of="$KPROBE_EVENTS" status=none 2>/dev/null || true
+    if [[ -s "$tmp" ]]; then
+        sudo -n python3 - "$KPROBE_EVENTS" "$tmp" <<'PY' 2>/dev/null || true
+import os
+import pathlib
+import sys
+
+path = sys.argv[1]
+src = pathlib.Path(sys.argv[2])
+data = src.read_bytes()
+fd = os.open(path, os.O_WRONLY)
+try:
+    os.write(fd, data)
+finally:
+    os.close(fd)
+PY
+    fi
+
     rm -f "$tmp"
 }
 
@@ -86,7 +117,24 @@ p:r8_rmuvm/uvm_pmm_alloc_entry uvm_pmm_gpu_alloc_kernel num_chunks=$arg2:u64 chu
 r:r8_rmuvm/uvm_pmm_alloc_ret uvm_pmm_gpu_alloc_kernel ret=$retval:u32
 EOF
 
-    if ! sudo -n dd if="$tmp" of="$KPROBE_EVENTS" status=none; then
+    if ! sudo -n python3 - "$KPROBE_EVENTS" "$tmp" <<'PY'
+import os
+import pathlib
+import sys
+
+path = sys.argv[1]
+src = pathlib.Path(sys.argv[2])
+data = src.read_bytes()
+fd = os.open(path, os.O_WRONLY)
+try:
+    written = os.write(fd, data)
+finally:
+    os.close(fd)
+
+if written != len(data):
+    raise SystemExit(f"short kprobe control write: {written}/{len(data)}")
+PY
+    then
         rm -f "$tmp"
         die "failed to install R8 kprobe definitions"
     fi
