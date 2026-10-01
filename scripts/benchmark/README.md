@@ -6231,10 +6231,37 @@ Updated classification:
 KV allocation-size boundary                 bracketed between 14 and 15 GiB
 ```
 
-Next use 14.5 GiB (15569256448 bytes) as the midpoint under the same host and
-runtime conditions. Preserve the 180-second post-ready soak and complete
-kernel-window scan. The 15 GiB evidence is now captured, so the stopped 15 GiB
-control container may be removed before starting the 14.5 GiB control.
+The isolated 14.5 GiB midpoint control failed before readiness:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- only `--kv-cache-memory-bytes` changed to 15569256448 (14.5 GiB);
+- at 10:55:10.918298 KST the live kernel watchdog captured
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- the watchdog immediately stopped the control container;
+- health was never reached, so the post-ready soak was skipped;
+- the complete kernel window contains the same RM allocation failure;
+- the container exited 137 with `OOMKilled=false`, consistent with watchdog
+  cleanup rather than a cgroup OOM kill;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+14 GiB isolated Hybrid host stability       PASS
+14.5 GiB isolated Hybrid host stability     FAIL (NV_ERR_NO_MEMORY before READY)
+15 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 14.0 and 14.5 GiB
+```
+
+Next use 14.25 GiB (15300820992 bytes) under the same host/runtime conditions,
+the same live RM watchdog, and the same 180-second post-ready soak. If it
+passes, the boundary narrows to (14.25,14.5] GiB; if it fails, the boundary
+narrows to (14.0,14.25] GiB. Do not change the managed default yet.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
