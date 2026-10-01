@@ -87,32 +87,63 @@ cleanup_probes() {
         printf '%s\n' "-:${GROUP}/${event}" >>"$tmp"
     done
 
-    sudo -n python3 - "$KPROBE_EVENTS" "$tmp" <<'PY' >/dev/null 2>&1 || true
+    sudo -n python3 - "$KPROBE_EVENTS" "$TRACEFS" "$GROUP" "$tmp" <<'PY'
+import errno
 import os
 import pathlib
 import sys
 
 path = sys.argv[1]
-source = pathlib.Path(sys.argv[2])
+tracefs = pathlib.Path(sys.argv[2])
+group = sys.argv[3]
+source = pathlib.Path(sys.argv[4])
+
+failed = 0
 
 for raw in source.read_bytes().splitlines():
     command = raw.strip()
     if not command:
         continue
 
+    event = command.decode(errors="replace").split("/", 1)[-1]
+    enabled = tracefs / "events" / group / event / "enable"
+
+    state = "NA"
+    try:
+        state = enabled.read_text().strip()
+    except OSError as exc:
+        state = f"ERR:{exc.errno}"
+
     try:
         fd = os.open(path, os.O_WRONLY)
         try:
-            os.write(fd, command + b"\n")
+            written = os.write(fd, command + b"\n")
         finally:
             os.close(fd)
-    except OSError:
-        # Cleanup is best-effort per event. A missing event must not prevent
-        # deletion attempts for later stale events from earlier preflights.
-        continue
+
+        expected = len(command) + 1
+        if written != expected:
+            print(
+                f"CLEANUP_SHORT event={event} enabled={state} "
+                f"written={written}/{expected}"
+            )
+            failed += 1
+        else:
+            print(f"CLEANUP_OK event={event} enabled={state}")
+    except OSError as exc:
+        name = errno.errorcode.get(exc.errno, "UNKNOWN")
+        print(
+            f"CLEANUP_FAIL event={event} enabled={state} "
+            f"errno={exc.errno}({name}) message={exc.strerror}"
+        )
+        failed += 1
+
+raise SystemExit(1 if failed else 0)
 PY
+    local rc=$?
 
     rm -f "$tmp"
+    return "$rc"
 }
 
 die() {
@@ -127,11 +158,22 @@ require_root_timestamp() {
 
 create_probes() {
     local tmp
+
+    echo "=== cleanup existing R8 probes ==="
+    set +e
     cleanup_probes
+    local cleanup_rc=$?
+    set -e
+    echo "cleanup.rc=$cleanup_rc"
+    echo
 
     echo "=== stale R8 probes after cleanup ==="
     sudo -n cat "$KPROBE_EVENTS" | grep -F "$GROUP/" || true
     echo
+
+    if sudo -n cat "$KPROBE_EVENTS" | grep -Fq "$GROUP/"; then
+        die "stale R8 probes remain after cleanup; see CLEANUP_FAIL diagnostics above"
+    fi
 
     tmp="$(mktemp /tmp/h6-r8-kprobe-create.XXXXXX)"
     cat >"$tmp" <<'EOF'
