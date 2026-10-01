@@ -49,11 +49,15 @@ PROBE_EVENTS=(
 )
 
 cleanup_probes() {
-    local event
+    local tmp event
+    tmp="$(mktemp /tmp/h6-r8-kprobe-cleanup.XXXXXX)"
+
     for event in "${PROBE_EVENTS[@]}"; do
-        printf '%s\n' "-:${GROUP}/${event}" |
-            sudo -n tee -a "$KPROBE_EVENTS" >/dev/null 2>&1 || true
+        printf '%s\n' "-:${GROUP}/${event}" >>"$tmp"
     done
+
+    sudo -n dd if="$tmp" of="$KPROBE_EVENTS" status=none 2>/dev/null || true
+    rm -f "$tmp"
 }
 
 die() {
@@ -66,25 +70,28 @@ require_root_timestamp() {
         die "sudo timestamp unavailable; run sudo -v first"
 }
 
-add_probe() {
-    local spec="$1"
-    printf '%s\n' "$spec" | sudo -n tee -a "$KPROBE_EVENTS" >/dev/null
-}
-
 create_probes() {
+    local tmp
     cleanup_probes
 
-    add_probe 'p:r8_rmuvm/nv_alloc_pages_entry nv_alloc_pages page_count=$arg2:u32 page_size=$arg3:u64 contiguous=$arg4:u8'
-    add_probe 'r:r8_rmuvm/nv_alloc_pages_ret nv_alloc_pages ret=$retval:u32'
+    tmp="$(mktemp /tmp/h6-r8-kprobe-create.XXXXXX)"
+    cat >"$tmp" <<'EOF'
+p:r8_rmuvm/nv_alloc_pages_entry nv_alloc_pages page_count=$arg2:u32 page_size=$arg3:u64 contiguous=$arg4:u8
+r:r8_rmuvm/nv_alloc_pages_ret nv_alloc_pages ret=$retval:u32
+p:r8_rmuvm/pma_alloc_entry nvUvmInterfacePmaAllocPages page_count=$arg2:u64 page_size=$arg3:u64
+r:r8_rmuvm/pma_alloc_ret nvUvmInterfacePmaAllocPages ret=$retval:u32
+p:r8_rmuvm/uvm_dma_alloc_entry uvm_gpu_dma_alloc size=$arg1:u64 gfp=$arg3:u64
+r:r8_rmuvm/uvm_dma_alloc_ret uvm_gpu_dma_alloc ret=$retval:u32
+p:r8_rmuvm/uvm_pmm_alloc_entry uvm_pmm_gpu_alloc_kernel num_chunks=$arg2:u64 chunk_size=$arg3:u64 flags=$arg4:u32
+r:r8_rmuvm/uvm_pmm_alloc_ret uvm_pmm_gpu_alloc_kernel ret=$retval:u32
+EOF
 
-    add_probe 'p:r8_rmuvm/pma_alloc_entry nvUvmInterfacePmaAllocPages page_count=$arg2:u64 page_size=$arg3:u64'
-    add_probe 'r:r8_rmuvm/pma_alloc_ret nvUvmInterfacePmaAllocPages ret=$retval:u32'
+    if ! sudo -n dd if="$tmp" of="$KPROBE_EVENTS" status=none; then
+        rm -f "$tmp"
+        die "failed to install R8 kprobe definitions"
+    fi
 
-    add_probe 'p:r8_rmuvm/uvm_dma_alloc_entry uvm_gpu_dma_alloc size=$arg1:u64 gfp=$arg3:u64'
-    add_probe 'r:r8_rmuvm/uvm_dma_alloc_ret uvm_gpu_dma_alloc ret=$retval:u32'
-
-    add_probe 'p:r8_rmuvm/uvm_pmm_alloc_entry uvm_pmm_gpu_alloc_kernel num_chunks=$arg2:u64 chunk_size=$arg3:u64 flags=$arg4:u32'
-    add_probe 'r:r8_rmuvm/uvm_pmm_alloc_ret uvm_pmm_gpu_alloc_kernel ret=$retval:u32'
+    rm -f "$tmp"
 }
 
 verify_probes() {
