@@ -6825,3 +6825,40 @@ Keep the existing R6/R7 Linux allocator trace profile unchanged and add only
 the minimum driver probes required to distinguish whether the failing
 `_memdescAllocInternal` event corresponds to system-memory, PMA, or UVM DMA
 allocation. Do not add broad function tracing.
+
+
+The exact-host R8 probe-target validation has now completed. On the live
+6.17.0-1032-nvidia / 580.178.04 host the following targets are ftrace-visible:
+
+- `nv_alloc_pages [nvidia]`: PRESENT;
+- `nv_alloc_system_pages [nvidia]`: PRESENT;
+- `nv_alloc_contig_pages [nvidia]`: PRESENT;
+- `nvUvmInterfacePmaAllocPages [nvidia]`: PRESENT;
+- `uvm_gpu_dma_alloc [nvidia_uvm]`: PRESENT;
+- `uvm_mem_alloc [nvidia_uvm]`: PRESENT;
+- `uvm_pmm_gpu_alloc_kernel [nvidia_uvm]`: PRESENT;
+- `replayable_faults_isr_bottom_half [nvidia_uvm]`: PRESENT.
+
+`rm_gpu_ops_pma_alloc_pages [nvidia]` itself is not ftrace-visible on this
+build. This does not block PMA-boundary observation: in NVIDIA's exact
+580.178.04 open-kernel source, the visible exported
+`nvUvmInterfacePmaAllocPages()` allocates an RM stack, calls
+`rm_gpu_ops_pma_alloc_pages()`, and returns that `NV_STATUS` unchanged.
+It is therefore the preferred low-overhead PMA boundary probe.
+
+R8 should add only four driver paths to the existing R6/R7 light allocator
+profile:
+
+1. `nv_alloc_pages` entry/return, capturing page count, page size,
+   contiguous flag, and return status;
+2. `nvUvmInterfacePmaAllocPages` entry/return, capturing PMA page count,
+   page size, and return status;
+3. `uvm_gpu_dma_alloc` entry/return, capturing size, GFP flags, and return
+   status;
+4. `uvm_pmm_gpu_alloc_kernel` entry/return, capturing chunk count, chunk
+   size, flags, and return status.
+
+Do not enable broad function tracing. The repository R8 runner derives its
+model-control child from the preserved validated local R7 child so the serving
+logic remains unchanged, and supports a probe-only `--preflight` mode before
+any model run.
