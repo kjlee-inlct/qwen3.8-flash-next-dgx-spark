@@ -6396,10 +6396,19 @@ those telemetry files for truncating output before the base control script
 failed its precondition on the already-existing stopped container. As a
 result, the comparator correctly produced no 8 GiB samples.
 
-Repeat the 8 GiB instrumented comparator once using a new container name, port,
-and evidence directory so the original PASS evidence is never overwritten.
-Then rerun the same phase-aligned comparator against the preserved 14 GiB FAIL
-telemetry.
+The replacement 8 GiB R2 comparator had in fact already completed
+successfully before the later wrapper invocation was rejected by the new
+evidence-protection guard. The preserved R2 container used the intended
+8 GiB KV setting (8589934592 bytes), exited cleanly with code 0 and
+`OOMKilled=false`, completed engine initialization, served `/health`
+successfully, and shut down normally after the soak/control sequence.
+
+The R2 high-frequency telemetry is intact in
+`/tmp/hybrid-6.17-kv8-instrumented-r2-20261001`:
+`memory-1s.log` (~382 KiB), `vmstat-1s.log` (~867 KiB), and
+`buddyinfo-5s.log` (~50 KiB), together with complete container and kernel
+logs. Do not rerun or delete this comparator. Use these preserved R2 files for
+the phase-aligned 8 GiB PASS vs 14 GiB FAIL allocator comparison.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
