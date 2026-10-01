@@ -6519,6 +6519,26 @@ test was started by that invocation. Treat the pre-existing container and
 until inspected; do not delete or rerun R5 before checking container state,
 timestamps, arguments, logs, and evidence files.
 
+
+Inspection confirms that the pre-existing R5 is a valid completed trace run,
+not stale state. The container used the intended 14.5 GiB KV setting
+(15569256448 bytes), completed model load and KV reservation, reached API
+health, survived the 180 s post-ready soak, and exited cleanly with code 0 and
+`OOMKilled=false`. The outer kernel window contains no matched RM/host
+failure signal, so this run is FUNCTIONAL PASS / HOST PASS.
+
+This is also important evidence against a deterministic 14.5 GiB boundary:
+previous 14.5 GiB controls failed in different startup phases, while this one
+passed. However, the trace instrumentation was extremely heavy:
+`allocator-trace.dat` is ~27 MiB and the decoded text is ~994 MiB, with about
+3.24M `mm_page_alloc_extfrag` events, 2.64M filtered `mm_page_alloc`
+events, 296k `mm_compaction_finished` events, 14.6k compaction requests, and
+~2k direct-reclaim intervals. Because this event volume can perturb startup
+timing, do not compare this traced PASS directly against the prior untraced
+FAIL as if instrumentation were neutral. First summarize the preserved R5
+histograms/event phases, then reduce the trace set before attempting a traced
+FAIL comparator.
+
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
 host-stability gate passes.
