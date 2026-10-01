@@ -220,12 +220,35 @@ grep -F 'CTRL_KV=17179869184' "$R8_CHILD" >/dev/null ||
 grep -F 'OUT="/tmp/hybrid-6.17-kv16-rmuvm-r8-20261001"' "$R8_CHILD" >/dev/null ||
     die "R8 evidence verification failed"
 
-if grep -Eq '\bsudo\b' "$R8_CHILD"; then
+if grep -Eq '(^|[^[:alnum:]_])sudo([^[:alnum:]_]|$)' "$R8_CHILD"; then
     die "R8 child unexpectedly contains sudo"
 fi
 
 TMP="$(mktemp -d /tmp/h6-kv16-r8-outer.XXXXXX)"
-trap 'cleanup_probes; rm -rf "$TMP"' EXIT
+
+SUDO_KEEPALIVE_PID=""
+
+sudo_keepalive() {
+    while sudo -n true >/dev/null 2>&1; do
+        sleep 60
+    done
+}
+
+cleanup_outer() {
+    cleanup_probes
+
+    if [[ -n "$SUDO_KEEPALIVE_PID" ]]; then
+        kill "$SUDO_KEEPALIVE_PID" >/dev/null 2>&1 || true
+        wait "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+    fi
+
+    echo "R8_OUTER_EVIDENCE_PRESERVED=$TMP"
+}
+
+trap cleanup_outer EXIT
+
+sudo_keepalive &
+SUDO_KEEPALIVE_PID=$!
 
 START_EPOCH="$(date +%s.%N)"
 printf '%s\n' "$START_EPOCH" >"$TMP/start-epoch.txt"
