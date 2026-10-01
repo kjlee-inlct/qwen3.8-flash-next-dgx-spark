@@ -6295,14 +6295,41 @@ Current interpretation:
 24 GiB              FAIL
 ```
 
-Do not continue simple size bisection yet. First repeat the 14.0 GiB control
-with higher-frequency host allocation telemetry around the entire startup
-window. The purpose is to determine whether the previously passing point is
-repeatably stable and to correlate any RM failure with free/available memory,
-swap activity, fragmentation/buddy state, and relevant kernel allocator state.
-If 14.0 GiB remains clean across repeated cold starts while 14.5 GiB continues
-to fail, size is still a useful pressure control variable even though the exact
-failure phase is non-deterministic.
+The instrumented 14.0 GiB repeat did **not** remain stable. It reproduced the
+same host NVIDIA RM allocation failure at 11:24:44.814613 KST. The failure
+occurred as checkpoint loading completed: the run logged 100% of 81 shards and
+`Loading weights took 487.34 seconds`, but it never reached the explicit KV
+reservation/capacity messages. The watchdog stopped the container before
+readiness; Docker reported exit 137 with `OOMKilled=false`.
+
+Immediately before the RM error the monitor still showed tens of GiB of
+reclaimable/available memory (about 41.9 GiB at 11:24:43), while immediately
+free memory was only a few GiB and then fell to roughly 1 GiB. The monitor
+remained at `protect=0/3`, so the stop was caused by the independent RM-error
+watchdog, not the memory policy.
+
+This falsifies the working model that 14.0 GiB is a repeatably stable point and
+that a monotonic KV-cache-size threshold lies between 14.0 and 14.5 GiB.
+Observed RM failures now span multiple startup phases and multiple KV settings:
+
+```text
+8 GiB      PASS (complete run)
+12 GiB     PASS (complete run)
+14 GiB #1  PASS (complete run)
+14 GiB #2  FAIL at end of weight loading, before explicit KV reservation
+14.5 #1    FAIL during shard loading
+14.5 #2    FAIL ~0.82 s after explicit KV reservation
+15 GiB     FAIL during late initialization
+16 GiB     FAIL during late initialization
+24 GiB     FAIL
+```
+
+Stop size bisection. The next investigation is allocator-state correlation:
+extract the instrumented 1-second memory/vmstat and 5-second buddyinfo windows
+around the 14 GiB failure, then compare them with a fresh low-pressure 8 GiB
+control using the same instrumentation. The goal is to identify whether high
+order free blocks, compaction/reclaim activity, swap/pageout behavior, or other
+host allocator state distinguishes a clean run from an RM failure.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
