@@ -6573,10 +6573,23 @@ reserved the intended 15.0 GiB KV cache, completed CUDA graph capture and
 engine initialization, started the API server, and returned HTTP 200 from
 `/health`. It then completed the configured 180 s post-ready soak, returned
 HTTP 200 from `/v1/models`, and performed the expected clean shutdown. The
-container ended with exit code 0 and `OOMKilled=false`. This establishes a
-functional PASS for the 15 GiB R6 light-trace run. Host-stability classification
-still depends on the outer kernel-window and trace summary files; the expected
-post-shutdown health probe returning connection failure is not a test failure.
+container ended with exit code 0 and `OOMKilled=false`.
+
+Final evidence confirms a full PASS: `control.rc=0`,
+`functional.result=FUNCTIONAL_PASS`, the wall-clock and monotonic kernel
+error files are both empty, and `rm-trace-window.txt` contains
+`NO_RM_ERROR`. The light trace preserved 18,739 compaction requests, 18,436
+compaction begin/end pairs, 2,484 direct-reclaim begin/end pairs, and 227,933
+filtered extfrag events. The decoded trace is ~52 MiB versus ~994 MiB for R5,
+so the reduced profile lowers trace volume by roughly 19x while retaining the
+allocator signals of interest.
+
+This result confirms that 15 GiB is not a deterministic failure boundary:
+the earlier untraced 15 GiB control hit an RM allocation failure, while this
+light-traced 15 GiB run reached READY, survived the full soak, and completed
+without any matched host/GPU failure signal. The working hypothesis should
+therefore focus on timing-sensitive allocator/RM/UVM state interactions rather
+than a fixed KV-capacity threshold.
 
 Do not continue to the mazinb live-switch leg until the exact #246 trigger is
 identified, any required repair is merged and promoted, and the Hybrid
