@@ -6548,6 +6548,14 @@ at order 9, yet no RM/host error occurred. Compaction requests were dominated
 by order 4 (9,003), order 6 (3,944), and order 9 (1,586); direct reclaim also
 included 497 order-9 requests.
 
+
+Most order-9 activity is THP-related rather than evidence of an RM-specific
+order-9 request: 1,549/1,586 (~97.7%) order-9 compaction requests use
+`GFP_TRANSHUGE*`, and 488/497 (~98.2%) order-9 direct-reclaim requests do
+the same. This materially weakens the earlier interpretation that order-9
+buddy depletion identifies the RM allocation geometry. Treat order-9 pressure
+as mostly THP noise unless a future RM-correlated sequence shows otherwise.
+
 Task attribution is informative: `VLLM::Worker` generated most compaction
 requests (9,412) and direct reclaim events (1,257), while `UVM GPU1 BH`
 generated another 3,497 compaction requests and 211 direct-reclaim events.
