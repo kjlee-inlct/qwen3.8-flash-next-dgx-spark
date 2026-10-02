@@ -204,3 +204,44 @@ handling now prints:
 
 A separate read-only collector can recover the same lifecycle, monitor, Docker,
 and kernel evidence after a run without starting or stopping the model.
+
+## Next mitigation experiment: mazinb KV 24 GiB vs 16 GiB
+
+The failed managed activation does not prove that the configured 24 GiB KV
+cache caused the RM event. It does establish a useful temporal sequence: vLLM
+reserved 24 GiB for KV, the startup then entered its final warmup/graph-capture
+phase, the kernel emitted `NV_ERR_NO_MEMORY`, and the safety monitor protected
+the host seconds later. KV size is therefore a bounded mitigation variable worth
+isolating before changing the checkpoint, PLE mmap path, or driver.
+
+The repository now provides `scripts/runtime/mazinb-kv-ab.sh` for a controlled
+first-stage experiment:
+
+- A: 24 GiB, the current mazinb default/control;
+- B: 16 GiB, the reduced-KV candidate;
+- every other mazinb runtime control is pinned to the failed attempt;
+- the managed service and canonical container must remain stopped;
+- temporary container names and monitor state are isolated from managed state;
+- the memory safety monitor remains enabled in protect mode; and
+- the helper records container, monitor, and kernel RM/OOM evidence for the
+  exact case window.
+
+Run B first. B is accepted as `FUNCTIONAL PASS / HOST-STABILITY PASS` only if
+it reaches `/health`, exposes the expected mazinb served-model identity,
+completes a 180-second soak, avoids a protected stop, avoids Docker
+`OOMKilled=true`, and has no kernel `NV_ERR_NO_MEMORY` in the case window.
+
+Interpretation is intentionally asymmetric:
+
+- if B reproduces the RM/protected-stop failure, 16 GiB is not a sufficient
+  mitigation and A need not be rerun;
+- if B passes the strict gate, run A with the same helper to remove the
+  managed-vs-temporary lifecycle difference and establish a controlled KV-size
+  contrast; and
+- if B becomes functionally ready but still logs `NV_ERR_NO_MEMORY`, it remains
+  a host-stability failure under the current strict policy.
+
+A B-case pass would be mitigation evidence only. It would not retroactively
+change this managed activation result and would not qualify the managed
+Hybrid -> mazinb leg until the selected KV value is promoted into the managed
+profile and that managed transition is rerun successfully.
