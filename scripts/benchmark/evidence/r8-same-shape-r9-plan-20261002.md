@@ -105,9 +105,8 @@ were silent throughout R8.
 
 ## Tooling gate before any R9 model run
 
-Repository preflight:
-
-`scripts/runtime/check-h6-r9-rmsys-probes.sh`
+Repository preflight helper: `check-h6-r9-rmsys-probes.sh` in the runtime
+category.
 
 The preflight starts no model. It validates:
 
@@ -121,3 +120,24 @@ The preflight starts no model. It validates:
 
 Do not run the full R9 model experiment until this preflight reports
 `R9_RMSYS_PROBE_PREFLIGHT=PASS`.
+
+### First live R9 preflight attempt — NO TEST
+
+The first live preflight did not start a model. It successfully installed and
+materialized all four dynamic RM sysmem events, including the
+`nv_alloc_pages` entry definition carrying `$arg8` as `node_id`. It then
+reported the first compaction trace event as missing.
+
+That failure was a preflight permission-check bug rather than evidence that the
+kernel trace event is absent. Dynamic event formats were read through `sudo`,
+while static event formats were tested with a non-privileged shell `-r` check.
+On the live tracefs mount those format files require privileged reads, so the
+static check falsely reported them as missing. The captured-field display was
+also empty because its parser required `field:` at column zero even though the
+trace format uses indentation.
+
+The helper now performs privileged reads for static event verification, prints
+an event lookup only on a real failure, tolerates field indentation, and
+asserts all seven intended `nv_alloc_pages` policy/shape fields before the
+trace-cmd smoke test. This attempt remains **NO TEST / PREFLIGHT FAIL** and does
+not change the R8 model classification.
