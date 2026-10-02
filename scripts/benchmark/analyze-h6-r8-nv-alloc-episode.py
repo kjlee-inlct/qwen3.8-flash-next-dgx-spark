@@ -4,15 +4,17 @@
 This script reads only the already-decoded R8 trace and kernel monotonic log.
 It does not rerun the model and does not mutate the original trace evidence.
 
-It pairs nv_alloc_pages entry/return events per thread, identifies the call
-spanning the first RM NV_ERR_NO_MEMORY log, the first failed outer call after
-that log, and the immediate next call on the same thread.  For each selected
-call interval it summarizes Linux compaction/reclaim/extfrag activity.
+The exact NVIDIA 580.178.04 open-kernel source matters for interpretation:
+for non-contiguous nv_alloc_pages(), page_count becomes at->num_pages while
+page_size selects at->order via get_order(page_size).  nv_alloc_system_pages()
+then allocates enough PAGE_SIZE<<order chunks to cover at->num_pages*PAGE_SIZE.
+Therefore page_count*page_size is NOT the total request size.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -65,13 +67,27 @@ class NvAllocCall:
     def duration(self) -> float:
         return self.end - self.start
 
-    @property
-    def logical_bytes(self) -> int:
-        return self.page_count * self.page_size
+    def total_bytes(self, host_page_size: int) -> int:
+        # Mirrors nv_alloc_system_pages(): at->num_pages * PAGE_SIZE.
+        return self.page_count * host_page_size
 
-    @property
-    def logical_gib(self) -> float:
-        return self.logical_bytes / (1024**3)
+    def total_gib(self, host_page_size: int) -> float:
+        return self.total_bytes(host_page_size) / (1024**3)
+
+    def allocation_order(self, host_page_size: int) -> int:
+        """Approximate Linux get_order(page_size) for the live base PAGE_SIZE."""
+        if self.page_size <= host_page_size:
+            return 0
+        pages = (self.page_size + host_page_size - 1) // host_page_size
+        return (pages - 1).bit_length()
+
+    def allocation_chunk_bytes(self, host_page_size: int) -> int:
+        return host_page_size << self.allocation_order(host_page_size)
+
+    def allocation_chunk_count(self, host_page_size: int) -> int:
+        total = self.total_bytes(host_page_size)
+        chunk = self.allocation_chunk_bytes(host_page_size)
+        return (total + chunk - 1) // chunk
 
 
 def parse_int(raw: str) -> int:
@@ -114,8 +130,6 @@ def first_rm_timestamp(path: Path) -> tuple[float, str]:
 
 
 def pair_nv_alloc_calls(events: list[Event]) -> list[NvAllocCall]:
-    # nv_alloc_pages is not expected to recurse on the same task, but a stack
-    # also handles that case correctly for kretprobe pairing.
     stacks: dict[int, list[Event]] = defaultdict(list)
     calls: list[NvAllocCall] = []
 
@@ -124,16 +138,12 @@ def pair_nv_alloc_calls(events: list[Event]) -> list[NvAllocCall]:
             stacks[event.pid].append(event)
             continue
 
-        if event.name != "nv_alloc_pages_ret":
-            continue
-
-        if not stacks[event.pid]:
+        if event.name != "nv_alloc_pages_ret" or not stacks[event.pid]:
             continue
 
         entry = stacks[event.pid].pop()
         entry_fields = parse_fields(entry.body)
         ret_fields = parse_fields(event.body)
-
         required = ("page_count", "page_size", "contiguous")
         if any(key not in entry_fields for key in required) or "ret" not in ret_fields:
             continue
@@ -209,16 +219,20 @@ def extfrag_stats(events: list[Event]) -> dict[str, object]:
 def fmt_counter(counter: Counter[object], limit: int = 12) -> str:
     if not counter:
         return "NONE"
-    return ", ".join(
-        f"{key}={value}" for key, value in counter.most_common(limit)
-    )
+    return ", ".join(f"{key}={value}" for key, value in counter.most_common(limit))
 
 
 def events_between(events: list[Event], start: float, end: float) -> list[Event]:
     return [event for event in events if start <= event.ts <= end]
 
 
-def print_call(label: str, call: NvAllocCall, rm_ts: float, events: list[Event]) -> None:
+def print_call(
+    label: str,
+    call: NvAllocCall,
+    rm_ts: float,
+    events: list[Event],
+    host_page_size: int,
+) -> None:
     interval = events_between(events, call.start, call.end)
     names = Counter(event.name for event in interval)
     compaction_orders = order_hist(interval, "mm_compaction_try_to_compact_pages")
@@ -231,9 +245,13 @@ def print_call(label: str, call: NvAllocCall, rm_ts: float, events: list[Event])
     print(f"end={call.end:.6f} delta_from_rm={call.end - rm_ts:+.9f}s")
     print(f"duration_ms={call.duration * 1000:.3f}")
     print(f"page_count={call.page_count}")
-    print(f"page_size={call.page_size}")
-    print(f"logical_bytes={call.logical_bytes}")
-    print(f"logical_gib={call.logical_gib:.6f}")
+    print(f"requested_page_size={call.page_size}")
+    print(f"host_page_size={host_page_size}")
+    print(f"total_bytes_page_count_x_PAGE_SIZE={call.total_bytes(host_page_size)}")
+    print(f"total_gib={call.total_gib(host_page_size):.6f}")
+    print(f"derived_get_order={call.allocation_order(host_page_size)}")
+    print(f"allocation_chunk_bytes={call.allocation_chunk_bytes(host_page_size)}")
+    print(f"allocation_chunk_count={call.allocation_chunk_count(host_page_size)}")
     print(f"contiguous={call.contiguous}")
     print(f"ret=0x{call.ret:x}({call.ret})")
     print(f"spans_rm={'YES' if call.start <= rm_ts <= call.end else 'NO'}")
@@ -277,7 +295,16 @@ def main() -> int:
         default=DEFAULT_OUT,
         help="preserved R8 evidence directory",
     )
+    parser.add_argument(
+        "--host-page-size",
+        type=int,
+        default=os.sysconf("SC_PAGE_SIZE"),
+        help="live host base PAGE_SIZE; defaults to os.sysconf(SC_PAGE_SIZE)",
+    )
     args = parser.parse_args()
+
+    if args.host_page_size <= 0 or args.host_page_size & (args.host_page_size - 1):
+        raise SystemExit("host page size must be a positive power of two")
 
     out: Path = args.evidence
     trace_path = out / "allocator-trace.txt"
@@ -300,6 +327,7 @@ def main() -> int:
 
     print("=== R8 NV_ALLOC EPISODE ANALYSIS ===")
     print(f"evidence={out}")
+    print(f"host_page_size={args.host_page_size}")
     print(f"parsed_trace_events={len(events)}")
     print(f"paired_nv_alloc_calls={len(calls)}")
     print(f"rm_monotonic={rm_ts:.6f}")
@@ -309,8 +337,6 @@ def main() -> int:
     selected: list[tuple[str, NvAllocCall]] = []
 
     if spanning:
-        # If multiple tasks span the timestamp, prefer the VLLM worker and then
-        # the call whose interval is tightest around the RM event.
         spanning_call = min(
             spanning,
             key=lambda call: (
@@ -326,7 +352,6 @@ def main() -> int:
     if failed_after:
         failure = min(failed_after, key=lambda call: call.start)
         selected.append(("FIRST_FAILED_NV_ALLOC_AFTER_RM", failure))
-
         next_same_thread = [
             call for call in calls
             if call.pid == failure.pid and call.start > failure.end
@@ -343,7 +368,7 @@ def main() -> int:
         print()
 
     for label, call in selected:
-        print_call(label, call, rm_ts, events)
+        print_call(label, call, rm_ts, events, args.host_page_size)
 
     print("=== CALLS WITHIN RM +/-1s ===")
     near = [
@@ -356,25 +381,28 @@ def main() -> int:
             f"start_delta={call.start-rm_ts:+.6f}s "
             f"end_delta={call.end-rm_ts:+.6f}s "
             f"duration_ms={call.duration*1000:.3f} "
-            f"count={call.page_count} page_size={call.page_size} "
-            f"gib={call.logical_gib:.6f} contig={call.contiguous} "
-            f"ret=0x{call.ret:x}"
+            f"count={call.page_count} requested_page_size={call.page_size} "
+            f"total_gib={call.total_gib(args.host_page_size):.6f} "
+            f"order={call.allocation_order(args.host_page_size)} "
+            f"chunks={call.allocation_chunk_count(args.host_page_size)} "
+            f"contig={call.contiguous} ret=0x{call.ret:x}"
         )
 
     print()
     print("=== INTERPRETATION GUARDS ===")
     print(
-        "logical_gib is page_count * page_size from the public nv_alloc_pages "
-        "API arguments; it describes the outer request represented by this probe."
+        "For non-contiguous NVIDIA sysmem allocation, total bytes are "
+        "page_count * host PAGE_SIZE. requested_page_size selects get_order() "
+        "and therefore the physical allocation chunk granularity."
+    )
+    print(
+        "Calls with identical page_count but different requested_page_size "
+        "represent the same total byte count on a fixed host PAGE_SIZE, while "
+        "their allocation order/chunk count can differ."
     )
     print(
         "A kernel _memdescAllocInternal log that occurs while an outer call is "
         "in flight must not be assumed to be that outer call's final return."
-    )
-    print(
-        "Likewise, a later call with the same page_count but a different page_size "
-        "must not be called an equivalent retry unless deeper RM source evidence "
-        "establishes that relationship."
     )
 
     return 0
