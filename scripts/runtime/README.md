@@ -85,3 +85,17 @@ Use the stable operator entry point instead of hand-written polling loops:
 ```
 
 Experimental containers can use the same helper by changing `--container`. The waiter exits early if the container stops and prints recent logs; otherwise it waits for both `/health` and the expected `/v1/models` entry.
+
+## Managed readiness failure diagnostics
+
+The systemd installer path waits for a replacement runtime to become healthy, expose the expected served-model identity, and write a matching runtime-commit attestation. If the managed service becomes inactive before that boundary, or the 30-minute readiness window expires, `scripts/manage-service.sh` prints failure context before returning an error.
+
+The diagnostic block includes:
+
+- systemd `ActiveState`, `SubState`, `Result`, `ExecMainCode`, and `ExecMainStatus`;
+- the recent managed-service journal;
+- the recent runtime memory-monitor log, including protection warnings/stops when present;
+- Docker container status, exit code, `OOMKilled`, engine error, and start/finish timestamps; and
+- a recent timestamped container-log tail.
+
+This output is evidence collection, not a host-stability classification by itself. In particular, a service that becomes `inactive` during startup can be consistent with the intentional memory-protection path because `service-runner.sh` exits successfully after a matching protected stop. Confirm the monitor/journal evidence before classifying the event as memory protection, runtime failure, or another lifecycle stop.
