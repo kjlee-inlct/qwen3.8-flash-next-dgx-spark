@@ -34,6 +34,7 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `check-h6-r9-rmsys-probes.sh`: read-only R9 exact-host RM/sysmem probe and trace-filter preflight; it starts no model.
 - `check-mazinb-switch-preflight.sh`: read-only Hybrid -> mazinb asset/lifecycle preflight; it performs no profile-switch mutation.
 - `collect-managed-readiness-evidence.sh`: read-only collector for lifecycle, service, monitor, Docker, and kernel evidence after a managed startup/readiness failure.
+- `mazinb-kv-ab.sh`: guarded temporary mazinb 24 GiB vs 16 GiB KV-cache host-stability experiment with isolated monitor state and strict evidence classification.
 - `orcarouter-v029.sh`: dedicated OrcaRouter v0.29 investigation/runtime launcher, including the validated H38 profiles.
 - `orcarouter-stock-skinny.sh`: guarded stock/skinny OrcaRouter comparison launcher.
 - `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
@@ -74,6 +75,74 @@ Use `bash scripts/runtime/nvidia-2x2.sh plan` for the fixed controls and
 A/B/C/D matrix. Operators must stop the managed service before a case and
 restart it after the experiment series. Benchmark policy and result
 interpretation remain documented under `../benchmark/README.md`.
+
+## mazinb KV host-stability A/B
+
+The 2026-10-02 managed mazinb activation used the profile default
+`KV_MEM=25769803776` (24 GiB). The runtime completed model loading, compile,
+warmup, KV allocation, and CUDA graph capture, but the host emitted
+`_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)` and the safety monitor then
+performed a protected stop before managed readiness.
+
+`mazinb-kv-ab.sh` isolates the first mitigation question without changing the
+managed install manifest or runtime attestation:
+
+| Case | KV cache | Purpose |
+|---|---:|---|
+| A | 24 GiB (`25769803776`) | current mazinb default/control |
+| B | 16 GiB (`17179869184`) | reduced-KV candidate |
+
+All other runtime controls are pinned to the failed mazinb attempt: 262144
+maximum model length, MTP `k=2`, `MAXSEQS=3`, prefix cache off, index sharing
+off, FlashInfer autotune off, exact QSA on, loopback-only API, no Docker
+restart, and the same memory-monitor protection floors. Each case gets a
+separate container name and separate `XDG_STATE_HOME`, so its monitor log and
+protected-stop marker do not overwrite the managed runtime state.
+
+Run the reduced-KV B case first:
+
+```bash
+git switch docs/live-profile-switch-acceptance-20260930
+git pull --ff-only origin docs/live-profile-switch-acceptance-20260930
+
+sudo -v
+bash scripts/runtime/mazinb-kv-ab.sh plan
+bash scripts/runtime/mazinb-kv-ab.sh preflight
+bash scripts/runtime/mazinb-kv-ab.sh run B \
+  | tee /tmp/mazinb-kv-b-20261002.txt
+```
+
+`run` waits up to 1800 seconds for `/health`, validates that `/v1/models`
+contains only the expected mazinb served-model ID, performs a 180-second soak,
+stops the temporary runtime to release memory, then prints the case evidence.
+A case is `FUNCTIONAL PASS / HOST-STABILITY PASS` only when readiness and model
+identity pass, the full soak completes, no memory-protection stop occurs, no
+kernel `NV_ERR_NO_MEMORY` is present in the case window, and Docker did not
+report `OOMKilled=true`. A pre-ready application failure without host evidence
+stays `HOST NOT CLASSIFIED`; it is not promoted to a host pass.
+
+Interpret the first result conservatively:
+
+- B fails with the same RM/protected-stop signature: reducing KV from 24 GiB to
+  16 GiB is not sufficient, so do not spend another long run reproducing A.
+- B passes the strict gate: preserve B evidence, then run A under this same
+  helper to remove the managed-vs-temporary lifecycle confound and establish a
+  controlled 24 GiB vs 16 GiB contrast.
+- B reaches READY but still records `NV_ERR_NO_MEMORY`: functional startup may
+  have improved, but the strict host-stability result remains FAIL.
+
+The helper intentionally does not restart the managed service. Experimental
+containers and their evidence remain until explicitly cleaned:
+
+```bash
+bash scripts/runtime/mazinb-kv-ab.sh evidence B
+bash scripts/runtime/mazinb-kv-ab.sh cleanup B
+```
+
+A successful 16 GiB temporary experiment is mitigation evidence, not managed
+profile-switch acceptance. Only after the controlled result is understood
+should the chosen KV value be promoted into the managed mazinb profile and the
+Hybrid -> mazinb managed leg be repeated.
 
 ## Readiness waiting
 
