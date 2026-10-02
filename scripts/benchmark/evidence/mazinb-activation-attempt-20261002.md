@@ -214,8 +214,8 @@ phase, the kernel emitted `NV_ERR_NO_MEMORY`, and the safety monitor protected
 the host seconds later. KV size is therefore a bounded mitigation variable worth
 isolating before changing the checkpoint, PLE mmap path, or driver.
 
-The repository now provides `scripts/runtime/mazinb-kv-ab.sh` for a controlled
-first-stage experiment:
+A guarded operator helper outside the benchmark category now provides a
+controlled first-stage experiment:
 
 - A: 24 GiB, the current mazinb default/control;
 - B: 16 GiB, the reduced-KV candidate;
