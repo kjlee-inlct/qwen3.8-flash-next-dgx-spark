@@ -169,3 +169,11 @@ scripts/benchmark/analyze-h6-r9-rmsys.py
 The report should not attach the 551 MiB decoded trace by default. Prefer the
 binary trace plus a compact analyzer output, and provide the decoded trace only
 if requested.
+
+## Project-side acceptance status
+
+Root-cause tracing is complete at the proximate mechanism level. The current
+project policy remains strict: this recoverable fallback is still classified as
+`FUNCTIONAL PASS / HOST-STABILITY FAIL` until an explicit project decision
+introduces the narrow recoverable-warning exception documented separately.
+No additional allocator-tracing run is required for this report.
