@@ -37,7 +37,7 @@ describe_model_profile() {
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-      PROFILE_DESCRIPTION="Optional mazinb profile; installer wired, DGX managed-lifecycle E2E pending"
+      PROFILE_DESCRIPTION="Optional mazinb profile; 16 GiB KV mitigation selected, managed re-validation pending"
       ;;
     orcarouter-hybrid)
       PROFILE_STATUS="experimental"
