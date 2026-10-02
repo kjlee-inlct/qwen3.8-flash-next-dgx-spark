@@ -107,7 +107,7 @@ were silent throughout R8.
 
 Repository preflight:
 
-`scripts/benchmark/check-h6-r9-rmsys-probes.sh`
+`scripts/runtime/check-h6-r9-rmsys-probes.sh`
 
 The preflight starts no model. It validates:
 
