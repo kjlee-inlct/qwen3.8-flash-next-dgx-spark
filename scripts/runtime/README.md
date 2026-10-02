@@ -109,8 +109,11 @@ sudo -v
 bash scripts/runtime/mazinb-kv-ab.sh plan
 bash scripts/runtime/mazinb-kv-ab.sh preflight
 bash scripts/runtime/mazinb-kv-ab.sh run B \
-  | tee /tmp/mazinb-kv-b-20261002.txt
+  |& tee /tmp/mazinb-kv-b-20261002.txt
 ```
+
+Use `|& tee`, not a stdout-only pipe, so startup/runtime diagnostics written to
+stderr are retained with the case evidence.
 
 `run` waits up to 1800 seconds for `/health`, validates that `/v1/models`
 contains only the expected mazinb served-model ID, performs a 180-second soak,
