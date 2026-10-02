@@ -109,3 +109,16 @@ Accordingly, do not alter a working kernel/driver stack solely on the
 assumption that 580.173.02 is a guaranteed fix. Any driver/kernel A/B should be
 an explicit mitigation-validation experiment with rollback instructions and
 its own acceptance criteria.
+
+## Current project policy after R9
+
+Until an explicit project decision changes it, the **strict gate remains in
+force**. Therefore:
+
+- Hybrid remains `FUNCTIONAL PASS / HOST-STABILITY FAIL`;
+- root-cause tracing is considered complete at the proximate mechanism level;
+- no R10 allocator experiment is scheduled;
+- no kernel/driver change is scheduled solely to chase the warning;
+- the mazinb live-switch leg remains blocked;
+- read-only mazinb asset/lifecycle preflight is allowed because it does not
+  activate or mutate the live profile.
