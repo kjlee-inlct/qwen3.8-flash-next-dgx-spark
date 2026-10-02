@@ -88,6 +88,9 @@ printf 'current_container=%s\n' "$CURRENT_CONTAINER"
 [[ -d "$CURRENT_MODEL_DIR" ]] ||
     fail "live model directory is missing: $CURRENT_MODEL_DIR"
 
+CURRENT_MODEL_ROOT="$(dirname -- "$(realpath -m -- "$CURRENT_MODEL_DIR")")"
+printf 'managed_model_root=%s\n' "$CURRENT_MODEL_ROOT"
+
 if [[ -n "$CURRENT_CONTAINER" ]]; then
     docker inspect "$CURRENT_CONTAINER" >/dev/null 2>&1 ||
         fail "live container is not inspectable: $CURRENT_CONTAINER"
@@ -96,6 +99,10 @@ if [[ -n "$CURRENT_CONTAINER" ]]; then
 fi
 
 printf '\n=== mazinb target profile ===\n'
+# The live install manifest is authoritative for the managed model root. This
+# mirrors install.sh profile-switch behavior and avoids silently falling back to
+# the registry's standalone $HOME/models default during a managed transition.
+export QWEN38_MODEL_ROOT="$CURRENT_MODEL_ROOT"
 # Compatibility source path; canonical registry is model/model-profiles.sh.
 # shellcheck source=scripts/model-profiles.sh
 source "$MODEL_PROFILES"
@@ -111,7 +118,14 @@ printf 'target_image=%s\n' "$PROFILE_IMAGE"
 printf 'target_served_name=%s\n' "$PROFILE_SERVED_NAME"
 
 [[ "$PROFILE_INSTALLABLE" == 1 ]] || fail 'mazinb profile is not installable'
-[[ -d "$PROFILE_MODEL_DIR" ]] || fail "mazinb checkpoint missing: $PROFILE_MODEL_DIR"
+[[ -d "$PROFILE_MODEL_DIR" ]] || {
+    standalone_default="$HOME/models/$(basename -- "$PROFILE_MODEL_DIR")"
+    if [[ -d "$standalone_default" && "$standalone_default" != "$PROFILE_MODEL_DIR" ]]; then
+        printf 'ALTERNATE_MAZINB_CHECKPOINT=%s\n' "$standalone_default" >&2
+        fail "mazinb checkpoint exists outside the managed model root; refusing to select it implicitly"
+    fi
+    fail "mazinb checkpoint missing from managed model root: $PROFILE_MODEL_DIR"
+}
 [[ -f "$PROFILE_MODEL_DIR/config.json" ]] || fail 'mazinb config.json missing'
 
 if [[ ! -f "$PROFILE_MODEL_DIR/model.safetensors.index.json" ]]; then
@@ -119,6 +133,15 @@ if [[ ! -f "$PROFILE_MODEL_DIR/model.safetensors.index.json" ]]; then
     shards=("$PROFILE_MODEL_DIR"/*.safetensors)
     shopt -u nullglob
     ((${#shards[@]} > 0)) || fail 'mazinb checkpoint has no safetensors index or shard files'
+fi
+
+if [[ -f "$PROFILE_MODEL_DIR/.qwen38-model-manifest.json" ]]; then
+    grep -Eq '"status"[[:space:]]*:[[:space:]]*"complete"' \
+        "$PROFILE_MODEL_DIR/.qwen38-model-manifest.json" ||
+        fail 'mazinb model manifest exists but is not complete'
+    printf 'target_model_manifest=complete\n'
+else
+    printf 'target_model_manifest=ABSENT_LEGACY_OR_EXTERNAL\n'
 fi
 
 docker image inspect "$PROFILE_IMAGE" >/dev/null 2>&1 ||
@@ -136,11 +159,12 @@ for path in "$backup" "$candidate"; do
 done
 
 printf '\n=== capacity snapshot ===\n'
-df -h "$(dirname -- "$PROFILE_MODEL_DIR")" | tail -n 1
+df -h "$CURRENT_MODEL_ROOT" | tail -n 1
 free -h | sed -n '1,3p'
 
 printf '\nMAZINB_SWITCH_PREFLIGHT=PASS\n'
 printf 'from_profile=%s\n' "$CURRENT_PROFILE"
 printf 'to_profile=%s\n' "$TARGET_PROFILE"
+printf 'managed_model_root=%s\n' "$CURRENT_MODEL_ROOT"
 printf 'mutation_performed=NO\n'
 printf 'strict_r9_gate=STILL_BLOCKS_ACTIVATION\n'
