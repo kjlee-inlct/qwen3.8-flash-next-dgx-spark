@@ -2,23 +2,25 @@
 
 ## Classification
 
-**FUNCTIONAL FAIL / HOST NOT CLASSIFIED**
+**FUNCTIONAL FAIL / HOST-STABILITY FAIL**
 
 This was a real managed profile activation attempt, not a dry-run and not an
 instrumentation/tooling `NO TEST`.
 
 The mazinb candidate did not reach the managed readiness boundary:
 
-- `/health` never became ready in the captured installer output;
-- runtime-commit attestation remained missing;
-- the systemd service became `inactive` before readiness; and
-- the installer rolled the profile switch back to `orcarouter-hybrid`.
+- `/health` never became ready before the candidate was stopped;
+- runtime-commit attestation was never written;
+- the runtime memory monitor entered its protected-stop path during startup;
+- the service runner recognized the matching memory-protection stop marker;
+- the previous `orcarouter-hybrid` runtime container was restored but left
+  stopped; and
+- the profile-switch/runtime transactions returned to `idle`.
 
-The captured installer output does **not** contain enough retained host evidence
-to classify the stop as memory protection, an application/container failure, a
-kernel/RM host-stability event, or another lifecycle stop. Do not promote the
-result to `HOST-STABILITY FAIL` or `HOST PASS` until the retained journal,
-monitor, Docker state, and kernel evidence is inspected.
+The retained host evidence now resolves the previously unclassified stop. This
+attempt is a host-stability failure under the current strict acceptance policy
+because a kernel RM memory-allocation error occurred in the same startup window
+and the safety monitor actually stopped the candidate before readiness.
 
 ## Attempt configuration
 
@@ -45,82 +47,154 @@ Before runtime startup, the installer reported:
 
 These pre-start results do not imply runtime acceptance.
 
-## Readiness timeline captured by the installer
+## Retained lifecycle evidence
 
-The same candidate container remained reported as running while the installer
-waited for committed readiness.
+The read-only evidence collector was run at 2026-10-02 20:15 KST for the
+activation window beginning at 18:00 KST.
 
-Observed milestones include:
+Post-rollback lifecycle state was clean:
 
-- 60 s: checkpoint shard loading had started;
-- 720 s: readiness still waiting and attestation missing;
-- 780 s: the vLLM log reported compile work for range `(1, 8192)`;
-- 840 s: the vLLM log reported CUDA graph capture complete, using 0.53 GiB;
-- immediately after the 840 s progress report: the managed service was reported
-  `inactive`; and
-- the profile-switch transaction rolled back to `orcarouter-hybrid`.
+- update transition: `idle`;
+- runtime transition: `idle`;
+- profile-switch transition: `idle`;
+- systemd `Result=success`;
+- `ExecMainStatus=0`; and
+- service state `inactive/dead`.
 
-The captured output therefore establishes meaningful candidate startup
-progress, but not API readiness, served-model validation, runtime commit, or a
-host-stability classification.
+The service journal gives an explicit protected-stop sequence:
 
-## What the captured installer output does not establish
+- 18:02:54: mazinb candidate started with memory protection enabled;
+- 18:16:46: readiness was still waiting at 840/1800 seconds;
+- 18:17:16: `Candidate runtime was stopped by memory protection during startup`;
+- 18:17:16: the previous runtime container was restored but deliberately left
+  stopped after memory protection; and
+- 18:17:16: the runtime transition reported `aborted by memory protection`
+  with final state `idle`.
 
-No conclusion should be drawn solely from the absence of these strings in the
-installer transcript:
+This is not an application/container crash classification. The managed
+lifecycle intentionally treated the matching protected stop as a successful
+service-runner exit so systemd ended `inactive` rather than restarting it as a
+failure.
 
-- `NV_ERR_NO_MEMORY` / `NVRM`;
-- kernel OOM / process OOM;
-- Docker `OOMKilled`;
-- monitor `PROTECT` output; or
-- the service-runner protected-stop message.
+## Runtime progress before the stop
 
-The installer version used for this attempt printed only the last service and
-container progress lines while waiting. When the unit changed to `inactive`, it
-returned the generic readiness error before dumping the complete service
-journal, runtime monitor tail, Docker exit metadata, or kernel log.
+The candidate made substantial startup progress before host protection fired:
 
-## Leading lifecycle hypothesis — not yet a conclusion
+- checkpoint load completed; target + MTP model loading reported approximately
+  79.42 GiB and 702.1 seconds;
+- vLLM reserved the configured 24 GiB KV cache;
+- torch compile completed;
+- initial profiling/warmup completed;
+- target and speculator CUDA graph capture completed;
+- engine initialization completed; and
+- the API-server process had advanced into final startup configuration.
 
-A low-memory protected stop is a plausible first hypothesis because the managed
-service runner intentionally exits successfully after a matching startup
-memory-protection stop, while the systemd unit uses `Restart=on-failure`. That
-combination can leave the service `inactive` rather than failed/restarting.
+The final captured runtime lines show graph capture completing at approximately
+18:16:45 KST and engine initialization completing shortly afterward. The
+candidate was therefore near the API-serving boundary, but managed readiness
+was never committed before host protection stopped it.
 
-This is only a code-path consistency check. The retained monitor/journal
-records must show the protected-stop evidence before classifying this attempt as
-memory protection.
+## Memory-protection evidence
 
-## Evidence required before another activation
+The runtime monitor was active in `protect` mode with the configured floors:
 
-Collect the retained evidence from the existing attempt before rerunning the
-model:
+- warning floor: 6 GiB non-CMA available;
+- protection free floor: 2 GiB non-CMA free;
+- protection available gate: 10 GiB non-CMA available;
+- minimum swap-free floor: 8 GiB; and
+- five consecutive low samples required before protected stop.
 
-1. transition states after rollback;
-2. full managed-service journal covering the attempt;
-3. runtime memory-monitor tail and warning/protection lines;
-4. Docker container state/exit/OOM metadata where still retained; and
-5. kernel RM/OOM lines for the same time window.
+The decisive 2026-10-02 sequence was:
 
-A read-only runtime helper was added after this attempt to collect these sources
-in one command. It does not start or stop the model.
+- 18:16:36: first low-memory warning (`protect=1/5`), followed by recovery at
+  18:16:38;
+- 18:16:54: a new protection sequence began with
+  `noncma_available=9311 MiB`, `noncmafree=1812 MiB`;
+- 18:16:56: `protect=2/5`;
+- 18:16:58: `protect=3/5`;
+- 18:17:00: `protect=4/5`;
+- 18:17:02: `protect=5/5`, with `noncma_available=8562 MiB` and
+  `noncmafree=1053 MiB`; and
+- 18:17:02: `PROTECT stopping qwen38-flash-next gracefully to preserve host
+  stability`.
+
+Swap was not exhausted. `SwapFree` remained roughly 143 GiB when protection
+fired. The protected-stop condition was the low non-CMA free-memory + available
+memory gate, not the swap-free floor.
+
+## Kernel RM signal
+
+The collector captured the following kernel event immediately before the
+monitor entered the low-memory sequence:
+
+```text
+2026-10-02 18:16:33 kernel: NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
+```
+
+This is the same top-level `_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)`
+signature seen in the earlier Hybrid H6 R9 investigation.
+
+However, this mazinb run did **not** capture the R9 allocation trace. Therefore
+this evidence does not establish that the exact lower-level R9 mechanism
+(order-4/64 KiB allocation rollback followed by an order-0/4 KiB retry) was
+repeated here. The supported statement is narrower: the same RM error signature
+occurred at 18:16:33, followed within seconds by low-memory monitor pressure and
+a protected stop. Temporal proximity does not by itself prove the private RM
+allocation path was identical.
+
+The collected kernel RM/OOM section contains the `NV_ERR_NO_MEMORY` line above
+and does not show an Xid, kernel/process OOM-kill, panic, or fallen-off-bus line
+in the retained collector output. That absence does not convert the run into a
+host pass because the monitor protected stop is itself a strict-gate failure.
+
+## Docker evidence and scope limitation
+
+After rollback, the canonical container name refers to the restored previous
+`orcarouter-hybrid` container, not the removed mazinb candidate. The collector
+therefore reports the restored canonical container (`exit=143`,
+`OOMKilled=false`) and must not be used to claim `OOMKilled=false` for the
+mazinb candidate itself.
+
+The decisive candidate classification instead comes from the matching
+memory-protection stop marker, monitor sequence, service-runner journal, and
+kernel RM event.
+
+## Why the strict host-stability gate fails
+
+The repository's narrow recoverable-warning gate for the R9 signature requires,
+among other conditions:
+
+- API READY;
+- successful post-ready soak;
+- healthy served-model identity;
+- clean runtime stop; and
+- **no safety-monitor protected stop**.
+
+This mazinb activation satisfies none of the readiness/soak completion
+requirements and explicitly violates the last condition because the safety
+monitor stopped the runtime. It therefore cannot be classified as
+`HOST-STABILITY WARN / RECOVERABLE_RM_SYSMEM_FALLBACK` even though the same
+high-level RM signature appeared.
 
 ## Acceptance impact
 
-- Hybrid -> mazinb is no longer merely "activation blocked"; an activation was
-  attempted and rolled back.
+- Hybrid -> mazinb: **FUNCTIONAL FAIL / HOST-STABILITY FAIL**.
+- The failure mode is a managed **memory-protection startup abort**, not an
+  unexplained service inactivity or demonstrated vLLM crash.
 - mazinb -> OrcaRouter remains pending because mazinb never reached committed
   readiness.
 - The rollback restored `orcarouter-hybrid`; that rollback itself must not be
   counted as the still-pending final OrcaRouter -> Hybrid matrix leg.
-- The existing Hybrid H6 R9 host-stability conclusion remains separate from
-  this mazinb startup failure until the retained evidence is classified.
-- PR #244 should remain open.
+- The earlier Hybrid H6 R9 mechanism remains independently established. This
+  mazinb run re-observed the top-level RM signature but did not re-prove the R9
+  lower-level allocation trace.
+- PR #244 should remain open while mitigation/acceptance policy and remaining
+  profile-switch legs are unresolved.
 
 ## Observability follow-up
 
-After this attempt, managed readiness failure handling was hardened so an early
-service stop or readiness timeout prints:
+The post-attempt diagnostics hardening remains useful. Managed readiness failure
+handling now prints:
 
 - systemd state/result/exit status;
 - recent service journal;
@@ -128,4 +202,5 @@ service stop or readiness timeout prints:
 - Docker exit code and `OOMKilled`; and
 - recent timestamped container logs.
 
-Regression coverage and runtime documentation were added with the change.
+A separate read-only collector can recover the same lifecycle, monitor, Docker,
+and kernel evidence after a run without starting or stopping the model.
