@@ -33,6 +33,23 @@ class ManagedReadinessDiagnosticsTests(unittest.TestCase):
         self.assertIn(timeout_failure, manager)
         self.assertLess(manager.index(timeout_diagnostics), manager.index(timeout_failure))
 
+    def test_read_only_collector_covers_lifecycle_service_monitor_container_and_kernel(self) -> None:
+        collector = (
+            ROOT / "scripts" / "runtime" / "collect-managed-readiness-evidence.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("update-transition.sh", collector)
+        self.assertIn("runtime-transition.sh", collector)
+        self.assertIn("profile-switch-transition.sh", collector)
+        self.assertIn('journalctl -u "${UNIT}" --since "${SINCE}"', collector)
+        self.assertIn('"${STATE_DIR}/monitor.log"', collector)
+        self.assertIn("oom_killed={{.State.OOMKilled}}", collector)
+        self.assertIn("NV_ERR_NO_MEMORY", collector)
+        self.assertIn("_memdescAllocInternal", collector)
+        self.assertNotIn("docker stop", collector)
+        self.assertNotIn("systemctl stop", collector)
+        self.assertNotIn("systemctl start", collector)
+
 
 if __name__ == "__main__":
     unittest.main()
