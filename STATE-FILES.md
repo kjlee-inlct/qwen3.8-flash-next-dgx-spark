@@ -1,17 +1,20 @@
 # Lifecycle state-file safety
 
-Qwen38 uses small state files to coordinate release/update/runtime recovery. These files are data, not shell programs.
+Qwen38 uses small state files to coordinate release/update/runtime/profile-switch recovery. These files are data, not shell programs.
 
 ## Strictly parsed lifecycle files
 
-The following files are parsed by `scripts/state_file.py` and are never evaluated as shell code:
+The following files are parsed by the strict state parser (`scripts/lib/state_file.py`, with `scripts/state_file.py` retained as a compatibility entry point) and are never evaluated as shell code:
 
 - `~/.local/state/qwen38-spark/update-transition.env`
 - `~/.local/state/qwen38-spark/runtime-stop.env`
 - `~/.local/state/qwen38-spark/runtime-commit.env`
+- `~/.local/state/qwen38-spark/profile-switch-transition.env`
 - `~/.local/share/qwen38-spark/qualified/<release>.env`
 
 The parser uses a schema-specific key whitelist and rejects unknown, duplicate, missing, or malformed keys and values. Bash consumers receive validated key/value pairs through a NUL-delimited stream and assign only whitelisted variable names with `printf -v`.
+
+`profile-switch-transition.env` is parsed with the dedicated `profile-switch` schema. It binds the source/target profiles, phase, backup/candidate manifest paths, their recorded digests, and update timestamp. The profile-switch helper never sources this file; malformed or ambiguous state fails closed.
 
 ## Runtime commit attestation
 
@@ -19,13 +22,14 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 ## Lifecycle operation lock
 
-Mutating maintenance operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so installer state, release pointers, update-transition state, managed-service mutation, and uninstall cleanup cannot overlap with another covered mutation.
+Mutating maintenance operations use one advisory `flock` at `~/.local/state/qwen38-spark/operation.lock`. The lock is held for the full outer operation so installer state, release pointers, update-transition state, profile-switch state, managed-service mutation, and uninstall cleanup cannot overlap with another covered mutation.
 
 The locking scope covers:
 
-- non-dry-run `install.sh`, including manifest migration and the complete interactive/download/swap/API/release/service flow;
+- non-dry-run `install.sh`, including manifest migration and the complete interactive/download/swap/API/release/service/profile-switch flow;
 - `scripts/update-release.sh` for non-dry-run cutover;
 - `scripts/lifecycle/update-transition.sh` actions `prepare`, `commit`, `rollback`, and `recover`;
+- `scripts/lifecycle/profile-switch-transition.sh` actions `prepare`, `activate`, `runtime-committed`, `commit`, `rollback`, `recover`, and service-startup recovery when it is not deferred by an existing outer lock;
 - `scripts/release-manager.sh` actions `stage`, `activate`, `discard`, and `rollback`;
 - `scripts/lifecycle/bootstrap-release.sh`;
 - `scripts/manage-service.sh` actions `create` and `remove`;
@@ -45,7 +49,10 @@ Read-only `status`/`verify` paths and all supported dry-runs remain unlocked. No
 - `manage-service.sh` uses `install-service`, validating and emitting only service installation/readiness fields;
 - `doctor.sh` uses `install-doctor`, validating and emitting only model pinning, runtime drift, monitor, swap, and API-access diagnostic fields;
 - `uninstall.sh` uses `install-uninstall`, validating and emitting only resource paths, ownership flags, container name, configuration path, and UI language needed to decide cleanup actions;
-- `install.sh` resume/migration uses `install-maintenance`, validating the closed installer field set while preserving schema-2/3/4 compatibility and emitting only keys actually present in the existing manifest.
+- `install.sh` resume/migration uses `install-maintenance`, validating the closed installer field set while preserving schema-2/3/4 compatibility and emitting only keys actually present in the existing manifest;
+- `profile-switch-transition.sh` parses the live, backup, and candidate install manifests with strict maintenance/runtime views before it activates, commits, restores, or recovers a switch.
+
+During a managed profile switch, `install.env.profile-switch-candidate` and `install.env.profile-switch-backup` are install-manifest data files, not shell state. The candidate is prepared and strictly validated before activation; the backup is validated before rollback. Their paths and digests are bound by `profile-switch-transition.env`, and orphan candidate/backup files without matching transition state are treated as an ambiguous recovery condition rather than silently adopted.
 
 All install-manifest views:
 
@@ -74,6 +81,11 @@ bash ./scripts/update-transition.sh recover
 bash ./scripts/update-transition.sh rollback
 bash ./scripts/runtime-transition.sh status
 bash ./scripts/runtime-transition.sh recover
+bash ./scripts/profile-switch-transition.sh status
+bash ./scripts/profile-switch-transition.sh recover
+bash ./scripts/profile-switch-transition.sh rollback
 ```
+
+For an interrupted profile switch, inspect/recover the profile-switch transaction before manually changing containers or install manifests. Recovery either proves and commits the target, proves and restores the previous profile, or leaves the persisted state intact and fails closed when neither side can be proven.
 
 Malformed lifecycle or installation state is treated as an error rather than executed or silently ignored.
