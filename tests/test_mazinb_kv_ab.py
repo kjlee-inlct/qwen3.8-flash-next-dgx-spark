@@ -69,6 +69,14 @@ class MazinbKvAbExperimentTests(unittest.TestCase):
         self.assertNotIn("systemctl start", text)
         self.assertNotIn("install.sh", text)
 
+    def test_host_pass_requires_soak_and_all_strict_negative_checks(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("soak_completed == 1", text)
+        self.assertIn("protected_stop_present", text)
+        self.assertIn("kernel_nv_err_present", text)
+        self.assertIn("OOMKilled", text)
+        self.assertIn("HOST-STABILITY PASS", text)
+
 
 if __name__ == "__main__":
     unittest.main()
