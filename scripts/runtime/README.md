@@ -33,6 +33,7 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `validate_runtime.py`
 - `check-h6-r9-rmsys-probes.sh`: read-only R9 exact-host RM/sysmem probe and trace-filter preflight; it starts no model.
 - `check-mazinb-switch-preflight.sh`: read-only Hybrid -> mazinb asset/lifecycle preflight; it performs no profile-switch mutation.
+- `collect-managed-readiness-evidence.sh`: read-only collector for lifecycle, service, monitor, Docker, and kernel evidence after a managed startup/readiness failure.
 - `orcarouter-v029.sh`: dedicated OrcaRouter v0.29 investigation/runtime launcher, including the validated H38 profiles.
 - `orcarouter-stock-skinny.sh`: guarded stock/skinny OrcaRouter comparison launcher.
 - `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
@@ -99,3 +100,13 @@ The diagnostic block includes:
 - a recent timestamped container-log tail.
 
 This output is evidence collection, not a host-stability classification by itself. In particular, a service that becomes `inactive` during startup can be consistent with the intentional memory-protection path because `service-runner.sh` exits successfully after a matching protected stop. Confirm the monitor/journal evidence before classifying the event as memory protection, runtime failure, or another lifecycle stop.
+
+For an already-completed failure whose installer output predates the automatic diagnostic block, collect the retained evidence without restarting the model:
+
+```bash
+sudo -v
+bash scripts/runtime/collect-managed-readiness-evidence.sh \
+  --since '2026-10-02 18:00:00'
+```
+
+The collector does not start/stop services or containers. Its `--since` value is passed to `journalctl`; choose a window that includes the failed activation. Kernel RM/OOM lines are included only when a non-interactive sudo credential is available, which is why `sudo -v` is shown separately.
