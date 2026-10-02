@@ -9,6 +9,7 @@ This directory contains canonical managed-runtime transition, preflight, service
 - Run the managed service lifecycle and commit runtime attestation only after validation.
 - Monitor runtime resource safety and perform explicit runtime validation.
 - Provide a reusable readiness wait that checks container state, health, and served-model identity.
+- Provide read-only exact-host preflights for runtime/driver instrumentation and blocked profile-switch legs without mutating lifecycle state.
 
 ## Dependencies
 
@@ -30,6 +31,8 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `monitor-runtime.sh`
 - `wait-ready.sh`
 - `validate_runtime.py`
+- `check-h6-r9-rmsys-probes.sh`: read-only R9 exact-host RM/sysmem probe and trace-filter preflight; it starts no model.
+- `check-mazinb-switch-preflight.sh`: read-only Hybrid -> mazinb asset/lifecycle preflight; it performs no profile-switch mutation.
 - `orcarouter-v029.sh`: dedicated OrcaRouter v0.29 investigation/runtime launcher, including the validated H38 profiles.
 - `orcarouter-stock-skinny.sh`: guarded stock/skinny OrcaRouter comparison launcher.
 - `nvidia-2x2.sh`: guarded temporary launcher for the NVIDIA INDEX_SHARE x AUTOTUNE benchmark matrix.
