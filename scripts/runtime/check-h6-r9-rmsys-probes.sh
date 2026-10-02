@@ -165,7 +165,16 @@ EOF
 }
 
 verify_probes() {
-    local event format
+    local event field format
+    local fields=(
+        page_count
+        page_size
+        contiguous
+        cache_type
+        zeroed
+        unencrypted
+        node_id
+    )
 
     echo "=== active R9 kprobe definitions ==="
     sudo -n cat "$KPROBE_EVENTS" | grep -F "$GROUP/" || true
@@ -178,18 +187,24 @@ verify_probes() {
         echo "PRESENT $GROUP:$event"
     done
 
+    format="$TRACEFS/events/$GROUP/nv_alloc_pages_entry/format"
     echo
     echo "=== nv_alloc_pages captured fields ==="
     sudo -n awk '
-        /^field:/ &&
+        /field:/ &&
         ($0 ~ /page_count/ || $0 ~ /page_size/ || $0 ~ /contiguous/ ||
          $0 ~ /cache_type/ || $0 ~ /zeroed/ || $0 ~ /unencrypted/ ||
          $0 ~ /node_id/) {print}
-    ' "$TRACEFS/events/$GROUP/nv_alloc_pages_entry/format"
+    ' "$format"
+
+    for field in "${fields[@]}"; do
+        sudo -n grep -Eq "field:.*[[:space:]]${field};" "$format" ||
+            fail "nv_alloc_pages probe format missing captured field: $field"
+    done
 }
 
 verify_static_events() {
-    local path
+    local path format
     local events=(
         "compaction/mm_compaction_try_to_compact_pages"
         "compaction/mm_compaction_begin"
@@ -204,10 +219,14 @@ verify_static_events() {
     echo
     echo "=== required static trace events ==="
     for path in "${events[@]}"; do
-        if [[ -r "$TRACEFS/events/$path/format" ]]; then
+        format="$TRACEFS/events/$path/format"
+        if sudo -n cat "$format" >/dev/null 2>&1; then
             echo "PRESENT $path"
         else
-            fail "missing static trace event: $path"
+            echo "TRACE_EVENT_LOOKUP basename=${path##*/}" >&2
+            sudo -n find "$TRACEFS/events" -maxdepth 2 -type d \
+                -name "${path##*/}" -print 2>/dev/null >&2 || true
+            fail "static trace event format unreadable or absent: $path"
         fi
     done
 }
