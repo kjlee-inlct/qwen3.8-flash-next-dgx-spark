@@ -108,6 +108,6 @@ The first failed request also shows why a pre-start high-order-capacity number c
 
 ## Next mitigation step
 
-R13 changes exactly one runtime VM policy and restores it afterward: temporary `vm.compaction_proactiveness=80` for the full startup interval, with all other VM tunables unchanged and the same R11 trace/collector contract. The helper refuses to run unless the original value is the measured baseline 20 and restores the original value on normal, error, INT, and TERM paths.
+R13 changes exactly one runtime VM policy and restores it afterward: temporary `vm.compaction_proactiveness=80` for the full startup interval, with all other VM tunables unchanged and the same R11 trace/collector contract. The helper refuses to run unless the original value is the measured baseline 20 and restores the original value on normal, error, INT, and TERM paths. The R13 helper and regression tests pass CI.
 
 If R13 still reproduces RM OOM, the next isolated variable should be free-page reserve/reclaim policy (most directly `watermark_scale_factor`) rather than another pre-start compaction or another KV reduction.
