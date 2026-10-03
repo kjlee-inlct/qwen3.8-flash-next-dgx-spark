@@ -124,55 +124,42 @@ Normal zone after (`+0.696 s`):
 
 The RM-triggered snapshot at +1.033 s showed nearly all remaining Normal-zone high-order free blocks classified under Unmovable, with only one Movable order-4+ block.
 
-This establishes a strong association between the startup interval, collapse of the Movable high-order pool, heavy pageblock ownership/migratetype change, and the RM order-4 fallback.
+## Exact zone and migratetype closure
 
-## Exact zone / migratetype closure
+Read-only post-processing of the preserved raw R11 trace closed the previously unresolved zone/migratetype dimension:
 
-The preserved raw R11 trace was post-processed against the zone PFN boundaries captured in the RM-triggered zone snapshot.
+- failed interval: `VLLM::Worker`, PID 4,075,858;
+- order-4 allocations: 17,984;
+- order-4 frees: 17,983;
+- rollback PFNs: 17,983;
+- all 17,983 rollback PFNs map to **node-0 Normal zone**;
+- allocation-zone mapping coverage: 17,983 / 17,984; the one unmapped allocation was not part of the rollback set;
+- all 17,984 `mm_page_alloc` events report migratetype `0 / Unmovable`;
+- all 671 extfrag events report `Unmovable -> Movable` fallback;
+- 643 / 671 extfrag events (95.8%) report `change_ownership=1`;
+- fallback buddy orders span 4 through 9 and are dominated by orders 8, 9, and 7.
 
-The failed nested `nv_alloc_system_pages` interval contained 36,638 matching trace events and directly mapped the RM high-order allocation path as follows:
-
-- order-4 allocation events: 17,984;
-- order-4 free events: 17,983;
-- identical PFNs allocated then freed: 17,983;
-- rollback size: 1,123.9375 MiB;
-- allocation-zone coverage: 17,983 / 17,984 events mapped to a captured zone boundary;
-- all 17,983 mapped allocation PFNs: **node 0 Normal zone**;
-- all 17,983 free/rollback PFNs: **node 0 Normal zone**;
-- the one unmapped allocation event was not part of the 17,983-PFN rollback set;
-- all 17,984 `mm_page_alloc` events carried trace migratetype **0 / Unmovable**.
-
-The extfrag tracepoint also closes the fallback source:
-
-- all 671 extfrag events requested **Unmovable** and fell back to **Movable**;
-- 643 / 671 events (95.8%) reported `change_ownership=1`;
-- fallback buddy orders were 8 (231), 9 (145), 7 (128), 6 (88), 5 (61), and 4 (18).
-
-Therefore the allocator path is directly observed rather than inferred: NVIDIA RM's 64 KiB requests enter the Linux allocator as **Normal-zone Unmovable order-4 demand**. When same-type high-order supply is unavailable, the allocator repeatedly falls back to larger **Movable** buddy blocks and, in most observed extfrag events, changes ownership while satisfying the Unmovable allocation. During this startup interval that process coincides with collapse of the Movable high-order pool and conversion of thousands of Normal-zone pageblocks toward Unmovable ownership.
-
-The `mm_page_free` tracepoint used by this capture does not expose a migratetype field, so the free-side migratetype is correctly recorded as unavailable rather than inferred. Zone identity for the rollback PFNs is nevertheless directly mapped from the PFNs themselves.
+This directly closes the allocation path observed during the failure: NVIDIA RM generates Normal-zone Unmovable order-4 demand. When compatible high-order supply is insufficient, Linux repeatedly falls back to larger Movable buddy blocks, splits them, and usually changes pageblock ownership. The Movable high-order reservoir collapses during startup. The logical order-4 request eventually cannot obtain its next chunk, RM rolls back the accumulated Normal-zone high-order pages, and the same logical request then succeeds at order 0.
 
 ## Root-cause status after R11
-
-R11 closes the previously unresolved Linux allocator dimensions for this failure.
 
 Supported conclusions:
 
 1. **Not total-memory exhaustion.** Tens of GiB of available/swap memory remained.
 2. **Not a fixed logical request-size threshold.** Prior traces reproduced the same mechanism from 40 MiB to approximately 16 GiB.
-3. **Not an order-0 allocation failure.** The identical logical request succeeded immediately when RM retried with 4 KiB/order 0.
-4. **The failing high-order path is node-0 Normal-zone Unmovable.** 17,983 rollback PFNs map directly to Normal, and every captured order-4 allocation event carried Unmovable migratetype.
-5. **Movable is the directly observed fallback reservoir.** Every extfrag event was Unmovable -> Movable, with ownership change reported in 643 / 671 cases.
-6. **The Normal-zone high-order buddy pool was effectively exhausted at the failure boundary.** The nearest pre-failure fast sample had only 1.688 MiB of Normal-zone order-4+ free capacity despite substantial base-page memory.
-7. **Rollback repopulated the same Normal-zone high-order pool.** 1,123.9375 MiB of traced rollback closely matches the 1,121.375 MiB post-failure Normal-zone high-order capacity.
-8. **Compaction/reclaim/fragmentation pressure is directly present.** The interval contains heavy compaction, direct reclaim, allocator stalls, and Unmovable -> Movable extfrag fallback.
+3. **Not an order-0 allocator failure.** The same request succeeded immediately at order 0.
+4. **Directly localized to Normal-zone Unmovable high-order demand and Movable fallback.** Raw PFN and migratetype trace closes both dimensions.
+5. **Compaction/reclaim was actively struggling to maintain high-order supply.** Large allocstall, compaction, reclaim, and extfrag activity occurred around the failure.
+6. **Pageblock stealing/ownership transition is part of the observed path.** 95.8% of captured Unmovable->Movable extfrag fallback events reported ownership change.
 
-Current lower-level mechanism:
+Current lower-level model:
 
-> During some OrcaRouter startup states, NVIDIA RM issues non-contiguous 64 KiB sysmem allocations that reach Linux as Normal-zone Unmovable order-4 requests. Same-type high-order supply becomes insufficient, so the allocator repeatedly steals/splits larger Movable buddy blocks, usually changing pageblock ownership. The Movable high-order reservoir collapses while substantial base-page memory remains available. Eventually RM cannot complete the logical request at order 4, returns `NV_ERR_NO_MEMORY`, rolls back the accumulated Normal-zone order-4 pages, and immediately retries the same logical allocation at 4 KiB/order 0, which succeeds.
+> During some OrcaRouter startup states, NVIDIA RM creates sustained Normal-zone Unmovable order-4 demand. Same-type high-order supply becomes insufficient, so Linux repeatedly steals and splits larger Movable buddy blocks, usually changing ownership. The Movable high-order reservoir collapses despite substantial base-page memory remaining. RM's logical high-order request eventually cannot obtain its next order-4 chunk, rolls back the accumulated Normal-zone high-order pages, then retries the same logical request at 4 KiB/order 0 and succeeds.
 
-The proximate failure mechanism is therefore closed through the NVIDIA RM boundary, Linux zone, migratetype, buddy fallback source, ownership-change behavior, rollback, and successful lower-order retry. The remaining work is mitigation selection and validation rather than another reproduction run merely to identify the mechanism.
+## Mitigation follow-up
 
-## Follow-up tooling
+R12 tested a one-shot write to `vm.compact_memory` immediately before startup. It began with approximately 2.85 GiB of Normal-zone order-4+ free capacity, and the one-shot compaction barely changed that starting capacity. Nevertheless two RM order-4 failures reappeared later during the long model startup, including a 3.125 GiB request that accumulated and rolled back about 2.53 GiB of order-4 chunks before falling back successfully to order 0.
 
-The repository includes `scripts/benchmark/analyze-orcarouter-r11-zone-migratetype.py`, a read-only post-processor for the preserved R11 trace. It maps the failed interval's order-4 allocation/free PFNs to zone boundaries from the RM event snapshot and reports trace migratetype, extfrag fallback migratetype, ownership-change counts, and fallback orders. This follow-up analysis does not restart or mutate the runtime.
+Therefore one-shot pre-start compaction is not a sufficient mitigation. The relevant allocator state evolves during startup; mitigation must preserve high-order supply during the load. The next isolated A/B temporarily raises `vm.compaction_proactiveness` from 20 to 80 for the full startup interval, restores it afterward, and keeps every other VM tunable unchanged.
+
+Canonical R12 evidence: `scripts/benchmark/evidence/orcarouter-managed-rmsys-r12-precompact-20261003.md`.
