@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Correlate R11 Linux allocator-state samples with the traced RM OOM.
+"""Correlate R11 Linux allocator-state samples with a traced RM OOM.
 
 The analyzer is read-only. It aligns the R10b RM monotonic timestamp with the
 R11 fast/slow samples and RM-triggered full snapshot, then summarizes buddy
-order-4 capacity, migratetype order-4 capacity, pageblock distribution, memory
-headroom, VM allocator counters, and PSI around the failure.
+order-4 capacity, migratetype order-4 capacity, pageblock distribution, zone
+watermarks, memory headroom, VM allocator counters, and PSI around failure.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import argparse
 import dataclasses
 import pathlib
 import re
-from typing import Iterable
 
 PAGE_SIZE = 4096
 SAMPLE_RE = re.compile(
@@ -25,6 +24,7 @@ PAGETYPE_RE = re.compile(
     r"^Node\s+(\d+),\s+zone\s+(\S+),\s+type\s+(\S+)\s+(.+)$"
 )
 PAGEBLOCK_RE = re.compile(r"^Node\s+(\d+),\s+zone\s+(\S+)\s+(.+)$")
+ZONE_HEADER_RE = re.compile(r"^Node\s+(\d+),\s+zone\s+(\S+)$")
 RM_RE = re.compile(r"^rm_monotonic=([0-9.]+)$", re.MULTILINE)
 META_MONO_RE = re.compile(r"^monotonic_ns=(\d+)$", re.MULTILINE)
 
@@ -132,15 +132,15 @@ def parse_pagetype(
 
         match = PAGETYPE_RE.match(line)
         if match:
-            values = []
+            values: list[int] = []
             for token in match.group(4).split():
                 if token == ">100000":
                     values.append(100001)
-                else:
-                    try:
-                        values.append(int(token))
-                    except ValueError:
-                        pass
+                    continue
+                try:
+                    values.append(int(token))
+                except ValueError:
+                    pass
             order_counts[(int(match.group(1)), match.group(2), match.group(3))] = values
             continue
 
@@ -158,6 +158,36 @@ def parse_pagetype(
                         zip(block_types, values[: len(block_types)], strict=False)
                     )
     return order_counts, pageblocks
+
+
+def parse_zoneinfo(text: str) -> dict[tuple[int, str], dict[str, int]]:
+    zones: dict[tuple[int, str], dict[str, int]] = {}
+    current: tuple[int, str] | None = None
+    wanted = {"free", "min", "low", "high", "promo", "spanned", "present", "managed", "cma"}
+    for raw in text.splitlines():
+        line = raw.strip()
+        match = ZONE_HEADER_RE.match(line)
+        if match:
+            current = (int(match.group(1)), match.group(2))
+            zones.setdefault(current, {})
+            continue
+        if current is None:
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        if len(parts) >= 3 and parts[0] == "pages" and parts[1] == "free":
+            try:
+                zones[current]["free"] = int(parts[2])
+            except ValueError:
+                pass
+            continue
+        if len(parts) >= 2 and parts[0] in wanted:
+            try:
+                zones[current][parts[0]] = int(parts[1])
+            except ValueError:
+                pass
+    return zones
 
 
 def parse_kv(text: str) -> dict[str, int]:
@@ -220,9 +250,9 @@ def emit_mem(label: str, sample: Sample | None) -> None:
         return
     mem = parse_kv(sample.sections.get("/proc/meminfo", ""))
     wanted = ("MemFree", "MemAvailable", "SwapFree", "CmaFree")
-    values = " ".join(f"{key}_kib={mem[key]}" for key in wanted if key in mem)
-    if values:
-        print(f"{label} {values}")
+    fields = " ".join(f"{key}_kib={mem[key]}" for key in wanted if key in mem)
+    if fields:
+        print(f"{label} {fields}")
 
 
 def emit_vm_delta(before: Sample | None, after: Sample | None) -> None:
@@ -230,13 +260,7 @@ def emit_vm_delta(before: Sample | None, after: Sample | None) -> None:
         return
     left = parse_kv(before.sections.get("/proc/vmstat", ""))
     right = parse_kv(after.sections.get("/proc/vmstat", ""))
-    prefixes = (
-        "compact_",
-        "pgscan_direct",
-        "pgsteal_direct",
-        "allocstall",
-        "pgalloc_",
-    )
+    prefixes = ("compact_", "pgscan_direct", "pgsteal_direct", "allocstall", "pgalloc_")
     for key in sorted(set(left) & set(right)):
         if key.startswith(prefixes):
             delta = right[key] - left[key]
@@ -253,24 +277,51 @@ def emit_psi(label: str, sample: Sample | None) -> None:
             continue
         values = psi[kind]
         fields = " ".join(
-            f"{key}={values[key]:.3f}" for key in ("avg10", "avg60", "avg300", "total") if key in values
+            f"{key}={values[key]:.3f}"
+            for key in ("avg10", "avg60", "avg300", "total")
+            if key in values
         )
         print(f"{label} kind={kind} {fields}")
 
 
-def read_event_snapshot(event_dir: pathlib.Path) -> tuple[int | None, str, str]:
+def emit_zone_text(label: str, text: str) -> None:
+    for (node, zone), values in sorted(parse_zoneinfo(text).items()):
+        fields = " ".join(
+            f"{key}_pages={values[key]}"
+            for key in ("free", "min", "low", "high", "managed", "cma")
+            if key in values
+        )
+        if "free" in values and "low" in values:
+            fields += f" free_minus_low_pages={values['free'] - values['low']}"
+        print(f"{label} node={node} zone={zone} {fields}".rstrip())
+
+
+def emit_pagetype_text(label: str, text: str) -> None:
+    counts, blocks = parse_pagetype(text)
+    for (node, zone, migratetype), values in sorted(counts.items()):
+        order4 = values[4] if len(values) > 4 else 0
+        ge4 = sum(values[4:]) if len(values) > 4 else 0
+        print(
+            f"{label}_pagetype node={node} zone={zone} type={migratetype} "
+            f"order4_blocks={order4} order4plus_blocks={ge4}"
+        )
+    for (node, zone), values in sorted(blocks.items()):
+        fields = " ".join(f"{key}={value}" for key, value in values.items())
+        print(f"{label}_pageblocks node={node} zone={zone} {fields}")
+
+
+def read_event_snapshot(event_dir: pathlib.Path) -> tuple[int | None, str, str, str]:
     meta = (event_dir / "meta.txt").read_text(encoding="utf-8", errors="replace")
     match = META_MONO_RE.search(meta)
     mono = int(match.group(1)) if match else None
     buddy = (event_dir / "proc-buddyinfo.txt").read_text(encoding="utf-8", errors="replace")
-    pagetype = (event_dir / "proc-pagetypeinfo.txt").read_text(
-        encoding="utf-8", errors="replace"
-    )
-    return mono, buddy, pagetype
+    pagetype = (event_dir / "proc-pagetypeinfo.txt").read_text(encoding="utf-8", errors="replace")
+    zoneinfo = (event_dir / "proc-zoneinfo.txt").read_text(encoding="utf-8", errors="replace")
+    return mono, buddy, pagetype, zoneinfo
 
 
 def emit_event(event_dir: pathlib.Path, rm_ns: int) -> None:
-    mono, buddy_text, pagetype_text = read_event_snapshot(event_dir)
+    mono, buddy_text, pagetype_text, zoneinfo_text = read_event_snapshot(event_dir)
     if mono is not None:
         print(f"event_snapshot_delay_ms={(mono - rm_ns) / 1_000_000:+.3f}")
     for (node, zone), values in sorted(parse_buddy(buddy_text).items()):
@@ -279,18 +330,8 @@ def emit_event(event_dir: pathlib.Path, rm_ns: int) -> None:
             f"event_buddy node={node} zone={zone} order4_blocks={order4} "
             f"order5plus_blocks={higher} ge4_free_mib={ge4_mib:.3f}"
         )
-
-    order_counts, pageblocks = parse_pagetype(pagetype_text)
-    for (node, zone, migratetype), values in sorted(order_counts.items()):
-        order4 = values[4] if len(values) > 4 else 0
-        ge4 = sum(values[4:]) if len(values) > 4 else 0
-        print(
-            f"event_pagetype node={node} zone={zone} type={migratetype} "
-            f"order4_blocks={order4} order4plus_blocks={ge4}"
-        )
-    for (node, zone), values in sorted(pageblocks.items()):
-        fields = " ".join(f"{key}={value}" for key, value in values.items())
-        print(f"event_pageblocks node={node} zone={zone} {fields}")
+    emit_pagetype_text("event", pagetype_text)
+    emit_zone_text("event_zone", zoneinfo_text)
 
 
 def main() -> int:
@@ -318,8 +359,8 @@ def main() -> int:
     slow = parse_samples(slow_path)
     fast_before, fast_after = nearest(fast, rm_ns)
     slow_before, slow_after = nearest(slow, rm_ns)
-
     events = sorted((state / "events").glob("rm-oom-*"))
+
     print("R11_ALLOCATOR_STATE_ANALYSIS=RM_OOM_CORRELATED")
     print(f"rm_monotonic_s={rm_s:.6f}")
     print(f"fast_samples={len(fast)} slow_samples={len(slow)} rm_event_snapshots={len(events)}")
@@ -346,30 +387,11 @@ def main() -> int:
         print("event_snapshot=MISSING")
 
     if slow_before is not None:
-        counts, blocks = parse_pagetype(slow_before.sections.get("/proc/pagetypeinfo", ""))
-        for (node, zone, migratetype), values in sorted(counts.items()):
-            order4 = values[4] if len(values) > 4 else 0
-            ge4 = sum(values[4:]) if len(values) > 4 else 0
-            print(
-                f"slow_before_pagetype node={node} zone={zone} type={migratetype} "
-                f"order4_blocks={order4} order4plus_blocks={ge4}"
-            )
-        for (node, zone), values in sorted(blocks.items()):
-            fields = " ".join(f"{key}={value}" for key, value in values.items())
-            print(f"slow_before_pageblocks node={node} zone={zone} {fields}")
-
+        emit_pagetype_text("slow_before", slow_before.sections.get("/proc/pagetypeinfo", ""))
+        emit_zone_text("slow_before_zone", slow_before.sections.get("/proc/zoneinfo", ""))
     if slow_after is not None:
-        counts, blocks = parse_pagetype(slow_after.sections.get("/proc/pagetypeinfo", ""))
-        for (node, zone, migratetype), values in sorted(counts.items()):
-            order4 = values[4] if len(values) > 4 else 0
-            ge4 = sum(values[4:]) if len(values) > 4 else 0
-            print(
-                f"slow_after_pagetype node={node} zone={zone} type={migratetype} "
-                f"order4_blocks={order4} order4plus_blocks={ge4}"
-            )
-        for (node, zone), values in sorted(blocks.items()):
-            fields = " ".join(f"{key}={value}" for key, value in values.items())
-            print(f"slow_after_pageblocks node={node} zone={zone} {fields}")
+        emit_pagetype_text("slow_after", slow_after.sections.get("/proc/pagetypeinfo", ""))
+        emit_zone_text("slow_after_zone", slow_after.sections.get("/proc/zoneinfo", ""))
 
     return 0
 
