@@ -99,19 +99,18 @@ The promoted immutable-release validation and R10b used the same release and rep
 
 This is strong evidence that the early RM sysmem failure is not deterministic from profile + KV size alone. The allocator state at the time of the post-weight-load / FP4-MoE / subsequent-load transition materially affects whether the large RM Linux-sysmem allocation path fails.
 
-The R10b clean run cannot be used to compare the failed allocation shape against R9 because no failed RM allocation occurred. The exact OrcaRouter failure request/policy and any rollback/retry behavior therefore remain unresolved until a valid traced restart reproduces RM OOM.
+## Follow-up closure
 
-## Next experiment
+A later corrected R10b attempt 02 reproduced six RM OOM events with a valid allocator trace on the same immutable release and 16 GiB default.
 
-Repeat the same corrected R10b trace contract with a unique evidence directory for each restart, stopping as soon as one valid run re-observes `_memdescAllocInternal` / `NV_ERR_NO_MEMORY`.
+That follow-up directly captured the same structural recovery pattern previously established by Hybrid R9: every failed 64 KiB/order-4 RM Linux-sysmem request was followed immediately on the same thread by the same logical request and captured policy at 4 KiB/order 0, where it succeeded.
 
-The runner already supports `ORCA_R10B_OUT`, so subsequent captures can preserve every run independently without modifying the immutable release or the 16 GiB default.
+The six failed logical request sizes were 3.125 GiB, 1.5625 GiB, approximately 1.186 GiB, approximately 1.193 GiB, 40 MiB and 40 MiB. This proves the fallback mechanism is not specific to the approximately 16 GiB request observed in R9.
 
-When a valid traced RM OOM is captured, compare it directly against R9 for:
+Canonical follow-up evidence:
 
-- outer request size and page policy;
-- 64 KiB/order-4 chunk count;
-- allocation/free rollback symmetry;
-- thread identity across failure and retry;
-- immediate 4 KiB/order-0 fallback behavior;
-- compaction, reclaim, and extfrag activity around the failed request.
+```text
+scripts/benchmark/evidence/orcarouter-managed-rmsys-r10b-02-rm-oom-20261003.md
+```
+
+Accordingly, this document remains the canonical **clean** R10b run, while attempt 02 is the canonical traced OrcaRouter RM-fallback run. Further tracing is no longer needed merely to prove the fallback shape; the remaining allocator question is which Linux zone/migratetype/buddy/pageblock state determines whether an order-4 RM allocation succeeds or falls back.
