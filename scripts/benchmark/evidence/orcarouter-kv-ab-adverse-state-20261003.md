@@ -89,8 +89,18 @@ Do not over-generalize the result:
 
 The supported operational conclusion is narrower: 24 GiB is not robust enough as the managed OrcaRouter default across the observed lifecycle states, while 16 GiB crossed the same adverse-state startup path cleanly and retained substantial post-ready host-memory margin.
 
+## Promoted-release follow-up
+
+The repository default was subsequently promoted to 16 GiB and validated again after removing the temporary service override and cutting over to immutable release `ff67bab3c94d6992f61b9535836df97f03b9c022`.
+
+That independent restart confirmed the repository default at runtime (`16.0 GiB`, 579,086 KV tokens, 2.21x maximum concurrency) and completed managed readiness/commit successfully, but emitted six recoverable `_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)` events before readiness. No protected stop occurred and the container remained running.
+
+Therefore the promoted-release run is **FUNCTIONAL PASS / HOST-STABILITY FAIL** under the strict policy. See `orcarouter-managed-16g-promoted-release-20261003.md` for the detailed evidence.
+
+This follow-up narrows the conclusion further: 16 GiB improves survivability and avoids the observed 24 GiB fatal/protected-stop boundary, but it does not deterministically eliminate RM sysmem allocation failures across restarts.
+
 ## Operational decision
 
-Promote OrcaRouter's managed KV default from 24 GiB to 16 GiB as a resilience mitigation, with regression coverage pinning the value. Keep the change described as mitigation rather than a universal RM fix.
+Keep OrcaRouter's managed KV default at 16 GiB as a resilience mitigation, with regression coverage pinning the value. Do not describe the change as a universal or strict host-stability fix.
 
 The Hybrid profile remains a separate decision. This OrcaRouter A/B does not by itself justify changing the Hybrid default without a Hybrid-specific controlled run.
