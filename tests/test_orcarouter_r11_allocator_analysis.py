@@ -89,7 +89,8 @@ Node 0, zone Normal 1 2 3 4 6
             "/proc/pressure/memory",
             "order4_blocks",
             "event_snapshot_delay_ms",
-            "slow_before_pageblocks",
+            'emit_pagetype_text("slow_before"',
+            'emit_zone_text("slow_before_zone"',
             "free_minus_low_pages",
         ):
             self.assertIn(token, text)
