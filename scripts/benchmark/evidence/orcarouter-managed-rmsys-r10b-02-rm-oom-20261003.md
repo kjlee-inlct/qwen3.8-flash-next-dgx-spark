@@ -82,7 +82,7 @@ Selected counts:
 - failure 5: compaction 23; direct reclaim 22; extfrag 20;
 - failure 6: compaction 22; direct reclaim 21; extfrag 18.
 
-This supports an order-4 physical-allocation availability/fragmentation boundary under the allocator state present at those moments. The exact Linux zone, migratetype, buddy free-list and pageblock state remain unresolved because those lower-level state variables were not captured.
+This supports an order-4 physical-allocation availability/fragmentation boundary under the allocator state present at those moments.
 
 ## Direct comparison with Hybrid R9
 
@@ -125,4 +125,6 @@ The previously documented optional `HOST-STABILITY WARN / RECOVERABLE_RM_SYSMEM_
 
 The proximate mechanism is no longer Hybrid-specific. It is directly observed in both Hybrid and OrcaRouter.
 
-Further repeated tracing is no longer required merely to prove the 64 KiB/order-4 -> 4 KiB/order-0 fallback shape. Additional allocator experiments should instead target the remaining question: **which Linux allocator state variables determine whether a given order-4 RM request succeeds cleanly or crosses into fallback?**
+R11 has since captured the next lower layer: during a valid OrcaRouter restart, Normal-zone order-4+ buddy capacity collapsed to 1.688 MiB immediately before a recoverable RM fallback despite about 20 GiB MemAvailable and about 43.5 GiB SwapFree. The 17,983 rolled-back 64 KiB chunks represented 1,123.9375 MiB, closely matching the 1,121.375 MiB Normal-zone order-4+ capacity observed immediately after rollback. See `scripts/benchmark/evidence/orcarouter-managed-rmsys-r11-allocator-state-20261003.md`.
+
+Further repeated tracing is no longer required merely to prove the 64 KiB/order-4 -> 4 KiB/order-0 fallback shape. The remaining analysis should map the preserved R11 raw PFNs and trace migratetype fields to exact Linux zone and pageblock ownership transitions.
