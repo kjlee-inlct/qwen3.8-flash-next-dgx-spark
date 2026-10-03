@@ -27,7 +27,9 @@ case "${MODEL_PROFILE}" in
     IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
     MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
-    DEFAULT_GPU_UTIL=0.85; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    # 2026-10-03 adverse-state controlled A/B: 16 GiB passed strict readiness/soak/host checks;
+    # 24 GiB reproduced repeated RM NV_ERR_NO_MEMORY events and a five-sample protected stop.
+    DEFAULT_GPU_UTIL=0.85; DEFAULT_KV_MEM=17179869184; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
     SERVED_NAME="${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   nvidia)
@@ -41,7 +43,9 @@ case "${MODEL_PROFILE}" in
     IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029:v1}"
     MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-mazinb}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
-    DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=25769803776; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    # 2026-10-02 controlled A/B: 16 GiB passed strict readiness/soak/host checks;
+    # 24 GiB reproduced RM NV_ERR_NO_MEMORY and a five-sample protected stop.
+    DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=17179869184; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
     DEFAULT_QSA_EXACT_TOPK=1
     PLE_MODE=mmap
     KV_MEMORY_FLAG=--kv-cache-memory-bytes

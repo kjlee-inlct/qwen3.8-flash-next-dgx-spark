@@ -43,19 +43,29 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 |---|---|---:|
 | `orcarouter` | stable/default, qualified | yes |
 | `nvidia` | experimental | yes |
-| `mazinb` | experimental, clean managed DGX lifecycle pending | yes |
-| `orcarouter-hybrid` | experimental, generated H6; warm/reuse E2E + round-trip switch + host repair gate PASS; clean-host full build pending | yes |
+| `mazinb` | experimental; checkpoint staged + switch preflight/wizard dry-run PASS; live managed activation pending | yes |
+| `orcarouter-hybrid` | experimental, generated H6; warm/reuse + round-trip functional PASS; current strict host-stability FAIL after R9; clean-host full build pending | yes |
 | `lychee888` | planned | no |
 
 A profile is not made installable merely because checkpoint metadata exists.
 The registry must also have a defined preparation/runtime path and the managed
 lifecycle must accept the profile. However, `installable=yes` is an implementation
 state, not proof that the full DGX managed-service qualification has passed.
+
 `orcarouter-hybrid` uses the H3 -> H4-all -> H5 -> H6 preparation chain and has
-passed warm/reuse managed operation, the Hybrid -> OrcaRouter -> Hybrid transactional
-round trip, and the 2026-09-29 CMA-aware host-stability repair gate. Its genuinely
-clean-host source-download/build/service lifecycle is still pending, so it remains
-experimental. `lychee888` remains blocked.
+passed warm/reuse managed operation and the Hybrid -> OrcaRouter -> Hybrid
+transactional round trip functionally. The 2026-09-29 CMA-aware repair gate also
+passed its then-defined repeated-validation criteria, but later live switch/restart
+runs and the R8/R9 investigation reproduced recoverable NVIDIA RM
+`NV_ERR_NO_MEMORY`. The current strict classification is therefore
+**FUNCTIONAL PASS / HOST-STABILITY FAIL**. R9 localized the proximate mechanism
+to an RM Linux-sysmem order-4/64 KiB physical-chunk allocation failure with
+rollback followed by successful order-0/4 KiB fallback for the same logical
+request and captured allocation policy. The optional narrow recoverable-RM
+warning exception is documented separately and is not implicitly enabled.
+
+Its genuinely clean-host source-download/build/service lifecycle is still
+pending, so Hybrid remains experimental. `lychee888` remains blocked.
 
 
 ### OrcaRouter hybrid installer profile
@@ -85,19 +95,33 @@ scripts/model/validate-orcarouter-hybrid.py
 
 ### mazinb installer promotion status
 
-The installer promotion was merged after two concrete checks on DGX Spark:
+The installer exposes mazinb as an experimental/installable profile, but this is
+not yet a full managed-service qualification result.
 
-- `./install.sh --list-models` exposed `mazinb` as
+Verified DGX Spark evidence as of 2026-10-02:
+
+- `./install.sh --list-models` exposes `mazinb` as
   `experimental / installable=1`;
-- `./install.sh --model mazinb --lang en --yes --no-start --dry-run`
-  produced the expected model, revision `f2c21eb`, model directory, and local
-  `vllm-orcarouter-v029:v1` image plan without mutating the host.
+- the pinned source ref `f2c21eb` resolved to full SHA
+  `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`;
+- the complete 173.64 GiB checkpoint was staged under the active repository-local
+  managed model root and all required files were verified before the project model
+  manifest was marked `complete`;
+- the read-only Hybrid -> mazinb preflight passed with all three lifecycle
+  transactions idle, the expected image/checkpoint present, and no stale
+  profile-switch candidate/backup artifacts;
+- `./install.sh --model mazinb --model-root <managed-root> --dry-run` produced
+  the intended `orcarouter-hybrid -> mazinb` managed switch plan, including
+  checkpoint-default config, memory monitor/protection, API/LAN settings, and
+  installer-owned systemd service, then explicitly exited without mutating
+  download/swap/release/API/service/Docker/manifest state.
 
-The full managed lifecycle validation has **not yet been run** for mazinb.
-Actual checkpoint download, local image build, systemd readiness, doctor, restart,
-uninstall preservation, API behavior, determinism/correctness, and performance are
-still pending. Keeping mazinb selectable means only that the installer path exists;
-it is not a qualification result.
+Actual live profile activation, systemd startup/readiness and runtime commit,
+post-commit doctor/restart, uninstall preservation, managed API behavior, and
+managed-lifecycle correctness/performance remain pending. Under the current
+strict Hybrid host-stability policy, live Hybrid -> mazinb activation remains
+blocked unless the documented narrow recoverable-RM exception is explicitly
+adopted for that acceptance leg.
 
 ## Installer ownership vs model inventory
 
