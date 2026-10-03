@@ -22,7 +22,7 @@ fail() {
     exit 2
 }
 
-for command in sudo python3 bash systemctl curl date tee cat grep; do
+for command in sudo python3 bash systemctl curl date tee cat grep tail cut; do
     command -v "${command}" >/dev/null 2>&1 || fail "required command not found: ${command}"
 done
 
@@ -50,6 +50,7 @@ capture_state() {
 
 capture_vm_tunables() {
     local target="$1"
+    local name path
     {
         for name in \
             compaction_proactiveness \
