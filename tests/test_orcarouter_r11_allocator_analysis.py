@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import sys
 import tempfile
 import unittest
 
@@ -12,14 +13,13 @@ ANALYZER = ROOT / "scripts" / "benchmark" / "analyze-orcarouter-r11-allocator-st
 spec = importlib.util.spec_from_file_location("r11_allocator_analysis", ANALYZER)
 assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
 class OrcaRouterR11AllocatorAnalysisTests(unittest.TestCase):
     def test_parse_buddy_and_metrics(self) -> None:
-        parsed = module.parse_buddy(
-            "Node 0, zone Normal  1 2 3 4 5 6 7\n"
-        )
+        parsed = module.parse_buddy("Node 0, zone Normal  1 2 3 4 5 6 7\n")
         values = parsed[(0, "Normal")]
         order4, ge4_mib, higher = module.buddy_metrics(values)
         self.assertEqual(order4, 5)
@@ -39,6 +39,22 @@ Node 0, zone   Normal          10           20            3            1        
         self.assertEqual(counts[(0, "Normal", "Movable")][4], 11)
         self.assertEqual(blocks[(0, "Normal")]["Unmovable"], 10)
         self.assertEqual(blocks[(0, "Normal")]["Movable"], 20)
+
+    def test_parse_zoneinfo_watermarks(self) -> None:
+        text = """\
+Node 0, zone   Normal
+  pages free     1200
+        boost    0
+        min      100
+        low      200
+        high     300
+        managed  4000
+        cma      0
+"""
+        zones = module.parse_zoneinfo(text)
+        self.assertEqual(zones[(0, "Normal")]["free"], 1200)
+        self.assertEqual(zones[(0, "Normal")]["low"], 200)
+        self.assertEqual(zones[(0, "Normal")]["managed"], 4000)
 
     def test_parse_samples_and_nearest(self) -> None:
         text = """\
@@ -74,6 +90,7 @@ Node 0, zone Normal 1 2 3 4 6
             "order4_blocks",
             "event_snapshot_delay_ms",
             "slow_before_pageblocks",
+            "free_minus_low_pages",
         ):
             self.assertIn(token, text)
 
