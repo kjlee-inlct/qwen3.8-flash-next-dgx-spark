@@ -15,7 +15,11 @@ class OrcaRouterRmSysTraceTests(unittest.TestCase):
     def test_runner_targets_managed_orcarouter_16_gib_release(self) -> None:
         self.assertIn("MODEL_PROFILE=orcarouter", self.text)
         self.assertIn("DEFAULT_KV_MEM=17179869184", self.text)
-        self.assertIn("/qwen38-spark/current", self.text)
+        self.assertIn(
+            'DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"',
+            self.text,
+        )
+        self.assertIn('CURRENT_LINK="${DATA_HOME}/current"', self.text)
         self.assertIn("kv16-ab.conf", self.text)
         self.assertIn("temporary KV override is still present", self.text)
 
