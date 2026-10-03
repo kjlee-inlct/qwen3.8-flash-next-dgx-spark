@@ -42,7 +42,7 @@ for command in sudo python3 bash systemctl curl date grep find wc; do
     command -v "${command}" >/dev/null 2>&1 || fail "required command not found: ${command}"
 done
 sudo -n true >/dev/null 2>&1 || fail "sudo timestamp unavailable; run sudo -v first"
-[[ -x "${R10B}" ]] || fail "R10b runner is not executable: ${R10B}"
+[[ -r "${R10B}" ]] || fail "R10b runner is not readable: ${R10B}"
 [[ -r "${COLLECTOR}" ]] || fail "allocator-state collector missing: ${COLLECTOR}"
 [[ ! -e "${OUT}" ]] || fail "evidence already exists: ${OUT}"
 systemctl is-active --quiet "${UNIT}" || fail "managed service is not active"
