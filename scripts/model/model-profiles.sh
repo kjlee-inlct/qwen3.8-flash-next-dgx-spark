@@ -23,7 +23,7 @@ describe_model_profile() {
       PROFILE_DEFAULT=1
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-      PROFILE_DESCRIPTION="Primary qualified OrcaRouter profile"
+      PROFILE_DESCRIPTION="Primary qualified OrcaRouter profile; 16 GiB managed KV resilience default"
       ;;
     nvidia)
       PROFILE_STATUS="experimental"
@@ -37,7 +37,7 @@ describe_model_profile() {
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-      PROFILE_DESCRIPTION="Optional mazinb profile; 16 GiB KV mitigation selected, managed re-validation pending"
+      PROFILE_DESCRIPTION="Optional mazinb profile; 16 GiB managed KV resilience mitigation validated"
       ;;
     orcarouter-hybrid)
       PROFILE_STATUS="experimental"
