@@ -82,18 +82,32 @@ The temporary A/B comparison now removes the managed-vs-temporary lifecycle diff
 - B, 16 GiB: strict PASS, API ready, served-model validated, 180-second soak complete, no protected stop, no RM/OOM signal, clean exit 0;
 - A, 24 GiB: readiness never reached, two RM `NV_ERR_NO_MEMORY` events, five-sample low-memory protection sequence, protected stop, exit 1, `OOMKilled=false`.
 
-Within the tested controls, this is strong causal evidence that the 24 GiB KV reservation materially pushes the GB10 unified-memory host across the RM/host-protection failure boundary, while 16 GiB leaves enough non-CMA available-memory margin to complete startup and soak.
+Within this specific controlled allocator/runtime state, this is strong causal evidence that the 24 GiB KV reservation materially pushes the GB10 unified-memory host across the RM/host-protection failure boundary, while 16 GiB leaves enough non-CMA available-memory margin to complete startup and soak.
 
-This does **not** establish that KV size is the sole possible contributor under every allocator state, driver version, or workload. It establishes the narrower and operationally relevant result: on this host, with the same checkpoint, image, PLE mode, speculation, QSA mode, max length, max sequences, GPU utilization, and protection policy, changing the controlled KV reservation from 16 GiB to 24 GiB changed the outcome from strict PASS to repeated RM/protected-stop failure.
+This does **not** establish that KV size is the sole possible contributor under every allocator state, driver version, lifecycle path, or workload. It establishes the narrower operational result that changing the controlled KV reservation from 16 GiB to 24 GiB changed the temporary-helper outcome from strict PASS to repeated RM/protected-stop failure.
+
+## Managed follow-up qualification
+
+The subsequent real managed 16 GiB re-validation materially limits how far the temporary B result may be generalized.
+
+In that managed run, 16 GiB still reached committed readiness, passed the required 180-second post-ready soak, avoided any protected stop, remained `OOMKilled=false`, and stayed active for more than four hours. However, the sudo-enabled kernel re-collection found one `_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)` event during startup, roughly one minute before health readiness.
+
+Therefore the combined evidence supports this refined conclusion:
+
+- reducing mazinb KV from 24 GiB to 16 GiB materially improves host-memory margin and avoids the fatal/protected-stop boundary observed at 24 GiB;
+- 16 GiB does **not** guarantee elimination of the RM sysmem allocation failure across allocator/lifecycle states;
+- the managed 16 GiB run is functionally successful but remains a strict host-stability FAIL under the current policy because any RM `NV_ERR_NO_MEMORY` is disqualifying.
+
+No R9 allocation trace was captured in that managed follow-up, so the exact R9 order-4 rollback/order-0 retry mechanism is not claimed to have been reproduced. Only the same top-level RM failure signature is established.
 
 ## Promotion decision
 
-The selected mitigation is therefore:
+The selected operational mitigation remains:
 
-- promote mazinb managed default KV from 24 GiB to 16 GiB;
-- keep every other managed mazinb runtime control unchanged for the next validation;
-- retain memory protection unchanged;
-- rerun the real managed Hybrid -> mazinb transition;
-- require managed readiness, correct served-model identity, post-ready soak, no protected stop, no Docker OOM kill, and no kernel `NV_ERR_NO_MEMORY` in the validation window before changing the managed matrix result.
+- keep the mazinb managed default at 16 GiB rather than reverting to 24 GiB;
+- keep the other managed mazinb runtime controls unchanged unless a new bounded experiment targets another variable;
+- retain memory protection unchanged.
 
-The completed A/B experiment does not retroactively change the earlier failed managed Hybrid -> mazinb activation. Until the promoted 16 GiB default passes the real managed transition, that existing matrix entry remains `FUNCTIONAL FAIL / HOST-STABILITY FAIL`.
+The promotion is justified as a resilience improvement because it changes the managed outcome from readiness failure plus protected stop at 24 GiB to committed readiness and sustained operation at 16 GiB. It is **not** a strict host-stability fix by itself.
+
+Under the current strict policy, the managed Hybrid -> mazinb matrix entry after the 16 GiB re-validation is `FUNCTIONAL PASS / HOST-STABILITY FAIL`.
