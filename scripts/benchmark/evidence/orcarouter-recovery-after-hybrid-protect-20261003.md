@@ -4,7 +4,7 @@
 
 - Functional: **FAIL**
 - Host stability: **FAIL**
-- Kernel RM/OOM evidence: **not collected in this attempt**
+- Kernel RM/OOM evidence: **CONFIRMED**
 
 This recovery attempt is outside the planned live-switch matrix. It was run after the final OrcaRouter -> Hybrid return had already failed and the previous OrcaRouter container had been restored in a stopped state.
 
@@ -44,14 +44,49 @@ After the 780-second readiness checkpoint, the managed path reported:
 
 Subsequent loopback `/health` and `/v1/models` requests failed because port 8888 was no longer serving.
 
+## Memory-protection sequence
+
+The read-only follow-up evidence collection used the same recovery window beginning at 12:30 KST and confirmed the decisive memory sequence.
+
+The runtime monitor first stayed above the protection gate while checkpoint paging consumed substantial swap. Near startup completion:
+
+- 12:44:31: protection sample 1/5 at 9585 MiB non-CMA available and 1903 MiB non-CMA free
+- 12:44:33: margin recovered to 11666 MiB non-CMA available
+- 12:44:41: protection sample 1/5 at 9790 MiB non-CMA available
+- 12:44:43: 2/5
+- 12:44:45: 3/5
+- 12:44:47: 4/5
+- 12:44:49: 5/5 followed by `PROTECT stopping`
+
+Swap-free at the protected stop was about 45.9 GiB, so total swap exhaustion was not the immediate trigger.
+
+## Kernel RM/OOM closure
+
+The sudo-enabled kernel window confirms seven top-level NVIDIA RM allocation failures immediately before the protection sequence:
+
+- three `_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)` events at 12:44:25
+- two more at 12:44:26
+- two more at 12:44:30
+
+The first managed low-memory protection sample followed at 12:44:31. The timing therefore establishes the same top-level ordering seen in the fatal managed cases: RM sysmem allocation failure first, then managed host-protection pressure, then protected stop.
+
+No R9 allocation trace was active for this recovery attempt. Therefore this result re-confirms the top-level `_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)` signature, but it does **not** re-prove the exact R9 order-4 rollback / order-0 retry mechanism for this OrcaRouter run.
+
 ## Host-stability interpretation
 
-This attempt is a strict **HOST-STABILITY FAIL** because memory protection intervened during startup. A protected stop is disqualifying under the current policy even without a captured kernel RM/OOM line.
+This attempt is a strict **HOST-STABILITY FAIL** for two independent reasons:
 
-The available output from this attempt does **not** contain a sudo-enabled kernel journal collection, so do not claim that `_memdescAllocInternal` / `NV_ERR_NO_MEMORY (0x51)` was re-observed here. A separate read-only evidence collection is required to determine whether the protected stop was accompanied by the same RM signature.
+1. the kernel emitted repeated NVIDIA RM `NV_ERR_NO_MEMORY` failures; and
+2. managed memory protection intervened before readiness.
 
-The failure also shows that the previously strict-PASS OrcaRouter profile is not guaranteed to recover immediately after the protected Hybrid failure under the allocator/lifecycle state present at this later point. This does not invalidate the earlier mazinb -> OrcaRouter PASS/PASS observation; it demonstrates state-dependent reproducibility.
+It is also a **FUNCTIONAL FAIL** because the candidate never reached the managed readiness/model-validation/commit sequence and the loopback API was unavailable after abort.
+
+The failure shows that the previously strict-PASS OrcaRouter profile is not guaranteed to recover immediately after the protected Hybrid failure under the allocator/lifecycle state present at this later point. This does not invalidate the earlier mazinb -> OrcaRouter PASS/PASS observation; it demonstrates state-dependent reproducibility.
+
+The result also strengthens the evidence against a Hybrid-only explanation. Both the Hybrid final return and the later normal OrcaRouter recovery used a 24 GiB manual KV reservation and crossed the fatal/protected-stop boundary under adverse allocator state. This remains an observed association, not proof that 24 GiB alone is a sufficient cause across all fresh states.
 
 ## Operational state
 
-At the end of this attempt the managed service is inactive/dead and the loopback API is unavailable. Repeating the same 24 GiB recovery blindly is not justified until kernel evidence is collected and the next mitigation/recovery strategy is selected.
+At evidence collection time the managed service remained inactive/dead and the loopback API was unavailable. The canonical restored container metadata showed `exit=0` and `oom_killed=false`, but that container is the earlier restored OrcaRouter instance, not the failed recovery candidate, so those fields must not be attributed to the failed candidate.
+
+Repeating the same 24 GiB recovery blindly is not justified. The next controlled step should change allocator state or KV pressure deliberately rather than simply retrying the identical failed recovery path.
