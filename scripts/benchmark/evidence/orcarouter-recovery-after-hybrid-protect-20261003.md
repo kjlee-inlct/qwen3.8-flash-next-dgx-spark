@@ -18,6 +18,7 @@ This recovery attempt is outside the planned live-switch matrix. It was run afte
 - PLE: CPU offload
 - Speculative decode: MTP, k=2
 - max model length: 262144
+- manual KV reservation: 24 GiB
 - managed memory protection: enabled
 - preflight: memory=121551 MiB, swapfree=146448 MiB, diskfree=120514 MiB
 
@@ -85,8 +86,24 @@ The failure shows that the previously strict-PASS OrcaRouter profile is not guar
 
 The result also strengthens the evidence against a Hybrid-only explanation. Both the Hybrid final return and the later normal OrcaRouter recovery used a 24 GiB manual KV reservation and crossed the fatal/protected-stop boundary under adverse allocator state. This remains an observed association, not proof that 24 GiB alone is a sufficient cause across all fresh states.
 
-## Operational state
+## Operational state at failure closure
 
-At evidence collection time the managed service remained inactive/dead and the loopback API was unavailable. The canonical restored container metadata showed `exit=0` and `oom_killed=false`, but that container is the earlier restored OrcaRouter instance, not the failed recovery candidate, so those fields must not be attributed to the failed candidate.
+At the first evidence collection after this attempt, the managed service was inactive/dead and the loopback API was unavailable. The canonical restored container metadata showed `exit=0` and `oom_killed=false`, but that container was the earlier restored OrcaRouter instance, not the failed recovery candidate, so those fields must not be attributed to the failed candidate.
 
-Repeating the same 24 GiB recovery blindly is not justified. The next controlled step should change allocator state or KV pressure deliberately rather than simply retrying the identical failed recovery path.
+## Controlled 16 GiB follow-up
+
+A subsequent controlled OrcaRouter run was performed without rebooting, preserving the adverse allocator/lifecycle state as much as practical while reducing only the manual KV reservation from 24 GiB to 16 GiB.
+
+That 16 GiB run was a strict **FUNCTIONAL PASS / HOST-STABILITY PASS**:
+
+- the runtime confirmed a 16.0 GiB KV reservation
+- health-ready and expected-model validation completed
+- the managed runtime transition committed and wrote attestation
+- the required 180-second post-ready soak completed with HTTP 200 health/model responses
+- Docker remained running with `OOMKilled=false`
+- the sudo-enabled kernel window contained no RM/OOM signal
+- no protected stop occurred
+
+The full A/B is recorded in `orcarouter-kv-ab-adverse-state-20261003.md`.
+
+The operational conclusion is therefore no longer to retry the same 24 GiB path. Promote 16 GiB as the managed OrcaRouter resilience default, while keeping the claim narrow: this is a demonstrated mitigation under the tested adverse state, not proof of a universal RM fix.
