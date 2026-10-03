@@ -64,4 +64,6 @@ bash scripts/runtime/collect-managed-readiness-evidence.sh \
   | tee /tmp/mazinb-managed-16g-kernel-20261003.txt
 ```
 
-Final host-stability acceptance requires no new `NV_ERR_NO_MEMORY`, NVIDIA RM OOM, kernel OOM-killer event, or protected stop in the managed candidate window through at least the completed 180-second soak.
+Because the runtime remains active, this re-collection also extends the observed stable-runtime window beyond the original 180-second soak.
+
+Final host-stability acceptance requires no new `NV_ERR_NO_MEMORY`, NVIDIA RM OOM, kernel OOM-killer event, or protected stop in the managed candidate window through the re-collection time.
