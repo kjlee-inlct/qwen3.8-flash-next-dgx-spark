@@ -104,8 +104,10 @@ The key observation is that the experiment began with approximately 2.85 GiB of 
 
 Therefore the failure is not explained by a bad allocator state only at service-start time. The relevant state evolves dynamically during startup. A useful mitigation must keep the high-order reservoir healthier throughout the load, not merely compact it once before the load begins.
 
+The first failed request also shows why a pre-start high-order-capacity number cannot be treated as a simple acceptance threshold. The request required 3.125 GiB logically, while the kernel dynamically compacted, reclaimed, split fallback buddies, and accumulated more than 2.5 GiB of order-4 chunks before eventual failure. The allocator path evolves throughout the request.
+
 ## Next mitigation step
 
-The next A/B should modify exactly one runtime VM policy and restore it afterward. The first candidate is temporary `vm.compaction_proactiveness=80` for the full startup interval, with all other VM tunables unchanged and the same R11 trace/collector contract. This directly tests whether sustained background compaction can prevent the Normal-zone high-order reservoir collapse observed in R11/R12.
+R13 changes exactly one runtime VM policy and restores it afterward: temporary `vm.compaction_proactiveness=80` for the full startup interval, with all other VM tunables unchanged and the same R11 trace/collector contract. This directly tests whether sustained background compaction can prevent the Normal-zone high-order reservoir collapse observed in R11/R12.
 
 If that still reproduces RM OOM, the next isolated variable should be free-page reserve/reclaim policy (most directly `watermark_scale_factor`) rather than another pre-start compaction or another KV reduction.
