@@ -160,6 +160,6 @@ Current lower-level model:
 
 R12 tested a one-shot write to `vm.compact_memory` immediately before startup. It began with approximately 2.85 GiB of Normal-zone order-4+ free capacity, and the one-shot compaction barely changed that starting capacity. Nevertheless two RM order-4 failures reappeared later during the long model startup, including a 3.125 GiB request that accumulated and rolled back about 2.53 GiB of order-4 chunks before falling back successfully to order 0.
 
-Therefore one-shot pre-start compaction is not a sufficient mitigation. The relevant allocator state evolves during startup; mitigation must preserve high-order supply during the load. R13 is the next isolated A/B: temporarily raise `vm.compaction_proactiveness` from 20 to 80 for the full startup interval, restore it afterward on every exit path, and keep every other VM tunable unchanged.
+Therefore one-shot pre-start compaction is not a sufficient mitigation. The relevant allocator state evolves during startup; mitigation must preserve high-order supply during the load. R13 is the next isolated A/B: temporarily raise `vm.compaction_proactiveness` from 20 to 80 for the full startup interval, restore it afterward on every exit path, and keep every other VM tunable unchanged. The R13 helper and regression tests pass CI.
 
 Canonical R12 evidence: `scripts/benchmark/evidence/orcarouter-managed-rmsys-r12-precompact-20261003.md`.
