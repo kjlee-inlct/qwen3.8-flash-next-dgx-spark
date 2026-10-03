@@ -76,3 +76,9 @@ The corrected follow-up is R10b. Its runner changes the experiment contract in t
 2. the managed child writes its own exit status independently of `trace-cmd`, and experiment validity additionally requires an observed container replacement.
 
 The invalid R10 output directory should be retained as failed-run evidence. R10b uses a separate output directory and must be the run used for allocator/root-cause comparison against R9.
+
+## R10b follow-up
+
+The corrected R10b run subsequently executed successfully and is recorded separately in `orcarouter-managed-rmsys-r10b-clean-20261003.md`.
+
+That run observed a real managed container replacement, non-zero allocator trace data across all CPUs, a healthy committed replacement runtime, and no RM OOM in its valid capture window. The first R10 attempt remains invalid and must still be excluded from host-stability statistics.
