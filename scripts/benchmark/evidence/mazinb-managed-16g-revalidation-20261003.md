@@ -55,15 +55,8 @@ The evidence collector could not read the kernel journal because the sudo creden
 
 Under the current strict acceptance policy, absence of a protected stop and `OOMKilled=false` are not sufficient to claim `HOST-STABILITY PASS` if the kernel RM window was not captured. The managed 16 GiB leg remains `HOST-STABILITY PENDING KERNEL EVIDENCE` until the kernel journal is checked for the candidate-start-through-soak window.
 
-No model rerun is required. Re-run the read-only evidence collector with a fresh sudo credential, using the original managed-candidate start as the lower bound:
+No model rerun is required. Refresh the sudo credential and rerun the repository's read-only managed-readiness evidence collector from the original candidate start time `2026-10-03T04:56:51+09:00`.
 
-```bash
-sudo -v
-bash scripts/runtime/collect-managed-readiness-evidence.sh \
-  --since '2026-10-03T04:56:51+09:00' \
-  | tee /tmp/mazinb-managed-16g-kernel-20261003.txt
-```
-
-Because the runtime remains active, this re-collection also extends the observed stable-runtime window beyond the original 180-second soak.
+Because the runtime remains active, that re-collection also extends the observed stable-runtime window beyond the original 180-second soak.
 
 Final host-stability acceptance requires no new `NV_ERR_NO_MEMORY`, NVIDIA RM OOM, kernel OOM-killer event, or protected stop in the managed candidate window through the re-collection time.
