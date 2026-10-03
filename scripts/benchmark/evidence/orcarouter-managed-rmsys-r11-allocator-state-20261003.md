@@ -144,3 +144,7 @@ Current best lower-level model:
 > During some OrcaRouter startup states, Normal-zone high-order buddy capacity collapses while substantial base-page memory remains available. NVIDIA RM's 64 KiB/order-4 sysmem request drives compaction/reclaim and partially succeeds, but cannot complete the required sequence of high-order chunks. RM rolls back the accumulated order-4 pages, which visibly repopulates the Normal-zone high-order buddy pool, then retries the same logical request at 4 KiB/order 0 and succeeds.
 
 The exact GFP/migratetype compatibility and pageblock-stealing path remain to be closed from the preserved raw R11 trace; no additional runtime restart is required for that analysis.
+
+## Follow-up tooling
+
+The repository now includes `scripts/benchmark/analyze-orcarouter-r11-zone-migratetype.py`, a read-only post-processor for the preserved R11 trace. It maps the failed interval's order-4 allocation/free PFNs to zone boundaries from the RM event snapshot and reports trace migratetype, extfrag fallback migratetype, and ownership-change counts. This follow-up analysis does not restart or mutate the runtime.
