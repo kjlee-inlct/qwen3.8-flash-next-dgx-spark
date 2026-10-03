@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import pathlib
+import select
 import subprocess
 import threading
 import time
@@ -54,8 +55,6 @@ def append_snapshot(target: pathlib.Path, sources: Iterable[str], seq: int) -> N
         for source in sources:
             out.write(f"--- {source} ---\n")
             out.write(read_text(pathlib.Path(source)))
-            if not out.tell():
-                out.write("\n")
             out.write("\n")
         out.flush()
 
@@ -107,11 +106,15 @@ def journal_worker(root: pathlib.Path, stop: threading.Event) -> None:
         assert proc.stdout is not None
         with log_path.open("a", encoding="utf-8") as out:
             while not stop.is_set():
+                ready, _, _ = select.select([proc.stdout], [], [], 0.25)
+                if not ready:
+                    if proc.poll() is not None:
+                        break
+                    continue
                 line = proc.stdout.readline()
                 if not line:
                     if proc.poll() is not None:
                         break
-                    time.sleep(0.05)
                     continue
                 out.write(line)
                 out.flush()
@@ -147,18 +150,18 @@ def main() -> int:
     if args.fast_interval <= 0 or args.slow_interval <= 0:
         raise SystemExit("intervals must be positive")
 
-    (root / "collector-meta.txt").write_text(
-        "\n".join(
-            (
-                f"started_wall={utc_now()}",
-                f"started_monotonic_ns={time.monotonic_ns()}",
-                f"fast_interval={args.fast_interval}",
-                f"slow_interval={args.slow_interval}",
+    with (root / "collector-meta.txt").open("w", encoding="utf-8") as meta:
+        meta.write(
+            "\n".join(
+                (
+                    f"started_wall={utc_now()}",
+                    f"started_monotonic_ns={time.monotonic_ns()}",
+                    f"fast_interval={args.fast_interval}",
+                    f"slow_interval={args.slow_interval}",
+                )
             )
+            + "\n"
         )
-        + "\n",
-        encoding="utf-8",
-    )
     write_full_snapshot(root, "baseline")
 
     stop_event = threading.Event()
@@ -166,7 +169,7 @@ def main() -> int:
         target=journal_worker,
         args=(root, stop_event),
         name="allocator-journal-follow",
-        daemon=True,
+        daemon=False,
     )
     journal_thread.start()
 
@@ -192,9 +195,12 @@ def main() -> int:
         write_full_snapshot(root, "final")
         stop_event.set()
         journal_thread.join(timeout=5)
-        (root / "collector-meta.txt").open("a", encoding="utf-8").write(
-            f"finished_wall={utc_now()}\nfinished_monotonic_ns={time.monotonic_ns()}\n"
-        )
+        if journal_thread.is_alive():
+            raise RuntimeError("kernel journal follower did not stop cleanly")
+        with (root / "collector-meta.txt").open("a", encoding="utf-8") as meta:
+            meta.write(
+                f"finished_wall={utc_now()}\nfinished_monotonic_ns={time.monotonic_ns()}\n"
+            )
 
     return 0
 
