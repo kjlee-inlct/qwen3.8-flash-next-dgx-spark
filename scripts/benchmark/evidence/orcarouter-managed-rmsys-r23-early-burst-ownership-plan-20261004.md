@@ -173,9 +173,9 @@ R23 should reuse rather than duplicate:
   - exact RM/UVM target presence;
 - R8 dynamic probe create/verify/cleanup mechanics from
   `scripts/benchmark/run-h6-kv16-rmuvm-r8.sh`;
-- R9 full `nv_alloc_pages` policy-argument definition and
-  `nv_alloc_system_pages` boundary from
-  `scripts/runtime/check-h6-r9-rmsys-probes.sh` and the R9 runner;
+- R9's proven full `nv_alloc_pages` policy-argument definition and
+  `nv_alloc_system_pages` probe contract, reusing the existing R9 evidence and
+  runner behavior without adding a benchmark-to-runtime implementation dependency;
 - `scripts/benchmark/collect-linux-allocator-state.py`
   - 1-second buddy/meminfo/vmstat/PSI sampling;
   - 5-second pagetype/zone state;
