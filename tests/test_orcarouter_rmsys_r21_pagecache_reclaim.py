@@ -50,6 +50,16 @@ def test_one_shot_mutations_are_exact_and_no_persistent_tuning() -> None:
         assert f"/proc/sys/vm/{knob}" not in data
 
 
+def test_sudo_timestamp_is_kept_alive_through_long_startup() -> None:
+    data = text()
+    assert 'SUDO_KEEPALIVE_PID=""' in data
+    assert "sudo -n -v" in data
+    assert "while sleep 60" in data
+    assert 'kill "${SUDO_KEEPALIVE_PID}"' in data
+    assert data.index("sudo -n -v") < data.index('sudo -n /bin/bash "${MANAGE_SERVICE}" create')
+    assert data.index('sudo -n /bin/bash "${MANAGE_SERVICE}" create') < data.index("journalctl -k")
+
+
 def test_r21_collects_allocator_and_strict_rm_evidence() -> None:
     data = text()
     assert "collect-linux-allocator-state.py" in data
