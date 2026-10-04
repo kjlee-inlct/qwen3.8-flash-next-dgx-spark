@@ -24,6 +24,7 @@ MIN_PREDECESSOR_AGE_S="${ORCA_R21_MIN_PREDECESSOR_AGE_S:-2700}"
 RUN_USER="${SUDO_USER:-$(id -un)}"
 RUN_GROUP="$(id -gn "${RUN_USER}")"
 COLLECTOR_PID=""
+SUDO_KEEPALIVE_PID=""
 COLLECTOR_RC=125
 MANAGED_RC=125
 SERVICE_STOPPED=0
@@ -40,6 +41,10 @@ cleanup() {
     touch "${STOP_FILE}" 2>/dev/null || true
     if [[ -n "${COLLECTOR_PID}" ]] && kill -0 "${COLLECTOR_PID}" >/dev/null 2>&1; then
         wait "${COLLECTOR_PID}" >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${SUDO_KEEPALIVE_PID}" ]] && kill -0 "${SUDO_KEEPALIVE_PID}" >/dev/null 2>&1; then
+        kill "${SUDO_KEEPALIVE_PID}" >/dev/null 2>&1 || true
+        wait "${SUDO_KEEPALIVE_PID}" >/dev/null 2>&1 || true
     fi
     if [[ "${SERVICE_STOPPED}" == 1 ]] && ! systemctl is-active --quiet "${UNIT}"; then
         sudo -n systemctl start "${UNIT}" >/dev/null 2>&1 || true
@@ -63,6 +68,12 @@ for command in sudo python3 bash systemctl docker curl journalctl date grep awk 
     command -v "${command}" >/dev/null 2>&1 || fail "required command not found: ${command}"
 done
 sudo -n true >/dev/null 2>&1 || fail "sudo timestamp unavailable; run sudo -v first"
+(
+    while sleep 60; do
+        sudo -n -v >/dev/null 2>&1 || exit 0
+    done
+) &
+SUDO_KEEPALIVE_PID=$!
 [[ -r "${STATE_FILE}" ]] || fail "installation state missing: ${STATE_FILE}"
 [[ -r "${COLLECTOR}" ]] || fail "allocator-state collector missing: ${COLLECTOR}"
 [[ -L "${CURRENT_LINK}" ]] || fail "immutable current release link missing: ${CURRENT_LINK}"
