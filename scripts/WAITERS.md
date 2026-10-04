@@ -61,7 +61,7 @@ Example for the 45-minute OrcaRouter aged-predecessor gate:
   --min-age 2700
 ```
 
-The helper pins both the initial Docker container ID and its `StartedAt` value. It deliberately fails if the container stops, disappears, or is replaced while waiting. It never silently transfers the age requirement to a new runtime.
+The helper pins both the initial Docker container ID and its `StartedAt` value. Its container replacement guard deliberately fails if the container stops, disappears, or is replaced while waiting. It never silently transfers the age requirement to a new runtime.
 
 Successful completion prints `WAIT_RUNTIME_AGE_READY` and exits zero. This means the same runtime observed at waiter start has reached the requested age; it does not imply runtime health or benchmark acceptance. Use `wait-ready.sh` separately when readiness is the condition being tested.
 
