@@ -102,14 +102,32 @@ Repository implementation includes:
 - `scripts/benchmark/analyze-orcarouter-r23-rm-uvm-overlap.py` — read-only same-PID nesting and burst-window RM/UVM correlation;
 - `tests/test_orcarouter_r23_ownership_trace.py` and `tests/test_orcarouter_r23_rm_uvm_overlap.py` — focused regression contracts.
 
+## R24 H6 16 GiB RM mitigation discriminator
+
+- `orcarouter-hybrid-r24-kv16-rm-mitigation-plan-20261004.md`
+
+R24 is **IMPLEMENTED / LIVE TEST NOT YET RUN**. It moves from ownership discovery to mitigation discrimination and uses R22 as the matched control.
+
+The first R24 candidate is the generated H6 ModelOpt W4A16 Hybrid checkpoint, but its managed-profile `24 GiB` KV default is deliberately overridden to the R22-matched `16 GiB` value (`17179869184` bytes). This keeps the v0.29 PLE-mmap/exact-QSA runtime line and key runtime controls matched while changing the H6 checkpoint/loader representation rather than also changing KV allocation.
+
+R24 preserves the R21/R22 host-conditioning and protection harness, validates the complete H6 parent/manifest chain and exact Docker runtime identity, and records only the already-closed RM boundaries (`nv_alloc_pages` and `nv_alloc_system_pages`) around the early startup window. Selected UVM and broad Linux/driver tracing are intentionally not reopened.
+
+The analyzer compares the candidate's independently detected largest five-second unexplained-residual increase against the fixed R22 baseline `75138.043 MiB`, reports node0 Normal and high-order movement, checks whether the narrow RM trace actually covers the candidate burst, and preserves the strict host-stability rule for any later RM OOM.
+
+Repository implementation now includes:
+
+- `scripts/benchmark/run-orcarouter-hybrid-r24-kv16-rm-mitigation.sh` — `--preflight` plus live H6/R22-matched discriminator;
+- `scripts/benchmark/analyze-orcarouter-hybrid-r24-rm-mitigation.py` — residual/RM/high-order comparison against R22;
+- `tests/test_orcarouter_hybrid_r24_rm_mitigation.py` — fixed-control, identity, trace-scope, restoration, and classification contracts.
+
+The required next action is **preflight only**. Do not start the live H6 candidate unless the preflight reports `R24_PREFLIGHT=PASS`; in particular, the aged-predecessor gate must pass.
+
 ## Current next engineering direction
 
-Do not start another broad ownership run and do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, function-graph, or all-driver tracing.
+Do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, function-graph, UVM, or all-driver tracing.
 
-The driver-level common-burst ownership question is sufficiently closed. Move to a narrowly controlled mitigation/discriminator phase, prioritizing the planned Hybrid/runtime-specific path while preserving runtime identity and the strict host-stability gate.
+Use R24 to determine whether the H6 representation materially reduces the closed early RM burst and/or eliminates the later strict RM OOM while preserving the matched runtime controls. A clean result is a mitigation candidate, not automatic promotion; it requires confirmation before any managed Hybrid default or production recommendation changes.
 
-Each candidate should be judged on whether it reduces/removes the early ~75 GiB RM burst, preserves node0 Normal high-order supply, eliminates later strict RM OOM, and retains functional/model/KV/readiness equivalence.
-
-Conditioning and mmap remain measurement controls or discriminators, not accepted production mitigations.
+Conditioning and mmap remain measurement controls/discriminators, not accepted production mitigations.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
