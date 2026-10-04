@@ -70,10 +70,12 @@ R23 is currently **DESIGN / NO TEST**. It is explicitly not another broad VM-tun
 
 The first live instrumentation set centers on `nv_alloc_pages`, `nv_alloc_system_pages`, `nvUvmInterfacePmaAllocPages`, `uvm_gpu_dma_alloc`, `uvm_mem_alloc`, and `uvm_pmm_gpu_alloc_kernel`. Broad page alloc/free, compaction/reclaim/extfrag, function-graph, scheduler, and full-driver tracing are excluded from the first R23 live run because R11 already closes the Linux high-order allocator mechanism.
 
+Repository-side probe-only preflight support is now present in `scripts/benchmark/check-orcarouter-r23-ownership-probes.sh`, with focused static coverage in `tests/test_orcarouter_r23_ownership_trace.py`. The helper does not restart the model and does not change persistent VM settings. The actual DGX host preflight has not yet been executed.
+
 ## Current next diagnostic direction
 
 Do not return to broad watermark, compaction, drop-cache, or swap tuning as the primary diagnostic path.
 
-Complete the R23 probe-only preflight/helper, focused tests, narrow-window managed runner, and analyzer. Only after CI is green should a live R23 restart be issued. The live goal is to align RM/UVM boundary activity and task attribution with the approximately 75 GiB early residual formation, not to evaluate another mitigation.
+First run the R23 probe-only preflight on the DGX host. If all selected dynamic probes materialize and smoke-record cleanly, implement and lock the narrow-window managed runner and ownership analyzer, then require green CI before the live R23 restart. The live goal is to align RM/UVM boundary activity and task attribution with the approximately 75 GiB early residual formation, not to evaluate another mitigation.
 
 Do not merge or promote reclaim/compaction or mmap behavior as a production mitigation from R9–R22 evidence alone.
