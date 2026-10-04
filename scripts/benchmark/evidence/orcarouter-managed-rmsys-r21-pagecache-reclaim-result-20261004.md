@@ -184,34 +184,32 @@ This shows temporary re-formation of high-order free capacity, predominantly in 
 
 ## Collapse onset
 
-The complete sample-history scan closes the onset of the initial collapse.
+The complete sample-history scan localizes the dominant collapse to the beginning of startup, roughly 45-56 seconds after compaction and more than eleven minutes before the final RM event.
 
 Prepared state:
 
-- Unmovable order-4+: `104613.938 MiB`
+- Normal Unmovable order-4+: `104613.938 MiB`
 - aggregate Normal order-4+: `119742.938 MiB`
 
-First crossings after post-stop compaction:
+First crossings:
 
-- aggregate Normal below 50% at `06:23:22.990Z`, value `50375.875 MiB`
-- Unmovable below 50% at `06:23:23.991Z`, value `29280.688 MiB`
-- Unmovable below 10% at `06:23:28.991Z`, value `6248.688 MiB`
-- aggregate Normal effectively zero at `06:23:29.996Z`, value `0.438 MiB`
-- Unmovable effectively zero at `06:23:34.003Z`
+- aggregate Normal below 50%: `06:23:22.990Z`, `50375.875 MiB`
+- Unmovable below 50%: `06:23:23.991Z`, `29280.688 MiB`
+- Unmovable below 10%: `06:23:28.991Z`, `6248.688 MiB`
+- aggregate Normal effectively zero: `06:23:29.996Z`, `0.438 MiB`
+- Unmovable effectively zero: `06:23:34.003Z`
 
-The steepest observed drains were:
+Largest observed drains:
 
 - Unmovable: `104162.625 -> 29280.688 MiB`, `-74881.938 MiB` over 5 seconds
 - Movable: `8921.438 -> 6.750 MiB`, `-8914.688 MiB` over 5 seconds
 - aggregate Normal order-4+: `76771.000 -> 50375.875 MiB`, `-26395.125 MiB` over 1 second
 
-This dominant collapse occurs only ~45-56 seconds after compaction and more than eleven minutes before the final RM OOM.
+The first visible PLE-offload progress record is `06:23:25.827677599Z`, already at `1/18` (`6%`) from `PleOffloadWorker pid=458`. It sits inside the collapse interval: after the 50% crossings but before the 10%/near-zero crossings. Because the first visible progress record is already 6%, it is not the PLE start timestamp.
 
-The first visible PLE-offload progress marker is `06:23:25.827677599Z`, already at `1/18` (`6%`) in `PleOffloadWorker pid=458`. It lies inside the collapse window: after the 50% crossings but before the 10%/near-zero crossings. Because this is already a 6% progress line, it is not the PLE start timestamp. The evidence therefore supports strong temporal correlation with the initial legacy PLE/shard-loading phase, but it does not prove per-page ownership or PLE-only causality.
+The managed OrcaRouter profile uses the legacy `VLLM_PLE_CPU_OFFLOAD=1` path. The managed runtime script documents that this path loads approximately `95.37 GiB` into the offload process and that most of it is pushed to swap during startup. This is structurally consistent with the observed early collapse and later large swap consumption, but does not prove per-page ownership or PLE-only causality.
 
-The managed OrcaRouter profile uses the legacy `VLLM_PLE_CPU_OFFLOAD=1` path. The managed runtime script documents that this path loads ~95.37 GiB into the offload process and that most of it is pushed back out to swap during startup. That implementation context is structurally consistent with the observed early high-order collapse and later large swap consumption.
-
-Focused evidence is preserved separately in `orcarouter-managed-rmsys-r21-collapse-onset-20261004.md`.
+Focused evidence is recorded in `orcarouter-managed-rmsys-r21-collapse-onset-20261004.md`.
 
 ## Harness note
 
@@ -226,12 +224,12 @@ R21 separates two problems that had been partially conflated:
 - file-cache conditioning can determine whether startup reaches the host memory-protection boundary;
 - the recoverable RM order-4 failure can still occur after that protection problem is avoided.
 
-Post-stop reclaim/compaction can improve the initial allocator state, but the prepared high-order reservoir is consumed during startup. The complete collapse scan localizes the dominant destruction of the prepared reservoir to the initial model/PLE loading interval rather than the late MoE phase. Aggregate high-order free capacity can later transiently reform in Movable form and then disappear abruptly near the final RM event.
+Post-stop reclaim/compaction can improve the initial allocator state, but the prepared high-order reservoir is consumed during startup. The full-history scan localizes the dominant destruction to the initial model/PLE-loading interval, while aggregate high-order free capacity can later transiently reform in Movable form and disappear again near the RM event.
 
-Therefore neither a one-shot treatment, a static pre-start allocator threshold, nor a single late vLLM phase marker is a sufficient production explanation or mitigation.
+Therefore neither a one-shot treatment, a static pre-start allocator threshold, nor the late MoE marker is a sufficient production explanation or mitigation.
 
 ## Next analysis
 
-No new restart is required yet. Preserve the exact live R21 container log window around `06:23:18Z-06:23:40Z`, after validating that the live container ID still matches the R21 candidate. The goal is to recover any PLE initialization/model-loading lines that precede the first visible 6% progress record.
+No new restart is required yet. Preserve the exact live R21 container log window around `06:23:18Z-06:23:40Z`, validating that the current container ID still matches the R21 candidate. The goal is to recover any PLE initialization/model-loading lines immediately before the first 50% crossing.
 
-Only after this read-only early-startup log correlation should an R22 mutation be designed. The leading R22 direction, if the correlation remains consistent, is to test the OrcaRouter checkpoint without the legacy CPU-offload PLE path rather than to add more allocator tuning.
+If the early log window confirms the legacy PLE CPU-offload path is already active across the collapse onset, the leading R22 direction is to test the same OrcaRouter checkpoint without that legacy CPU-offload path, rather than adding more allocator tuning.
