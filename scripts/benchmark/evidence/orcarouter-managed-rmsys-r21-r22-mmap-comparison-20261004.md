@@ -135,32 +135,60 @@ No CMA, vmalloc, per-CPU, hugepage, page-table, locked-memory, slab, or anonymou
 
 Several meminfo fields overlap by definition (`Cached` with file LRU, `AnonPages` with anon LRU, `Slab` with its reclaimable/unreclaimable children), so they must not be summed as independent buckets. The conclusion is instead based on the direct MemAvailable loss plus the absence of any conventional physical-memory category of comparable scale.
 
-This materially strengthens the R11-consistent interpretation that the common startup footprint is composed largely of direct kernel/driver-owned system pages allocated from the buddy allocator: such pages reduce zone free capacity without appearing as a similarly sized process-anon, file-cache, slab, CMA, hugetlb, per-CPU, or page-table bucket.
+## Physical-page accounting closure
 
-This interpretation is now the **leading accounting model**, but the exact page ownership is still not directly proven by meminfo alone.
+The read-only page-accounting helper closes the host-side free-page correlation using the already captured POST_COMPACT and RM_EVENT snapshots.
+
+R21:
+
+- MemFree loss: `120639.027 MiB`
+- node0 Normal-zone free-page loss: `120609.535 MiB`
+- global `nr_free_pages` loss: `120638.160 MiB`
+- node0 Normal `managed` pages: unchanged at `31725420`
+- deliberately non-overlapping core accounted growth: `31173.844 MiB`
+- approximate `core_unexplained_loss`: `89465.184 MiB`
+- MemAvailable loss: `91942.395 MiB`
+
+R22:
+
+- MemFree loss: `118173.609 MiB`
+- node0 Normal-zone free-page loss: `118161.762 MiB`
+- global `nr_free_pages` loss: `118174.477 MiB`
+- node0 Normal `managed` pages: unchanged at `31725420`
+- deliberately non-overlapping core accounted growth: `28172.840 MiB`
+- approximate `core_unexplained_loss`: `90000.770 MiB`
+- MemAvailable loss: `93169.719 MiB`
+
+The zone and global counters agree closely with MemFree in both runs. Nearly the entire physical free-page loss is therefore observed directly in node0 Normal while the zone's managed-page population remains constant; it is not explained by pages leaving the managed zone or by CMA accounting.
+
+The non-overlapping core accounting includes active/inactive anon/file LRU, Unevictable, Slab, non-slab KReclaimable excess, primary and secondary page tables, and kernel stack. After those conventional resident categories are accounted for, approximately `89.5 GiB` in R21 and `90.0 GiB` in R22 remain unattributed by this accounting model.
+
+`core_unexplained_loss` is **not an exact NVIDIA-owned-page measurement**. It is an approximate residual derived from a deliberately limited, non-overlapping Linux accounting set. However, the residual's near-identical scale in the legacy and mmap runs, together with the direct node0 Normal free-page collapse and unchanged managed-page count, strongly supports a common direct system-page pressure mechanism.
+
+This is consistent with R11, where NVIDIA RM's non-contiguous 64 KiB allocation reached Linux as node0 Normal-zone Unmovable order-4 page demand and rolled back accumulated same-order pages after a failed chunk. The R21/R22 host accounting and the R11 allocator trace are therefore now consistent with the same lower-level mechanism, while exact ownership of every page in the ~90 GiB residual remains unproven.
 
 ## Interpretation
 
 The evidence supports a two-layer model:
 
-1. **A common startup allocation footprint consumes roughly 92-93 GiB of available physical memory in both legacy and mmap paths and drives the initial high-order collapse.** Full meminfo accounting finds no conventional category of comparable scale; this is strongly consistent with direct NVIDIA RM/kernel page allocation observed in R11.
+1. **A common startup allocation footprint consumes roughly 90 GiB of physical pages not explained by the selected conventional resident accounting in both legacy and mmap paths.** It is directly visible as node0 Normal free-page loss with unchanged managed capacity and drives the initial high-order collapse. This is strongly consistent with the direct NVIDIA RM/kernel page-allocation behavior observed in R11.
 2. **Legacy PLE CPU-offload adds a separate roughly 100 GiB swap/residency pressure path.** R22 substantially removes this sustained pressure and slows later high-order depletion, but the common allocation footprint and strict RM fallback remain.
 
 Therefore legacy PLE CPU-offload is an important pressure amplifier but not the sole or necessary cause of `_memdescAllocInternal` failure.
 
-The remaining RM failure mechanism should now be investigated in the common model-loading / NVIDIA RM allocation path rather than by further page-cache or swap tuning.
+Further page-cache, watermark, or swap tuning is no longer the primary diagnostic direction. The remaining mechanism should be investigated in the common model-loading / NVIDIA RM allocation path.
 
-## Next read-only page accounting
+## Next read-only discriminator
 
-Before any R23 restart, correlate the already captured node0 Normal-zone and vmstat page states with the meminfo result.
+Before any R23 restart, use the existing one-second allocator samples to locate when the common `core_unexplained_loss` develops.
 
-The read-only `scripts/benchmark/compare-orcarouter-r21-r22-rm-page-accounting.py` helper now reports:
+The next analyzer should derive a per-sample non-overlapping residual from `allocator-state/fast-state.txt` and report, separately for R21 and R22:
 
-- node0 Normal `free` and `managed` page deltas from POST_COMPACT to RM_EVENT;
-- `nr_free_pages` and key LRU/page-state vmstat deltas;
-- a deliberately non-overlapping core physical-memory accounting using active/inactive anon/file LRU, Unevictable, Slab, non-slab KReclaimable excess, page tables, secondary page tables, and kernel stack;
-- `core_unexplained_loss`, explicitly treated as an approximate/unattributed physical-page loss, **not** an exact NVIDIA allocation measurement.
+- 25%, 50%, 75%, and 90% crossings of the final residual;
+- largest one-second and five-second increases;
+- corresponding MemFree, MemAvailable, file-LRU, anon-LRU, Slab, page-table, and SwapFree states;
+- wall/monotonic timestamps that can be aligned with preserved model-loading logs.
 
-If node0 Normal managed pages stay constant, its free pages collapse by the expected amount, and the core unexplained loss remains around the common ~90 GiB scale, the R11 allocator trace and R21/R22 host accounting will be consistent with the same direct-driver page-allocation mechanism.
+If the ~90 GiB residual forms at the same startup phase in both R21 and R22 despite their radically different swap behavior, the next live trace can be tightly scoped to that common phase rather than repeating broad host-tuning experiments.
 
-No R23 restart is justified until that read-only page-accounting check is closed.
+No R23 restart is justified until that existing time-series evidence is extracted.
