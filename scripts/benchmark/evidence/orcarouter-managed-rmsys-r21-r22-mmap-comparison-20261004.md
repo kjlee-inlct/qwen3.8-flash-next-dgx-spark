@@ -83,30 +83,61 @@ R22 RM event:
 
 This is the strongest discriminator so far. R21 reaches the RM event after roughly 99 GiB of additional swap use and with essentially no Unmovable high-order capacity left. R22 reaches the same strict RM failure with very little additional swap use and with about 3.1 GiB of Normal order-4+ capacity still present, including about 1.53 GiB Unmovable.
 
+## Detailed RM-event memory composition
+
+The detailed `/proc/meminfo` comparison shows that R22's large MemFree loss is **not** explained by a correspondingly large anonymous, slab, page-table, or locked-memory increase.
+
+R21 post-compaction -> RM event:
+
+- MemFree: `-120639.027 MiB`
+- MemAvailable: `-91942.395 MiB`
+- Cached: `+28594.223 MiB`
+- AnonPages: `+1307.094 MiB`
+- Shmem: `+96.527 MiB`
+- Slab: `+856.305 MiB`
+- PageTables: `+215.492 MiB`
+- SwapFree: `-101284.828 MiB`
+
+R22 post-compaction -> RM event:
+
+- MemFree: `-118173.609 MiB`
+- MemAvailable: `-93169.719 MiB`
+- Cached: `+25861.672 MiB`
+- AnonPages: `+1650.254 MiB`
+- Shmem: `+326.195 MiB`
+- Slab: `+441.777 MiB`
+- PageTables: `+16.551 MiB`
+- SwapFree: `-3163.168 MiB`
+
+The most important common signal is that **MemAvailable falls by almost the same amount in both runs**: about 91.9 GiB in R21 and 93.2 GiB in R22. The roughly 25-29 GiB gap between MemFree loss and MemAvailable loss closely tracks the growth of file cache in each run. That means the large common remainder is not ordinary reclaimable page cache.
+
+At the same time, R22 removes almost all of R21's additional swap consumption: the RM-event SwapFree difference is about `+98133.629 MiB` in R22. Therefore the legacy PLE CPU-offload path strongly explains the extra swap churn, but it does **not** explain the roughly 92-93 GiB common loss of available physical memory.
+
+The tracked conventional categories are individually far too small to explain that common unavailable footprint. This is consistent with the R11 mechanism in which NVIDIA RM allocates high-order system pages directly via the kernel page allocator: such driver-owned pages reduce zone free capacity but need not appear as process anonymous memory, file cache, or slab. This is currently the leading accounting interpretation, but it is not yet proven because the full `/proc/meminfo` key set has not been checked for CMA/vmalloc/per-CPU/hugepage-specific changes.
+
 ## Interpretation
 
 The evidence now supports a two-layer model:
 
-1. **Legacy PLE CPU-offload strongly amplifies sustained residency/swap pressure and accelerates long-lived high-order depletion.** R22 substantially removes this aspect.
-2. **The initial catastrophic high-order collapse and the strict RM fallback do not require that legacy path.** Both still occur under the mmap candidate.
+1. **A common startup allocation footprint consumes roughly 92-93 GiB of available physical memory in both legacy and mmap paths and drives the initial high-order collapse.** Its accounting is not explained by the conventional process/file/slab fields measured so far and is consistent with direct NVIDIA RM/kernel page allocation.
+2. **Legacy PLE CPU-offload adds a separate roughly 100 GiB swap/residency pressure path.** R22 substantially removes this sustained pressure and slows later high-order depletion, but the common allocation footprint and strict RM fallback remain.
 
-Therefore the legacy PLE CPU-offload path is an important pressure amplifier but not the sole or necessary cause of `_memdescAllocInternal` failure.
+Therefore legacy PLE CPU-offload is an important pressure amplifier but not the sole or necessary cause of `_memdescAllocInternal` failure.
 
-The remaining RM failure mechanism is now broader than PLE residency alone and should be investigated in the common model-loading / NVIDIA RM allocation path.
+The remaining RM failure mechanism should now be investigated in the common model-loading / NVIDIA RM allocation path rather than by further page-cache or swap tuning.
 
 ## Next evidence
 
-Before another restart, compare the full RM-event memory composition for R21 and R22. R22 loses about 118 GiB of MemFree while SwapFree drops by only about 3 GiB and file cache grows by only about 26 GiB. The remaining memory residency is not explained by the metrics currently emitted by the compact event analyzer.
+Before another restart, inspect every `/proc/meminfo` key in the already captured POST_COMPACT and RM_EVENT snapshots. The read-only `scripts/benchmark/compare-orcarouter-r21-r22-rm-meminfo-all.py` helper reports all deltas and explicitly highlights:
 
-The read-only `scripts/benchmark/compare-orcarouter-r21-r22-rm-memory.py` helper now quantifies at POST_COMPACT and RM_EVENT:
+- `CmaTotal` / `CmaFree`
+- `VmallocTotal` / `VmallocUsed` / `VmallocChunk`
+- `Percpu`
+- `KernelStack` / `PageTables`
+- `Unevictable` / `Mlocked`
+- hugepage / hugetlb fields
+- all remaining meminfo keys sorted by absolute delta
 
-- AnonPages
-- Active(anon) / Inactive(anon)
-- Cached / Active(file) / Inactive(file)
-- Shmem
-- Slab / SReclaimable / SUnreclaim
-- KernelStack / PageTables
-- Unevictable / Mlocked
-- SwapFree
+If none of these fields contains a tens-of-GiB increase or free-pool decrease that explains the common 92-93 GiB unavailable footprint, the evidence will strongly support direct driver-owned page allocation outside the ordinary process/file/slab accounting categories.
 
-No R23 restart is justified until that composition gap is closed.
+No R23 restart is justified until that accounting check is closed.
