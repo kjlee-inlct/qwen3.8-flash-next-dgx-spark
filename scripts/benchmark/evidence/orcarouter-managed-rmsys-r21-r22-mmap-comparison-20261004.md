@@ -81,7 +81,9 @@ R22 RM event:
 - SwapFree: 143279.770 MiB
 - swap-free delta from post-compaction: -3163.168 MiB
 
-This is the strongest discriminator so far. R21 reaches the RM event after roughly 99 GiB of additional swap use and with essentially no Unmovable high-order capacity left. R22 reaches the same strict RM failure with very little additional swap use and with about 3.1 GiB of Normal order-4+ capacity still present, including about 1.53 GiB Unmovable.
+This is the strongest discriminator so far. R21 reaches the RM event after roughly 99 GiB of additional swap use and with essentially no Unmovable high-order capacity visible in the post-event snapshot. R22 reaches the same strict RM failure with very little additional swap use and the post-event snapshot contains about 3.1 GiB of Normal order-4+ capacity, including about 1.53 GiB Unmovable.
+
+The RM-event snapshots are **post-failure observations, not exact pre-failure free-pool measurements**. R11 showed that the 64 KiB/order-4 RM path can accumulate many high-order pages, fail one allocation, and then free/roll back the pages already accumulated before returning `NV_ERR_NO_MEMORY`. Therefore some high-order capacity visible in the R22 event snapshot may already be rollback-released capacity. The R22 event value is useful evidence against a simple static aggregate threshold, but it must not be interpreted as proof that the same 3.1/1.53 GiB was continuously free immediately before the failed allocation.
 
 ## Detailed RM-event memory composition
 
