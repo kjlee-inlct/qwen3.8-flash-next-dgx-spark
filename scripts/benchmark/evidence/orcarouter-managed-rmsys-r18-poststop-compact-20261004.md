@@ -70,23 +70,43 @@ R18:
 - one-shot post-stop compaction
 - RM OOM x0
 
-However R18 does **not** isolate whether the causal mitigation is:
+However R18 alone did **not** isolate whether the causal mitigation was:
 
 1. the explicit post-stop compaction, or
 2. the full stop / quiescent teardown boundary itself.
 
-The managed restart path normally stops the service and immediately starts the replacement. R18 inserts allocator observation plus a one-shot compaction between those phases. Therefore the next required control is an otherwise matched aged-predecessor run that performs:
+That ambiguity was tested directly by R19.
 
-> full stop -> no `compact_memory` write -> immediate start
+## R19 stop-only control result
 
-If that control fails while R18 remains clean, post-stop compaction gains direct causal support. If the control is also clean, the teardown/quiescence boundary itself becomes the stronger mitigation candidate.
+R19 used the same aged-predecessor guard and the same immutable OrcaRouter release, but deliberately removed the compaction treatment:
+
+> aged predecessor -> full stop -> post-stop allocator snapshot -> no `compact_memory` write -> immediate start
+
+R19 was a valid replacement startup but emitted five recoverable RM OOM events:
+
+- predecessor age: ~53.461 min
+- `run_valid=1`
+- `restart_observed=1`
+- `api_ready=1`
+- `rm_oom_count=5`
+- result: `ORCA_R19_RESULT=VALID_RM_OOM`
+
+This directly rejects the simpler explanation that R18 was clean merely because it inserted a full-stop/quiescent boundary. Full teardown by itself is not sufficient for an aged predecessor.
+
+The R18/R19 outcomes therefore materially strengthen post-stop compaction as the leading mitigation candidate:
+
+- R18 treatment: aged predecessor -> stop -> compact -> start -> clean
+- R19 control: aged predecessor -> stop -> no compact -> start -> RM OOM x5
+
+The two runs did not begin from identical post-stop allocator states, so treatment necessity/sufficiency is not yet proven for every aged state. R19 post-stop Normal order-4+ free was ~105494.875 MiB, whereas R18 pre-compaction was ~110184.313 MiB. A second aged-predecessor post-stop-compaction treatment run is therefore the next efficient repeatability check.
 
 ## Current conclusion
 
 The proximate failure mechanism remains unchanged: NVIDIA RM Linux-sysmem 64 KiB/order-4 Unmovable demand can exhaust usable high-order supply, roll back, return `NV_ERR_NO_MEMORY`, then succeed on immediate order-0 retry.
 
-R18 adds a new mitigation result:
+R18 plus R19 now provide the strongest Linux-side mitigation evidence so far:
 
-> A one-shot compaction performed only after a ~5.3-hour OrcaRouter predecessor was fully torn down produced a valid strict-clean replacement startup with no recoverable RM OOM, while visibly coalescing Normal-zone free buddy capacity upward.
+> Full teardown alone does not remove the aged-predecessor failure boundary. A one-shot compaction performed after teardown and before replacement startup is the leading mitigation candidate: the R18 treatment was strict-clean, while the matched R19 stop-only control failed with five recoverable RM OOM events.
 
-This is a strong mitigation candidate, not yet proof that the compaction write itself is necessary. R19 must isolate stop-only control behavior before production adoption.
+Production adoption should wait for at least one additional aged-predecessor treatment replication, because the treatment and control runs had different post-stop allocator starting states.
