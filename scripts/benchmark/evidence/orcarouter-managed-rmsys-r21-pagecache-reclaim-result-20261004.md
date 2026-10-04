@@ -157,7 +157,32 @@ The directly relevant Unmovable order-4+ reservoir fell from ~104.6 GiB to effec
 
 This is consistent with startup demand exhausting/fragmenting the Normal-zone high-order reservoir until the lower-level mechanism identified in R11 is reached. The event snapshot alone does not attribute every consumed page to NVIDIA RM or to a specific vLLM/PLE component; it only proves the system-wide allocator state at the event.
 
-The preserved managed output showed a vLLM phase marker near the event: `Using MoEPrepareAndFinalizeNoDPEPModular` at approximately `06:34:48Z`, about 12 seconds before the RM event at `06:35:00Z`. Treat that as a phase-correlation clue, not yet a causal attribution. The pre-event trajectory analysis should determine whether the allocator collapse accelerated around this phase.
+## Pre-event trajectory
+
+The preserved 1-second buddy/meminfo samples and 5-second pagetype samples show that the collapse has two distinct phases.
+
+First, the Normal Unmovable order-4+ reservoir was already essentially exhausted well before the final RM event:
+
+- ~61.6 s before the event: Unmovable order-4+ = 4.312 MiB, Movable order-4+ = 682.125 MiB
+- ~31.6 s before: Unmovable = 4.312 MiB, Movable = 6.750 MiB
+- ~11.6 s before: Unmovable = 1.250 MiB, Movable = 786.812 MiB
+- ~6.6 s before: Unmovable = 5.250 MiB, Movable = 2614.375 MiB
+- ~1.6 s before: Unmovable = 3.688 MiB, Movable = 2419.688 MiB
+
+Therefore the ~104.6 GiB prepared Unmovable reservoir had collapsed **earlier than the T-60 window**. The phase marker `Using MoEPrepareAndFinalizeNoDPEPModular` appeared at `06:34:48.381Z`, about 12.2 s before the RM event, after Unmovable capacity was already effectively gone. This marker is not evidence for the onset of the Unmovable collapse and must not be treated as causal.
+
+Second, aggregate Normal high-order free capacity remained highly dynamic after the Unmovable reservoir was gone:
+
+- ~59.6 s before: Normal order-4+ = 613.312 MiB
+- ~29.6 s before: 89.625 MiB
+- ~9.6 s before: 2619.875 MiB
+- ~4.6 s before: 2619.875 MiB
+- ~0.62 s before: 0.625 MiB
+- ~0.38 s after the event snapshot timestamp: 120.500 MiB
+
+This shows temporary re-formation of high-order free capacity, predominantly in Movable form, followed by an acute final drain immediately before RM failure. A 5-second pagetype sample still showed ~2419.688 MiB Movable order-4+ at ~1.62 s before the event, while the 1-second buddy sample ~0.62 s before the event showed only 0.625 MiB total Normal order-4+ free. Because these are different samplers taken ~1 second apart, the exact sub-second transition cannot be reconstructed, but the evidence supports a very sharp final high-order depletion boundary.
+
+The trajectory therefore rules out a simple interpretation in which the MoE phase starts the overall depletion. The next useful read-only question is **when the large Unmovable reservoir first crossed down from tens of GiB to near-zero during earlier model/shard loading**, and which sample interval contains the largest drain.
 
 ## Harness note
 
@@ -172,19 +197,23 @@ R21 separates two problems that had been partially conflated:
 - file-cache conditioning can determine whether startup reaches the host memory-protection boundary;
 - the recoverable RM order-4 failure can still occur after that protection problem is avoided.
 
-Post-stop reclaim/compaction can improve the initial allocator state, but the prepared high-order reservoir is consumed during startup. Therefore neither a one-shot treatment nor a static pre-start allocator threshold is a sufficient production mitigation.
+Post-stop reclaim/compaction can improve the initial allocator state, but the prepared high-order reservoir is consumed during startup. The pre-event trajectory further shows that the Unmovable reservoir is depleted substantially earlier than the final RM failure, while aggregate high-order free capacity can transiently reform in Movable form and then disappear abruptly near the event.
+
+Therefore neither a one-shot treatment, a static pre-start allocator threshold, nor a single late vLLM phase marker is a sufficient production explanation or mitigation.
 
 ## Next analysis
 
-No new restart is required. The next read-only step is to reconstruct the allocator trajectory immediately before the RM event from the existing 1-second fast samples and 5-second pagetype samples.
+No new restart is required. Scan the complete post-compaction-to-event sample history to locate:
+
+- first Unmovable order-4+ crossings below 50%, 10%, 1%, 1 GiB, 100 MiB, and 10 MiB of the prepared state;
+- the largest consecutive 5-second Unmovable/Movable drop;
+- the largest consecutive 1-second aggregate Normal order-4+ drop.
 
 Use:
 
 ```bash
-python3 scripts/benchmark/analyze-orcarouter-r21-rm-trajectory.py \
+python3 scripts/benchmark/analyze-orcarouter-r21-rm-collapse.py \
   --r21 /tmp/orcarouter-managed-rmsys-r21-pagecache-reclaim-compact-01-20261004
 ```
 
-The trajectory emits samples nearest `-60`, `-30`, `-10`, `-5`, `-1`, and `0` seconds relative to the RM event for Normal buddy capacity, meminfo, and Normal Unmovable/Movable order-4+ capacity. It should distinguish a gradual startup drain from a sharp depletion boundary near the RM event.
-
-Correlate the event wall time with the preserved managed/vLLM logs before designing another runtime mutation. No production integration or new runtime mutation is justified before this read-only trajectory analysis.
+This read-only scan should identify the onset and steepest section of the allocator collapse before any R22 runtime mutation is considered.
