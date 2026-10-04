@@ -133,4 +133,6 @@ Priority should be given to Hybrid/runtime-specific mitigation work already plan
 
 Conditioning (`drop_caches` / compaction), mmap behavior, or broad VM tuning remain measurement controls or discriminators, not accepted production mitigations.
 
+If later mitigation work needs to identify the originating userspace trigger, instrument only the smallest evidence-driven CUDA/RM call boundary needed for that specific mitigation question. Do not reopen broad UVM ownership tracing solely because userspace attribution remains unknown.
+
 PR #244 remains intentionally open and must not be merged until the planned mitigation/Hybrid closure and explicit merge timing are complete.
