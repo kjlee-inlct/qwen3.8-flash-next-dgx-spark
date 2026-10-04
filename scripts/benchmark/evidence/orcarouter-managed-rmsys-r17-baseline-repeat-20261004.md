@@ -117,11 +117,28 @@ The A-final -> B-baseline boundary is especially strong carry-over evidence:
 
 The pageblock counts require a careful distinction. During A, Normal pageblock ownership did not simply move toward Unmovable; the counts moved slightly in the opposite direction (Unmovable 55,892 -> 55,626, Movable 8,500 -> 8,770). What changed dramatically was the migratetype composition of the *free high-order areas*: free Movable high-order capacity disappeared while free Unmovable high-order capacity increased.
 
-Therefore the current strongest conditioning hypothesis is narrower than "more high-order memory" or "more Unmovable pageblocks":
+## Cross-campaign conditioning chain
 
-> The failing/recovering first restart reshapes the Normal-zone high-order free-area distribution into a state with more directly usable Unmovable high-order supply and little or no Movable high-order supply. That state survives essentially unchanged into the immediately adjacent second restart, which is clean in R17.
+A chronological read-only comparison across R15, R16 and R17 adds two important corrections.
 
-This is a correlation from one same-policy pair, not yet proof that the free-area migratetype redistribution is sufficient to cause the clean second restart. The same baseline/final composition must be checked across R15 and R16 before accepting the conditioning mechanism.
+First, the immediately adjacent pair boundaries preserve allocator state almost exactly:
+
+- R15A final -> R15B baseline: 0.467 s, total high-order -6.500 MiB
+- R16A final -> R16B baseline: 6.394 s, total high-order -2.438 MiB
+- R17A final -> R17B baseline: 0.221 s, total high-order -8.750 MiB
+
+This confirms that the second leg is not starting from an independent allocator state.
+
+Second, the simple hypothesis "a clean second leg starts with Movable high-order near zero" does not hold for all pairs. R15B was clean even though its baseline still contained about 552.375 MiB of Movable high-order free capacity. In contrast, R16B and R17B did begin with approximately zero Movable high-order capacity and were also clean. Therefore free-area migratetype composition is part of the observed conditioning state but is not, by itself, a sufficient cross-campaign predictor.
+
+The longer between-campaign boundaries show substantial drift while the current loaded runtime remains active:
+
+- R15B final -> R16A baseline: 6551.934 s (~109 min), total high-order +833.625 MiB, Movable +934.688 MiB
+- R16B final -> R17A baseline: 16950.590 s (~282.5 min), total high-order +847.438 MiB, Movable +665.500 MiB
+
+Both following first legs failed. This makes elapsed time / predecessor-runtime residency a stronger common discriminator than watermark assignment or one specific migratetype composition.
+
+The next read-only analysis therefore correlates the exact age of the container being replaced (`container-started-before.txt` -> `managed-child-started.txt`) with RM OOM outcome across all six R15-R17 legs. This directly tests whether the stable pattern is better described as "restart of a long-lived predecessor fails; immediate restart of a freshly created predecessor is clean."
 
 ## Interpretation
 
@@ -131,11 +148,13 @@ R17 directly reproduces the same ordinal pattern previously seen across R15 and 
 - R16: first leg watermark 100 failed, second leg baseline 10 was clean.
 - R17: first leg baseline 10 failed, second leg baseline 10 was clean.
 
-Therefore the stronger common factor is restart ordinal / allocator-state carry-over, not `watermark_scale_factor=100`.
+Therefore the stronger common factor is not `watermark_scale_factor=100`.
 
 `watermark_scale_factor=100` must not be promoted as a persistent mitigation from the existing evidence. The R14 standalone clean result and the clean R15 treatment leg are now explained at least as plausibly by allocator-state variability / adjacent-restart carry-over.
 
-New VM tuning experiments remain paused. A read-only chronological R15 -> R16 -> R17 conditioning-chain analyzer has been added to compare all six legs and all between-leg boundaries. Its purpose is to determine whether clean second legs consistently inherit an Unmovable-heavy high-order free-area distribution and whether that distribution drifts back toward a mixed Movable/Unmovable state before the next failing first leg. The analyzer and regression coverage passed CI #905.
+The R15-R17 conditioning chain further shows that aggregate high-order capacity, free-area migratetype composition, and pageblock ownership are individually insufficient to explain all three pairs. The robust common feature is that every clean leg immediately follows another managed restart, whereas each next failing first leg occurs after the predecessor runtime has remained loaded for a substantially longer interval.
+
+New VM tuning experiments remain paused while predecessor-runtime age and teardown/release state are analyzed from existing evidence.
 
 ## Current conclusion
 
@@ -143,8 +162,6 @@ The proximate RM/Linux failure mechanism remains unchanged and directly observed
 
 The strengthened higher-level conclusion is:
 
-> Whether a specific managed restart encounters the recoverable RM high-order failure is strongly allocator-state dependent. Across three adjacent two-leg campaigns, the first restart failed and the second restart was clean even when the watermark assignment was reversed or held constant.
+> Whether a specific managed restart encounters the recoverable RM high-order failure is strongly dependent on the state of the predecessor runtime and allocator at teardown. Across three two-leg campaigns, the first restart failed and the immediately adjacent second restart was clean, independent of watermark assignment. The allocator state is continuous across those short boundaries but drifts substantially over the longer intervals before the next campaign.
 
-R17 further shows that aggregate high-order capacity alone does not predict the outcome. The immediately adjacent clean restart inherited an allocator state in which the Normal-zone high-order free pool was almost entirely classified as Unmovable, directly matching the migratetype requested by the traced RM allocations.
-
-The remaining question is whether this same conditioning/drift pattern repeats across R15 and R16. Until that is checked, the free-area migratetype redistribution is the leading allocator-state explanation, not a proven mitigation mechanism.
+This does not yet prove a specific Linux or NVIDIA RM mechanism. The leading next discriminator is predecessor-runtime age / residency-layout aging, tested read-only from the existing R15-R17 evidence.
