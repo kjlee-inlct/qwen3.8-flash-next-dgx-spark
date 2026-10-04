@@ -99,6 +99,38 @@ R20 nevertheless began from a weaker post-stop high-order state than either earl
 
 Do not infer a hard high-order threshold from these values: R20 was stopped by the independent memory-protection gate before readiness, so the runs do not provide a completed like-for-like outcome at the same point in startup.
 
+## Recovery follow-up
+
+After preserving the R20 invalid evidence, the managed OrcaRouter service was started normally without another benchmark treatment.
+
+The recovery completed successfully:
+
+- current immutable release pointer remained `ff67bab3c94d6992f61b9535836df97f03b9c022`
+- update/runtime/profile-switch transaction states were idle before recovery
+- the protected-stop rollback container was exited before recovery
+- the replacement container reached API/model readiness after `852 s`
+- recovered container ID: `91685b554aaf6b279715eab4c5608e0293310e57369c6b5e1116f4cdacf33c42`
+- recovered container state: running
+- Docker `OOMKilled=false`
+- managed runtime/profile-switch transitions remained idle after recovery
+- final service state: active
+
+The host after recovery reported approximately:
+
+- MemAvailable: `15983 MiB`
+- swap used: `101382 MiB`
+- swap free: `46073 MiB`
+
+The startup therefore demonstrates that large PLE swap consumption by itself does not imply the R20 protected-stop outcome. The R20 protection event remains a distinct transient memory-margin boundary rather than a simple total-swap-use condition.
+
+The new stable age waiter was also exercised on this recovered runtime. `scripts/wait-runtime-age.sh` pinned the same recovered container ID and `StartedAt`, reported progress without following a replacement container, and returned:
+
+- `WAIT_RUNTIME_AGE_READY`
+- `age_s=2700`
+- `min_age_s=2700`
+
+This live-host validation replaces the repeated inline Python age polling used in the earlier R18-R20 operator steps.
+
 ## Interpretation
 
 R20 changes the mitigation conclusion in an important but limited way.
@@ -108,14 +140,16 @@ Still supported:
 1. Full stop alone is insufficient: R19 was valid and emitted RM OOM x5.
 2. Post-stop compaction has a real allocator effect: R18 and R20 both show upward buddy coalescing.
 3. R18 remains the only completed aged-predecessor post-stop-compaction run and was strict clean.
+4. The managed service can recover normally after the R20 protected-stop boundary.
 
 Not established:
 
 1. R20 is not a second clean treatment replication.
 2. Post-stop compaction is not yet proven sufficient across aged allocator states.
 3. The absence of RM OOM in R20 cannot be promoted to HOST-STABILITY PASS because the safety monitor stopped the candidate first.
+4. A simple pre-start MemAvailable or SwapFree threshold has not been established as the discriminator.
 
-The new proximate blocker is the managed memory-protection boundary during the candidate startup. Before repeating R20 again, restore the managed OrcaRouter service and inspect the protected-stop evidence separately from the RM/sysmem mechanism.
+The next read-only discriminator is a direct R18-clean versus R20-invalid comparison of the already-captured post-stop pre/post-compaction snapshots, including buddy order distribution, migratetype composition, MemAvailable/MemFree/SwapFree, Normal-zone watermarks, and compaction vmstat deltas. No additional restart is required for this comparison.
 
 ## Current conclusion
 
@@ -124,5 +158,6 @@ The current sequence is:
 - R18 treatment: valid clean
 - R19 stop-only control: valid, RM OOM x5
 - R20 treatment replication: invalid, RM OOM x0 observed before a memory-protection stop
+- normal managed recovery after R20: successful and active
 
-Post-stop compaction therefore remains the leading RM/sysmem mitigation candidate, but production integration is **not yet justified**. The next step is to recover the managed service, preserve R20 as a distinct protected-stop result, and decide whether the replication runner needs an additional pre-start memory-margin eligibility gate or another controlled retry under a sufficiently healthy host-memory baseline.
+Post-stop compaction therefore remains the leading RM/sysmem mitigation candidate, but production integration is **not yet justified**. Analyze the existing R18/R20 post-compaction state before another treatment restart; the protected-stop path must remain separate from the recoverable RM/sysmem classification.
