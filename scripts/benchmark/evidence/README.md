@@ -62,10 +62,18 @@ The cross-run trajectory is the current strongest common-path discriminator:
 - R21 largest 5 s unexplained-residual increase: `+75174.387 MiB`;
 - R22 largest 5 s unexplained-residual increase: `+75138.043 MiB`.
 
+## R23 early-burst ownership trace
+
+- `orcarouter-managed-rmsys-r23-early-burst-ownership-plan-20261004.md`
+
+R23 is currently **DESIGN / NO TEST**. It is explicitly not another broad VM-tuning experiment. The plan keeps the current managed OrcaRouter runtime and established conditioning/protection harness fixed, then records only a narrow startup window around the known common burst using the minimum RM/UVM allocation-boundary probes needed for ownership attribution.
+
+The first live instrumentation set centers on `nv_alloc_pages`, `nv_alloc_system_pages`, `nvUvmInterfacePmaAllocPages`, `uvm_gpu_dma_alloc`, `uvm_mem_alloc`, and `uvm_pmm_gpu_alloc_kernel`. Broad page alloc/free, compaction/reclaim/extfrag, function-graph, scheduler, and full-driver tracing are excluded from the first R23 live run because R11 already closes the Linux high-order allocator mechanism.
+
 ## Current next diagnostic direction
 
 Do not return to broad watermark, compaction, drop-cache, or swap tuning as the primary diagnostic path.
 
-The next high-value experiment should narrowly observe approximately the first 30–50 seconds after post-stop compaction/candidate startup and attribute the common early allocation burst using the minimum necessary NVIDIA RM/UVM allocation-boundary probes.
+Complete the R23 probe-only preflight/helper, focused tests, narrow-window managed runner, and analyzer. Only after CI is green should a live R23 restart be issued. The live goal is to align RM/UVM boundary activity and task attribution with the approximately 75 GiB early residual formation, not to evaluate another mitigation.
 
 Do not merge or promote reclaim/compaction or mmap behavior as a production mitigation from R9–R22 evidence alone.
