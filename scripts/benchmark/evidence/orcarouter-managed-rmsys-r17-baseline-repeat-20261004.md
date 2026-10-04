@@ -135,7 +135,7 @@ Therefore the stronger common factor is restart ordinal / allocator-state carry-
 
 `watermark_scale_factor=100` must not be promoted as a persistent mitigation from the existing evidence. The R14 standalone clean result and the clean R15 treatment leg are now explained at least as plausibly by allocator-state variability / adjacent-restart carry-over.
 
-New VM tuning experiments remain paused. The next read-only step is a chronological R15 -> R16 -> R17 conditioning-chain comparison, including campaign-to-campaign idle boundaries, to determine whether clean second legs consistently inherit an Unmovable-heavy high-order free-area distribution and whether that distribution drifts back before the next failing first leg.
+New VM tuning experiments remain paused. A read-only chronological R15 -> R16 -> R17 conditioning-chain analyzer has been added to compare all six legs and all between-leg boundaries. Its purpose is to determine whether clean second legs consistently inherit an Unmovable-heavy high-order free-area distribution and whether that distribution drifts back toward a mixed Movable/Unmovable state before the next failing first leg.
 
 ## Current conclusion
 
