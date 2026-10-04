@@ -29,10 +29,11 @@ class OrcaRouterR18R20PoststopCompareTests(unittest.TestCase):
         self.assertEqual(self.module.mib_for_orders(values, 4), 0.25)
 
         mem = self.module.parse_meminfo(
-            "MemAvailable:    16384 kB\nMemFree: 8192 kB\nSwapFree: 32768 kB\n"
+            "MemAvailable:    16384 kB\nMemFree: 8192 kB\nSwapFree: 32768 kB\nCached: 4096 kB\n"
         )
         self.assertEqual(mem["MemAvailable"], 16384)
         self.assertEqual(mem["SwapFree"], 32768)
+        self.assertEqual(self.module.mem_mib(mem, "Cached"), 4.0)
 
     def test_pagetype_parser(self) -> None:
         parsed = self.module.parse_counts(
@@ -48,13 +49,18 @@ class OrcaRouterR18R20PoststopCompareTests(unittest.TestCase):
         self.assertEqual(parsed[(0, "Normal")]["free"], 100)
         self.assertEqual(parsed[(0, "Normal")]["low"], 30)
 
-    def test_analyzer_is_read_only(self) -> None:
+    def test_analyzer_is_read_only_and_emits_discriminators(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
         self.assertNotIn("/proc/sys/vm/", text)
         self.assertNotIn("compact_memory", text)
         self.assertIn("poststop-before-compact", text)
         self.assertIn("poststop-after-compact", text)
         self.assertIn("ORCA_R18_R20_POSTSTOP_COMPARISON", text)
+        self.assertIn("compaction_pagetype=", text)
+        self.assertIn("postcompact_pagetype=", text)
+        self.assertIn("postcompact_mem=", text)
+        self.assertIn('"KReclaimable"', text)
+        self.assertIn('"SReclaimable"', text)
 
     def test_load_snapshot_requires_full_proc_set(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -71,7 +77,7 @@ class OrcaRouterR18R20PoststopCompareTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (path / "proc-meminfo.txt").write_text(
-                "MemAvailable: 1000 kB\nMemFree: 500 kB\nSwapFree: 2000 kB\n",
+                "MemAvailable: 1000 kB\nMemFree: 500 kB\nSwapFree: 2000 kB\nCached: 250 kB\n",
                 encoding="utf-8",
             )
             (path / "proc-vmstat.txt").write_text(
@@ -80,6 +86,7 @@ class OrcaRouterR18R20PoststopCompareTests(unittest.TestCase):
             )
             snap = self.module.load_snapshot(path)
             self.assertEqual(snap["mem"]["MemAvailable"], 1000)
+            self.assertEqual(snap["mem"]["Cached"], 250)
             self.assertEqual(snap["vm"]["compact_success"], 7)
 
 
