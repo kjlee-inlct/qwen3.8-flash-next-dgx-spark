@@ -67,7 +67,9 @@ The mmap candidate:
 
 Therefore legacy PLE CPU-offload is not, by itself, a sufficient explanation for the RM fallback.
 
-R21/R22 allocator comparison further shows that mmap materially reduces sustained swap pressure and delays later high-order depletion, but does not remove the initial catastrophic high-order collapse. R22 still has one strict RM event even though the event occurs with roughly `3112 MiB` Normal order-4+ and `1531 MiB` Unmovable order-4+ remaining.
+R21/R22 allocator comparison further shows that mmap materially reduces sustained swap pressure and delays later high-order depletion, but does not remove the initial catastrophic high-order collapse.
+
+The R22 RM-event snapshot contains roughly `3112 MiB` Normal order-4+ and `1531 MiB` Unmovable order-4+. These are **post-failure snapshot values**. R11 already established that the RM order-4 path can accumulate many pages, fail one allocation, and then roll back/free the pages already accumulated before returning `NV_ERR_NO_MEMORY`. Therefore some capacity visible in the event snapshot may already be rollback-released and must not be interpreted as the exact free reservoir immediately before failure.
 
 ## Common physical-memory footprint
 
