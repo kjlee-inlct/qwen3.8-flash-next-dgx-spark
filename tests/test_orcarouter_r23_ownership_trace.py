@@ -80,7 +80,7 @@ class OrcaRouterR23OwnershipTraceTests(unittest.TestCase):
         self.assertIn("TRACE_DURATION_S=50", self.runner)
         self.assertIn('CONTAINER="qwen38-flash-next"', self.runner)
         self.assertIn("DEFAULT_KV_MEM=17179869184", self.runner)
-        self.assertIn('--runtime-root "${CURRENT_LINK}" --start --yes', self.runner)
+        self.assertIn('create --runtime-root "${CURRENT_LINK}" --start --yes', self.runner)
         self.assertIn("replacement-request-monotonic-ns.txt", self.runner)
         self.assertIn("trace-window-start-monotonic-ns.txt", self.runner)
         self.assertIn("trace-window-end-monotonic-ns.txt", self.runner)
@@ -125,6 +125,19 @@ class OrcaRouterR23OwnershipTraceTests(unittest.TestCase):
                 self.assertNotIn(forbidden_event, self.runner)
         self.assertIn("nvidia:nvidia_dev_xid", self.runner)
 
+    def test_runner_keeps_recovery_armed_during_async_managed_start(self) -> None:
+        stop_index = self.runner.index("SERVICE_RECOVERY_ARMED=1")
+        launch_index = self.runner.index('sudo -n /bin/bash "${MANAGE_SERVICE}"', stop_index)
+        clear_index = self.runner.index("SERVICE_RECOVERY_ARMED=0", launch_index)
+        wait_index = self.runner.index('wait "${MANAGED_PID}"', launch_index)
+        self.assertLess(stop_index, launch_index)
+        self.assertLess(launch_index, wait_index)
+        self.assertLess(wait_index, clear_index)
+        self.assertIn('stop_background_pid "${MANAGED_PID}"', self.runner)
+        self.assertIn('! systemctl is-active --quiet "${UNIT}"', self.runner)
+        self.assertIn('sudo -n systemctl start "${UNIT}"', self.runner)
+        self.assertIn("managed start exited before replacement was observed", self.runner)
+
     def test_runner_has_cleanup_identity_and_strict_classification(self) -> None:
         self.assertIn("cleanup_probes", self.runner)
         self.assertIn("SUDO_KEEPALIVE_PID", self.runner)
@@ -135,17 +148,26 @@ class OrcaRouterR23OwnershipTraceTests(unittest.TestCase):
         self.assertIn('HOST_CLASS="FAIL"', self.runner)
         self.assertIn("NV_ERR_NO_MEMORY|_memdescAllocInternal", self.runner)
 
-    def test_analyzer_treats_request_sum_as_activity_and_boundary_pairs_as_partial(self) -> None:
-        self.assertIn("activity_volume_not_resident_ownership", self.analyzer)
-        self.assertIn("window_boundary_capable=1", self.analyzer)
-        self.assertIn("unmatched_entries", self.analyzer)
-        self.assertIn("unmatched_returns", self.analyzer)
-        self.assertIn("ownership_discriminator", self.analyzer)
-        self.assertIn("node0_normal_free_delta_mib", self.analyzer)
-        self.assertIn("nr_free_pages_delta_mib", self.analyzer)
-        self.assertIn("milestone_nearest_", self.analyzer)
+    def test_analyzer_emits_complete_window_and_boundary_metrics(self) -> None:
+        for token in (
+            "trace_window_start_from_container_started_s",
+            ".first_monotonic=",
+            ".last_monotonic=",
+            "window_boundary_capable=1",
+            "unmatched_entries",
+            "unmatched_returns",
+            "activity_volume_not_resident_ownership",
+            "node0_normal_free_delta_mib",
+            "nr_free_pages_delta_mib",
+            "normal_unmovable_order4plus_mib",
+            "normal_movable_order4plus_mib",
+            "milestone_nearest_",
+            "ownership_discriminator",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, self.analyzer)
 
-    def test_analyzer_residual_and_buddy_weighting(self) -> None:
+    def test_analyzer_residual_buddy_and_pagetype_weighting(self) -> None:
         base = {
             "MemFree": 1000.0,
             "Active(anon)": 10.0,
@@ -164,8 +186,21 @@ class OrcaRouterR23OwnershipTraceTests(unittest.TestCase):
         now["MemFree"] = 900.0
         now["Active(anon)"] = 20.0
         self.assertAlmostEqual(r23.residual(base, now), 90.0)
+
         buddy = ["Node 0, zone   Normal      1 2 0"]
-        self.assertAlmostEqual(r23.normal_free_mib(buddy, 4096), 20 * 1024 / 1024 / 1024)
+        self.assertAlmostEqual(
+            r23.normal_free_mib(buddy, 4096),
+            20 * 1024 / 1024 / 1024,
+        )
+
+        pagetype = [
+            "Node 0, zone Normal, type Unmovable 1 1 1 1 2 1 0",
+        ]
+        expected_pages = 2 * (1 << 4) + 1 * (1 << 5)
+        self.assertAlmostEqual(
+            r23.pagetype_high_mib(pagetype, 4096, "Unmovable"),
+            expected_pages * 4096 / 1048576,
+        )
 
 
 if __name__ == "__main__":
