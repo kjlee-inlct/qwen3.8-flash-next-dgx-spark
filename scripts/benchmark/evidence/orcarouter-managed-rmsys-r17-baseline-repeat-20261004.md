@@ -138,7 +138,26 @@ The longer between-campaign boundaries show substantial drift while the current 
 
 Both following first legs failed. This makes elapsed time / predecessor-runtime residency a stronger common discriminator than watermark assignment or one specific migratetype composition.
 
-The next read-only analysis therefore correlates the exact age of the container being replaced (`container-started-before.txt` -> `managed-child-started.txt`) with RM OOM outcome across all six R15-R17 legs. This directly tests whether the stable pattern is better described as "restart of a long-lived predecessor fails; immediate restart of a freshly created predecessor is clean."
+## Predecessor runtime age correlation
+
+A direct read-only correlation used the already-recorded predecessor container start time and managed restart start time for every R15-R17 leg.
+
+The six observations separate completely:
+
+- R15A: predecessor age 50.722 min, RM OOM x1
+- R15B: predecessor age 14.947 min, clean
+- R16A: predecessor age 125.120 min, RM OOM x3
+- R16B: predecessor age 15.052 min, clean
+- R17A: predecessor age 298.448 min, RM OOM x4
+- R17B: predecessor age 15.953 min, clean
+
+There is no overlap between the observed clean and failing predecessor ages. The three clean restarts replaced runtimes approximately 15-16 minutes old, while all three failures replaced substantially older runtimes, starting at about 50.7 minutes in the shortest observed failure.
+
+The failure count also rose across the three older-predecessor observations (1, 3, 4) as predecessor age increased (50.7, 125.1, 298.4 minutes). With only three failing samples this must not be treated as a calibrated dose-response curve, but it strengthens the evidence that elapsed residency is related to the allocator state presented at teardown.
+
+This still does not prove that wall-clock age itself is causal. Runtime age is a proxy for allocator/residency drift while the loaded predecessor remains active. The mechanism could be the physical-page layout released by teardown after a long residency rather than elapsed time directly.
+
+The practical implication is that the next mitigation experiment should operate at the teardown boundary. R12 compacted while the predecessor runtime was still resident and therefore could not compact the pages that the predecessor would later release. The managed service path currently stops the old unit and immediately starts the replacement. A stronger targeted candidate is therefore: fully stop the aged predecessor, compact once with those pages now free, then start the replacement under the same R11/R10b tracing and strict classification.
 
 ## Interpretation
 
@@ -152,9 +171,9 @@ Therefore the stronger common factor is not `watermark_scale_factor=100`.
 
 `watermark_scale_factor=100` must not be promoted as a persistent mitigation from the existing evidence. The R14 standalone clean result and the clean R15 treatment leg are now explained at least as plausibly by allocator-state variability / adjacent-restart carry-over.
 
-The R15-R17 conditioning chain further shows that aggregate high-order capacity, free-area migratetype composition, and pageblock ownership are individually insufficient to explain all three pairs. The robust common feature is that every clean leg immediately follows another managed restart, whereas each next failing first leg occurs after the predecessor runtime has remained loaded for a substantially longer interval.
+The R15-R17 conditioning chain further shows that aggregate high-order capacity, free-area migratetype composition, and pageblock ownership are individually insufficient to explain all three pairs. The direct age correlation provides the cleanest higher-level discriminator observed so far: every approximately 15-16 minute predecessor was clean, while every 50.7-298.4 minute predecessor emitted recoverable RM OOM.
 
-New VM tuning experiments remain paused while predecessor-runtime age and teardown/release state are analyzed from existing evidence.
+New VM tuning experiments remain paused. The next experiment should target the predecessor teardown/release boundary rather than another persistent allocator knob.
 
 ## Current conclusion
 
@@ -162,6 +181,6 @@ The proximate RM/Linux failure mechanism remains unchanged and directly observed
 
 The strengthened higher-level conclusion is:
 
-> Whether a specific managed restart encounters the recoverable RM high-order failure is strongly dependent on the state of the predecessor runtime and allocator at teardown. Across three two-leg campaigns, the first restart failed and the immediately adjacent second restart was clean, independent of watermark assignment. The allocator state is continuous across those short boundaries but drifts substantially over the longer intervals before the next campaign.
+> Whether a specific managed restart encounters the recoverable RM high-order failure is strongly dependent on the state of the predecessor runtime and allocator at teardown. Across R15-R17, predecessor age cleanly separates the six observed outcomes: approximately 15-16 minute predecessors were clean, while 50.7-298.4 minute predecessors emitted RM OOM. Age is best treated as a proxy for residency/allocator-layout drift, not yet as a causal timer threshold.
 
-This does not yet prove a specific Linux or NVIDIA RM mechanism. The leading next discriminator is predecessor-runtime age / residency-layout aging, tested read-only from the existing R15-R17 evidence.
+The next mitigation target is therefore post-teardown allocator state: stop the aged predecessor first, then compact the now-free pages before starting the replacement, while preserving the existing strict host-stability classification.
