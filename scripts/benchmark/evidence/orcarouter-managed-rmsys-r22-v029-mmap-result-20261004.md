@@ -73,7 +73,7 @@ The R22 RM-event snapshot contains roughly `3112 MiB` Normal order-4+ and `1531 
 
 ## Common physical-memory footprint
 
-The detailed R21/R22 `/proc/meminfo` comparison adds a stronger common-path result.
+The completed R21/R22 accounting comparison separates two effects.
 
 R22 post-compaction -> RM event:
 
@@ -87,34 +87,73 @@ R22 post-compaction -> RM event:
 
 R21 shows a nearly identical MemAvailable reduction (`-91942.395 MiB`) despite a radically different SwapFree reduction (`-101284.828 MiB`).
 
-The evidence therefore separates two effects:
+Full `/proc/meminfo` accounting finds no conventional tens-of-GiB bucket that explains the common footprint: CMA, per-CPU, hugetlb/hugepages, vmalloc, page tables, locked memory, slab, anon, and shmem are all individually far too small.
 
-1. a **common roughly 92-93 GiB loss of available physical memory** present in both legacy and mmap startup paths;
-2. an additional roughly 100 GiB swap-pressure path associated with the legacy PLE CPU-offload startup.
+The physical-page accounting further closes the host-side localization for R22:
 
-The common footprint is not explained by any single conventional process/file/slab field measured so far. This is consistent with the already established R11 mechanism of direct NVIDIA RM high-order system-page allocation, but the accounting attribution remains provisional until all `/proc/meminfo` fields are checked.
+- node0 Normal free-page loss: `118161.762 MiB`
+- global `nr_free_pages` loss: `118174.477 MiB`
+- node0 Normal managed pages: unchanged at `31725420`
+- non-overlapping core accounted growth: `28172.840 MiB`
+- approximate `core_unexplained_loss`: `90000.770 MiB`
+
+R21 produces the same pattern with approximate residual `89465.184 MiB`.
+
+`core_unexplained_loss` is an approximate residual, not an exact NVIDIA-owned-page measurement. However, the near-identical residual scale, direct node0 Normal free-page loss, unchanged managed capacity, and R11's direct RM order-4 trace are strongly consistent with a common direct system-page allocation pressure mechanism.
+
+## Time-series closure
+
+The one-second trajectory shows when the common residual forms.
+
+R22 final residual: `90000.770 MiB`.
+
+- 25% crossing: `+35.638 s` after compaction, residual `39416.078 MiB`
+- 50% crossing: `+36.638 s`, residual `64328.199 MiB`
+- 75% crossing: `+37.638 s`, residual `75189.867 MiB`
+- 90% crossing: `+588.638 s`, residual `81546.207 MiB`
+- largest 1 s residual increase: `+24912.121 MiB`
+- largest 5 s residual increase: `+75138.043 MiB`
+
+R21 shows an almost identical early five-second residual burst (`+75174.387 MiB`) despite using the legacy CPU-offload path.
+
+At the R22 early 75% crossing, SwapFree had changed by only `+0.203 MiB`; at the R21 early 75% crossing it had changed by only `+3.668 MiB`. The common approximately 75 GiB early burst therefore precedes and is independent of R21's later approximately 100 GiB swap churn.
+
+The early residual burst aligns with the initial catastrophic high-order collapse in both runtime stacks. This is now the highest-value common allocation interval for ownership tracing.
+
+Focused cross-run trajectory evidence is recorded in `orcarouter-managed-rmsys-r21-r22-unaccounted-trajectory-20261004.md`.
 
 ## Relation to R21
 
 R21 legacy startup:
 
 - reaches near-zero Unmovable capacity within roughly one minute;
-- consumes roughly 99 GiB additional swap before the RM event;
+- forms about `75.17 GiB` unexplained residual over its strongest five-second startup burst;
+- later consumes roughly 99-100 GiB additional swap before the RM event;
 - records one strict RM OOM.
 
 R22 mmap startup:
 
 - reproduces the initial catastrophic high-order collapse;
+- forms about `75.14 GiB` unexplained residual over its strongest five-second startup burst;
 - reaches low Unmovable capacity much more slowly;
 - consumes only roughly 3 GiB additional swap before the RM event;
 - still records one strict RM OOM.
 
-Therefore legacy PLE CPU-offload is a strong sustained-pressure amplifier, not the sole or necessary cause of the RM failure.
+Therefore legacy PLE CPU-offload is a strong sustained-pressure amplifier, not the sole or necessary cause of either the common early physical-page burst or the strict RM failure.
 
-## Next read-only analysis
+## Current conclusion and next step
 
-Use the preserved R21/R22 snapshots with `scripts/benchmark/compare-orcarouter-r21-r22-rm-meminfo-all.py` to inspect every `/proc/meminfo` field, especially CMA, vmalloc, per-CPU, hugepage, page-table, kernel-stack, and locked-memory accounting.
+R22 has completed its intended mechanism-discrimination role.
 
-If none contains a tens-of-GiB change matching the common 92-93 GiB unavailable footprint, direct driver-owned pages outside ordinary process/file/slab accounting become the leading closed accounting interpretation.
+The broad tuning questions are closed sufficiently for this branch:
 
-No R23 restart, merge, or production promotion is implied by R22.
+- mmap alone does not eliminate strict RM fallback;
+- legacy PLE swap pressure is separable from the common startup footprint;
+- the common footprint is localized to node0 Normal free-page consumption with unchanged managed capacity;
+- approximately 75 GiB of the roughly 90 GiB unexplained residual forms in a common five-second early-startup burst.
+
+No further watermark, compaction, drop-cache, or swap-tuning experiment is the primary next step.
+
+The next live experiment should narrowly trace the common early allocation burst, approximately the first `30-50 s` after post-stop compaction/candidate start, and add only the minimum NVIDIA RM/UVM observability needed to attribute page ownership or the responsible common model-loading boundary.
+
+No merge or production promotion is implied by R22.
