@@ -54,71 +54,101 @@ Therefore:
 
 The fact that fallback recovered sufficiently for the runtime to become READY does not change the host-stability classification.
 
-## What R22 establishes
+## R21 versus R22 starting state
 
-R22 rejects the strong form of the previous hypothesis that merely replacing the legacy resident PLE CPU-offload path with the existing v0.29 PLE-mmap startup stack is sufficient to eliminate the strict RM order-4 fallback.
+R21 post-compaction:
 
-The mmap candidate:
+- Normal order-4+: `119743.188 MiB`
+- Unmovable order-4+: `104607.312 MiB`
+- Movable order-4+: `15083.688 MiB`
+- MemFree: `122314.555 MiB`
+- SwapFree: `146430.969 MiB`
 
-- started successfully;
-- was not stopped by host memory protection;
-- reached the requested model READY state;
-- nevertheless produced the same strict `_memdescAllocInternal / NV_ERR_NO_MEMORY` signature once.
+R22 post-compaction:
 
-Therefore legacy PLE CPU-offload is not, by itself, a sufficient explanation for the RM fallback.
+- Normal order-4+: `117236.812 MiB`
+- Unmovable order-4+: `96999.250 MiB`
+- Movable order-4+: `20115.625 MiB`
+- MemFree: `122021.215 MiB`
+- SwapFree: `146442.938 MiB`
 
-This does **not** establish that mmap has no allocator benefit. R22 may still materially change the timing, depth, or migratetype composition of the early high-order collapse. That distinction is the next required analysis.
+The post-conditioning host states are broadly comparable, although R22 starts with about `7.6 GiB` less Unmovable order-4+ capacity.
 
-## Relation to R21
+## Initial high-order collapse
 
-R21 legacy startup:
+The first high-order collapse remains catastrophic under mmap.
 
-- page-cache reclaim + compaction produced a strong initial allocator state;
-- Normal Unmovable order-4+ was roughly `104 GiB` after conditioning;
-- the dominant collapse occurred during the first model / legacy-PLE loading interval;
-- Unmovable order-4+ reached effectively zero within roughly 56 seconds after compaction;
-- one strict RM OOM occurred later;
-- result: `VALID_RM_OOM`.
+R21:
 
-R22 mmap startup:
+- Unmovable 50% crossing: about `45.99 s` after compaction
+- Unmovable 10% crossing: about `50.99 s`
+- Unmovable 1% crossing: about `56.00 s`
+- largest 5 s Unmovable drop: `-74881.938 MiB`
+- largest 1 s Normal order-4+ drop: `-26395.125 MiB`
 
-- uses the same one-shot page-cache reclaim + compaction conditioning family;
-- uses the same `16 GiB` KV target as managed OrcaRouter;
-- reaches READY without protection;
-- still records one strict RM OOM;
-- result: `VALID_RM_OOM`.
+R22:
 
-The remaining high-value discriminator is therefore whether R22 reproduces the R21 **early allocator-collapse shape**.
+- Unmovable 50% crossing: about `36.64 s` after compaction
+- Unmovable 10% crossing: about `261.64 s`
+- Unmovable 1% crossing: about `336.64 s`
+- largest 5 s Unmovable drop: `-64215.375 MiB`
+- largest 1 s Normal order-4+ drop: `-24882.938 MiB`
+
+Therefore removing the legacy PLE CPU-offload worker does **not** remove the initial catastrophic high-order collapse. The first drain still occurs in the mmap candidate with a similar one-second/five-second scale.
+
+However, the sustained-depletion trajectory changes materially. R21 reaches effectively zero Unmovable order-4+ capacity within about one minute; R22 takes several minutes to reach the same low-capacity regime.
+
+## RM-event state discriminator
+
+R21 RM event:
+
+- Normal order-4+: `146.125 MiB`
+- Unmovable order-4+: `0.562 MiB`
+- Movable order-4+: `145.500 MiB`
+- MemFree: `1675.527 MiB`
+- SwapFree: `45146.141 MiB`
+- SwapFree delta from post-compaction: `-101284.828 MiB`
+
+R22 RM event:
+
+- Normal order-4+: `3112.125 MiB`
+- Unmovable order-4+: `1530.688 MiB`
+- Movable order-4+: `1558.438 MiB`
+- MemFree: `3847.605 MiB`
+- SwapFree: `143279.770 MiB`
+- SwapFree delta from post-compaction: `-3163.168 MiB`
+
+This is the strongest discriminator so far.
+
+R21 reaches the RM event after roughly `99 GiB` of additional swap use and with essentially no Unmovable high-order capacity left. R22 reaches the same strict RM failure with very little additional swap use and with about `3.1 GiB` of Normal order-4+ capacity still present, including about `1.53 GiB` Unmovable.
+
+## Updated mechanism model
+
+The evidence now supports a two-layer model:
+
+1. **Legacy PLE CPU-offload strongly amplifies sustained residency/swap pressure and accelerates long-lived high-order depletion.** R22 substantially removes this behavior.
+2. **The initial catastrophic high-order collapse and the strict RM fallback do not require that legacy path.** Both still occur in R22.
+
+Therefore legacy PLE CPU-offload is an important pressure amplifier, but it is not the sole or necessary cause of `_memdescAllocInternal` failure.
+
+The remaining RM failure mechanism is broader than PLE residency alone and should be investigated in the common model-loading / NVIDIA RM allocation path.
 
 ## Next read-only analysis
 
-Use the preserved R22 allocator evidence to locate:
+No R23 restart is justified yet.
 
-- initial post-compaction Normal order-4+ and Unmovable order-4+ capacity;
-- first 50%, 10%, and 1% threshold crossings;
-- first crossing below 1 GiB / 100 MiB / 10 MiB;
-- largest consecutive 5-second Unmovable and Movable drops;
-- largest consecutive 1-second aggregate Normal order-4+ drop;
-- relation of those crossings to the mmap candidate startup log;
-- allocator state at the single R22 RM event.
+R22 loses about `118 GiB` of MemFree between post-compaction and the RM event while SwapFree drops by only about `3 GiB` and file cache grows by only about `26 GiB`. The compact event analyzer does not account for the remainder of that residency.
 
-The key comparison is not only `rm_oom_count` (R21 and R22 are both one) but whether mmap changes the early collapse from the R21 pattern.
+The next comparison should quantify, for both R21 and R22 at POST_COMPACT and RM_EVENT:
 
-## Current interpretation boundary
+- AnonPages
+- Active(anon) / Inactive(anon)
+- Cached / Active(file) / Inactive(file)
+- Shmem
+- Slab / SReclaimable / SUnreclaim
+- KernelStack / PageTables
+- Unevictable / Mlocked
 
-Accepted conclusions:
-
-- static pre-start allocator strength is insufficient;
-- page-cache reclaim + compaction is insufficient to eliminate RM fallback;
-- legacy CPU-offload removal through the existing v0.29 mmap stack is also insufficient to eliminate RM fallback;
-- host protection did not trigger in this R22 run;
-- the strict RM failure mechanism persists somewhere in the alternative mmap startup stack.
-
-Not yet accepted:
-
-- that mmap and legacy startup have identical allocator trajectories;
-- that PLE is irrelevant to allocator pressure;
-- that the main model-loading path alone causes the failure;
-- any production promotion or mmap cutover.
+That composition gap should be closed before designing another runtime mutation.
 
 No merge or production integration is implied by this result.
