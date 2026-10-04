@@ -157,7 +157,23 @@ The failure count also rose across the three older-predecessor observations (1, 
 
 This still does not prove that wall-clock age itself is causal. Runtime age is a proxy for allocator/residency drift while the loaded predecessor remains active. The mechanism could be the physical-page layout released by teardown after a long residency rather than elapsed time directly.
 
-The practical implication is that the next mitigation experiment should operate at the teardown boundary. R12 compacted while the predecessor runtime was still resident and therefore could not compact the pages that the predecessor would later release. The managed service path currently stops the old unit and immediately starts the replacement. A stronger targeted candidate is therefore: fully stop the aged predecessor, compact once with those pages now free, then start the replacement under the same R11/R10b tracing and strict classification.
+## R18 post-stop compaction plan
+
+The age correlation changes where the next mitigation should act. R12 compacted while the predecessor runtime was still resident, so the pages later released by predecessor teardown were not available to that compaction pass. The managed service path also stops the predecessor and immediately starts the replacement.
+
+R18 therefore tests a narrower teardown-boundary intervention:
+
+1. require the predecessor to be at least 2700 seconds (45 minutes) old,
+2. begin read-only allocator-state collection,
+3. fully stop the predecessor service and verify its container is no longer running,
+4. capture post-stop allocator state,
+5. write `1` to `vm.compact_memory` exactly once,
+6. capture post-compaction allocator state,
+7. start the same immutable OrcaRouter release through the normal managed service helper,
+8. require a real container replacement and healthy API,
+9. classify any `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` as HOST-STABILITY FAIL under the unchanged strict policy.
+
+R18 changes no persistent VM tunable. Its helper is `scripts/benchmark/run-orcarouter-managed-rmsys-r18-poststop-compact.sh`; regression coverage enforces the aged-predecessor guard, stop-before-compact ordering, exactly one `compact_memory` write, absence of persistent VM-knob writes, allocator-state capture, and explicit VALID_CLEAN / VALID_RM_OOM outcomes. CI #915 passed.
 
 ## Interpretation
 
@@ -173,7 +189,7 @@ Therefore the stronger common factor is not `watermark_scale_factor=100`.
 
 The R15-R17 conditioning chain further shows that aggregate high-order capacity, free-area migratetype composition, and pageblock ownership are individually insufficient to explain all three pairs. The direct age correlation provides the cleanest higher-level discriminator observed so far: every approximately 15-16 minute predecessor was clean, while every 50.7-298.4 minute predecessor emitted recoverable RM OOM.
 
-New VM tuning experiments remain paused. The next experiment should target the predecessor teardown/release boundary rather than another persistent allocator knob.
+New persistent VM tuning experiments remain paused. R18 instead targets the moment when an aged predecessor releases its physical pages.
 
 ## Current conclusion
 
@@ -183,4 +199,4 @@ The strengthened higher-level conclusion is:
 
 > Whether a specific managed restart encounters the recoverable RM high-order failure is strongly dependent on the state of the predecessor runtime and allocator at teardown. Across R15-R17, predecessor age cleanly separates the six observed outcomes: approximately 15-16 minute predecessors were clean, while 50.7-298.4 minute predecessors emitted RM OOM. Age is best treated as a proxy for residency/allocator-layout drift, not yet as a causal timer threshold.
 
-The next mitigation target is therefore post-teardown allocator state: stop the aged predecessor first, then compact the now-free pages before starting the replacement, while preserving the existing strict host-stability classification.
+R18 tests whether compacting only after the aged predecessor has fully released its pages can turn that otherwise failure-associated restart boundary into a strict-clean replacement.
