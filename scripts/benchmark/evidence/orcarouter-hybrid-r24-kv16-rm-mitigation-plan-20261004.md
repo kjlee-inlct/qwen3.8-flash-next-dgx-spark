@@ -1,5 +1,13 @@
 # OrcaRouter Hybrid R24 — H6 16 GiB RM mitigation discriminator — plan — 2026-10-04
 
+## Status
+
+**IMPLEMENTED / LIVE TEST NOT YET RUN**
+
+Repository implementation is complete at head `60d60862aa0946476ca4ec83b3237cb7c1e63b52`. CI #1040 is SUCCESS: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace all pass.
+
+The required next action is `--preflight` only. A live H6 candidate run must not start unless preflight reports `R24_PREFLIGHT=PASS`.
+
 ## Purpose
 
 R23 closes the common early approximately 75 GiB startup burst to the observed NVIDIA RM system-memory allocation path (`nv_alloc_pages` / `nv_alloc_system_pages`). R24 therefore does **not** reopen broad ownership tracing. It asks a mitigation question: does the H6 ModelOpt W4A16 hybrid representation reduce the direct RM system-memory burst and remove the later strict RM allocation failure?
