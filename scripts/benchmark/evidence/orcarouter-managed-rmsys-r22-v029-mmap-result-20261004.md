@@ -54,101 +54,65 @@ Therefore:
 
 The fact that fallback recovered sufficiently for the runtime to become READY does not change the host-stability classification.
 
-## R21 versus R22 starting state
+## What R22 establishes
 
-R21 post-compaction:
+R22 rejects the strong form of the previous hypothesis that merely replacing the legacy resident PLE CPU-offload path with the existing v0.29 PLE-mmap startup stack is sufficient to eliminate the strict RM order-4 fallback.
 
-- Normal order-4+: `119743.188 MiB`
-- Unmovable order-4+: `104607.312 MiB`
-- Movable order-4+: `15083.688 MiB`
-- MemFree: `122314.555 MiB`
-- SwapFree: `146430.969 MiB`
+The mmap candidate:
 
-R22 post-compaction:
+- started successfully;
+- was not stopped by host memory protection;
+- reached the requested model READY state;
+- nevertheless produced the same strict `_memdescAllocInternal / NV_ERR_NO_MEMORY` signature once.
 
-- Normal order-4+: `117236.812 MiB`
-- Unmovable order-4+: `96999.250 MiB`
-- Movable order-4+: `20115.625 MiB`
-- MemFree: `122021.215 MiB`
-- SwapFree: `146442.938 MiB`
+Therefore legacy PLE CPU-offload is not, by itself, a sufficient explanation for the RM fallback.
 
-The post-conditioning host states are broadly comparable, although R22 starts with about `7.6 GiB` less Unmovable order-4+ capacity.
+R21/R22 allocator comparison further shows that mmap materially reduces sustained swap pressure and delays later high-order depletion, but does not remove the initial catastrophic high-order collapse. R22 still has one strict RM event even though the event occurs with roughly `3112 MiB` Normal order-4+ and `1531 MiB` Unmovable order-4+ remaining.
 
-## Initial high-order collapse
+## Common physical-memory footprint
 
-The first high-order collapse remains catastrophic under mmap.
+The detailed R21/R22 `/proc/meminfo` comparison adds a stronger common-path result.
 
-R21:
+R22 post-compaction -> RM event:
 
-- Unmovable 50% crossing: about `45.99 s` after compaction
-- Unmovable 10% crossing: about `50.99 s`
-- Unmovable 1% crossing: about `56.00 s`
-- largest 5 s Unmovable drop: `-74881.938 MiB`
-- largest 1 s Normal order-4+ drop: `-26395.125 MiB`
+- MemFree: `-118173.609 MiB`
+- MemAvailable: `-93169.719 MiB`
+- Cached: `+25861.672 MiB`
+- AnonPages: `+1650.254 MiB`
+- Shmem: `+326.195 MiB`
+- Slab: `+441.777 MiB`
+- SwapFree: `-3163.168 MiB`
 
-R22:
+R21 shows a nearly identical MemAvailable reduction (`-91942.395 MiB`) despite a radically different SwapFree reduction (`-101284.828 MiB`).
 
-- Unmovable 50% crossing: about `36.64 s` after compaction
-- Unmovable 10% crossing: about `261.64 s`
-- Unmovable 1% crossing: about `336.64 s`
-- largest 5 s Unmovable drop: `-64215.375 MiB`
-- largest 1 s Normal order-4+ drop: `-24882.938 MiB`
+The evidence therefore separates two effects:
 
-Therefore removing the legacy PLE CPU-offload worker does **not** remove the initial catastrophic high-order collapse. The first drain still occurs in the mmap candidate with a similar one-second/five-second scale.
+1. a **common roughly 92-93 GiB loss of available physical memory** present in both legacy and mmap startup paths;
+2. an additional roughly 100 GiB swap-pressure path associated with the legacy PLE CPU-offload startup.
 
-However, the sustained-depletion trajectory changes materially. R21 reaches effectively zero Unmovable order-4+ capacity within about one minute; R22 takes several minutes to reach the same low-capacity regime.
+The common footprint is not explained by any single conventional process/file/slab field measured so far. This is consistent with the already established R11 mechanism of direct NVIDIA RM high-order system-page allocation, but the accounting attribution remains provisional until all `/proc/meminfo` fields are checked.
 
-## RM-event state discriminator
+## Relation to R21
 
-R21 RM event:
+R21 legacy startup:
 
-- Normal order-4+: `146.125 MiB`
-- Unmovable order-4+: `0.562 MiB`
-- Movable order-4+: `145.500 MiB`
-- MemFree: `1675.527 MiB`
-- SwapFree: `45146.141 MiB`
-- SwapFree delta from post-compaction: `-101284.828 MiB`
+- reaches near-zero Unmovable capacity within roughly one minute;
+- consumes roughly 99 GiB additional swap before the RM event;
+- records one strict RM OOM.
 
-R22 RM event:
+R22 mmap startup:
 
-- Normal order-4+: `3112.125 MiB`
-- Unmovable order-4+: `1530.688 MiB`
-- Movable order-4+: `1558.438 MiB`
-- MemFree: `3847.605 MiB`
-- SwapFree: `143279.770 MiB`
-- SwapFree delta from post-compaction: `-3163.168 MiB`
+- reproduces the initial catastrophic high-order collapse;
+- reaches low Unmovable capacity much more slowly;
+- consumes only roughly 3 GiB additional swap before the RM event;
+- still records one strict RM OOM.
 
-This is the strongest discriminator so far.
-
-R21 reaches the RM event after roughly `99 GiB` of additional swap use and with essentially no Unmovable high-order capacity left. R22 reaches the same strict RM failure with very little additional swap use and with about `3.1 GiB` of Normal order-4+ capacity still present, including about `1.53 GiB` Unmovable.
-
-## Updated mechanism model
-
-The evidence now supports a two-layer model:
-
-1. **Legacy PLE CPU-offload strongly amplifies sustained residency/swap pressure and accelerates long-lived high-order depletion.** R22 substantially removes this behavior.
-2. **The initial catastrophic high-order collapse and the strict RM fallback do not require that legacy path.** Both still occur in R22.
-
-Therefore legacy PLE CPU-offload is an important pressure amplifier, but it is not the sole or necessary cause of `_memdescAllocInternal` failure.
-
-The remaining RM failure mechanism is broader than PLE residency alone and should be investigated in the common model-loading / NVIDIA RM allocation path.
+Therefore legacy PLE CPU-offload is a strong sustained-pressure amplifier, not the sole or necessary cause of the RM failure.
 
 ## Next read-only analysis
 
-No R23 restart is justified yet.
+Use the preserved R21/R22 snapshots with `scripts/benchmark/compare-orcarouter-r21-r22-rm-meminfo-all.py` to inspect every `/proc/meminfo` field, especially CMA, vmalloc, per-CPU, hugepage, page-table, kernel-stack, and locked-memory accounting.
 
-R22 loses about `118 GiB` of MemFree between post-compaction and the RM event while SwapFree drops by only about `3 GiB` and file cache grows by only about `26 GiB`. The compact event analyzer does not account for the remainder of that residency.
+If none contains a tens-of-GiB change matching the common 92-93 GiB unavailable footprint, direct driver-owned pages outside ordinary process/file/slab accounting become the leading closed accounting interpretation.
 
-The next comparison should quantify, for both R21 and R22 at POST_COMPACT and RM_EVENT:
-
-- AnonPages
-- Active(anon) / Inactive(anon)
-- Cached / Active(file) / Inactive(file)
-- Shmem
-- Slab / SReclaimable / SUnreclaim
-- KernelStack / PageTables
-- Unevictable / Mlocked
-
-That composition gap should be closed before designing another runtime mutation.
-
-No merge or production integration is implied by this result.
+No R23 restart, merge, or production promotion is implied by R22.
