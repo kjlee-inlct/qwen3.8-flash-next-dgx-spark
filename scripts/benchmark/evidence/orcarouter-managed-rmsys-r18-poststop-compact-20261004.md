@@ -99,14 +99,28 @@ The R18/R19 outcomes therefore materially strengthen post-stop compaction as the
 - R18 treatment: aged predecessor -> stop -> compact -> start -> clean
 - R19 control: aged predecessor -> stop -> no compact -> start -> RM OOM x5
 
-The two runs did not begin from identical post-stop allocator states, so treatment necessity/sufficiency is not yet proven for every aged state. R19 post-stop Normal order-4+ free was ~105494.875 MiB, whereas R18 pre-compaction was ~110184.313 MiB. A second aged-predecessor post-stop-compaction treatment run is therefore the next efficient repeatability check.
+The two runs did not begin from identical post-stop allocator states, so treatment necessity/sufficiency is not yet proven for every aged state. R19 post-stop Normal order-4+ free was ~105494.875 MiB, whereas R18 pre-compaction was ~110184.313 MiB.
+
+## R20 replication outcome
+
+R20 repeated the R18 treatment on another aged predecessor but did not complete the validity boundary. Post-stop compaction again visibly coalesced Normal-zone free buddies, and no RM OOM was observed before termination, but the managed memory-protection gate intentionally stopped the candidate before API readiness.
+
+Therefore the sequence is not a completed treatment/control/treatment proof:
+
+- R18 treatment: VALID CLEAN
+- R19 control: VALID RM OOM x5
+- R20 treatment replication: INVALID protected stop, RM OOM x0 observed before stop
+
+The R20 result does not refute the RM-side compaction hypothesis, but it establishes a separate startup memory-margin boundary that must not be conflated with recoverable RM/sysmem fallback.
+
+The managed OrcaRouter service was subsequently recovered normally and returned to active/healthy state. Before another treatment restart, the existing R18 and R20 post-stop pre/post-compaction snapshots should be compared directly for buddy distribution, migratetype composition, memory totals, Normal-zone watermarks, and compaction vmstat deltas. The read-only comparator is `scripts/benchmark/compare-orcarouter-r18-r20-poststop-state.py`.
 
 ## Current conclusion
 
 The proximate failure mechanism remains unchanged: NVIDIA RM Linux-sysmem 64 KiB/order-4 Unmovable demand can exhaust usable high-order supply, roll back, return `NV_ERR_NO_MEMORY`, then succeed on immediate order-0 retry.
 
-R18 plus R19 now provide the strongest Linux-side mitigation evidence so far:
+R18 plus R19 still provide the strongest Linux-side mitigation evidence so far:
 
 > Full teardown alone does not remove the aged-predecessor failure boundary. A one-shot compaction performed after teardown and before replacement startup is the leading mitigation candidate: the R18 treatment was strict-clean, while the matched R19 stop-only control failed with five recoverable RM OOM events.
 
-Production adoption should wait for at least one additional aged-predecessor treatment replication, because the treatment and control runs had different post-stop allocator starting states.
+R20 prevents promotion to production integration because treatment repeatability is not yet established. Analyze the already-captured R18/R20 allocator state before deciding the next controlled restart.
