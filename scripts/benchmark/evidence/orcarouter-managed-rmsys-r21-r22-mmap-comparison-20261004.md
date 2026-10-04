@@ -98,7 +98,7 @@ The remaining RM failure mechanism is now broader than PLE residency alone and s
 
 Before another restart, compare the full RM-event memory composition for R21 and R22. R22 loses about 118 GiB of MemFree while SwapFree drops by only about 3 GiB and file cache grows by only about 26 GiB. The remaining memory residency is not explained by the metrics currently emitted by the compact event analyzer.
 
-The next read-only discriminator should therefore quantify at POST_COMPACT and RM_EVENT:
+The read-only `scripts/benchmark/compare-orcarouter-r21-r22-rm-memory.py` helper now quantifies at POST_COMPACT and RM_EVENT:
 
 - AnonPages
 - Active(anon) / Inactive(anon)
@@ -107,5 +107,6 @@ The next read-only discriminator should therefore quantify at POST_COMPACT and R
 - Slab / SReclaimable / SUnreclaim
 - KernelStack / PageTables
 - Unevictable / Mlocked
+- SwapFree
 
 No R23 restart is justified until that composition gap is closed.
