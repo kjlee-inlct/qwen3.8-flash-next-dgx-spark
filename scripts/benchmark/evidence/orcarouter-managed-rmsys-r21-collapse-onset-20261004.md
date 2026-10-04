@@ -109,15 +109,15 @@ Repository implementation notes for this path state that loading the PLE table p
 
 ## Existing mmap comparison path
 
-The repository already contains an experimental OrcaRouter path on vLLM v0.29 that replaces resident/CPU-offloaded PLE table storage with NVMe-backed mmap/page-cache access. That image keeps the same OrcaRouter checkpoint and includes the required GB10 FLA and QSA compatibility fixes.
+The repository contains an experimental OrcaRouter path on vLLM v0.29 that replaces resident/CPU-offloaded PLE table storage with NVMe-backed mmap/page-cache access. That image keeps the same OrcaRouter checkpoint and includes the required GB10 FLA and QSA compatibility fixes.
 
 The mmap implementation replaces the giant PLE embedding with a small placeholder, drops the PLE shard tensors during `load_weights`, and opens the corresponding safetensor ranges as memory maps. With prewarm disabled, it does not intentionally stream the complete PLE table into RAM during startup.
 
-This existing path is therefore the highest-value next mechanism discriminator. It is **not** a pure one-variable A/B against the managed path because the vLLM runtime line, QSA fallback, and GB10 FLA fixes also differ. Any R22 result must preserve that limitation explicitly.
+This path was subsequently exercised as R22. R22 is not a pure one-variable A/B against the managed path because the vLLM runtime line, QSA fallback, and GB10 FLA fixes also differ.
 
 ## Interpretation
 
-R21 now separates three stages:
+R21 separates three stages:
 
 1. post-stop reclaim/compaction creates a strong initial allocator state;
 2. the initial model/legacy-PLE initialization interval destroys almost all Normal high-order capacity within ~45-56 seconds after compaction;
@@ -128,21 +128,30 @@ Therefore:
 - a static pre-start allocator eligibility gate cannot solve this mechanism;
 - one-shot post-stop reclaim/compaction cannot preserve the reservoir through startup;
 - the late MoE marker is not the collapse onset;
-- legacy PLE CPU-offload is now the leading startup-pressure source to discriminate experimentally, but causal ownership is not yet proven;
+- the legacy PLE path correlates with the R21 collapse but is not sufficient to explain the mechanism by itself;
 - production integration of cache reclaim/compaction is not justified.
 
-## Next experiment
+## Later closure
 
-R22 should reuse R21's preconditioning and evidence collection but replace the startup path with the repository's existing OrcaRouter v0.29 PLE-mmap candidate.
+R22 subsequently tested the existing v0.29 PLE-mmap path with matched 16 GiB KV and the same R21 conditioning family. It also reached READY and also recorded one strict RM OOM, so removing the legacy CPU-offload path is **not sufficient** to eliminate the lower-level failure.
 
-To preserve comparability, R22 should pin:
+The cross-run accounting then established:
 
-- the installed OrcaRouter checkpoint and served model identity;
-- `16 GiB` KV, matching the current managed OrcaRouter default rather than the older v0.29 helper's historical `24 GiB` value;
-- `max_model_len=262144`, `max_num_seqs=3`;
-- host VM defaults and the same protection thresholds;
-- `sync -> drop_caches=1 -> compact_memory` after full predecessor teardown;
-- 1-second buddy/meminfo and 5-second pagetype collection;
-- strict RM signature counting.
+- R21 `core_unexplained_loss`: `89465.184 MiB`;
+- R22 `core_unexplained_loss`: `90000.770 MiB`;
+- node0 Normal managed pages unchanged in both runs;
+- nearly all MemFree loss localized to node0 Normal free-page loss;
+- no conventional meminfo bucket of comparable scale.
 
-R22 is a mechanism-discrimination experiment, not production acceptance. A clean mmap run would strongly implicate the legacy resident CPU-offload startup path, but because the runtime stack also changes it would not by itself prove a single-variable causal fix or justify promotion.
+The one-second trajectory further shows an almost identical common early burst:
+
+- R21 largest 5 s unexplained-residual increase: `+75174.387 MiB`;
+- R22 largest 5 s unexplained-residual increase: `+75138.043 MiB`.
+
+The R21 burst is aligned with this document's largest Unmovable drain interval, while R22 reproduces the same class of burst without the legacy CPU-offload worker. The current leading target is therefore ownership of the **common early startup allocation burst**, not another PLE-only or broad VM-tuning experiment.
+
+Canonical follow-up evidence:
+
+- `orcarouter-managed-rmsys-r22-v029-mmap-result-20261004.md`
+- `orcarouter-managed-rmsys-r21-r22-mmap-comparison-20261004.md`
+- `orcarouter-managed-rmsys-r21-r22-unaccounted-trajectory-20261004.md`
