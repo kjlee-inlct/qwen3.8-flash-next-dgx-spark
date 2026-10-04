@@ -10,7 +10,7 @@ The canonical comparison baseline is R22, not the managed Hybrid default.
 
 R22 used the v0.29 PLE-mmap stack with exact QSA/GB10 compatibility, `16 GiB` KV (`17179869184` bytes), max model length `262144`, max sequences `3`, MTP `k=2`, prefix caching disabled, GPU utilization `0.80`, max batched tokens `8192`, and the fixed R21 conditioning harness. It was `VALID_RM_OOM` and its largest five-second unexplained-residual increase was `+75138.043 MiB`.
 
-The managed `orcarouter-hybrid` profile currently defaults to `24 GiB` KV. That default is intentionally **not** used for the first R24 run because it would confound checkpoint/loader representation with an additional 8 GiB KV allocation.
+The managed `orcarouter-hybrid` profile currently defaults to `24 GiB` KV. That default is intentionally not used for the first R24 run because it would confound checkpoint/loader representation with an additional 8 GiB KV allocation.
 
 ## Candidate
 
