@@ -110,6 +110,53 @@ Therefore:
 4. reclaim + compaction is **not sufficient** to eliminate the recoverable RM 64 KiB/order-4 failure mechanism;
 5. no production integration is justified from R21.
 
+## RM-event allocator collapse
+
+The allocator collector captured one immediate full snapshot at the strict RM OOM event:
+
+- event wall time: `2026-10-04T06:35:00.611065+00:00`
+- strict kernel line: `NV_ERR_NO_MEMORY` from `_memdescAllocInternal(pMemDesc)`
+
+Post-compaction immediately before startup, the prepared state was:
+
+- MemAvailable: 121720.500 MiB
+- MemFree: 122314.555 MiB
+- Cached: 202.426 MiB
+- Inactive(file): 48.480 MiB
+- SwapFree: 146430.969 MiB
+- Normal exact order-4: 1904.938 MiB
+- Normal order-5+: 117838.250 MiB
+- Normal order-4+: 119743.188 MiB
+- Normal Unmovable order-4+: 104607.312 MiB
+- Normal Movable order-4+: 15083.688 MiB
+
+At the RM OOM event, the state had collapsed to:
+
+- MemAvailable: 29778.105 MiB
+- MemFree: 1675.527 MiB
+- Cached: 28796.648 MiB
+- Inactive(file): 26643.223 MiB
+- SwapFree: 45146.141 MiB
+- Normal exact order-4: 110.625 MiB
+- Normal order-5+: 35.500 MiB
+- Normal order-4+: 146.125 MiB
+- Normal Unmovable order-4+: 0.562 MiB
+- Normal Movable order-4+: 145.500 MiB
+
+The startup transition therefore consumed or transformed almost the entire prepared high-order reservoir before RM failed:
+
+- MemFree: -120639.027 MiB
+- SwapFree: -101284.828 MiB
+- Cached: +28594.223 MiB
+- Inactive(file): +26594.742 MiB
+- Normal order-4+: -119597.062 MiB
+- Normal Unmovable order-4+: -104606.750 MiB
+- Normal Movable order-4+: -14938.188 MiB
+
+The directly relevant Unmovable order-4+ reservoir fell from ~104.6 GiB to effectively zero before the strict RM failure. This closes an important interpretation boundary: a strong post-stop allocator state is not preserved through OrcaRouter startup, so a static pre-start eligibility threshold cannot by itself guarantee zero RM fallback.
+
+The R21 result is consistent with startup demand exhausting/fragmenting the Normal-zone high-order reservoir until the same lower-level mechanism identified in R11 is reached. The event snapshot alone does not attribute every consumed page to NVIDIA RM or to a specific vLLM/PLE component; it only proves the system-wide allocator state at the event.
+
 ## Harness note
 
 The original R21 runner completed the managed replacement and reached healthy runtime, but its late kernel-journal finalization initially failed because the sudo timestamp expired during the long startup. The preserved run was finalized post hoc with the same recorded run window and the live candidate identity. The finalizer verified that the candidate start time falls inside the R21 run window before classifying the run.
@@ -118,15 +165,13 @@ The runner now maintains a sudo keepalive through long startup waits so future e
 
 ## Next analysis
 
-The allocator collector captured exactly one immediate full snapshot for the R21 RM OOM event. The next step is read-only analysis of that event, comparing `poststop-after-compact` with `allocator-state/events/rm-oom-*`.
-
-The important question is whether the directly relevant node-0 Normal-zone Unmovable order-4+ reservoir had already collapsed materially by the time RM failed despite the much stronger post-treatment starting state.
+No new restart is required. The next read-only step is to reconstruct the allocator trajectory immediately before the RM event from the existing 1-second fast samples and 5-second pagetype samples.
 
 Use:
 
 ```bash
-python3 scripts/benchmark/analyze-orcarouter-r21-rm-event.py \
+python3 scripts/benchmark/analyze-orcarouter-r21-rm-trajectory.py \
   --r21 /tmp/orcarouter-managed-rmsys-r21-pagecache-reclaim-compact-01-20261004
 ```
 
-No new restart is needed for this analysis.
+The trajectory should show whether the high-order reservoir collapsed gradually through startup or crossed a sharp depletion boundary near the RM event. Correlate the event wall time with the preserved managed/vLLM logs before designing another runtime mutation.
