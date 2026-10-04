@@ -157,6 +157,8 @@ The directly relevant Unmovable order-4+ reservoir fell from ~104.6 GiB to effec
 
 This is consistent with startup demand exhausting/fragmenting the Normal-zone high-order reservoir until the lower-level mechanism identified in R11 is reached. The event snapshot alone does not attribute every consumed page to NVIDIA RM or to a specific vLLM/PLE component; it only proves the system-wide allocator state at the event.
 
+The preserved managed output showed a vLLM phase marker near the event: `Using MoEPrepareAndFinalizeNoDPEPModular` at approximately `06:34:48Z`, about 12 seconds before the RM event at `06:35:00Z`. Treat that as a phase-correlation clue, not yet a causal attribution. The pre-event trajectory analysis should determine whether the allocator collapse accelerated around this phase.
+
 ## Harness note
 
 The original R21 runner completed the managed replacement and reached healthy runtime, but its late kernel-journal finalization initially failed because the sudo timestamp expired during the long startup. The preserved run was finalized post hoc with the same recorded run window and the live candidate identity. The finalizer verified that the candidate start time falls inside the R21 run window before classifying the run.
