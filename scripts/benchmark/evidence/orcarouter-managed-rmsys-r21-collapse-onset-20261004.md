@@ -2,9 +2,9 @@
 
 ## Scope
 
-This document records the read-only full-history analysis of the R21 allocator samples. R21 itself remains `VALID_RM_OOM` (FUNCTIONAL PASS / strict HOST-STABILITY FAIL).
+This document records the read-only full-history and exact live-log correlation for the R21 allocator collapse. R21 itself remains `VALID_RM_OOM` (FUNCTIONAL PASS / strict HOST-STABILITY FAIL).
 
-The purpose here is to locate when the prepared Normal-zone high-order reservoir first collapsed, not to introduce a new runtime mutation.
+The purpose is to locate when the prepared Normal-zone high-order reservoir collapsed and correlate that interval with the runtime startup path without claiming per-page ownership that the evidence does not provide.
 
 ## Timing
 
@@ -57,43 +57,70 @@ Largest consecutive 1-second aggregate Normal order-4+ drop:
 
 This is not a slow monotonic drain spread across the whole ~12 minute startup. The dominant collapse occurs near the beginning of model startup.
 
-## Correlation with PLE/model loading
+## Exact startup-log correlation
 
-The preserved managed output contains the first visible PLE-offload progress marker at:
+The live container ID was checked before collecting the historical Docker log window and still matched the R21 candidate, so these lines belong to the measured R21 replacement.
 
-- `06:23:25.827677599Z`
-- `PleOffloadWorker pid=458`
-- `Loading safetensors checkpoint shards(PLE-offload): 6% Completed | 1/18`
+Relevant startup events:
 
-The high-order collapse begins before this first visible progress line:
+- `06:23:17.005849Z`: main worker logs `PleOffload: spawning worker`
+- `06:23:20.324583Z`: main worker logs `Loading model from scratch...`
+- `06:23:21.449516Z`: `PleOffloadWorker` distributed initialization begins
+- `06:23:21.623236Z`: PLE worker distributed environment initialized
+- `06:23:21.623303Z`: PLE worker logs `Initializing model structure for PLE weight discovery ...`
+- `06:23:23.757579Z`: PLE worker reports one discovered PLE layer
+- `06:23:23.829814Z`: main worker reports checkpoint size `170.88 GiB`, available RAM `39.44 GiB`
+- `06:23:23.830634Z`: main checkpoint safetensor loading is at `0/18`
+- `06:23:23.935605Z`: PLE worker reports checkpoint size `170.88 GiB`, available RAM `39.43 GiB`
+- `06:23:23.936012Z`: PLE-offload safetensor loading is at `0/18`
+- `06:23:25.827678Z`: PLE-offload reaches `1/18` (`6%`)
 
-- aggregate Normal 50% crossing: ~`2.84 s` before the 6% PLE line
-- Unmovable 50% crossing: ~`1.84 s` before the 6% PLE line
+The largest measured Unmovable drain spans approximately `06:23:18.991Z -> 06:23:23.991Z`. That interval begins after the PLE worker is spawned, contains main-model startup and PLE worker initialization/weight discovery, and ends just after both the main worker and PLE worker enter safetensor loading at `0/18`.
 
-But the 6% PLE line lands inside the collapse window:
+The threshold crossings line up with the same startup sequence:
 
+- aggregate Normal 50% crossing: `06:23:22.990Z`
 - Unmovable 50% crossing: `06:23:23.991Z`
-- first visible PLE 6% line: `06:23:25.828Z`
+- PLE-offload `0/18`: `06:23:23.936Z`
+- first visible PLE-offload `1/18`: `06:23:25.828Z`
 - Unmovable 10% crossing: `06:23:28.991Z`
 - aggregate Normal effectively zero: `06:23:29.996Z`
 - Unmovable effectively zero: `06:23:34.003Z`
 
-Because the first captured PLE progress line is already at 6%, it is not the PLE start timestamp. The evidence therefore supports a strong temporal correlation with the initial legacy PLE/shard-loading window, but does not prove that the `PleOffloadWorker` owns every consumed page or that PLE alone causes the collapse.
+This is substantially stronger than correlation with the later 6% progress line alone: the collapse begins after the legacy PLE worker is spawned and overlaps its structure initialization and weight-discovery path before visible shard progress.
+
+It still does **not** prove that the PLE process owns every page represented by the buddy/pagetype collapse. Main-model initialization is active in the same interval and the allocator samples are system-wide.
 
 The later `Using MoEPrepareAndFinalizeNoDPEPModular` marker at `06:34:48.381Z` occurs long after Unmovable capacity was already exhausted and is not the onset cause.
 
 ## Runtime-path context
 
-The managed OrcaRouter profile currently uses the legacy CPU-offload PLE path (`VLLM_PLE_CPU_OFFLOAD=1`). The repository also documents that this path loads approximately `95.37 GiB` into the offload process and that most of it is pushed back out to swap during startup.
+The captured R21 container environment confirms:
 
-That documented behavior is structurally consistent with the R21 observation that a ~104.6 GiB prepared Unmovable high-order reservoir collapses during the initial loading interval and that large swap consumption follows. This remains correlation plus implementation-context evidence, not per-page ownership proof.
+- `VLLM_PLE_CPU_OFFLOAD=1`
+- `VLLM_PLE_OFFLOAD_READY_TIMEOUT=1800`
+- exact-QSA fallback disabled in the managed path
+- CUDA `13.0.1`
+- managed image `local/vllm-openai:dev`
+
+The managed OrcaRouter path therefore used the legacy CPU-offload PLE implementation during the measured collapse.
+
+Repository implementation notes for this path state that loading the PLE table places about `95.37 GiB` into the offload process and that most of it is subsequently pushed to swap. The magnitude and timing are structurally consistent with R21's initial high-order collapse and later large swap consumption, but this remains implementation-context evidence rather than direct page ownership proof.
+
+## Existing mmap comparison path
+
+The repository already contains an experimental OrcaRouter path on vLLM v0.29 that replaces resident/CPU-offloaded PLE table storage with NVMe-backed mmap/page-cache access. That image keeps the same OrcaRouter checkpoint and includes the required GB10 FLA and QSA compatibility fixes.
+
+The mmap implementation replaces the giant PLE embedding with a small placeholder, drops the PLE shard tensors during `load_weights`, and opens the corresponding safetensor ranges as memory maps. With prewarm disabled, it does not intentionally stream the complete PLE table into RAM during startup.
+
+This existing path is therefore the highest-value next mechanism discriminator. It is **not** a pure one-variable A/B against the managed path because the vLLM runtime line, QSA fallback, and GB10 FLA fixes also differ. Any R22 result must preserve that limitation explicitly.
 
 ## Interpretation
 
 R21 now separates three stages:
 
 1. post-stop reclaim/compaction creates a strong initial allocator state;
-2. the initial model/PLE loading interval destroys almost all Normal high-order capacity within ~45-56 seconds after compaction;
+2. the initial model/legacy-PLE initialization interval destroys almost all Normal high-order capacity within ~45-56 seconds after compaction;
 3. much later, temporary Movable high-order capacity reforms and is drained again near the final RM allocation failure.
 
 Therefore:
@@ -101,10 +128,21 @@ Therefore:
 - a static pre-start allocator eligibility gate cannot solve this mechanism;
 - one-shot post-stop reclaim/compaction cannot preserve the reservoir through startup;
 - the late MoE marker is not the collapse onset;
-- the highest-value next target is the exact early `06:23:18Z-06:23:40Z` runtime log window and the legacy PLE CPU-offload path.
+- legacy PLE CPU-offload is now the leading startup-pressure source to discriminate experimentally, but causal ownership is not yet proven;
+- production integration of cache reclaim/compaction is not justified.
 
-No production mitigation is accepted from this analysis alone.
+## Next experiment
 
-## Next read-only evidence
+R22 should reuse R21's preconditioning and evidence collection but replace the startup path with the repository's existing OrcaRouter v0.29 PLE-mmap candidate.
 
-Before designing R22, preserve the exact live R21 container log window around `06:23:18Z-06:23:40Z`, validating that the current container ID is still the R21 candidate. This may expose the PLE initialization line or other allocations immediately preceding the first 50% crossing.
+To preserve comparability, R22 should pin:
+
+- the installed OrcaRouter checkpoint and served model identity;
+- `16 GiB` KV, matching the current managed OrcaRouter default rather than the older v0.29 helper's historical `24 GiB` value;
+- `max_model_len=262144`, `max_num_seqs=3`;
+- host VM defaults and the same protection thresholds;
+- `sync -> drop_caches=1 -> compact_memory` after full predecessor teardown;
+- 1-second buddy/meminfo and 5-second pagetype collection;
+- strict RM signature counting.
+
+R22 is a mechanism-discrimination experiment, not production acceptance. A clean mmap run would strongly implicate the legacy resident CPU-offload startup path, but because the runtime stack also changes it would not by itself prove a single-variable causal fix or justify promotion.
