@@ -165,6 +165,15 @@ The original R21 runner completed the managed replacement and reached healthy ru
 
 The runner now maintains a sudo keepalive through long startup waits so future evidence finalization does not depend on the interactive sudo timestamp lifetime.
 
+## Current conclusion
+
+R21 separates two problems that had been partially conflated:
+
+- file-cache conditioning can determine whether startup reaches the host memory-protection boundary;
+- the recoverable RM order-4 failure can still occur after that protection problem is avoided.
+
+Post-stop reclaim/compaction can improve the initial allocator state, but the prepared high-order reservoir is consumed during startup. Therefore neither a one-shot treatment nor a static pre-start allocator threshold is a sufficient production mitigation.
+
 ## Next analysis
 
 No new restart is required. The next read-only step is to reconstruct the allocator trajectory immediately before the RM event from the existing 1-second fast samples and 5-second pagetype samples.
