@@ -99,6 +99,24 @@ R20 nevertheless began from a weaker post-stop high-order state than either earl
 
 Do not infer a hard high-order threshold from these values: R20 was stopped by the independent memory-protection gate before readiness, so the runs do not provide a completed like-for-like outcome at the same point in startup.
 
+## R18 vs R20 post-stop comparison
+
+The dedicated read-only comparison is recorded in:
+
+- `scripts/benchmark/evidence/orcarouter-managed-rmsys-r18-r20-poststop-comparison-20261004.md`
+
+The first comparison establishes several important differences after compaction:
+
+- R20 had ~7334 MiB less Normal order-4+ free capacity than R18.
+- R20 had ~11324.437 MiB less Unmovable order-4+ free capacity but ~4001.250 MiB more Movable order-4+ capacity.
+- R18 compaction increased Unmovable order-4+ by ~652.624 MiB, while R20 compaction decreased it by ~880.687 MiB.
+- R20 aggregate order-4+ still increased because Movable order-4+ increased by ~4034.687 MiB.
+- post-compaction MemAvailable differed by only ~17.492 MiB and SwapFree by ~29.449 MiB, but R20 MemFree was ~11081.191 MiB lower.
+
+Therefore neither generic MemAvailable/SwapFree nor aggregate high-order growth is a sufficient discriminator. The directly relevant node-0 Normal-zone Unmovable high-order reservoir is now the leading allocator-state discriminator, but no hard threshold is accepted from one clean and one invalid treatment state.
+
+The comparator was extended to report detailed meminfo composition and per-migratetype compaction/cross-run deltas so the ~11 GiB MemFree gap can be decomposed without another restart.
+
 ## Recovery follow-up
 
 After preserving the R20 invalid evidence, the managed OrcaRouter service was started normally without another benchmark treatment.
@@ -138,18 +156,20 @@ R20 changes the mitigation conclusion in an important but limited way.
 Still supported:
 
 1. Full stop alone is insufficient: R19 was valid and emitted RM OOM x5.
-2. Post-stop compaction has a real allocator effect: R18 and R20 both show upward buddy coalescing.
+2. Post-stop compaction has a real allocator effect: R18 and R20 both show upward aggregate buddy coalescing.
 3. R18 remains the only completed aged-predecessor post-stop-compaction run and was strict clean.
 4. The managed service can recover normally after the R20 protected-stop boundary.
+5. R18 and R20 show that aggregate compaction success can hide opposite movement in the Unmovable high-order reservoir.
 
 Not established:
 
 1. R20 is not a second clean treatment replication.
 2. Post-stop compaction is not yet proven sufficient across aged allocator states.
 3. The absence of RM OOM in R20 cannot be promoted to HOST-STABILITY PASS because the safety monitor stopped the candidate first.
-4. A simple pre-start MemAvailable or SwapFree threshold has not been established as the discriminator.
+4. A simple pre-start MemAvailable, SwapFree, aggregate order-4+ threshold, or generic "compaction increased high-order free" condition has not been established as the discriminator.
+5. A numerical Unmovable high-order eligibility threshold is not yet justified.
 
-The next read-only discriminator is a direct R18-clean versus R20-invalid comparison of the already-captured post-stop pre/post-compaction snapshots, including buddy order distribution, migratetype composition, MemAvailable/MemFree/SwapFree, Normal-zone watermarks, and compaction vmstat deltas. No additional restart is required for this comparison.
+The next read-only discriminator is the detailed memory-composition output from the updated R18/R20 comparator. No additional restart is required.
 
 ## Current conclusion
 
@@ -160,4 +180,4 @@ The current sequence is:
 - R20 treatment replication: invalid, RM OOM x0 observed before a memory-protection stop
 - normal managed recovery after R20: successful and active
 
-Post-stop compaction therefore remains the leading RM/sysmem mitigation candidate, but production integration is **not yet justified**. Analyze the existing R18/R20 post-compaction state before another treatment restart; the protected-stop path must remain separate from the recoverable RM/sysmem classification.
+Post-stop compaction therefore remains the leading RM/sysmem mitigation candidate, but production integration is **not yet justified**. Analyze the detailed R18/R20 post-compaction memory composition before another treatment restart; the protected-stop path must remain separate from the recoverable RM/sysmem classification.
