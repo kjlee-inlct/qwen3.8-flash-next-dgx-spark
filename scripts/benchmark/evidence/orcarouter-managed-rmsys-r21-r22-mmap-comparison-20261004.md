@@ -113,7 +113,9 @@ The most important common signal is that **MemAvailable falls by almost the same
 
 At the same time, R22 removes almost all of R21's additional swap consumption: the RM-event SwapFree difference is about `+98133.629 MiB` in R22. Therefore the legacy PLE CPU-offload path strongly explains the extra swap churn, but it does **not** explain the roughly 92-93 GiB common loss of available physical memory.
 
-The tracked conventional categories are individually far too small to explain that common unavailable footprint. This is consistent with the R11 mechanism in which NVIDIA RM allocates high-order system pages directly via the kernel page allocator: such driver-owned pages reduce zone free capacity but need not appear as process anonymous memory, file cache, or slab. This is currently the leading accounting interpretation, but it is not yet proven because the full `/proc/meminfo` key set has not been checked for CMA/vmalloc/per-CPU/hugepage-specific changes.
+The tracked conventional categories are individually far too small to explain that common unavailable footprint. Because several `/proc/meminfo` fields overlap by definition (`Cached` with file active/inactive, `AnonPages` with anon LRU state, `Slab` with its reclaimable/unreclaimable children), they must not be summed as independent buckets. The conclusion instead comes from the direct `MemAvailable` loss and the absence of any single conventional category of comparable scale.
+
+This is consistent with the R11 mechanism in which NVIDIA RM allocates high-order system pages directly via the kernel page allocator: such driver-owned pages reduce zone free capacity but need not appear as process anonymous memory, file cache, or slab. This is currently the leading accounting interpretation, but it is not yet proven because the full `/proc/meminfo` key set has not been checked for CMA/vmalloc/per-CPU/hugepage-specific changes.
 
 ## Interpretation
 
