@@ -153,9 +153,9 @@ The startup transition therefore consumed or transformed almost the entire prepa
 - Normal Unmovable order-4+: -104606.750 MiB
 - Normal Movable order-4+: -14938.188 MiB
 
-The directly relevant Unmovable order-4+ reservoir fell from ~104.6 GiB to effectively zero before the strict RM failure. This closes an important interpretation boundary: a strong post-stop allocator state is not preserved through OrcaRouter startup, so a static pre-start eligibility threshold cannot by itself guarantee zero RM fallback.
+The directly relevant Unmovable order-4+ reservoir fell from ~104.6 GiB to effectively zero before the strict RM failure. A strong post-stop allocator state is therefore not preserved through OrcaRouter startup, so a static pre-start eligibility threshold cannot by itself guarantee zero RM fallback.
 
-The R21 result is consistent with startup demand exhausting/fragmenting the Normal-zone high-order reservoir until the same lower-level mechanism identified in R11 is reached. The event snapshot alone does not attribute every consumed page to NVIDIA RM or to a specific vLLM/PLE component; it only proves the system-wide allocator state at the event.
+This is consistent with startup demand exhausting/fragmenting the Normal-zone high-order reservoir until the lower-level mechanism identified in R11 is reached. The event snapshot alone does not attribute every consumed page to NVIDIA RM or to a specific vLLM/PLE component; it only proves the system-wide allocator state at the event.
 
 ## Harness note
 
@@ -174,4 +174,6 @@ python3 scripts/benchmark/analyze-orcarouter-r21-rm-trajectory.py \
   --r21 /tmp/orcarouter-managed-rmsys-r21-pagecache-reclaim-compact-01-20261004
 ```
 
-The trajectory should show whether the high-order reservoir collapsed gradually through startup or crossed a sharp depletion boundary near the RM event. Correlate the event wall time with the preserved managed/vLLM logs before designing another runtime mutation.
+The trajectory emits samples nearest `-60`, `-30`, `-10`, `-5`, `-1`, and `0` seconds relative to the RM event for Normal buddy capacity, meminfo, and Normal Unmovable/Movable order-4+ capacity. It should distinguish a gradual startup drain from a sharp depletion boundary near the RM event.
+
+Correlate the event wall time with the preserved managed/vLLM logs before designing another runtime mutation. No production integration or new runtime mutation is justified before this read-only trajectory analysis.
