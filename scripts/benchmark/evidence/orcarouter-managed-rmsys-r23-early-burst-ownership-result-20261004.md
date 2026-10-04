@@ -68,7 +68,7 @@ The independently reconstructed largest five-second unexplained-residual increas
 
 Thus the full-trace 64 KiB RM activity volume differs from the five-second residual increase by only **6.277 MiB**, approximately **0.0084%** of the 64 KiB activity volume.
 
-This is exceptionally strong temporal/size consistency with the R11 direct RM system-memory mechanism. However, it is still not legal to equate cumulative requested bytes with resident ownership: the RM request sum is activity volume and can include overlap, retry, rollback, and allocations outside the exact five-second sample window. A post-hoc per-call overlap calculation on the preserved trace is therefore required before making a stronger ownership statement.
+This is exceptionally strong temporal/size consistency with the R11 direct RM system-memory mechanism. However, it is still not legal to equate cumulative requested bytes with resident ownership: the RM request sum is activity volume and can include overlap, retry, rollback, and allocations outside the exact five-second sample window.
 
 ## Host allocator movement during the five-second burst
 
@@ -102,33 +102,80 @@ Therefore R23 separates two related but distinct phases:
 
 The early narrow trace was designed to attribute the common burst, not to capture the later failure episode.
 
-## Ownership interpretation
+## Live-run ownership interpretation
 
-The analyzer's coarse discriminator is `RM_AND_SELECTED_UVM_ACTIVE`, because `uvm_mem_alloc` fired twice. That label is factually correct but not yet specific enough to establish whether UVM is the upstream owner of the 75 GiB episode.
+The live analyzer's coarse discriminator was `RM_AND_SELECTED_UVM_ACTIVE`, because `uvm_mem_alloc` fired twice. At live-run completion this label was factually correct but did not establish whether UVM was the upstream owner of the 75 GiB episode.
 
-The detailed evidence is narrower:
+The live evidence already showed:
 
-- direct RM system-memory boundaries are heavily active exactly around the common burst;
-- the RM 64 KiB activity volume is almost numerically identical to the common five-second residual growth;
-- selected UVM PMA, DMA, and PMM allocation paths are completely silent;
-- only the higher-level `uvm_mem_alloc` boundary is active, with exactly two calls on the same two tasks that dominate RM activity.
+- direct RM system-memory boundaries heavily active around the common burst;
+- RM 64 KiB activity almost numerically identical to the common residual growth;
+- selected UVM PMA, DMA, and PMM allocation paths completely silent;
+- only `uvm_mem_alloc` active, with exactly two calls on tasks that also generated RM activity.
 
-This strongly elevates the direct RM system-memory path from "consistent mechanism" to the leading carrier of the common early burst. The remaining ambiguity is whether the two `uvm_mem_alloc` calls temporally bracket/feed most of that RM activity or are merely adjacent startup allocations.
+That left one narrow ambiguity: whether those two `uvm_mem_alloc` calls actually bracketed the RM activity or were merely adjacent startup work.
 
-## Next diagnostic — no new live restart yet
+## Post-hoc RM/UVM overlap closure
 
-Before any R24 live experiment, perform a read-only post-hoc correlation on the preserved R23 trace:
+The preserved R23 trace was then analyzed read-only with `scripts/benchmark/analyze-orcarouter-r23-rm-uvm-overlap.py`. No model restart, service mutation, new trace, VM tuning, or driver change was performed.
 
-1. pair each `uvm_mem_alloc` entry/return by PID;
-2. pair `nv_alloc_pages` and `nv_alloc_system_pages` calls by PID;
-3. measure how many RM calls and how much 64 KiB logical activity occur inside each `uvm_mem_alloc` interval;
-4. separately sum 64 KiB RM activity whose entry timestamp falls inside the independently measured five-second residual-burst window;
-5. compare that burst-window RM activity with `75,083.652 MiB` residual growth.
+The independently determined five-second residual interval contains:
 
-Interpretation gate:
+- `515` 64 KiB/order-4-path `nv_alloc_pages` calls;
+- `74,537.938 MiB` of 64 KiB RM logical activity;
+- `75,083.652 MiB` residual growth;
+- `-545.715 MiB` activity-minus-residual difference;
+- **`99.273191%`** RM 64 KiB activity/residual ratio.
 
-- if the two `uvm_mem_alloc` intervals contain nearly all burst-window RM activity, treat UVM `uvm_mem_alloc` as the immediate upstream wrapper and move only one boundary lower/inside that call path if further closure is needed;
-- if they contain little of the burst-window RM activity, treat the selected UVM activity as incidental and retain direct RM system memory as the primary ownership path;
-- do not return to broad VM tuning or broad tracing in either case.
+The two `uvm_mem_alloc` calls were both sub-millisecond:
 
-No production mitigation is accepted from R23 alone, and PR #244 remains intentionally open.
+- `VLLM::Worker` PID `1991664`: `0.000335 s`, before the measured burst window, with zero nested `nv_alloc_pages`, zero nested 64 KiB RM activity, and zero nested `nv_alloc_system_pages` calls;
+- `python3` PID `1991878`: `0.000172 s`, overlapping the burst by only `0.000172 s`, again with zero nested `nv_alloc_pages`, zero nested 64 KiB RM activity, and zero nested `nv_alloc_system_pages` calls.
+
+Aggregate `uvm_mem_alloc` coverage is therefore:
+
+- total 64 KiB RM activity: `0.000000%`;
+- burst-window 64 KiB RM activity: `0.000000%`;
+- `nv_alloc_system_pages` calls: `0.000000%`.
+
+All relevant entry/return pairs remain matched. The post-hoc discriminator is:
+
+`UVM_MEM_ALLOC_ADJACENT_OR_INCIDENTAL_TO_BURST_RM_ACTIVITY`
+
+This closes the remaining selected-UVM ambiguity. `uvm_mem_alloc` is temporally adjacent startup activity, not an observed wrapper around the common RM burst.
+
+## Final R23 ownership conclusion
+
+For the common early startup/model-loading burst, the **primary observed ownership endpoint is the direct NVIDIA RM system-memory path** represented by `nv_alloc_pages` / `nv_alloc_system_pages`.
+
+The selected UVM PMA/DMA/PMM allocation paths are silent, and the only active selected UVM boundary (`uvm_mem_alloc`) contains none of the observed RM calls and covers zero percent of the RM activity.
+
+The same independently selected five-second physical residual window contains `74,537.938 MiB` of 64 KiB RM activity, equal to `99.273191%` of its `75,083.652 MiB` residual growth. Combined with R11's lower-level zone/migratetype trace, the driver-level common-burst mechanism is now sufficiently closed for the project to stop broadening ownership tracing.
+
+Two guards remain:
+
+1. cumulative requested bytes are activity volume, not exact resident ownership;
+2. R23 does not identify the original userspace CUDA/vLLM API or caller that triggers the RM demand.
+
+Those guards do not reopen the selected-UVM ownership question.
+
+Canonical closure:
+
+`orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
+
+## Next engineering direction
+
+Do not start another broad ownership-trace run and do not return to broad watermark, compaction, drop-cache, swap, scheduler, function-graph, or generic page-allocation tracing.
+
+The next phase should move to narrowly controlled mitigation/discriminator work, especially the planned Hybrid/runtime-specific path, while holding runtime identity and the strict host-stability gate fixed.
+
+A mitigation candidate must be judged on whether it:
+
+- reduces or removes the early ~75 GiB RM system-memory burst;
+- preserves more node0 Normal high-order supply;
+- eliminates later `_memdescAllocInternal` / `NV_ERR_NO_MEMORY`;
+- preserves functionality, model identity, KV configuration, and readiness.
+
+Conditioning and mmap behavior remain measurement controls/discriminators rather than accepted production mitigation.
+
+PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
