@@ -47,8 +47,39 @@ No persistent VM knob is changed. The existing memory-protection policy is not r
 
 Any `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` remains HOST-STABILITY FAIL under the existing strict policy.
 
+## Live attempt 01 — partial result
+
+The first live R21 attempt used an aged predecessor of 5943 s (~99.05 min), with the managed OrcaRouter release, transitions, and VM defaults all in the expected baseline state.
+
+The allocator treatment itself produced a strong and internally consistent shift:
+
+- before reclaim: Cached ~8424.0 MiB, Inactive(file) ~6371.3 MiB, MemFree ~113793.2 MiB, Unmovable order-4+ ~100231.9 MiB
+- after `sync`: effectively unchanged
+- after `drop_caches=1`: Cached ~202.4 MiB, Inactive(file) ~48.2 MiB, MemFree ~122278.4 MiB, Unmovable order-4+ ~105998.9 MiB
+- after `compact_memory`: MemFree ~122314.6 MiB, aggregate Normal order-4+ ~119743.2 MiB, Unmovable order-4+ ~104607.3 MiB, Movable order-4+ ~15083.7 MiB
+
+Key deltas:
+
+- `sync -> drop_caches`: Cached -8221.984 MiB, Inactive(file) -6323.301 MiB, MemFree +8490.176 MiB, Unmovable order-4+ +5766.688 MiB, aggregate Normal order-4+ +14486.062 MiB
+- `drop_caches -> compact_memory`: aggregate Normal order-4+ +2496.000 MiB, but Unmovable order-4+ -1391.562 MiB while Movable order-4+ +3875.500 MiB
+- pre-treatment -> post-compaction: MemFree +8521.332 MiB, Cached -8221.598 MiB, Unmovable order-4+ +4375.438 MiB, aggregate Normal order-4+ +16984.250 MiB
+
+The managed replacement then reached the service's committed-and-healthy state and the service remained active. No RM/OOM text was present in the shell-level `kernel RM/OOM` display.
+
+However, the runner did not write `r21-summary.txt`. The long managed startup consumed the existing sudo timestamp, and the first late `sudo -n journalctl -k ...` evidence-finalization step failed with `sudo: a password is required`. Because strict kernel-window capture, restart/API validity files, and the canonical summary were not completed, attempt 01 must not be promoted directly to `VALID_CLEAN` from the live console output alone.
+
+Current classification before post-hoc finalization: **INVALID / incomplete harness finalization**, with a successful treatment-state transformation and apparently healthy replacement runtime.
+
+## Harness correction
+
+The R21 runner now keeps the existing sudo timestamp alive during long managed startup so that late kernel-evidence collection cannot fail solely because the timestamp expires.
+
+A separate `finalize-orcarouter-r21-incomplete.sh` helper can complete attempt 01 without another restart. It reconstructs the exact kernel-journal window from the already-written start/end epochs, requires the current replacement container to have started inside the recorded R21 run window, recomputes strict RM signatures, and writes the missing validity/summary evidence. This prevents a later unrelated restart from being misclassified as the R21 candidate.
+
 ## Interpretation boundaries
 
-A clean R21 would support page-cache state as an important conditioning variable and would justify comparing the pre/post reclaim snapshots against R18 and R20. It would not by itself establish a permanent numerical allocator threshold or prove that a specific checkpoint file owned the historical R20 cache.
+The partial live result directly supports the page-cache-conditioning mechanism: reclaiming page cache converted ~8.2 GiB of cache into ~8.5 GiB additional free memory and increased the directly relevant Unmovable high-order reservoir by ~5.8 GiB before compaction.
 
-An RM-OOM or protected-stop R21 would show that page-cache reclaim plus compaction is insufficient and would keep the allocator-state mechanism open without weakening the existing safety monitor.
+It also shows again that one-shot compaction primarily moves the buddy distribution toward larger Movable blocks; in this run, Unmovable order-4+ fell by ~1.39 GiB during the compaction step itself. Therefore a future eligibility rule still cannot be based on aggregate high-order growth alone.
+
+A final `VALID_CLEAN` classification still requires successful post-hoc strict kernel-window capture plus replacement/readiness/collector validation. No permanent numerical allocator threshold is accepted from this run.
