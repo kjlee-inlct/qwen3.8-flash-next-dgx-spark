@@ -67,7 +67,6 @@ def parse_meminfo(path: pathlib.Path) -> dict[str, float]:
             value = float(parts[0])
         except ValueError:
             continue
-        # /proc/meminfo uses KiB for memory-valued fields.
         result[key] = value / 1024.0
     return result
 
@@ -98,8 +97,14 @@ def parse_normal_zone(path: pathlib.Path) -> dict[str, float]:
     next_zone = re.search(r"^Node\s+\d+,\s+zone\s+\S+\s*$", tail, re.MULTILINE)
     block = tail[: next_zone.start()] if next_zone else tail
     result: dict[str, float] = {}
-    for key in ("free", "managed", "present", "spanned"):
-        field = re.search(rf"^\s+{key}\s+(\d+)\s*$", block, re.MULTILINE)
+    patterns = {
+        "free": r"^\s+pages\s+free\s+(\d+)\s*$",
+        "managed": r"^\s+managed\s+(\d+)\s*$",
+        "present": r"^\s+present\s+(\d+)\s*$",
+        "spanned": r"^\s+spanned\s+(\d+)\s*$",
+    }
+    for key, pattern in patterns.items():
+        field = re.search(pattern, block, re.MULTILINE)
         if field:
             result[key] = float(field.group(1))
     if "free" not in result or "managed" not in result:
@@ -149,7 +154,6 @@ def core_accounting(before: dict[str, float], after: dict[str, float]) -> dict[s
         )
     )
     slab_growth = delta(before, after, "Slab")
-    # KReclaimable contains SReclaimable. Only count the non-slab excess once.
     non_slab_kreclaimable_growth = delta(before, after, "KReclaimable") - delta(
         before, after, "SReclaimable"
     )
