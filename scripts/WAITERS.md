@@ -65,6 +65,16 @@ The helper pins both the initial Docker container ID and its `StartedAt` value. 
 
 Successful completion prints `WAIT_RUNTIME_AGE_READY` and exits zero. This means the same runtime observed at waiter start has reached the requested age; it does not imply runtime health or benchmark acceptance. Use `wait-ready.sh` separately when readiness is the condition being tested.
 
+### Live-host validation
+
+The waiter was exercised on the recovered managed OrcaRouter runtime after the R20 protected-stop experiment. It pinned container ID `91685b554aaf6b279715eab4c5608e0293310e57369c6b5e1116f4cdacf33c42`, reported the remaining age against the 2700-second gate, and completed on the same container with:
+
+```text
+WAIT_RUNTIME_AGE_READY ... age_s=2700 min_age_s=2700
+```
+
+This confirms the operator helper works on the live DGX Spark path, not only in unit tests.
+
 ## Selection rule
 
 Use the waiter that matches the condition:
