@@ -4,7 +4,7 @@
 
 **IMPLEMENTED / LIVE TEST NOT YET RUN**
 
-Repository implementation was completed before the final status-only documentation update. The final validated branch head is `8a3cb6e0287e315173dc4e5e12f123f7b34e9136`. CI #1041 is SUCCESS: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace all pass.
+The R24 implementation has passed the repository CI contract: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace validation. Before live execution, use only the latest branch head after its associated CI run is green.
 
 The required next action is `--preflight` only. A live H6 candidate run must not start unless preflight reports `R24_PREFLIGHT=PASS`.
 
