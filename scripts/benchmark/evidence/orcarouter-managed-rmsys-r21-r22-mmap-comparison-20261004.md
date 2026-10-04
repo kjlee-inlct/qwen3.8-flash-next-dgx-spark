@@ -182,12 +182,12 @@ Further page-cache, watermark, or swap tuning is no longer the primary diagnosti
 
 Before any R23 restart, use the existing one-second allocator samples to locate when the common `core_unexplained_loss` develops.
 
-The next analyzer should derive a per-sample non-overlapping residual from `allocator-state/fast-state.txt` and report, separately for R21 and R22:
+The read-only `scripts/benchmark/compare-orcarouter-r21-r22-unaccounted-trajectory.py` helper derives a per-sample non-overlapping residual from `allocator-state/fast-state.txt` and reports, separately for R21 and R22:
 
 - 25%, 50%, 75%, and 90% crossings of the final residual;
 - largest one-second and five-second increases;
-- corresponding MemFree, MemAvailable, file-LRU, anon-LRU, Slab, page-table, and SwapFree states;
-- wall/monotonic timestamps that can be aligned with preserved model-loading logs.
+- corresponding MemFree, MemAvailable, anon/file LRU, Slab, page-table, and SwapFree states;
+- wall timestamps aligned to compaction and the RM event for preserved model-loading-log correlation.
 
 If the ~90 GiB residual forms at the same startup phase in both R21 and R22 despite their radically different swap behavior, the next live trace can be tightly scoped to that common phase rather than repeating broad host-tuning experiments.
 
