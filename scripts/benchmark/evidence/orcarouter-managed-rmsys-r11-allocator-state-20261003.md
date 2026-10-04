@@ -160,6 +160,33 @@ Current lower-level model:
 
 R12 tested a one-shot write to `vm.compact_memory` immediately before startup. It began with approximately 2.85 GiB of Normal-zone order-4+ free capacity, and the one-shot compaction barely changed that starting capacity. Nevertheless two RM order-4 failures reappeared later during the long model startup, including a 3.125 GiB request that accumulated and rolled back about 2.53 GiB of order-4 chunks before falling back successfully to order 0.
 
-Therefore one-shot pre-start compaction is not a sufficient mitigation. The relevant allocator state evolves during startup; mitigation must preserve high-order supply during the load. R13 is the next isolated A/B: temporarily raise `vm.compaction_proactiveness` from 20 to 80 for the full startup interval, restore it afterward on every exit path, and keep every other VM tunable unchanged. The R13 helper and regression tests pass CI.
+Therefore one-shot pre-start compaction is not a sufficient mitigation. The relevant allocator state evolves during startup.
 
 Canonical R12 evidence: `scripts/benchmark/evidence/orcarouter-managed-rmsys-r12-precompact-20261003.md`.
+
+## Later closure through R22
+
+R13–R22 subsequently tested proactive compaction, watermark changes, ordering/carryover, full stop, post-stop compaction, page-cache reclaim, and the v0.29 PLE-mmap discriminator. None established a deterministic production mitigation for the strict RM failure.
+
+The strongest later cross-run result is the R21/R22 physical accounting:
+
+- R21 approximate unexplained physical-page loss: `89465.184 MiB`;
+- R22 approximate unexplained physical-page loss: `90000.770 MiB`;
+- node0 Normal managed pages unchanged in both runs;
+- almost the entire free-page loss occurs in node0 Normal;
+- full meminfo inspection finds no conventional tens-of-GiB bucket that explains the residual.
+
+The one-second trajectory further localizes a common early startup burst:
+
+- R21 largest 5 s unexplained-residual increase: `+75174.387 MiB`;
+- R22 largest 5 s unexplained-residual increase: `+75138.043 MiB`.
+
+This common roughly 75 GiB burst occurs before meaningful swap movement and aligns with the early high-order collapse. The result is strongly consistent with the R11 direct RM/kernel system-page allocation mechanism, while exact ownership of the full 75–90 GiB footprint remains the open causal question.
+
+For the current state of the investigation, use:
+
+- `orcarouter-managed-rmsys-r9-r22-allocator-closure-20261004.md`
+- `orcarouter-managed-rmsys-r21-r22-mmap-comparison-20261004.md`
+- `orcarouter-managed-rmsys-r21-r22-unaccounted-trajectory-20261004.md`
+
+The next diagnostic direction is narrow RM/UVM ownership tracing of the common early allocation burst, not additional broad VM tuning.
