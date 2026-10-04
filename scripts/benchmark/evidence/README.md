@@ -4,13 +4,16 @@ This directory preserves canonical evidence for live DGX Spark runtime, profile-
 
 ## Current host-stability / RM allocator closure
 
-Start here for the current R9–R22 conclusion:
+Start with the R9–R22 allocator closure, then the R23 ownership result:
 
 - `orcarouter-managed-rmsys-r9-r22-allocator-closure-20261004.md`
+- `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
 
-The current leading result is that R21 and R22 share an early physical-page allocation burst of about 75 GiB over roughly five seconds, ultimately leaving an approximately 89.5–90.0 GiB physical-page residual not explained by the selected conventional Linux resident accounting. Nearly the entire free-page loss occurs in node0 Normal while managed capacity remains unchanged. This is strongly consistent with the direct NVIDIA RM/kernel system-page mechanism traced in R11, but exact ownership of the common 75–90 GiB footprint is not yet proven.
+R21 and R22 first established a common early physical-page allocation burst of about 75 GiB over roughly five seconds, ultimately leaving an approximately 89.5–90.0 GiB physical-page residual not explained by the selected conventional Linux resident accounting. Nearly the entire free-page loss occurs in node0 Normal while managed capacity remains unchanged.
 
-Legacy PLE CPU-offload is a separate pressure amplifier: it adds roughly 100 GiB of later swap/residency churn, but R22 shows that removing that path with mmap does not remove the common early burst or the strict RM OOM.
+R23 now directly aligns that common burst with NVIDIA RM system-memory activity. The R23 narrow trace recorded `75,077.375 MiB` of 64 KiB-path `nv_alloc_pages` logical activity while the independently reconstructed largest five-second unexplained residual increased by `75,083.652 MiB`, a difference of only `6.277 MiB` (~`0.0084%`). This is strong ownership evidence for the direct RM system-page path, while preserving the guard that cumulative requested bytes are activity volume rather than exact resident ownership.
+
+Legacy PLE CPU-offload remains a separate pressure amplifier: it adds roughly 100 GiB of later swap/residency churn, but R22 shows that removing that path with mmap does not remove the common early burst or the strict RM OOM.
 
 Strict classification policy remains:
 
@@ -57,7 +60,7 @@ R21 is `VALID_RM_OOM`: page-cache reclaim and post-stop compaction materially im
 
 R22 is also `VALID_RM_OOM`. mmap materially reduces sustained swap pressure and slows later high-order depletion, but it does not remove the initial catastrophic high-order collapse or strict RM failure.
 
-The cross-run trajectory is the current strongest common-path discriminator:
+The cross-run trajectory remains the common-path baseline:
 
 - R21 largest 5 s unexplained-residual increase: `+75174.387 MiB`;
 - R22 largest 5 s unexplained-residual increase: `+75138.043 MiB`.
@@ -66,24 +69,34 @@ The cross-run trajectory is the current strongest common-path discriminator:
 
 - `orcarouter-managed-rmsys-r23-early-burst-ownership-plan-20261004.md`
 - `orcarouter-managed-rmsys-r23-probe-preflight-result-20261004.md`
+- `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
 
-R23 is now **PREFLIGHT PASS / LIVE TEST NOT YET RUN**. It is explicitly not another broad VM-tuning experiment. The plan keeps the current managed OrcaRouter runtime and established conditioning/protection harness fixed, then records only a narrow startup window around the known common burst using the minimum RM/UVM allocation-boundary probes needed for ownership attribution.
+R23 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL**. The live managed restart completed successfully and remained healthy, but four later `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` events were recorded, so strict host stability fails.
 
-The DGX Spark probe-only preflight passed at repository head `05fa0b532847f89e30f499c78dfb498cba32ef08`. All six selected functions were ftrace-visible and all twelve entry/return events materialized and smoke-recorded successfully under `r23_own`. The preflight made no model restart and no persistent VM change.
+The narrow trace itself was valid: it started `20.020147 s` after the replacement request (`19.103315 s` after container `StartedAt`) and ran for `53.415677 s`. The trace captured 668 successful `nv_alloc_pages` calls and 599 successful `nv_alloc_system_pages` calls. Selected UVM PMA, DMA, and PMM boundaries were silent. `uvm_mem_alloc` executed exactly twice, once on the dominant `VLLM::Worker` task and once on a `python3` task.
 
-The live instrumentation set is therefore frozen to `nv_alloc_pages`, `nv_alloc_system_pages`, `nvUvmInterfacePmaAllocPages`, `uvm_gpu_dma_alloc`, `uvm_mem_alloc`, and `uvm_pmm_gpu_alloc_kernel`. Broad page alloc/free, compaction/reclaim/extfrag, function-graph, scheduler, and full-driver tracing remain excluded because R11 already closes the Linux high-order allocator mechanism.
+The key R23 size match is:
+
+- 64 KiB/order-4-path RM logical activity: `75,077.375 MiB`;
+- independently reconstructed largest 5 s residual increase: `75,083.652 MiB`;
+- absolute difference: `6.277 MiB` (~`0.0084%`).
+
+The same five-second interval loses about `77,019.473 MiB` from node0 Normal and `77,019.848 MiB` from global `nr_free_pages`. Its start is within `0.713 s` of the `Loading model from scratch...` milestone.
 
 Repository implementation now includes:
 
 - `scripts/benchmark/check-orcarouter-r23-ownership-probes.sh` — probe-only validation;
 - `scripts/benchmark/run-orcarouter-managed-rmsys-r23-early-burst-ownership.sh` — managed R21-style conditioning plus a startup `+20 s` to approximately `+70 s` RM/UVM trace window;
-- `scripts/benchmark/analyze-orcarouter-r23-ownership.py` — window-boundary-aware entry/return, task/PID, request-shape, allocator-residual, and strict RM analysis;
-- `tests/test_orcarouter_r23_ownership_trace.py` — focused regression contract.
+- `scripts/benchmark/analyze-orcarouter-r23-ownership.py` — window-boundary-aware ownership/allocator analysis;
+- `scripts/benchmark/analyze-orcarouter-r23-rm-uvm-overlap.py` — read-only post-hoc call nesting and burst-window RM/UVM correlation on the preserved R23 trace;
+- `tests/test_orcarouter_r23_ownership_trace.py` and `tests/test_orcarouter_r23_rm_uvm_overlap.py` — focused regression contracts.
 
 ## Current next diagnostic direction
 
-Do not return to broad watermark, compaction, drop-cache, or swap tuning as the primary diagnostic path.
+Do not start another live run yet, and do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, or function-graph tracing.
 
-CI-validate the R23 runner/analyzer contract. Only after that is green should the live R23 managed restart be issued. The live goal is to align RM/UVM boundary activity and task attribution with the approximately 75 GiB early residual formation, not to evaluate another mitigation.
+First run the read-only R23 overlap analyzer against the preserved live evidence. It will determine whether the two `uvm_mem_alloc` intervals on the same PIDs actually contain most of the 64 KiB RM activity and how much 64 KiB RM activity falls inside the independently measured five-second burst.
 
-Do not merge or promote reclaim/compaction or mmap behavior as a production mitigation from R9–R22 evidence alone.
+If `uvm_mem_alloc` brackets most burst-window RM activity, treat it as the immediate upstream UVM wrapper and move only one boundary lower/inside that path if additional closure is required. If it brackets little of the burst, treat the selected UVM activity as adjacent/incidental and retain direct RM system memory as the primary ownership path.
+
+No production reclaim/compaction or mmap promotion is accepted from R9–R23 evidence alone. PR #244 remains intentionally open.
