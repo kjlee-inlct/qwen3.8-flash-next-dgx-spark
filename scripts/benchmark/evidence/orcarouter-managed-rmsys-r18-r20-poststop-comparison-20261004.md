@@ -31,9 +31,9 @@ Post-compaction order-4+ values:
 
 | Migratetype | R18 POST | R20 POST | R20 - R18 |
 |---|---:|---:|---:|
-| Unmovable | 106486.812 MiB | 95162.375 MiB | -11324.438 MiB |
+| Unmovable | 106486.812 MiB | 95162.375 MiB | -11324.437 MiB |
 | Movable | 6079.625 MiB | 10080.875 MiB | +4001.250 MiB |
-| Reclaimable | 29.062 MiB | 20.188 MiB | -8.875 MiB |
+| Reclaimable | 29.062 MiB | 20.188 MiB | -8.874 MiB |
 | HighAtomic | 1.938 MiB | 0 MiB | -1.938 MiB |
 
 Approximate shares of total Normal order-4+ free capacity:
@@ -58,13 +58,13 @@ But the migratetype effect is different.
 
 R18:
 
-- Unmovable order-4+: 105834.188 -> 106486.812 MiB, delta +652.625 MiB
+- Unmovable order-4+: 105834.188 -> 106486.812 MiB, delta +652.624 MiB
 - Movable order-4+: 4324.250 -> 6079.625 MiB, delta +1755.375 MiB
 
 R20:
 
-- Unmovable order-4+: 96043.062 -> 95162.375 MiB, delta -880.688 MiB
-- Movable order-4+: 6046.188 -> 10080.875 MiB, delta +4034.688 MiB
+- Unmovable order-4+: 96043.062 -> 95162.375 MiB, delta -880.687 MiB
+- Movable order-4+: 6046.188 -> 10080.875 MiB, delta +4034.687 MiB
 
 Thus the R20 compaction pass increased aggregate order-4+ capacity while the directly relevant Unmovable reservoir actually decreased. Most of the visible gain appeared in Movable high-order free capacity.
 
@@ -72,37 +72,31 @@ This is the strongest current reason not to use only `compact_memory executed` o
 
 ## Memory totals and composition
 
-Post-compaction host-memory totals were:
+Post-compaction host-memory totals:
 
 | Metric | R18 POST | R20 POST | R20 - R18 |
 |---|---:|---:|---:|
 | MemAvailable | 121504.777 MiB | 121487.285 MiB | -17.492 MiB |
-| MemFree | 118694.555 MiB | 107613.363 MiB | -11081.191 MiB |
-| SwapFree | 146450.766 MiB | 146421.316 MiB | -29.449 MiB |
+| MemFree | 118694.555 MiB | 107613.363 MiB | -11081.192 MiB |
+| SwapFree | 146450.766 MiB | 146421.316 MiB | -29.450 MiB |
 
-The nearly identical MemAvailable and SwapFree values therefore hide an approximately 11.081 GiB MemFree difference.
+The nearly identical MemAvailable and SwapFree values hide an approximately 11.081 GiB MemFree difference.
 
-The detailed meminfo comparison explains that gap almost completely:
+The detailed meminfo comparison closes that gap:
 
-| Category | R20 - R18 |
-|---|---:|
-| Cached | +11114.258 MiB |
-| Inactive(file) | +10938.918 MiB |
-| Active(file) | +165.328 MiB |
-| SwapCached | +23.543 MiB |
-| AnonPages | +1.734 MiB |
-| Inactive(anon) | +1.578 MiB |
-| Active(anon) | -0.648 MiB |
-| KReclaimable | -40.547 MiB |
-| Slab | -41.723 MiB |
-| SReclaimable | -40.547 MiB |
-| SUnreclaim | -1.176 MiB |
+- Cached: +11114.258 MiB in R20
+- Inactive(file): +10938.918 MiB
+- Active(file): +165.328 MiB
+- AnonPages: only +1.734 MiB
+- Slab: -41.723 MiB
+- KReclaimable/SReclaimable: -40.547 MiB
+- SUnreclaim: -1.176 MiB
 
-R20 therefore did not have an additional ~11 GiB anonymous or unreclaimable allocation at this post-stop boundary. The missing MemFree was almost entirely represented as file cache, dominated by `Inactive(file)`.
+Therefore the ~11 GiB MemFree deficit is almost entirely represented by reclaimable file cache rather than extra anonymous or unreclaimable kernel memory. This explains why MemAvailable was nearly identical: Linux correctly counted most of that page cache as reclaimable even though it was not immediately free at the treatment boundary.
 
-This explains why MemAvailable was nearly identical: Linux counted that file-backed cache as reclaimable even though it was not currently free. A simple MemAvailable gate would therefore consider R18 and R20 almost equivalent despite a large difference in immediately free pages and in the Normal-zone Unmovable high-order reservoir.
+A simple MemAvailable or SwapFree gate would therefore not distinguish R18 from R20.
 
-The historical snapshots do not identify which files owned those cached pages. Checkpoint/model-file cache is a plausible source given the workload, but that attribution is an inference rather than something proved by these proc snapshots.
+The exact files owning the historical R20 cache cannot be identified from proc snapshots alone. Model/checkpoint file cache is plausible in this workload but is not asserted as fact.
 
 ## Compaction vmstat counters
 
@@ -110,22 +104,36 @@ The captured `compact_stall`, `compact_fail`, `compact_success`, and `compact_da
 
 That does not mean the one-shot action had no allocator effect: the buddy distributions changed by multiple GiB in both runs. These vmstat counters therefore do not distinguish the explicit R18/R20 one-shot events in this measurement path; the buddy and pagetype snapshots are the direct evidence.
 
+## R21 targeted follow-up and partial live result
+
+R21 was designed directly from this comparison: after an aged predecessor is fully stopped, execute `sync`, reclaim page cache once with `drop_caches=1`, compact once, then start the same immutable OrcaRouter release.
+
+The first live R21 attempt strongly validates the page-cache-conditioning part of the model at the allocator-state level:
+
+- before reclaim: Cached ~8424.0 MiB, Inactive(file) ~6371.3 MiB, MemFree ~113793.2 MiB, Unmovable order-4+ ~100231.9 MiB
+- after `drop_caches=1`: Cached ~202.4 MiB, Inactive(file) ~48.2 MiB, MemFree ~122278.4 MiB, Unmovable order-4+ ~105998.9 MiB
+- delta from post-sync to post-drop: Cached -8221.984 MiB, MemFree +8490.176 MiB, Unmovable order-4+ +5766.688 MiB, aggregate Normal order-4+ +14486.062 MiB
+
+The subsequent one-shot compaction increased aggregate Normal order-4+ by another +2496.000 MiB but reduced Unmovable order-4+ by -1391.562 MiB while Movable increased by +3875.500 MiB. Across the complete reclaim+compaction treatment, Unmovable order-4+ still ended +4375.438 MiB above the pre-reclaim state.
+
+The managed replacement reached the committed-and-healthy state and remained active, but the runner's long startup exhausted the sudo timestamp before late kernel-journal finalization. The shell-level RM/OOM display was empty, but the canonical summary was not written. Therefore attempt 01 is temporarily classified as incomplete/INVALID until the exact historical kernel window and validity fields are reconstructed by the dedicated post-hoc finalizer. The runner has also been hardened with a sudo keepalive for future long startups.
+
 ## Current interpretation
 
-The comparison narrows the mitigation model:
+The comparison and R21 partial result narrow the mitigation model:
 
 1. Full stop alone is insufficient: R19 was valid and emitted RM OOM x5.
 2. One-shot post-stop compaction can materially coalesce free buddies, but aggregate coalescing alone is not a sufficient eligibility signal.
 3. R18 clean and R20 invalid differ strongly in the post-compaction Normal-zone Unmovable high-order reservoir.
-4. R20 had almost exactly the same MemAvailable as R18 because ~11 GiB less MemFree was offset by ~11 GiB more reclaimable file cache, overwhelmingly `Inactive(file)`.
-5. MemAvailable and SwapFree are therefore too coarse to distinguish the two states.
-6. The leading allocator-state discriminator remains post-compaction node-0 Normal-zone Unmovable order-4+ free capacity, but no numerical threshold is accepted yet.
-7. The R20 protected-stop path must also be reviewed against the monitor's exact free/non-CMA-free and available-memory logic because reclaimable file cache can keep MemAvailable high while immediately free pages remain lower.
+4. R20 had nearly the same MemAvailable as R18 despite about 11 GiB less MemFree because the difference was almost entirely reclaimable file cache.
+5. R21 directly demonstrates that reclaiming that page cache converts it to free memory and substantially increases the directly relevant Unmovable high-order reservoir before compaction.
+6. The compaction step can still shift capacity from Unmovable toward Movable, so eligibility cannot rely on aggregate high-order growth alone.
+7. A future production gate, if adopted, should be based on directly relevant allocator state and treatment outcome rather than only predecessor age, MemAvailable, SwapFree, or aggregate order-4+ total.
+
+The leading candidate discriminator remains post-treatment node-0 Normal-zone Unmovable order-4+ free capacity, but no numerical threshold is accepted yet.
 
 ## Next step
 
-Do not perform another restart yet.
+Do not repeat the restart yet.
 
-Review the managed memory-protection logic against the R20 monitor samples and the now-explained file-cache-heavy post-stop state. If the protection gate intentionally depends on immediately free/non-CMA-free memory as well as MemAvailable, preserve that safety behavior and design the next controlled treatment around a measured post-compaction allocator eligibility state rather than around MemAvailable alone.
-
-If a future run needs to determine whether checkpoint files specifically account for the file cache, add file-residency capture at the post-stop boundary before mutating caches. Do not retrospectively attribute the existing R18/R20 cache pages to a specific file without direct evidence.
+First finalize the existing R21 attempt with the dedicated post-hoc helper so the exact kernel window, strict RM count, replacement identity, API readiness, collector status, and `r21-summary.txt` are recovered from the already-captured run. Only then decide whether another aged-predecessor replication or production-integration experiment is warranted.
