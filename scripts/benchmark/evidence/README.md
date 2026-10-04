@@ -65,17 +65,25 @@ The cross-run trajectory is the current strongest common-path discriminator:
 ## R23 early-burst ownership trace
 
 - `orcarouter-managed-rmsys-r23-early-burst-ownership-plan-20261004.md`
+- `orcarouter-managed-rmsys-r23-probe-preflight-result-20261004.md`
 
-R23 is currently **DESIGN / NO TEST**. It is explicitly not another broad VM-tuning experiment. The plan keeps the current managed OrcaRouter runtime and established conditioning/protection harness fixed, then records only a narrow startup window around the known common burst using the minimum RM/UVM allocation-boundary probes needed for ownership attribution.
+R23 is now **PREFLIGHT PASS / LIVE TEST NOT YET RUN**. It is explicitly not another broad VM-tuning experiment. The plan keeps the current managed OrcaRouter runtime and established conditioning/protection harness fixed, then records only a narrow startup window around the known common burst using the minimum RM/UVM allocation-boundary probes needed for ownership attribution.
 
-The first live instrumentation set centers on `nv_alloc_pages`, `nv_alloc_system_pages`, `nvUvmInterfacePmaAllocPages`, `uvm_gpu_dma_alloc`, `uvm_mem_alloc`, and `uvm_pmm_gpu_alloc_kernel`. Broad page alloc/free, compaction/reclaim/extfrag, function-graph, scheduler, and full-driver tracing are excluded from the first R23 live run because R11 already closes the Linux high-order allocator mechanism.
+The DGX Spark probe-only preflight passed at repository head `05fa0b532847f89e30f499c78dfb498cba32ef08`. All six selected functions were ftrace-visible and all twelve entry/return events materialized and smoke-recorded successfully under `r23_own`. The preflight made no model restart and no persistent VM change.
 
-Repository-side probe-only preflight support is now present in `scripts/benchmark/check-orcarouter-r23-ownership-probes.sh`, with focused static coverage in `tests/test_orcarouter_r23_ownership_trace.py`. The helper does not restart the model and does not change persistent VM settings. The actual DGX host preflight has not yet been executed.
+The live instrumentation set is therefore frozen to `nv_alloc_pages`, `nv_alloc_system_pages`, `nvUvmInterfacePmaAllocPages`, `uvm_gpu_dma_alloc`, `uvm_mem_alloc`, and `uvm_pmm_gpu_alloc_kernel`. Broad page alloc/free, compaction/reclaim/extfrag, function-graph, scheduler, and full-driver tracing remain excluded because R11 already closes the Linux high-order allocator mechanism.
+
+Repository implementation now includes:
+
+- `scripts/benchmark/check-orcarouter-r23-ownership-probes.sh` — probe-only validation;
+- `scripts/benchmark/run-orcarouter-managed-rmsys-r23-early-burst-ownership.sh` — managed R21-style conditioning plus a startup `+20 s` to approximately `+70 s` RM/UVM trace window;
+- `scripts/benchmark/analyze-orcarouter-r23-ownership.py` — window-boundary-aware entry/return, task/PID, request-shape, allocator-residual, and strict RM analysis;
+- `tests/test_orcarouter_r23_ownership_trace.py` — focused regression contract.
 
 ## Current next diagnostic direction
 
 Do not return to broad watermark, compaction, drop-cache, or swap tuning as the primary diagnostic path.
 
-First run the R23 probe-only preflight on the DGX host. If all selected dynamic probes materialize and smoke-record cleanly, implement and lock the narrow-window managed runner and ownership analyzer, then require green CI before the live R23 restart. The live goal is to align RM/UVM boundary activity and task attribution with the approximately 75 GiB early residual formation, not to evaluate another mitigation.
+CI-validate the R23 runner/analyzer contract. Only after that is green should the live R23 managed restart be issued. The live goal is to align RM/UVM boundary activity and task attribution with the approximately 75 GiB early residual formation, not to evaluate another mitigation.
 
 Do not merge or promote reclaim/compaction or mmap behavior as a production mitigation from R9–R22 evidence alone.
