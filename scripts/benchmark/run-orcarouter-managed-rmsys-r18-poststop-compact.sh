@@ -42,7 +42,7 @@ cleanup() {
         wait "${COLLECTOR_PID}" >/dev/null 2>&1 || true
     fi
     if [[ "${SERVICE_STOPPED}" == 1 ]] && ! systemctl is-active --quiet "${UNIT}"; then
-        systemctl start "${UNIT}" >/dev/null 2>&1 || true
+        sudo -n systemctl start "${UNIT}" >/dev/null 2>&1 || true
     fi
     exit "${rc}"
 }
@@ -50,7 +50,7 @@ trap cleanup EXIT INT TERM
 
 snapshot_proc() {
     local target="$1"
-    sudo -n mkdir -p -- "${target}"
+    mkdir -p -- "${target}"
     sudo -n cat /proc/buddyinfo >"${target}/proc-buddyinfo.txt"
     sudo -n cat /proc/pagetypeinfo >"${target}/proc-pagetypeinfo.txt"
     sudo -n cat /proc/zoneinfo >"${target}/proc-zoneinfo.txt"
@@ -59,7 +59,7 @@ snapshot_proc() {
     sudo -n cat /proc/pressure/memory >"${target}/proc-pressure-memory.txt"
 }
 
-for command in sudo python3 bash systemctl docker curl journalctl date grep awk find wc cat tee; do
+for command in sudo python3 bash systemctl docker curl journalctl date grep awk find wc cat tee seq sleep mkdir; do
     command -v "${command}" >/dev/null 2>&1 || fail "required command not found: ${command}"
 done
 sudo -n true >/dev/null 2>&1 || fail "sudo timestamp unavailable; run sudo -v first"
@@ -126,13 +126,16 @@ sleep 2
 kill -0 "${COLLECTOR_PID}" >/dev/null 2>&1 || fail "allocator-state collector exited before teardown"
 
 printf '%s\n' "$(date --iso-8601=seconds)" >"${OUT}/stop-started-iso.txt"
-systemctl stop "${UNIT}"
+sudo -n systemctl stop "${UNIT}"
 SERVICE_STOPPED=1
 for _ in $(seq 1 120); do
     systemctl is-active --quiet "${UNIT}" || break
     sleep 1
 done
 systemctl is-active --quiet "${UNIT}" && fail "managed service did not stop"
+if [[ "$(docker inspect --format '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || printf false)" == true ]]; then
+    fail "predecessor container is still running after service stop"
+fi
 printf '%s\n' "$(date --iso-8601=seconds)" >"${OUT}/stop-complete-iso.txt"
 
 snapshot_proc "${OUT}/poststop-before-compact"
