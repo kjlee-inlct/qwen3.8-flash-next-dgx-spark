@@ -167,28 +167,60 @@ The non-overlapping core accounting includes active/inactive anon/file LRU, Unev
 
 This is consistent with R11, where NVIDIA RM's non-contiguous 64 KiB allocation reached Linux as node0 Normal-zone Unmovable order-4 page demand and rolled back accumulated same-order pages after a failed chunk. The R21/R22 host accounting and the R11 allocator trace are therefore now consistent with the same lower-level mechanism, while exact ownership of every page in the ~90 GiB residual remains unproven.
 
+## Unexplained physical-page trajectory closure
+
+The one-second time-series comparison closes when the common residual forms.
+
+R21 final residual: `89465.184 MiB`.
+
+- 25% crossing: `+43.991 s` after compaction, residual `37154.699 MiB`
+- 50% crossing: `+44.990 s`, residual `63909.523 MiB`
+- 75% crossing: `+45.991 s`, residual `75885.785 MiB`
+- 90% crossing: `+730.991 s`, residual `81927.586 MiB`
+- largest 1 s increase: `+26754.824 MiB`
+- largest 5 s increase: `+75174.387 MiB`
+
+R22 final residual: `90000.770 MiB`.
+
+- 25% crossing: `+35.638 s` after compaction, residual `39416.078 MiB`
+- 50% crossing: `+36.638 s`, residual `64328.199 MiB`
+- 75% crossing: `+37.638 s`, residual `75189.867 MiB`
+- 90% crossing: `+588.638 s`, residual `81546.207 MiB`
+- largest 1 s increase: `+24912.121 MiB`
+- largest 5 s increase: `+75138.043 MiB`
+
+The largest five-second increases differ by only `36.344 MiB` out of roughly 75 GiB. About 84% of the final unexplained physical-page residual therefore forms in a short early-startup burst in both runtime stacks.
+
+That burst is independent of the later legacy PLE swap path:
+
+- at the R21 early 75% crossing, SwapFree delta was only about `+3.668 MiB`;
+- at the R22 early 75% crossing, SwapFree delta was only about `+0.203 MiB`;
+- R21's roughly 100 GiB swap loss accumulated later;
+- R22 never develops a comparable swap loss.
+
+The R21 five-second residual burst is aligned with the same `06:23:18.991Z -> 06:23:23.991Z` interval that contains the largest Unmovable order-4+ drop. R22 likewise forms its 25/50/75% residual within a three-second span during the initial mmap high-order collapse.
+
+This makes the short common startup allocation burst, rather than late swap exhaustion or a static pre-start allocator threshold, the highest-value next ownership target.
+
+Focused trajectory evidence is recorded in `orcarouter-managed-rmsys-r21-r22-unaccounted-trajectory-20261004.md`.
+
 ## Interpretation
 
 The evidence supports a two-layer model:
 
-1. **A common startup allocation footprint consumes roughly 90 GiB of physical pages not explained by the selected conventional resident accounting in both legacy and mmap paths.** It is directly visible as node0 Normal free-page loss with unchanged managed capacity and drives the initial high-order collapse. This is strongly consistent with the direct NVIDIA RM/kernel page-allocation behavior observed in R11.
+1. **A common startup allocation footprint creates a roughly 75 GiB burst in about five seconds and ultimately consumes roughly 90 GiB of physical pages not explained by the selected conventional resident accounting in both legacy and mmap paths.** It is directly visible as node0 Normal free-page loss with unchanged managed capacity and temporally aligned with the initial high-order collapse. This is strongly consistent with the direct NVIDIA RM/kernel page-allocation behavior observed in R11.
 2. **Legacy PLE CPU-offload adds a separate roughly 100 GiB swap/residency pressure path.** R22 substantially removes this sustained pressure and slows later high-order depletion, but the common allocation footprint and strict RM fallback remain.
 
 Therefore legacy PLE CPU-offload is an important pressure amplifier but not the sole or necessary cause of `_memdescAllocInternal` failure.
 
-Further page-cache, watermark, or swap tuning is no longer the primary diagnostic direction. The remaining mechanism should be investigated in the common model-loading / NVIDIA RM allocation path.
+Further page-cache, watermark, compaction, or swap tuning is no longer the primary diagnostic direction.
 
-## Next read-only discriminator
+## Current next step
 
-Before any R23 restart, use the existing one-second allocator samples to locate when the common `core_unexplained_loss` develops.
+No R23 restart has been justified solely from broad host-pressure tuning.
 
-The read-only `scripts/benchmark/compare-orcarouter-r21-r22-unaccounted-trajectory.py` helper derives a per-sample non-overlapping residual from `allocator-state/fast-state.txt` and reports, separately for R21 and R22:
+The next live experiment should target ownership of the common early allocation burst. The useful observation window is the short startup interval that covers approximately the first `30-50 s` after post-stop compaction/candidate start, rather than the entire long model startup.
 
-- 25%, 50%, 75%, and 90% crossings of the final residual;
-- largest one-second and five-second increases;
-- corresponding MemFree, MemAvailable, anon/file LRU, Slab, page-table, and SwapFree states;
-- wall timestamps aligned to compaction and the RM event for preserved model-loading-log correlation.
+The next trace should add only the minimum NVIDIA RM/UVM observability needed to identify which common model-loading/RM boundary is responsible for the approximately 75 GiB five-second physical-page burst. Exact attribution remains the open causal question.
 
-If the ~90 GiB residual forms at the same startup phase in both R21 and R22 despite their radically different swap behavior, the next live trace can be tightly scoped to that common phase rather than repeating broad host-tuning experiments.
-
-No R23 restart is justified until that existing time-series evidence is extracted.
+No production reclaim/compaction or mmap promotion is accepted from R21/R22.
