@@ -16,6 +16,25 @@ PAGE_SIZE = 4096
 BUDDY_RE = re.compile(r"^Node\s+(\d+),\s+zone\s+(\S+)\s+(.+)$")
 PAGETYPE_RE = re.compile(r"^Node\s+(\d+),\s+zone\s+(\S+),\s+type\s+(\S+)\s+(.+)$")
 ZONE_HEADER_RE = re.compile(r"^Node\s+(\d+),\s+zone\s+(\S+)$")
+MEMINFO_KEYS = (
+    "Buffers",
+    "Cached",
+    "SwapCached",
+    "Active(anon)",
+    "Inactive(anon)",
+    "Active(file)",
+    "Inactive(file)",
+    "Unevictable",
+    "Mlocked",
+    "AnonPages",
+    "Shmem",
+    "KReclaimable",
+    "Slab",
+    "SReclaimable",
+    "SUnreclaim",
+    "PageTables",
+)
+MIGRATETYPES = ("Unmovable", "Movable", "Reclaimable", "HighAtomic")
 
 
 def read_required(path: pathlib.Path) -> str:
@@ -109,6 +128,10 @@ def order_mib(values: list[int], order: int) -> float:
     return values[order] * (1 << order) * PAGE_SIZE / (1024 * 1024)
 
 
+def mem_mib(mem: dict[str, int], key: str) -> float:
+    return mem.get(key, 0) / 1024
+
+
 def load_snapshot(path: pathlib.Path) -> dict[str, object]:
     return {
         "buddy": parse_counts(read_required(path / "proc-buddyinfo.txt"), BUDDY_RE),
@@ -127,14 +150,18 @@ def emit_snapshot(label: str, snap: dict[str, object]) -> None:
         f"snapshot={label} normal_order4_mib={order_mib(buddy, 4):.3f} "
         f"normal_order5plus_mib={mib_for_orders(buddy, 5):.3f} "
         f"normal_order4plus_mib={mib_for_orders(buddy, 4):.3f} "
-        f"memavailable_mib={mem.get('MemAvailable', 0) / 1024:.3f} "
-        f"memfree_mib={mem.get('MemFree', 0) / 1024:.3f} "
-        f"swapfree_mib={mem.get('SwapFree', 0) / 1024:.3f} "
+        f"memavailable_mib={mem_mib(mem, 'MemAvailable'):.3f} "
+        f"memfree_mib={mem_mib(mem, 'MemFree'):.3f} "
+        f"swapfree_mib={mem_mib(mem, 'SwapFree'):.3f} "
         f"zone_free_pages={zone.get('free', 0)} zone_low_pages={zone.get('low', 0)} "
         f"zone_high_pages={zone.get('high', 0)}"
     )
+    print(
+        f"snapshot_mem={label} "
+        + " ".join(f"{key}={mem_mib(mem, key):.3f}" for key in MEMINFO_KEYS)
+    )
     pagetype = snap["pagetype"]  # type: ignore[assignment]
-    for migratetype in ("Unmovable", "Movable", "Reclaimable", "HighAtomic"):
+    for migratetype in MIGRATETYPES:
         values = pagetype.get((0, "Normal", migratetype), [])
         print(
             f"snapshot_pagetype={label} type={migratetype} "
@@ -153,6 +180,17 @@ def emit_compaction_delta(label: str, before: dict[str, object], after: dict[str
         f"order5plus_mib={mib_for_orders(a, 5) - mib_for_orders(b, 5):+.3f} "
         f"order4plus_mib={mib_for_orders(a, 4) - mib_for_orders(b, 4):+.3f}"
     )
+    bp = before["pagetype"]  # type: ignore[assignment]
+    ap = after["pagetype"]  # type: ignore[assignment]
+    for migratetype in MIGRATETYPES:
+        bv = bp.get((0, "Normal", migratetype), [])
+        av = ap.get((0, "Normal", migratetype), [])
+        print(
+            f"compaction_pagetype={label} type={migratetype} "
+            f"order4_mib={order_mib(av, 4) - order_mib(bv, 4):+.3f} "
+            f"order5plus_mib={mib_for_orders(av, 5) - mib_for_orders(bv, 5):+.3f} "
+            f"order4plus_mib={mib_for_orders(av, 4) - mib_for_orders(bv, 4):+.3f}"
+        )
     bv = before["vm"]  # type: ignore[assignment]
     av = after["vm"]  # type: ignore[assignment]
     fields = []
@@ -170,9 +208,26 @@ def emit_post_cross(r18: dict[str, object], r20: dict[str, object]) -> None:
         "postcompact_cross=R20_MINUS_R18 "
         f"order4plus_mib={mib_for_orders(b, 4) - mib_for_orders(a, 4):+.3f} "
         f"order5plus_mib={mib_for_orders(b, 5) - mib_for_orders(a, 5):+.3f} "
-        f"memavailable_mib={(bm.get('MemAvailable', 0) - am.get('MemAvailable', 0)) / 1024:+.3f} "
-        f"memfree_mib={(bm.get('MemFree', 0) - am.get('MemFree', 0)) / 1024:+.3f} "
-        f"swapfree_mib={(bm.get('SwapFree', 0) - am.get('SwapFree', 0)) / 1024:+.3f}"
+        f"memavailable_mib={mem_mib(bm, 'MemAvailable') - mem_mib(am, 'MemAvailable'):+.3f} "
+        f"memfree_mib={mem_mib(bm, 'MemFree') - mem_mib(am, 'MemFree'):+.3f} "
+        f"swapfree_mib={mem_mib(bm, 'SwapFree') - mem_mib(am, 'SwapFree'):+.3f}"
+    )
+    ap = r18["pagetype"]  # type: ignore[assignment]
+    bp = r20["pagetype"]  # type: ignore[assignment]
+    for migratetype in MIGRATETYPES:
+        av = ap.get((0, "Normal", migratetype), [])
+        bv = bp.get((0, "Normal", migratetype), [])
+        print(
+            f"postcompact_pagetype=R20_MINUS_R18 type={migratetype} "
+            f"order4_mib={order_mib(bv, 4) - order_mib(av, 4):+.3f} "
+            f"order5plus_mib={mib_for_orders(bv, 5) - mib_for_orders(av, 5):+.3f} "
+            f"order4plus_mib={mib_for_orders(bv, 4) - mib_for_orders(av, 4):+.3f}"
+        )
+    print(
+        "postcompact_mem=R20_MINUS_R18 "
+        + " ".join(
+            f"{key}={mem_mib(bm, key) - mem_mib(am, key):+.3f}" for key in MEMINFO_KEYS
+        )
     )
 
 
