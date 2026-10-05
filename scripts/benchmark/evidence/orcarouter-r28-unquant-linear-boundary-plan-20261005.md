@@ -2,12 +2,18 @@
 
 ## Status
 
-**IMPLEMENTED IN REPOSITORY — CI PASS — STATIC IMAGE / HARNESS PREFLIGHT REQUIRED — NO LIVE RUN AUTHORIZED YET**
+**STATIC IMAGE PASS — HARNESS PREFLIGHT PASS — EXACTLY ONE GUARDED R28 LIVE MEASUREMENT AUTHORIZED**
 
 Canonical predecessors:
 
 - `scripts/benchmark/evidence/orcarouter-r27-linear-residual-result-20261005.md`
 - `scripts/benchmark/evidence/orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
+
+Canonical R28 gates:
+
+- `scripts/benchmark/evidence/orcarouter-r28-repository-gate-result-20261005.md`
+- `scripts/benchmark/evidence/orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
+- `scripts/benchmark/evidence/orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
 
 R27 is closed as:
 
@@ -15,7 +21,7 @@ R27 is closed as:
 
 The follow-up read-only routing inspection is also closed PASS and explains why R27 observed zero `ModelOptNvFp4W4A16LinearMethod.create_weights()` calls: the relevant Qwen4Exp attention families are excluded from ModelOpt quantization and route through unquantized Linear construction, with an additional explicit QSA qkv opt-out.
 
-Repository CI #1141 passed shell syntax, ShellCheck, Python compile, full unit tests including the R28 marker/analyzer regressions, and whitespace checks on implementation head `496eaadb9fc56e268bcfcb080be6a45879709ba4`.
+Repository implementation passed CI, including shell syntax, ShellCheck, Python compile, full unit tests including the R28 marker/analyzer regressions, and whitespace checks.
 
 ## Objective
 
@@ -59,34 +65,48 @@ Dockerfile:
 
 - `scripts/Dockerfile.v029-r28-unquant-linear-markers`
 
-Image tag to build:
+Validated image:
 
 `vllm-orcarouter-v029-r28-unquant-linear-marker:v1`
+
+Validated image ID:
+
+`sha256:54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f`
 
 Parent:
 
 `vllm-orcarouter-v029-r27-linear-marker:v1`
 
-The image therefore inherits:
+The image inherits:
 
 - R26 top-level constructor markers;
 - R26 ModelOpt-MoE markers;
 - R27 Qwen4Exp decoder-layer markers;
 - the exact H6/R22-matched runtime behavior.
 
-New label:
+Validated label:
 
 `qwen38.r28=unquant-linear-boundary-v1`
 
 ## Static image gate
 
-Checker:
+Static build/check is **PASS**.
 
-- `scripts/benchmark/check-orcarouter-r28-unquant-linear-image.sh`
+Observed contracts:
 
-The checker must pass inherited R25/R26/R27 labels, inherited R26/R27 marker contracts, exact R28 marker count, `UnquantizedLinearMethod` source identity, and the unchanged `data=torch.empty(...)` allocation contract.
+- `R28_BUILD_RC=0`
+- `r26_inherited_constructor_contract=PASS`
+- `r26_inherited_modelopt_moe_contract=PASS`
+- `r27_inherited_qwen4_layer_contract=PASS`
+- `r28_unquant_linear_contract=PASS`
+- `R28_IMAGE_PREFLIGHT=PASS`
+- `R28_STATIC_PREFLIGHT_RC=0`
 
-Static build/check must not restart or mutate the managed runtime.
+Managed container ID and `StartedAt` remained bit-for-bit identical across the static work, exact OrcaRouter remained READY, and `max_model_len` remained `262144`.
+
+Canonical result:
+
+- `scripts/benchmark/evidence/orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
 
 ## Analyzer
 
@@ -130,11 +150,11 @@ Runner:
 
 - `scripts/benchmark/run-orcarouter-r28-unquant-linear-boundary.sh`
 
-Default mode is `--preflight`.
+Default mode remains `--preflight`.
 
 The runner reuses the validated R24 H6/R22-matched harness through an ephemeral transform, with a fresh `r28_rm` probe group and experiment container. It preserves R24, R26 and R27 evidence and refuses an existing R28 evidence directory.
 
-Fresh default evidence path:
+Fresh reserved evidence path:
 
 `/tmp/orcarouter-hybrid-r28-unquant-linear-boundary-01-20261005`
 
@@ -142,7 +162,24 @@ Experiment container:
 
 `qwen38-hybrid-r28-unquant-linear-marker`
 
-A future live run requires explicit `ORCA_R28_LIVE_ACK=YES`, but **this plan does not authorize a live run yet**.
+Harness preflight is **PASS**:
+
+- `stale_probe_groups=NONE`
+- `r28_probe_definition_contract=PASS`
+- predecessor age `3989.048 s >= 2700 s`
+- `rm_probe_target_count=2`
+- `R24_PREFLIGHT=PASS`
+- `R28_LIVE_PREFLIGHT=PASS`
+- `R28_HARNESS_PREFLIGHT_RC=0`
+- managed container ID / `StartedAt` unchanged
+- exact OrcaRouter READY with `max_model_len=262144`
+- no live evidence created
+- no experiment container created
+- no stale `r28_rm` group
+
+Canonical result:
+
+- `scripts/benchmark/evidence/orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
 
 ## Trace scope and policy
 
@@ -161,14 +198,16 @@ RM logical requested bytes remain allocation activity volume, not exact resident
 ## Gate sequence
 
 1. repository CI — **PASS**;
-2. build R28 marker-only image — required;
-3. static R28 image preflight — required;
-4. verify managed container ID / StartedAt unchanged across static work — required;
-5. guarded R28 harness `--preflight` — required;
-6. verify fresh evidence path/container remain absent after preflight — required;
-7. canonicalize static/harness preflight evidence — required;
-8. only then decide whether one live R28 measurement is authorized.
+2. build R28 marker-only image — **PASS**;
+3. static R28 image preflight — **PASS**;
+4. managed container ID / StartedAt unchanged across static work — **PASS**;
+5. guarded R28 harness `--preflight` — **PASS**;
+6. fresh evidence path/container remain absent after preflight — **PASS**;
+7. static/harness preflight evidence canonicalized — **PASS**;
+8. exactly one guarded R28 live measurement — **AUTHORIZED NEXT**.
 
-Do not apply H11 before this discriminator closes.
+Live execution requires explicit `ORCA_R28_LIVE_ACK=YES` and must use the existing runner without changing the matched controls.
+
+Do not repeat R27. Do not apply H11 before R28 closes.
 
 PR #244 remains open. No merge is implied or authorized.
