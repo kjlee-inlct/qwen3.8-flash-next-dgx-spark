@@ -1,6 +1,5 @@
 import importlib.util
 import pathlib
-import tempfile
 import unittest
 
 
@@ -41,6 +40,34 @@ def FusedMoEFactory():
             r32.find_assignment_call_lineno(func, "routed_experts", "routed_experts_cls"),
             3,
         )
+
+    def test_sparse_moe_order_is_scoped_to_target_class(self):
+        tree = r32.ast.parse(
+            """
+class Distractor:
+    def __init__(self):
+        self.experts = FusedMoEFactory()
+        self.shared_expert_gate = ReplicatedLinear()
+        self.gate = GateLinear()
+
+class Qwen3NextSparseMoeBlock:
+    def __init__(self):
+        self.gate = GateLinear()
+        self.shared_expert_gate = ReplicatedLinear()
+        self.experts = FusedMoEFactory()
+"""
+        )
+        cls = r32.find_class(tree, "Qwen3NextSparseMoeBlock")
+        func = r32.find_func(cls.body, "__init__")
+        gate = r32.find_self_assignment_call_lineno(func, "gate", "GateLinear")
+        shared = r32.find_self_assignment_call_lineno(
+            func, "shared_expert_gate", "ReplicatedLinear"
+        )
+        experts = r32.find_self_assignment_call_lineno(
+            func, "experts", "FusedMoEFactory"
+        )
+        self.assertLess(gate, shared)
+        self.assertLess(shared, experts)
 
 
 if __name__ == "__main__":
