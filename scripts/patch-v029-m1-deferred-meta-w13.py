@@ -119,8 +119,10 @@ def patch_source(source: str) -> str:
         1,
     )
 
-    source = source.replace(IMPORT_ANCHOR, IMPORT_ANCHOR + IMPORT_TEXT, 1)
+    # Replace the class before inserting the new import. Inserting the import first
+    # would shift class_start/class_end and corrupt the exact-source splice.
     source = source[:class_start] + class_block + source[class_end:]
+    source = source.replace(IMPORT_ANCHOR, IMPORT_ANCHOR + IMPORT_TEXT, 1)
     ast.parse(source)
     return source
 
