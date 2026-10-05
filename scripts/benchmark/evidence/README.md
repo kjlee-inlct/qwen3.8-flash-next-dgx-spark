@@ -16,6 +16,8 @@ Read the current closure in this order:
 8. `orcarouter-r27-linear-residual-result-20261005.md`
 9. `orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
 10. `orcarouter-r28-unquant-linear-boundary-plan-20261005.md`
+11. `orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
+12. `orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
 
 Supporting gate history remains canonical:
 
@@ -31,6 +33,7 @@ Supporting gate history remains canonical:
 - `orcarouter-r27-linear-image-preflight-result-20261005.md`
 - `orcarouter-r27-live-harness-preflight-result-20261005.md`
 - `orcarouter-r27-h6-quant-routing-inspection-plan-20261005.md`
+- `orcarouter-r28-repository-gate-result-20261005.md`
 
 Strict classification policy remains:
 
@@ -165,21 +168,42 @@ Therefore R27's zero W4A16-linear calls are treated as a real routing result, no
 
 ## R28 — unquantized Linear boundary
 
-R28 is implemented in the repository but **not authorized for a live run yet**.
+R28 repository, static-image, and guarded harness gates are now **PASS**. Exactly one guarded live R28 measurement is authorized next.
 
-Files:
+Canonical:
 
-- `../patch-v029-r28-unquant-linear-markers.py`
-- `../Dockerfile.v029-r28-unquant-linear-markers`
-- `../benchmark/check-orcarouter-r28-unquant-linear-image.sh`
-- `../benchmark/analyze-orcarouter-r28-unquant-linear-overlap.py`
-- `../benchmark/run-orcarouter-r28-unquant-linear-boundary.sh`
 - `orcarouter-r28-unquant-linear-boundary-plan-20261005.md`
+- `orcarouter-r28-repository-gate-result-20261005.md`
+- `orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
+- `orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
+
+Validated static image:
+
+- image: `vllm-orcarouter-v029-r28-unquant-linear-marker:v1`
+- image ID: `sha256:54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f`
+- R28 label: `unquant-linear-boundary-v1`
+- inherited R26 constructor contract: PASS
+- inherited R26 ModelOpt-MoE contract: PASS
+- inherited R27 Qwen4 layer contract: PASS
+- R28 unquantized Linear contract: PASS
+
+Harness preflight closure:
+
+- `stale_probe_groups=NONE`
+- `r28_probe_definition_contract=PASS`
+- predecessor age `3989.048 s >= 2700 s`
+- `rm_probe_target_count=2`
+- `R24_PREFLIGHT=PASS`
+- `R28_LIVE_PREFLIGHT=PASS`
+- `R28_HARNESS_PREFLIGHT_RC=0`
+- managed runtime ID / StartedAt unchanged
+- exact OrcaRouter READY with `max_model_len=262144`
+- live evidence path absent after preflight
+- experiment container absent after preflight
+- stale `r28_rm` group absent after preflight
 
 R28 narrows the next question to `UnquantizedLinearMethod.create_weights()` only. It keeps direct-RM activity and nominal `torch.empty` weight payload as separate quantities, aggregates overlap by exact prefix family, and preserves the inherited R26/R27 boundaries.
 
-Required next gates are repository CI, marker-image build/static preflight, managed non-mutation verification, and guarded harness preflight. Only after those close PASS may one live R28 measurement be considered.
-
-Do not repeat R27, do not apply H11 yet, and do not broaden kernel tracing.
+The next action is exactly one guarded R28 live measurement using the existing runner and reserved fresh evidence path. Do not broaden tracing and do not apply H11 before R28 closes.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
