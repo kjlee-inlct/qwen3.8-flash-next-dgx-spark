@@ -17,7 +17,12 @@ Read the current closure in this order:
 9. `orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
 10. `orcarouter-r28-unquant-linear-boundary-result-20261005.md`
 11. `orcarouter-r28b-unquant-call-pattern-result-20261005.md`
-12. `orcarouter-r29-global-rm-chunk-cadence-plan-20261005.md`
+12. `orcarouter-r29-global-rm-chunk-cadence-result-20261006.md`
+13. `orcarouter-r29b-layer-chunk-pairing-result-20261006.md`
+14. `orcarouter-r30-pre-w13-800-boundary-result-20261006.md`
+15. `orcarouter-r31-pre800-moe-boundary-result-20261006.md`
+16. `orcarouter-r32-precreate-source-contract-result-20261006.md`
+17. `orcarouter-r23-r32-allocation-localization-closure-20261006.md`
 
 Supporting gate history remains canonical:
 
@@ -38,6 +43,13 @@ Supporting gate history remains canonical:
 - `orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
 - `orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
 - `orcarouter-r28b-unquant-call-pattern-plan-20261005.md`
+- `orcarouter-r29-global-rm-chunk-cadence-plan-20261005.md`
+- `orcarouter-r29b-layer-chunk-pairing-plan-20261006.md`
+- `orcarouter-r30-pre-w13-800-boundary-plan-20261006.md`
+- `orcarouter-r31-pre800-moe-boundary-plan-20261006.md`
+- `orcarouter-r32-precreate-source-contract-plan-20261006.md`
+- `orcarouter-r32-attempt01-static-checker-invalid-20261006.md`
+- `orcarouter-r32-attempt02-static-checker-invalid-20261006.md`
 
 Strict classification policy remains:
 
@@ -247,29 +259,118 @@ Final discriminator:
 
 `R28B_HYPER_CONNECTION_RM_ACTIVITY_SPARSE_ACROSS_CALLS`
 
-This demotes another model-component marker split. The next discriminator should test the entire constructor RM stream for repeated large chunks spanning multiple inherited boundaries.
+This demotes another model-component marker split.
 
-## R29 — global RM chunk cadence
+## R29 / R29b — global repeated-chunk cadence
 
-R29 is **IMPLEMENTED — READ-ONLY POST-HOC ONLY — CI REQUIRED — NO LIVE RUN AUTHORIZED**.
+R29 and R29b are **COMPLETED — READ-ONLY POST-HOC PASS**.
 
-Canonical plan:
+R29 selected-constructor stream:
 
-- `orcarouter-r29-global-rm-chunk-cadence-plan-20261005.md`
+- order-4 request count: `464`;
+- order-4 activity: `76846.375 MiB`;
+- repeated large requests: `400 MiB x48`, `800 MiB x48`, `1214 MiB x2`;
+- 400 MiB median interarrival: `52.194 ms`;
+- 800 MiB median interarrival: `52.182 ms`.
 
-Analyzer:
+R29 strict discriminator:
 
-- `scripts/benchmark/analyze-orcarouter-r29-global-rm-chunk-cadence.py`
+`R29_REPEATED_LARGE_RM_CHUNKS_SPAN_MULTIPLE_CONSTRUCTOR_BOUNDARIES`
 
-R29 uses only preserved R28 evidence and classifies the full selected-constructor order-4 request stream against:
+R29b then proved all 48 ordinal pairs are `800 MiB -> 400 MiB`, all are adjacent in the RM stream, and the median pair delta is `24.925 ms`.
 
-- R26 ModelOpt-MoE intervals;
-- R27 Qwen4Exp layer intervals;
-- R28 unquantized Linear intervals;
-- other constructor regions.
+The original analyzer discriminator name used `PER_DECODER_LAYER`, but the raw output showed non-unique 800-layer marker placement. Canonical semantic correction:
 
-Repeated large requests are discovered from the data (`>=256 MiB`, count >=2) and compared by region, layer type, interarrival timing and intervening request count.
+`R29B_STRICT_800_THEN_400_ADJACENT_ORDINAL_CADENCE_WITH_NONUNIQUE_800_LAYER_PLACEMENT`
 
-No Docker launch, model restart, new image, kprobe mutation, or evidence mutation is authorized. H11 remains deferred.
+## R30 — exact w13 / 400 MiB closure
+
+R30 is **COMPLETED — READ-ONLY POST-HOC PASS**.
+
+The 400 MiB family is closed event-by-event to packed-expert w13 construction:
+
+- selected w13 intervals: `48`;
+- constructor 400 MiB requests: `48`;
+- exactly one 400 MiB request in every w13 interval: `48/48`;
+- no constructor 400 MiB requests outside w13 intervals;
+- `400 MiB * 48 = 19200 MiB`, exactly matching R26 `modelopt_w13.activity_mib`.
+
+All 48 w13-associated 400 MiB events have an immediately preceding 800 MiB RM request. The 800 MiB event occurs before W13 BEGIN by median `8.100208 ms`; W13 BEGIN to 400 is median `16.894804 ms`.
+
+Preceding-800 userspace placement is mixed:
+
+```text
+hyper_connection=32
+self_attn=11
+linear_attn=1
+outside_unquant=4
+```
+
+Final discriminator:
+
+`R30_EXACT_W13_400_WITH_IMMEDIATE_PRECEDING_800_MIXED_USERSPACE_PLACEMENT`
+
+## R31 — 800 MiB precedes ModelOpt-MoE create_weights
+
+R31 is **COMPLETED — READ-ONLY POST-HOC PASS**.
+
+Across all 48 exact R30 pairs:
+
+- 800 before ModelOpt-MoE BEGIN: `48/48`;
+- 800 inside MoE pre-w13: `0`;
+- 800 inside w13: `0`;
+- median 800 -> MoE BEGIN: `8.070243 ms`;
+- median MoE BEGIN -> W13 BEGIN: `0.028849 ms`.
+
+Final discriminator:
+
+`R31_PRE800_STRICTLY_BEFORE_MODELOPT_MOE_BEGIN`
+
+Therefore the 800 MiB family is not the ModelOpt packed w13/w2 allocation body.
+
+## R32 — exact-image pre-create source contract
+
+R32 is **COMPLETED — ATTEMPT03 PASS — STATIC / READ-ONLY**.
+
+Attempt01 and Attempt02 are permanently retained as **STATIC CHECKER INVALID / NO SOURCE-CLOSURE CLAIM**.
+
+Corrected Attempt03 on exact R28 image passed:
+
+```text
+qwen4_decoder_attention_before_mlp=PASS
+qwen4_decoder_hyperconnection_after_mlp=PASS
+sparse_moe_gate_before_factory=PASS
+sparse_moe_gate_call=ReplicatedLinear
+sparse_moe_shared_gate_call=ReplicatedLinear
+sparse_moe_factory_call=FusedMoEFactory
+routed_experts_order_contract=PASS
+factory_pre_routed_direct_tensor_alloc_count=0
+routed_pre_create_direct_tensor_alloc_count=0
+direct_precreate_tensor_alloc_syntax=ABSENT
+```
+
+Final discriminator:
+
+`R32_NO_DIRECT_PRECREATE_WEIGHT_ALLOCATION_SUPPORTS_ALLOCATOR_BACKING_GROWTH`
+
+R32 does not prove helper constructors allocate nothing. It does close the absence of a separate explicit direct pre-create model-weight allocation that could be promoted as the repeated 800 MiB owner.
+
+## R23–R32 engineering closure
+
+Canonical closure:
+
+- `orcarouter-r23-r32-allocation-localization-closure-20261006.md`
+
+Final interpretation:
+
+- the **400 MiB** repeated family is directly localized to packed `w13_weight` construction;
+- the **800 MiB** repeated family is not supported as a distinct model-component weight owner;
+- the best-supported mechanism is a discrete CUDA/NVIDIA RM backing/reservation growth event temporally induced by the repeated decoder-layer construction cycle;
+- this remains a mechanism-level inference, not proof of the exact lower allocator call;
+- RM bytes remain logical allocation activity, not exact resident ownership.
+
+Model-prefix/component localization is now closed. Do not add more model-prefix, Linear, attention, or hyper-connection markers for the 800 MiB ownership question.
+
+R33 is optional and is **not** automatically authorized. A new live allocator-focused discriminator is justified only if an actionable mitigation requires identifying the exact lower-level transition responsible for the 800 MiB request.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
