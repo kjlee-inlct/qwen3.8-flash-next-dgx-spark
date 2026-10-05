@@ -16,7 +16,7 @@ ANALYZER="${SCRIPT_ROOT}/scripts/benchmark/analyze-orcarouter-r25b-init-model-ov
 WAIT_READY="${SCRIPT_ROOT}/scripts/wait-ready.sh"
 IMAGE="${ORCA_R25B_IMAGE:-vllm-orcarouter-v029-r25-init-marker:v1}"
 EXPERIMENT_CONTAINER="${ORCA_R25B_CONTAINER:-qwen38-hybrid-r25b-init-marker}"
-OUT="${ORCA_R25B_OUT:-/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005}"
+OUT="${ORCA_R25B_OUT:-/tmp/orcarouter-hybrid-r25b-init-model-boundary-02-20261005}"
 PRESERVED_R24="${ORCA_R25B_PRESERVED_R24:-/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004}"
 TMP_HARNESS=""
 
@@ -33,9 +33,10 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in bash python3 docker systemctl curl mktemp grep; do
+for command in bash python3 docker systemctl curl mktemp grep sudo; do
     command -v "${command}" >/dev/null 2>&1 || fail "required command not found: ${command}"
 done
+sudo -n true >/dev/null 2>&1 || fail "sudo timestamp unavailable; run sudo -v first"
 
 [[ -r "${R24_HARNESS}" ]] || fail "R24 harness missing: ${R24_HARNESS}"
 [[ -r "${IMAGE_CHECK}" ]] || fail "R25b image checker missing: ${IMAGE_CHECK}"
@@ -49,6 +50,18 @@ done
 if docker inspect "${EXPERIMENT_CONTAINER}" >/dev/null 2>&1; then
     fail "R25b experiment container already exists: ${EXPERIMENT_CONTAINER}"
 fi
+
+TRACEFS="/sys/kernel/tracing"
+if [[ ! -e "${TRACEFS}/kprobe_events" ]]; then
+    TRACEFS="/sys/kernel/debug/tracing"
+fi
+[[ -e "${TRACEFS}/kprobe_events" ]] || fail "kprobe_events unavailable"
+for stale_group in r24_rm r25b_rm; do
+    if sudo -n test -d "${TRACEFS}/events/${stale_group}"; then
+        fail "stale kprobe group present: ${stale_group}; clean failed-attempt probe state before retry"
+    fi
+done
+printf 'stale_probe_groups=NONE\n'
 
 ORCA_R25B_IMAGE="${IMAGE}" bash "${IMAGE_CHECK}"
 
