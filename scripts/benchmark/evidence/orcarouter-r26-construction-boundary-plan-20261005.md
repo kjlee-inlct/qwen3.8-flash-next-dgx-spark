@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED — STATIC IMAGE BUILD/PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**
+**IMPLEMENTED — CI GREEN — STATIC IMAGE BUILD/PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**
 
 R25b is closed as **VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**. In the valid attempt-02 run, the 64 KiB direct NVIDIA RM order-4 episode was `77,405.938 MiB`; `76,846.250 MiB` (`99.276945%`) fell inside the first `initialize_model()` interval, `559.688 MiB` occurred before that interval, and `0.000 MiB` occurred after it. The strict discriminator was `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL` because the small precursor began about `0.418 s` before the marker.
 
@@ -34,9 +34,9 @@ That method creates the large routed-expert `w13_weight` and `w2_weight` `ModelW
 
 New repository files:
 
-- `scripts/patch-v029-r26-construction-markers.py`
-- `scripts/Dockerfile.v029-r26-construction-markers`
-- `scripts/benchmark/check-orcarouter-r26-construction-image.sh`
+- `scripts/patch-v029-r26-construction-markers.py`;
+- `scripts/Dockerfile.v029-r26-construction-markers`;
+- `scripts/benchmark/check-orcarouter-r26-construction-image.sh`.
 
 Planned image tag:
 
@@ -76,7 +76,7 @@ Static preflight must report no model restart, no managed-service mutation, and 
 
 New analyzer:
 
-- `scripts/benchmark/analyze-orcarouter-r26-construction-overlap.py`
+- `scripts/benchmark/analyze-orcarouter-r26-construction-overlap.py`.
 
 It reuses the established wall-clock to monotonic mapping from candidate-request / trace-start / trace-end anchors and consumes only:
 
@@ -100,10 +100,10 @@ It selects the top-level model-constructor interval containing the most 64 KiB R
 
 The `90%` threshold is an explicit analysis discriminator only; it is not a memory-safety acceptance threshold. Possible labels are:
 
-- `RM_ORDER4_PRIMARY_IN_MODELOPT_MOE_CREATE_WEIGHTS`
-- `RM_ORDER4_PRIMARY_IN_MODEL_CONSTRUCTOR_OUTSIDE_MODELOPT_MOE`
-- `RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`
-- `RM_ORDER4_NOT_LOCALIZED_TO_SELECTED_MODEL_CONSTRUCTOR`
+- `RM_ORDER4_PRIMARY_IN_MODELOPT_MOE_CREATE_WEIGHTS`;
+- `RM_ORDER4_PRIMARY_IN_MODEL_CONSTRUCTOR_OUTSIDE_MODELOPT_MOE`;
+- `RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`;
+- `RM_ORDER4_NOT_LOCALIZED_TO_SELECTED_MODEL_CONSTRUCTOR`.
 
 RM requested bytes remain activity volume, not exact resident ownership. Marker overlap remains temporal localization, not causal proof.
 
@@ -111,7 +111,7 @@ RM requested bytes remain activity volume, not exact resident ownership. Marker 
 
 New runner:
 
-- `scripts/benchmark/run-orcarouter-r26-construction-boundary.sh`
+- `scripts/benchmark/run-orcarouter-r26-construction-boundary.sh`.
 
 It reuses the validated historical R24 matched-control harness through an ephemeral copy; the historical R24 script is not edited. The ephemeral transform changes:
 
@@ -120,7 +120,7 @@ It reuses the validated historical R24 matched-control harness through an epheme
 3. kprobe group variable → `r26_rm`;
 4. all exactly four hard-coded `r24_rm/...` probe definitions → `r26_rm/...`.
 
-The transform requires exactly four probe-definition replacements and rejects any remaining `r24_rm/` definition.
+The transform requires exactly four probe-definition replacements and rejects any remaining `r24_rm/` definition. A dedicated regression test extracts and executes this exact embedded transform against the canonical R24 harness and requires four `r26_rm/` definitions with no `r24_rm/` leakage.
 
 Default evidence path:
 
@@ -132,9 +132,9 @@ Preserved historical R24 evidence remains:
 
 The runner blocks if any of these stale probe groups exists:
 
-- `r24_rm`
-- `r25b_rm`
-- `r26_rm`
+- `r24_rm`;
+- `r25b_rm`;
+- `r26_rm`.
 
 The runner defaults to `--preflight`. A live run additionally requires both explicit `run` mode and `ORCA_R26_LIVE_ACK=YES`.
 
@@ -164,14 +164,21 @@ Keep the R25b `559.688 MiB` precursor separate; R26 is designed to localize the 
 
 Regression coverage:
 
-- `tests/test_orcarouter_r26_construction_markers.py`
-- `tests/test_orcarouter_r26_construction_overlap.py`
+- `tests/test_orcarouter_r26_construction_markers.py`;
+- `tests/test_orcarouter_r26_construction_overlap.py`;
+- `tests/test_orcarouter_r26_runner_transform.py`.
 
-The marker-patch test applies the real patch script to synthetic v0.29-shaped sources and validates AST plus marker ordering/counts. The analyzer test uses synthetic evidence with 90% of RM activity inside one ModelOpt-MoE call and requires the ModelOpt-MoE-primary discriminator.
+The marker-patch test applies the real patch script to synthetic v0.29-shaped sources and validates AST plus marker ordering/counts. The analyzer test uses synthetic evidence with 90% of RM activity inside one ModelOpt-MoE call and requires the ModelOpt-MoE-primary discriminator. The runner-transform test extracts and executes the exact embedded R24→R26 harness transform.
+
+## Validation
+
+Repository implementation and regression tests are green through branch head `e90f0e71fe1152a3c476efa34ac6ee72b7e21c90`.
+
+CI #1092 is **SUCCESS**: shell syntax, ShellCheck, Python compile, full unit tests including all R26 marker/analyzer/runner-transform coverage, and whitespace all PASS.
 
 ## Gate sequence
 
-1. repository CI green;
+1. repository CI green — **CLOSED / PASS**;
 2. build `vllm-orcarouter-v029-r26-construction-marker:v1` from the current branch;
 3. run static R26 image preflight only;
 4. verify managed runtime container ID and `StartedAt` unchanged across build/preflight;
