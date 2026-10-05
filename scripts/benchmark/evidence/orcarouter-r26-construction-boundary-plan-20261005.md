@@ -172,9 +172,9 @@ The marker-patch test applies the real patch script to synthetic v0.29-shaped so
 
 ## Validation
 
-Repository implementation and regression tests are green through branch head `e90f0e71fe1152a3c476efa34ac6ee72b7e21c90`.
+Repository implementation and regression tests are green through branch head `ee2110ea3364f65d499ad13b88858ce1514121f9`.
 
-CI #1092 is **SUCCESS**: shell syntax, ShellCheck, Python compile, full unit tests including all R26 marker/analyzer/runner-transform coverage, and whitespace all PASS.
+CI #1093 is **SUCCESS**: shell syntax, ShellCheck, Python compile, full unit tests including all R26 marker/analyzer/runner-transform coverage, and whitespace all PASS.
 
 ## Gate sequence
 
