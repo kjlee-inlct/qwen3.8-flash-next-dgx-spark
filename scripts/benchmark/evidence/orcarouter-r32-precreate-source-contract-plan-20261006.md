@@ -1,6 +1,15 @@
 # R32 — exact-image pre-create source contract
 
-Status: **IMPLEMENTED — CI REQUIRED — STATIC/READ-ONLY ONLY**
+Status: **COMPLETED — ATTEMPT03 PASS — STATIC / READ-ONLY — NO RUNTIME CAUSAL CLAIM**
+
+Canonical result:
+
+- `orcarouter-r32-precreate-source-contract-result-20261006.md`
+
+Invalid checker attempts remain preserved separately:
+
+- `orcarouter-r32-attempt01-static-checker-invalid-20261006.md`
+- `orcarouter-r32-attempt02-static-checker-invalid-20261006.md`
 
 ## Question
 
@@ -19,20 +28,30 @@ Inside the already validated R28 diagnostic image:
 
 The inspector verifies constructor order and counts direct calls such as `torch.empty`, `torch.zeros`, `torch.ones`, `torch.full`, and `Parameter` before `RoutedExperts.quant_method.create_weights()`.
 
-## Expected source contract
+## Completed source contract
+
+Attempt03 on exact R28 image `sha256:54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f` passed:
 
 - attention constructors precede `self.mlp = Qwen4ExpSparseMoeBlock(...)`;
 - hyper-connection constructors follow MLP construction;
-- Sparse-MoE gate/shared-gate setup precedes `FusedMoEFactory(...)`;
+- installed Sparse-MoE gate is `ReplicatedLinear` at line 170;
+- installed shared-expert gate is `ReplicatedLinear` at line 178;
+- `FusedMoEFactory(...)` follows at line 215;
 - RoutedExperts resolves quant method and rounds sizes before calling `quant_method.create_weights()`;
-- no direct large model-tensor allocation syntax appears in FusedMoEFactory before RoutedExperts creation or in RoutedExperts before quant-method `create_weights()`.
+- direct allocation syntax before RoutedExperts construction: `0`;
+- direct allocation syntax in RoutedExperts before quant-method `create_weights()`: `0`;
+- `direct_precreate_tensor_alloc_syntax=ABSENT`.
 
-## Interpretation rule
-
-If the exact-image contract passes, it does **not** prove that helper constructors allocate nothing. It does show that there is no separate explicit pre-create weight allocation matching the repeated 800 MiB family. Combined with R28b/R29/R30/R31, this is sufficient to stop assigning the 800 MiB pulse to whichever userspace prefix temporally overlaps it and to prioritize allocator/backing-growth semantics.
-
-Expected discriminator:
+Final discriminator:
 
 `R32_NO_DIRECT_PRECREATE_WEIGHT_ALLOCATION_SUPPORTS_ALLOCATOR_BACKING_GROWTH`
 
-No live run, model restart, GPU model launch, kprobe modification, or behavior-changing experiment is authorized by this plan. H11 remains deferred.
+## Interpretation rule
+
+R32 does **not** prove that helper constructors allocate nothing. It shows that there is no separate explicit pre-create weight allocation matching the repeated 800 MiB family. Combined with R28b/R29/R30/R31, this closes model-prefix/component ownership localization for the 800 MiB family and prioritizes allocator/backing-growth semantics.
+
+The 400 MiB family remains directly localized to packed w13 construction. The 800 MiB family is best treated as a discrete CUDA/NVIDIA RM backing/reservation growth event temporally induced by the repeated decoder-layer construction cycle, not as a distinct explicit model-weight owner.
+
+No additional model-prefix markers are justified. A new live R33 is not automatically authorized; it is only justified if a mitigation decision requires identifying the exact lower-level allocator transition.
+
+H11 remains deferred. PR #244 remains open/unmerged.
