@@ -141,11 +141,21 @@ Therefore H6 should not be promoted as a host-stability mitigation and there is 
 
 This result also argues against further broad ownership/UVM tracing: R24 independently reproduces the same direct RM mechanism under the H6 path.
 
-## Managed-service restoration note
+## Managed-service restoration closure
 
-At script completion, the cleanup path had restarted the managed service and `systemctl is-active qwen38-flash-next.service` returned `active`. The immediately following `/health` request returned `curl: (56) Recv failure: 상대편이 연결을 끊음`.
+At script completion, cleanup restarted the managed service and `systemctl is-active qwen38-flash-next.service` returned `active`, but the immediately following `/health` request disconnected before restored API READY had been proven.
 
-The runner cleanup starts the managed service but does not wait for the restored managed runtime to reach API READY. Therefore the pasted console proves that restart was issued and the unit became active, but does **not** by itself prove post-experiment API readiness. This is a restoration follow-up item, not a validity defect in the completed H6 candidate measurement.
+A later explicit restoration check on 2026-10-05 closes that follow-up:
+
+- `qwen38-flash-next.service` remained `active (running)` from `2026-10-05 00:31:27 KST` and had been running for approximately 10 hours at verification time;
+- the service log records `health-ready`, `model-list-validated`, `Runtime transition committed`, `runtime-attestation-written`, and `Qwen API is ready` at `2026-10-05 00:45:28 KST` (`elapsed=841s`);
+- `scripts/wait-ready.sh --container qwen38-flash-next` returned `READY after 0s`;
+- `/health` succeeded;
+- `/v1/models` returned the exact restored served identity `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` with `max_model_len=262144`.
+
+Therefore **managed-service restoration is CLOSED / PASS**. The immediate post-run health disconnect was only the normal startup interval after cleanup restarted the managed runtime; it is not an unresolved recovery defect and does not affect the R24 candidate classification.
+
+The later unprivileged `journalctl -k` invocation printed the standard permission warning that the user could not see all system/kernel messages. Its empty filtered output is therefore **not** treated as proof that no later RM messages existed. This does not alter R24 because the measured candidate kernel window already contains the strict RM OOM used for classification.
 
 ## Next engineering direction
 
@@ -155,6 +165,6 @@ The next discriminator should target a variable capable of changing the *source 
 
 In particular, R24 shows that changing the H6 ModelOpt W4A16 loader/config representation alone is insufficient. Any R25 candidate should be justified by an explicit mechanism for reducing/eliminating the RM 64 KiB system-memory allocation episode, not only by a different checkpoint label or quantization metadata.
 
-Before the next live experiment, verify that the restored managed runtime has returned to API READY and preserve that confirmation.
+A high-information R25 direction is to test the model weight/materialization path directly. The current v0.29 serving path uses `--load-format safetensors`, and the observed 64 KiB RM activity (`77,405.938 MiB`) is numerically close to the runtime's documented approximately `77.5 GiB` weights + non-torch + activation + graph footprint. This similarity is a hypothesis generator, not causal proof. R25 should therefore align the smallest practical userspace weight-load/materialization boundary with the already-closed `nv_alloc_pages` / `nv_alloc_system_pages` episode before attempting another checkpoint/config-only mitigation.
 
 PR #244 remains intentionally open. No merge is implied by this result.
