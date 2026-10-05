@@ -147,10 +147,10 @@ H11 is potentially relevant only after initialization is implicated because it c
 
 ## Validation
 
-Validated implementation head before this documentation-only status stamp:
+Current branch head before this documentation-only CI-success stamp:
 
-- `999a3176c7eb540c73527c9956f351a6795dd947`
-- CI #1065: **SUCCESS**
+- `29ec13358eb9401040a88c767998a2869ce19203`
+- CI #1066: **SUCCESS**
 - shell syntax: PASS
 - ShellCheck: PASS
 - Python compile: PASS
