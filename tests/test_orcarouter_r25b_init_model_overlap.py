@@ -1,0 +1,50 @@
+import pathlib
+import subprocess
+import sys
+import tempfile
+import unittest
+
+
+REPO = pathlib.Path(__file__).resolve().parents[1]
+ANALYZER = REPO / "scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py"
+
+
+class R25bInitModelOverlapTest(unittest.TestCase):
+    def test_order4_activity_inside_initialize_model(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            anchors = [
+                ("candidate-request-iso.txt", "candidate-request-monotonic-ns.txt", "1970-01-01T00:16:40+00:00", "2000000000000"),
+                ("trace-window-start-iso.txt", "trace-window-start-monotonic-ns.txt", "1970-01-01T00:16:40.100000+00:00", "2000100000000"),
+                ("trace-window-end-iso.txt", "trace-window-end-monotonic-ns.txt", "1970-01-01T00:16:40.200000+00:00", "2000200000000"),
+            ]
+            for iso_name, mono_name, iso_value, mono_value in anchors:
+                (root / iso_name).write_text(iso_value + "\n", encoding="utf-8")
+                (root / mono_name).write_text(mono_value + "\n", encoding="utf-8")
+
+            (root / "host-page-size.txt").write_text("4096\n", encoding="utf-8")
+            (root / "candidate-container.log").write_text(
+                "1970-01-01T00:16:41.000000Z worker QWEN38_R25_INIT_MODEL_BEGIN\n"
+                "1970-01-01T00:16:41.500000Z worker QWEN38_R25_INIT_MODEL_END\n",
+                encoding="utf-8",
+            )
+            (root / "rm-trace.txt").write_text(
+                " worker-1 [000] 2001.100000: nv_alloc_pages_entry: page_count=256 page_size=65536 contiguous=0\n"
+                " worker-1 [000] 2001.300000: nv_alloc_pages_entry: page_count=256 page_size=65536 contiguous=0\n",
+                encoding="utf-8",
+            )
+
+            proc = subprocess.run(
+                [sys.executable, str(ANALYZER), str(root)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            self.assertIn("init_model_discriminator=RM_ORDER4_WITHIN_INITIALIZE_MODEL", proc.stdout)
+            self.assertIn("rm_order4.total_activity_mib=2.000", proc.stdout)
+            self.assertIn("rm_order4.inside_init_activity_mib=2.000", proc.stdout)
+            self.assertIn("rm_order4.inside_init_pct=100.000000", proc.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()
