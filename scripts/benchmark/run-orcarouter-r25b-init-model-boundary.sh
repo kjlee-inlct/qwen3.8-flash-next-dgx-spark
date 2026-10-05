@@ -38,9 +38,9 @@ for command in bash python3 docker systemctl curl mktemp grep; do
 done
 
 [[ -r "${R24_HARNESS}" ]] || fail "R24 harness missing: ${R24_HARNESS}"
-[[ -x "${IMAGE_CHECK}" ]] || fail "R25b image checker missing: ${IMAGE_CHECK}"
+[[ -r "${IMAGE_CHECK}" ]] || fail "R25b image checker missing: ${IMAGE_CHECK}"
 [[ -r "${ANALYZER}" ]] || fail "R25b analyzer missing: ${ANALYZER}"
-[[ -x "${WAIT_READY}" ]] || fail "readiness waiter missing: ${WAIT_READY}"
+[[ -r "${WAIT_READY}" ]] || fail "readiness waiter missing: ${WAIT_READY}"
 [[ -d "${PRESERVED_R24}" ]] || fail "preserved R24 evidence missing: ${PRESERVED_R24}"
 [[ "${OUT}" != "${PRESERVED_R24}" ]] || fail "R25b output must not reuse preserved R24 evidence"
 [[ "${EXPERIMENT_CONTAINER}" != qwen38-hybrid-r24-kv16 ]] || fail "R25b must not reuse the R24 experiment container"
@@ -137,7 +137,7 @@ fi
 RESTORE_RC=125
 if [[ -d "${OUT}" ]]; then
     set +e
-    "${WAIT_READY}" --container qwen38-flash-next --timeout 1800 --interval 10 \
+    bash "${WAIT_READY}" --container qwen38-flash-next --timeout 1800 --interval 10 \
         >"${OUT}/managed-restore-wait-ready.log" 2>&1
     RESTORE_RC=$?
     set -e
