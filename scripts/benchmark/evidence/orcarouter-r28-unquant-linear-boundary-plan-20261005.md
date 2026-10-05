@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED IN REPOSITORY — CI / STATIC IMAGE / HARNESS PREFLIGHT REQUIRED — NO LIVE RUN AUTHORIZED YET**
+**IMPLEMENTED IN REPOSITORY — CI PASS — STATIC IMAGE / HARNESS PREFLIGHT REQUIRED — NO LIVE RUN AUTHORIZED YET**
 
 Canonical predecessors:
 
@@ -14,6 +14,8 @@ R27 is closed as:
 **VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL — `RM_ORDER4_R26_RESIDUAL_MIXED_WITHIN_QWEN4_LAYERS`**
 
 The follow-up read-only routing inspection is also closed PASS and explains why R27 observed zero `ModelOptNvFp4W4A16LinearMethod.create_weights()` calls: the relevant Qwen4Exp attention families are excluded from ModelOpt quantization and route through unquantized Linear construction, with an additional explicit QSA qkv opt-out.
+
+Repository CI #1141 passed shell syntax, ShellCheck, Python compile, full unit tests including the R28 marker/analyzer regressions, and whitespace checks on implementation head `496eaadb9fc56e268bcfcb080be6a45879709ba4`.
 
 ## Objective
 
@@ -158,7 +160,7 @@ RM logical requested bytes remain allocation activity volume, not exact resident
 
 ## Gate sequence
 
-1. repository CI — required;
+1. repository CI — **PASS**;
 2. build R28 marker-only image — required;
 3. static R28 image preflight — required;
 4. verify managed container ID / StartedAt unchanged across static work — required;
