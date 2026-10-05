@@ -4,35 +4,31 @@ This directory preserves canonical evidence for live DGX Spark runtime, profile-
 
 ## Current host-stability / RM allocator closure
 
-Start with the R9–R22 allocator closure, then the R23 ownership closure and R24 mitigation result:
+Start with the R9–R22 allocator closure, then R23 ownership, R24 mitigation, and R25/R25b userspace localization:
 
 - `orcarouter-managed-rmsys-r9-r22-allocator-closure-20261004.md`
 - `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
 - `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
 - `orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
+- `orcarouter-r25-load-phase-localization-result-20261005.md`
+- `orcarouter-r25b-init-model-boundary-plan-20261005.md`
+- `orcarouter-r25b-init-model-image-preflight-result-20261005.md`
 
-R21 and R22 first established a common early physical-page allocation burst of about 75 GiB over roughly five seconds, ultimately leaving an approximately 89.5–90.0 GiB physical-page residual not explained by the selected conventional Linux resident accounting. Nearly the entire free-page loss occurs in node0 Normal while managed capacity remains unchanged.
+R21/R22 established a common early physical-page burst of about 75 GiB over roughly five seconds. R23 closes the observed driver-level ownership endpoint to direct NVIDIA RM system-memory allocation (`nv_alloc_pages` / `nv_alloc_system_pages`) rather than the selected UVM allocation boundaries. In the independently selected R23 five-second window, 64 KiB RM activity is `74,537.938 MiB` versus `75,083.652 MiB` unexplained-residual growth (`99.273191%`), while selected UVM coverage is `0.000000%`.
 
-R23 directly aligns that common burst with NVIDIA RM system-memory activity. The valid narrow trace recorded `75,077.375 MiB` of full-window 64 KiB-path `nv_alloc_pages` logical activity while the independently reconstructed largest five-second unexplained residual increased by `75,083.652 MiB`.
+R24 tested H6 ModelOpt W4A16 under R22-matched 16 GiB runtime controls. It did not mitigate the mechanism: largest five-second residual `77,937.680 MiB`, R22 ratio `103.725991%`, same-window RM activity `77,405.938 MiB`, and one strict RM OOM. Classification remains **FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**.
 
-The subsequent read-only overlap analysis closes the same-window correlation more precisely:
+R25 then localized that R24 RM activity with preserved evidence only. The RM order-4 episode lasts about `3.217673 s`, while checkpoint filling continues for `522.10 s`; `99.276945%` of traced RM activity lies between the coarse model-start and weight-load-completion markers. The first approximately `559.688 MiB` starts about `0.395 s` before the old model-start log, making the exact `initialize_model()` boundary the next highest-information discriminator.
 
-- five-second residual growth: `75,083.652 MiB`;
-- 64 KiB/order-4-path `nv_alloc_pages` activity inside that same five-second window: `74,537.938 MiB`;
-- RM activity / residual ratio: **`99.273191%`**;
-- `uvm_mem_alloc` coverage of burst-window RM activity: **`0.000000%`**;
-- `uvm_mem_alloc` coverage of `nv_alloc_system_pages` calls: **`0.000000%`**;
-- selected UVM PMA/DMA/PMM allocators: silent.
+R25b therefore adds only two INFO markers around vLLM v0.29 `initialize_model(...)`. The marker-only diagnostic image was built and passed its static contract check. The managed container id and `StartedAt` were identical before and after that build/static preflight, so no managed restart occurred.
 
-Therefore the common early burst is closed to the **observed direct NVIDIA RM system-memory allocation path** (`nv_alloc_pages` / `nv_alloc_system_pages`) rather than any selected UVM allocation boundary. This remains a driver-level ownership endpoint, not proof that cumulative request bytes equal exact resident ownership and not yet identification of the original userspace CUDA/vLLM caller.
-
-R24 then tested the H6 ModelOpt W4A16 Hybrid representation under R22-matched 16 GiB runtime controls. It did **not** mitigate the mechanism: the candidate largest five-second residual was `+77937.680 MiB` (`103.725991%` of R22), the same window contained `77405.938 MiB` of observed 64 KiB RM activity, and one later strict RM OOM remained. R24 is therefore **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**.
-
-Legacy PLE CPU-offload remains a separate pressure amplifier: it adds roughly 100 GiB of later swap/residency churn, but R22 shows that removing that path with mmap does not remove the common early burst or the strict RM OOM.
+R25b now has a gated live runner and a focused overlap analyzer. The next action is **R25b live-harness preflight only**. The runner defaults to preflight and a live run requires explicit `run` plus `ORCA_R25B_LIVE_ACK=YES`. Preserved R24 evidence/container names are explicitly forbidden for reuse.
 
 Strict classification policy remains:
 
 > Any confirmed `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` in a valid measured run is HOST-STABILITY FAIL even if fallback recovers and the runtime reaches READY.
+
+RM logical requested bytes remain activity volume rather than exact resident ownership. Userspace marker alignment is temporal localization rather than causal proof.
 
 ## Lower-level allocator mechanism
 
@@ -58,109 +54,67 @@ R11 is the canonical exact zone/migratetype closure: node0 Normal-zone Unmovable
 
 These runs collectively reject broad watermark/compaction/full-stop/static-high-order-state explanations as deterministic production fixes.
 
-## R21 page-cache / startup-collapse evidence
+## R21 / R22 startup-collapse evidence
 
 - `orcarouter-managed-rmsys-r21-pagecache-reclaim-plan-20261004.md`
 - `orcarouter-managed-rmsys-r21-pagecache-reclaim-result-20261004.md`
 - `orcarouter-managed-rmsys-r21-collapse-onset-20261004.md`
-
-R21 is `VALID_RM_OOM`: page-cache reclaim and post-stop compaction materially improve pre-start state and avoid the R20 protection boundary, but do not eliminate strict RM fallback.
-
-## R22 mmap discriminator and cross-run closure
-
 - `orcarouter-managed-rmsys-r22-v029-mmap-plan-20261004.md`
 - `orcarouter-managed-rmsys-r22-v029-mmap-result-20261004.md`
 - `orcarouter-managed-rmsys-r21-r22-mmap-comparison-20261004.md`
 - `orcarouter-managed-rmsys-r21-r22-unaccounted-trajectory-20261004.md`
 
-R22 is also `VALID_RM_OOM`. mmap materially reduces sustained swap pressure and slows later high-order depletion, but it does not remove the initial catastrophic high-order collapse or strict RM failure.
+Both R21 and R22 are `VALID_RM_OOM`. mmap materially reduces later PLE swap/residency pressure but does not remove the common early burst or strict RM failure.
 
-The cross-run trajectory remains the common-path baseline:
-
-- R21 largest 5 s unexplained-residual increase: `+75174.387 MiB`;
-- R22 largest 5 s unexplained-residual increase: `+75138.043 MiB`.
-
-## R23 early-burst ownership trace
+## R23 ownership closure
 
 - `orcarouter-managed-rmsys-r23-early-burst-ownership-plan-20261004.md`
 - `orcarouter-managed-rmsys-r23-probe-preflight-result-20261004.md`
 - `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
 - `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
 
-R23 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL**. The live managed restart completed successfully and remained healthy, but four later `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` events were recorded, so strict host stability fails.
+R23 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL**. The narrow trace captured 668 successful `nv_alloc_pages` calls and 599 successful `nv_alloc_system_pages` calls. Selected UVM PMA/DMA/PMM boundaries were silent, and the two observed `uvm_mem_alloc` calls wrapped zero RM calls.
 
-The narrow trace itself was valid: it started `20.020147 s` after the replacement request (`19.103315 s` after container `StartedAt`) and ran for `53.415677 s`. It captured 668 successful `nv_alloc_pages` calls and 599 successful `nv_alloc_system_pages` calls. Selected UVM PMA, DMA, and PMM boundaries were silent. `uvm_mem_alloc` executed exactly twice.
-
-The read-only post-hoc analyzer then showed both `uvm_mem_alloc` calls were sub-millisecond and contained **zero** observed `nv_alloc_pages` and **zero** `nv_alloc_system_pages` calls. Their coverage of both total and burst-window 64 KiB RM activity is `0.000000%`.
-
-By contrast, the independently selected five-second physical residual window contains `74,537.938 MiB` of 64 KiB RM activity, equal to `99.273191%` of its `75,083.652 MiB` residual growth.
-
-This closes the remaining selected-UVM ambiguity: `uvm_mem_alloc` is adjacent/incidental startup activity rather than an observed wrapper around the common RM burst.
-
-Repository implementation includes:
-
-- `scripts/benchmark/check-orcarouter-r23-ownership-probes.sh` — probe-only validation;
-- `scripts/benchmark/run-orcarouter-managed-rmsys-r23-early-burst-ownership.sh` — managed narrow ownership trace;
-- `scripts/benchmark/analyze-orcarouter-r23-ownership.py` — ownership/allocator analysis;
-- `scripts/benchmark/analyze-orcarouter-r23-rm-uvm-overlap.py` — read-only same-PID nesting and burst-window RM/UVM correlation;
-- `tests/test_orcarouter_r23_ownership_trace.py` and `tests/test_orcarouter_r23_rm_uvm_overlap.py` — focused regression contracts.
-
-## R24 H6 16 GiB RM mitigation discriminator
+## R24 H6 16 GiB discriminator
 
 - `orcarouter-hybrid-r24-kv16-rm-mitigation-plan-20261004.md`
 - `orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
 
-R24 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**. It moved from ownership discovery to mitigation discrimination and used R22 as the matched control.
+R24 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**. Managed restoration was later verified healthy and is closed PASS.
 
-The candidate was the generated H6 ModelOpt W4A16 Hybrid checkpoint with the managed-profile `24 GiB` KV default deliberately overridden to the R22-matched `16 GiB` value (`17179869184` bytes). This kept the v0.29 PLE-mmap/exact-QSA runtime line and key runtime controls matched while changing the H6 checkpoint/loader representation rather than also changing KV allocation.
-
-The run was valid: candidate start, collector, trace, trace report, analyzer, readiness, and candidate identity all passed. The candidate reached API READY with `functional_class=PASS`, but one strict RM OOM produced `host_stability_class=FAIL`.
-
-The mitigation discriminator is decisive:
-
-- R22 largest 5 s residual baseline: `75138.043 MiB`;
-- H6 largest 5 s residual: `77937.680 MiB`;
-- candidate/R22 ratio: `103.725991%`;
-- operational band: `BURST_UNCHANGED`;
-- 64 KiB RM activity inside the same H6 burst: `77405.938 MiB` across `526` calls;
-- node0 Normal free delta over the burst: `-78832.938 MiB`;
-- strict RM OOM count: `1`;
-- discriminator: `H6_NO_RM_MITIGATION_HOST_FAIL`.
-
-All observed H6 64 KiB RM activity was inside the independently selected five-second burst, and the narrow trace fully covered that window. H6 therefore reproduces the same already-closed direct RM system-memory mechanism rather than avoiding it.
-
-Repository implementation includes:
-
-- `scripts/benchmark/run-orcarouter-hybrid-r24-kv16-rm-mitigation.sh` — `--preflight` plus live H6/R22-matched discriminator;
-- `scripts/benchmark/analyze-orcarouter-hybrid-r24-rm-mitigation.py` — residual/RM/high-order comparison against R22;
-- `tests/test_orcarouter_hybrid_r24_rm_mitigation.py` — fixed-control, identity, trace-scope, restoration, and classification contracts.
-
-The immediate post-run `/health` disconnect is now closed as a normal restoration interval. Follow-up verification showed the managed service remained active, committed and attested its runtime transition at `2026-10-05 00:45:28 KST`, `scripts/wait-ready.sh` returned `READY after 0s`, `/health` succeeded, and `/v1/models` returned the exact OrcaRouter served identity. Managed restoration is therefore **CLOSED / PASS**.
-
-The later unprivileged `journalctl -k` output is not used to claim absence of later RM messages because it printed the system-journal permission warning.
-
-## R25 userspace load-phase localization
+## R25 load-phase localization
 
 - `orcarouter-r25-load-phase-localization-plan-20261005.md`
+- `orcarouter-r25-load-phase-localization-result-20261005.md`
 
-R25 begins with a **read-only post-hoc** analysis of the preserved R24 evidence rather than another live model restart. The purpose is to place the closed 64 KiB RM episode relative to coarse vLLM userspace phases: model start, weight loading, post-load/model finalization, and CUDA graph capture.
+R25 is a completed read-only post-hoc localization. It does not itself prove the userspace cause, but it excludes post-load/CUDA-graph timing as the primary location of the short common RM episode and prioritizes exact early model construction boundaries.
 
-The analyzer uses only timestamped `candidate-container.log`, the three preserved wall-clock/monotonic anchor pairs, `rm-trace.txt`, `r24-analysis.txt`, and host page size. It does not alter the model, service, Docker state, VM settings, tracepoints, or kernel state.
+Repository implementation:
 
-Repository implementation includes:
+- `scripts/benchmark/analyze-orcarouter-r24-load-phase.py`
+- `tests/test_orcarouter_r24_load_phase.py`
 
-- `scripts/benchmark/analyze-orcarouter-r24-load-phase.py` — wall/monotonic alignment and RM/load-phase overlap analysis;
-- `tests/test_orcarouter_r24_load_phase.py` — weight-phase localization and missing-marker regression coverage.
+## R25b initialize_model boundary discriminator
 
-The analysis explicitly keeps `nv_alloc_pages` bytes as activity volume rather than resident ownership and treats phase alignment as temporal correlation rather than causal proof.
+- `orcarouter-r25b-init-model-boundary-plan-20261005.md`
+- `orcarouter-r25b-init-model-image-preflight-result-20261005.md`
 
-Existing H11/H12 compressed-tensors loader controls are potentially useful only after this localization: H11 changes packed expert weights to `ModelWeightParameter`, while H12 preserves those objects across post-load rename. They should not be selected for another live run unless the post-hoc phase result points to the corresponding load/post-load boundary.
+Static image preflight is PASS. Repository implementation:
+
+- `scripts/patch-v029-r25-init-model-markers.py`
+- `scripts/Dockerfile.v029-r25-init-model-markers`
+- `scripts/benchmark/check-orcarouter-r25b-init-model-image.sh`
+- `scripts/benchmark/run-orcarouter-r25b-init-model-boundary.sh`
+- `scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py`
+- `tests/test_orcarouter_r25b_init_model_overlap.py`
+
+The next gate is live-harness **preflight only**. Do not start live R25b unless `R25B_LIVE_PREFLIGHT=PASS` is observed.
 
 ## Current next engineering direction
 
 Do not repeat H6 merely to seek a different outcome, and do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, function-graph, UVM, or all-driver tracing.
 
-Run the read-only R25 load-phase localization first. If the full 64 KiB RM episode lies within model-start → weight-load completion, the next live instrumentation should target the smallest practical weight allocation/loading boundary. If it begins after weight-load completion, target post-load conversion/materialization instead. If the preserved log lacks a decisive marker, add only the smallest missing userspace marker rather than broadening trace scope.
+Run only the gated R25b preflight next. If the later measured run places nearly all 64 KiB RM activity inside `initialize_model()`, the next discriminator should target construction/materialization shape. If activity materially starts after `INIT_MODEL_END`, instrument the smallest weight-loader boundary instead. H11 becomes relevant only if initialization/parameter construction is implicated; H12 remains lower priority for this host-stability question.
 
 Conditioning and mmap remain measurement controls/discriminators, not accepted production mitigations.
 
