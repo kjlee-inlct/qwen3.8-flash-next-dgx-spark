@@ -109,15 +109,27 @@ def find_assignment_call_lineno(func: ast.AST, target_name: str, call_suffix: st
     return rows[0]
 
 
-def find_self_assignment_call_lineno(
-    func: ast.AST, target_attr: str, call_suffix: str
-) -> int:
-    """Locate one ``self.<attr> = <call>`` inside the supplied function only."""
-    rows: list[int] = []
+def find_self_assignment_call(
+    func: ast.AST, target_attr: str
+) -> tuple[int, str]:
+    """Return line/call name for one ``self.<attr> = <call>`` in func.
+
+    R32 is an ordering contract. It intentionally does not hard-code the exact
+    implementation class used for gate/shared-gate in the installed image.
+    """
+    rows: list[tuple[int, str]] = []
     for node in ast.walk(func):
-        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+        target: ast.AST | None = None
+        value: ast.AST | None = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            target = node.target
+            value = node.value
+        else:
             continue
-        target = node.targets[0]
+
         if not (
             isinstance(target, ast.Attribute)
             and isinstance(target.value, ast.Name)
@@ -125,13 +137,13 @@ def find_self_assignment_call_lineno(
             and target.attr == target_attr
         ):
             continue
-        if not isinstance(node.value, ast.Call):
+        if not isinstance(value, ast.Call):
             continue
-        if call_name(node.value).endswith(call_suffix):
-            rows.append(node.lineno)
+        rows.append((node.lineno, call_name(value)))
+
     if len(rows) != 1:
         raise SystemExit(
-            f"expected one self.{target_attr}=*{call_suffix} in target function, "
+            f"expected one self.{target_attr}=<call> in target function, "
             f"found {len(rows)}"
         )
     return rows[0]
@@ -165,20 +177,21 @@ def main() -> int:
         and required_qwen4["attn_hc"] < required_qwen4["mlp_hc"]
     )
 
-    # Qwen3Next Sparse-MoE constructor ordering. Scope the AST lookup to the
-    # exact class/function; whole-file string.find() is invalid because other
-    # classes in qwen3_next.py may contain the same assignment spellings.
+    # Qwen3Next Sparse-MoE constructor ordering. Scope lookup to the exact
+    # class/function and report the installed implementation call names. The
+    # contract is ordering, not a hard-coded gate implementation class.
     qwen3_tree = ast.parse(qwen3)
     sparse_cls = find_class(qwen3_tree, "Qwen3NextSparseMoeBlock")
     sparse_init = find_func(sparse_cls.body, "__init__")
-    gate_line = find_self_assignment_call_lineno(sparse_init, "gate", "GateLinear")
-    shared_gate_line = find_self_assignment_call_lineno(
-        sparse_init, "shared_expert_gate", "ReplicatedLinear"
+    gate_line, gate_call = find_self_assignment_call(sparse_init, "gate")
+    shared_gate_line, shared_gate_call = find_self_assignment_call(
+        sparse_init, "shared_expert_gate"
     )
-    experts_line = find_self_assignment_call_lineno(
-        sparse_init, "experts", "FusedMoEFactory"
+    experts_line, experts_call = find_self_assignment_call(sparse_init, "experts")
+    sparse_factory_exact = experts_call.endswith("FusedMoEFactory")
+    sparse_order_pass = (
+        gate_line < shared_gate_line < experts_line and sparse_factory_exact
     )
-    sparse_order_pass = gate_line < shared_gate_line < experts_line
 
     # FusedMoEFactory direct allocations before RoutedExperts construction.
     factory_tree = ast.parse(factory)
@@ -213,8 +226,11 @@ def main() -> int:
     print(f"qwen4_decoder_hyperconnection_after_mlp={'PASS' if qwen4_order_pass else 'FAIL'}")
     print(f"sparse_moe_gate_before_factory={'PASS' if sparse_order_pass else 'FAIL'}")
     print(f"sparse_moe_gate_line={gate_line}")
+    print(f"sparse_moe_gate_call={gate_call}")
     print(f"sparse_moe_shared_gate_line={shared_gate_line}")
+    print(f"sparse_moe_shared_gate_call={shared_gate_call}")
     print(f"sparse_moe_factory_line={experts_line}")
+    print(f"sparse_moe_factory_call={experts_call}")
     print(f"routed_experts_order_contract={'PASS' if routed_order_pass else 'FAIL'}")
     print(f"factory_pre_routed_direct_tensor_alloc_count={len(factory_allocs)}")
     print(
