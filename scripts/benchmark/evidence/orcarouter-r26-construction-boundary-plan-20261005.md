@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED — CI GREEN — STATIC IMAGE BUILD/PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**
+**STATIC IMAGE BUILD/PREFLIGHT PASS — HARNESS PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**
 
 R25b is closed as **VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**. In the valid attempt-02 run, the 64 KiB direct NVIDIA RM order-4 episode was `77,405.938 MiB`; `76,846.250 MiB` (`99.276945%`) fell inside the first `initialize_model()` interval, `559.688 MiB` occurred before that interval, and `0.000 MiB` occurred after it. The strict discriminator was `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL` because the small precursor began about `0.418 s` before the marker.
 
@@ -38,11 +38,11 @@ Repository files:
 - `scripts/Dockerfile.v029-r26-construction-markers`;
 - `scripts/benchmark/check-orcarouter-r26-construction-image.sh`.
 
-Planned image tag:
+Image tag:
 
 `vllm-orcarouter-v029-r26-construction-marker:v1`
 
-The image derives from the already-validated R25 marker image:
+The image derives from the validated R25 marker image:
 
 `vllm-orcarouter-v029-r25-init-marker:v1`
 
@@ -57,9 +57,31 @@ R26 adds only INFO markers around:
 
 It does not alter tensor shapes, dtypes, parameter classes, checkpoint mappings, quantization methods, allocator behavior, runtime flags, PLE mmap, exact QSA, KV size, model length, speculative decode, or post-load processing.
 
+## Static image gate — CLOSED / PASS
+
+Canonical result:
+
+- `scripts/benchmark/evidence/orcarouter-r26-construction-image-preflight-result-20261005.md`
+
+DGX build/static preflight used repository head `35f11709715aa3b445b95442d7e81262cfcf8518` and produced:
+
+- image `vllm-orcarouter-v029-r26-construction-marker:v1`;
+- image id `sha256:568d0ac6917b324eef6c29e5f06b0a1ba182b5db043052b13296fe7d3c5428aa`;
+- `R26_BUILD_RC=0`;
+- `R26_STATIC_PREFLIGHT_RC=0`;
+- `R26_BUILD_AND_STATIC_PREFLIGHT=PASS`;
+- `r25_inherited_marker_contract=PASS`;
+- `r26_model_constructor_contract=PASS`;
+- `r26_modelopt_moe_contract=PASS`;
+- `R26_IMAGE_PREFLIGHT=PASS`.
+
+Managed non-mutation also passed: service remained active, exact container ID `e5422a909bf4e9b8c84bfa1a864b9ddeedac4686de5c449eb6aaf0a645add2cd` and `StartedAt=2026-10-05T05:42:55.476327457Z` were unchanged before/after, and the exact managed served identity remained `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` with `max_model_len=262144`.
+
+No R26 model load or live RM measurement occurred in this gate.
+
 ## Static image contract
 
-`check-orcarouter-r26-construction-image.sh` must pass before any model restart. It verifies:
+`check-orcarouter-r26-construction-image.sh` verifies:
 
 - inherited stability label `v0.29+qsa-layer-type+ple-mmap+exact-qsa+fla`;
 - inherited R25 label `init-model-boundary-v1`;
@@ -70,7 +92,7 @@ It does not alter tensor shapes, dtypes, parameter classes, checkpoint mappings,
 - sequence-counter contract;
 - presence of `W4A16_NVFP4` support in the patched ModelOpt source.
 
-Static preflight must report no model restart, no managed-service mutation, and no persistent VM tuning.
+This contract is now closed PASS for the built R26 image above.
 
 ## Evidence analyzer
 
@@ -99,6 +121,8 @@ Default evidence:
 
 Managed restoration requires exact served identity `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`.
 
+The next gate is **harness preflight only**. It must verify the built image contract again, the R24 matched-control preflight, unique evidence/container identities, exact four-probe `r26_rm` transform, stale-probe absence, predecessor-age requirement, and no managed-service mutation. Passing this gate does not itself constitute a live measurement.
+
 ## Trace scope
 
 Keep only the already-closed narrow RM trace:
@@ -125,18 +149,17 @@ Keep the R25b `559.688 MiB` precursor separate.
 
 ## Validation
 
-The R26 implementation and regression tests are present on current branch head `e70d4130eafb21f9b771e9731112dceda889cb9a`.
-
-CI #1097 is **SUCCESS** at that head: shell syntax, ShellCheck, Python compile, full unit tests including R26 marker/analyzer/runner-transform coverage, and whitespace all PASS.
+The R26 implementation is CI-green and the actual DGX static image build/preflight is now closed PASS in the canonical result above. Documentation-only commits made after the local static execution do not change the built image contract or runtime code.
 
 ## Gate sequence
 
 1. repository CI green — **CLOSED / PASS**;
-2. build `vllm-orcarouter-v029-r26-construction-marker:v1` from the current branch;
-3. run static R26 image preflight only;
-4. verify managed runtime container ID and `StartedAt` unchanged across build/preflight;
-5. record the static-preflight result canonically;
-6. only then run the R26 harness preflight;
-7. do not authorize a live measured run until both static and harness preflight gates are closed.
+2. build `vllm-orcarouter-v029-r26-construction-marker:v1` — **CLOSED / PASS**;
+3. static R26 image preflight — **CLOSED / PASS**;
+4. managed container ID / `StartedAt` unchanged across build/preflight — **CLOSED / PASS**;
+5. canonical static-preflight result — **CLOSED / PASS**;
+6. R26 harness preflight only — **NEXT**;
+7. canonical harness-preflight result — required before live authorization;
+8. live R26 measured run — **NOT AUTHORIZED YET**.
 
 PR #244 remains open. No merge is implied or authorized.
