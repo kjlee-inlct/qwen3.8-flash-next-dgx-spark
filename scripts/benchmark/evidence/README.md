@@ -14,6 +14,7 @@ Read the current closure in this order:
 6. `orcarouter-r25b-init-model-boundary-result-20261005.md`
 7. `orcarouter-r26-construction-boundary-result-20261005.md`
 8. `orcarouter-r27-linear-residual-plan-20261005.md`
+9. `orcarouter-r27-linear-image-preflight-result-20261005.md`
 
 Supporting R25b/R26 gate history remains canonical:
 
@@ -167,9 +168,10 @@ Managed restoration returned exact OrcaRouter READY after `879 s` and is CLOSED/
 
 ## R27 — W4A16-linear / exact Qwen4Exp residual discriminator
 
-Plan:
+Canonical sequence so far:
 
 - `orcarouter-r27-linear-residual-plan-20261005.md`
+- `orcarouter-r27-linear-image-preflight-result-20261005.md`
 
 Repository implementation:
 
@@ -186,13 +188,25 @@ R27 targets the `42554.250 MiB` R26 residual. It instruments the exact v0.29 `Qw
 
 Source inspection closes an important false lead before another live run: the matched runtime has `VLLM_PLE_MMAP=1`, and the v0.29 PLE patch replaces the giant `PLEVocabParallelEmbedding` with a small `_MmapNgramEmbedding` placeholder during constructor execution while passing `quant_config=None`. The large N-gram table is later mmap-backed, so R27 does not broaden into PLE table/page-fault tracing.
 
+Repository CI is green. The R27 image/static gate is now **CLOSED PASS**:
+
+- image: `vllm-orcarouter-v029-r27-linear-marker:v1`;
+- image id: `sha256:e9e92c5cb98d443a8410f21345cb0e07c30c9e7c84516cedcc2a6dc213934119`;
+- inherited R26 constructor/ModelOpt-MoE contracts: PASS;
+- R27 W4A16-linear contract: PASS;
+- exact Qwen4Exp-layer contract: PASS;
+- PLE-mmap placeholder contract: PASS;
+- managed container ID / `StartedAt`: unchanged;
+- exact managed OrcaRouter model with `max_model_len=262144`: READY;
+- model restart / managed-service mutation / persistent VM tuning: none.
+
 R27 remains observational. Current gate sequence:
 
-1. repository CI green;
-2. build marker-only R27 image;
-3. static image/preflight + managed non-mutation;
-4. canonical static result;
-5. guarded harness preflight + managed non-mutation;
+1. repository CI green — **PASS**;
+2. build marker-only R27 image — **PASS**;
+3. static image/preflight + managed non-mutation — **PASS**;
+4. canonical static result — **PASS**;
+5. guarded harness preflight + managed non-mutation — **NEXT**;
 6. canonical harness result;
 7. only then one live R27 measurement.
 
@@ -203,5 +217,7 @@ R27 remains observational. Current gate sequence:
 Do not repeat H6 or R26, do not apply H11 yet, and do not return to broad watermark, compaction, drop-cache, swap, UVM, page-allocation, scheduler, function-graph, CUDA-API, Python-profiler, or PLE page-fault tracing.
 
 The next highest-information question is whether ordinary ModelOpt W4A16 linear construction explains the R26 `42554.250 MiB` non-MoE constructor residual. If it does, the packed W4A16 weight sub-boundary will show whether storage materialization itself dominates. If it does not, Qwen4Exp layer-type and per-layer residual totals will identify the smallest remaining constructor path.
+
+The only authorized next action is the **R27 guarded harness preflight**. It must not launch the candidate model.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
