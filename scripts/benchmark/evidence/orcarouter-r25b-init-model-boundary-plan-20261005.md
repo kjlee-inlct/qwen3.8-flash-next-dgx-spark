@@ -145,4 +145,16 @@ RM logical bytes remain activity volume, not exact resident ownership. Marker ov
 
 H11 is potentially relevant only after initialization is implicated because it changes packed expert parameter construction. H12 remains lower priority for this host-stability question because it changes a later post-load wrapping/rename path.
 
+## Validation
+
+Validated implementation head before this documentation-only status stamp:
+
+- `999a3176c7eb540c73527c9956f351a6795dd947`
+- CI #1065: **SUCCESS**
+- shell syntax: PASS
+- ShellCheck: PASS
+- Python compile: PASS
+- full unit tests: PASS
+- whitespace: PASS
+
 PR #244 remains open. No merge is implied.
