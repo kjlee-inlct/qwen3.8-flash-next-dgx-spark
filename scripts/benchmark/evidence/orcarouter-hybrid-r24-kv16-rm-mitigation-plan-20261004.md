@@ -2,11 +2,15 @@
 
 ## Status
 
-**IMPLEMENTED / LIVE TEST NOT YET RUN**
+**IMPLEMENTED / LIVE TEST COMPLETED — SEE RESULT**
 
-The R24 implementation has passed the repository CI contract: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace validation. Before live execution, use only the latest branch head after its associated CI run is green.
+The R24 implementation passed the repository CI contract before execution: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace validation.
 
-The required next action is `--preflight` only. A live H6 candidate run must not start unless preflight reports `R24_PREFLIGHT=PASS`.
+The live H6 candidate run was completed on 2026-10-05 after `R24_PREFLIGHT=PASS`. The canonical result is:
+
+`orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
+
+The result is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**. Historical design and acceptance criteria below are preserved as the predeclared plan.
 
 ## Purpose
 
@@ -105,4 +109,8 @@ Functional and host-stability classifications remain separate. Any strict RM OOM
 
 ## Promotion boundary
 
-R24 is a discriminator, not an automatic production promotion. A clean H6 result would justify a subsequent confirmation/repeat and then evaluation of whether the same mitigation can be safely reflected in the managed Hybrid profile. PR #244 remains open; no merge is implied.
+R24 is a discriminator, not an automatic production promotion. A clean H6 result would justify a subsequent confirmation/repeat and then evaluation of whether the same mitigation can be safely reflected in the managed Hybrid profile.
+
+The actual live result was not clean: the burst remained unchanged and strict RM OOM persisted. H6 is therefore rejected as a host-stability mitigation candidate under this matched-control experiment.
+
+PR #244 remains open; no merge is implied.
