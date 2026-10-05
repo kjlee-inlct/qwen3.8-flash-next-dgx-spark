@@ -32,7 +32,7 @@ That method creates the large routed-expert `w13_weight` and `w2_weight` `ModelW
 
 ## Diagnostic image
 
-New repository files:
+Repository files:
 
 - `scripts/patch-v029-r26-construction-markers.py`;
 - `scripts/Dockerfile.v029-r26-construction-markers`;
@@ -74,31 +74,11 @@ Static preflight must report no model restart, no managed-service mutation, and 
 
 ## Evidence analyzer
 
-New analyzer:
-
 - `scripts/benchmark/analyze-orcarouter-r26-construction-overlap.py`.
 
-It reuses the established wall-clock to monotonic mapping from candidate-request / trace-start / trace-end anchors and consumes only:
+It selects the top-level model-constructor interval containing the most 64 KiB RM activity, then reports total/before/inside/after constructor activity, ModelOpt-MoE coverage, w13/w2 coverage, packed w13+w2 coverage, remaining MoE activity, constructor activity outside ModelOpt-MoE, and the five largest ModelOpt-MoE calls.
 
-- `candidate-container.log`;
-- `rm-trace.txt`;
-- existing clock anchors;
-- host page size.
-
-It selects the top-level model-constructor interval containing the most 64 KiB RM activity, then reports:
-
-- total / before-constructor / inside-constructor / after-constructor RM activity;
-- constructor coverage percentage;
-- total ModelOpt MoE marker pairs and calls overlapping the selected constructor;
-- RM activity inside the union of selected `ModelOptNvFp4FusedMoE.create_weights()` calls;
-- w13 allocation activity;
-- w2 allocation activity;
-- union of w13+w2 packed allocations;
-- ModelOpt-MoE activity outside those two packed allocations;
-- constructor activity outside ModelOpt-MoE create-weights intervals;
-- the five ModelOpt-MoE calls with the largest RM activity.
-
-The `90%` threshold is an explicit analysis discriminator only; it is not a memory-safety acceptance threshold. Possible labels are:
+The `90%` threshold is an analysis discriminator only, not a memory-safety acceptance threshold. Possible labels are:
 
 - `RM_ORDER4_PRIMARY_IN_MODELOPT_MOE_CREATE_WEIGHTS`;
 - `RM_ORDER4_PRIMARY_IN_MODEL_CONSTRUCTOR_OUTSIDE_MODELOPT_MOE`;
@@ -109,40 +89,19 @@ RM requested bytes remain activity volume, not exact resident ownership. Marker 
 
 ## Guarded live runner
 
-New runner:
-
 - `scripts/benchmark/run-orcarouter-r26-construction-boundary.sh`.
 
-It reuses the validated historical R24 matched-control harness through an ephemeral copy; the historical R24 script is not edited. The ephemeral transform changes:
+It reuses the validated R24 matched-control harness through an ephemeral copy and changes only repository-root injection, experiment container identity, kprobe group `r26_rm`, and the exact four inherited `r24_rm/...` definitions. It rejects stale `r24_rm`, `r25b_rm`, or `r26_rm` groups, defaults to `--preflight`, and requires explicit `run` plus `ORCA_R26_LIVE_ACK=YES` for a live run.
 
-1. repository-root injection;
-2. experiment container → `qwen38-hybrid-r26-construction-marker`;
-3. kprobe group variable → `r26_rm`;
-4. all exactly four hard-coded `r24_rm/...` probe definitions → `r26_rm/...`.
-
-The transform requires exactly four probe-definition replacements and rejects any remaining `r24_rm/` definition. A dedicated regression test extracts and executes this exact embedded transform against the canonical R24 harness and requires four `r26_rm/` definitions with no `r24_rm/` leakage.
-
-Default evidence path:
+Default evidence:
 
 `/tmp/orcarouter-hybrid-r26-construction-boundary-01-20261005`
 
-Preserved historical R24 evidence remains:
-
-`/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004`
-
-The runner blocks if any of these stale probe groups exists:
-
-- `r24_rm`;
-- `r25b_rm`;
-- `r26_rm`.
-
-The runner defaults to `--preflight`. A live run additionally requires both explicit `run` mode and `ORCA_R26_LIVE_ACK=YES`.
-
-Managed restoration is stricter than the original R25b wrapper: it waits for both container readiness and exact served model identity `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`.
+Managed restoration requires exact served identity `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`.
 
 ## Trace scope
 
-Keep the already-closed narrow RM trace only:
+Keep only the already-closed narrow RM trace:
 
 - `nv_alloc_pages`;
 - `nv_alloc_system_pages`;
@@ -152,29 +111,23 @@ Do not add UVM, generic page allocation, scheduler, function graph, CUDA API bla
 
 ## Interpretation / next branch
 
-If ModelOpt MoE `create_weights()` contains at least 90% of total order-4 RM activity, then parameter/storage construction is directly implicated and the next discriminator can separate packed expert tensor object/storage semantics (including H11-like parameter-class differences) without broad tracing.
+If ModelOpt MoE `create_weights()` contains at least 90% of total order-4 RM activity, parameter/storage construction is directly implicated and the next discriminator can separate packed expert tensor object/storage semantics, including H11-like parameter-class differences, without broad tracing.
 
-If the model constructor still contains the burst but ModelOpt MoE coverage is low, do not apply H11. Instead instrument the smallest constructor subpath responsible for the remaining activity (for example another routed-expert backend, embedding/PLE construction, or a different quantized storage path).
+If the model constructor contains the burst but ModelOpt MoE coverage is low, do not apply H11; instrument the smallest remaining constructor subpath instead. If w13+w2 intervals cover most ModelOpt-MoE activity, that is the strongest evidence for large expert storage materialization rather than scale/metadata creation.
 
-If w13+w2 packed allocation intervals themselves cover most ModelOpt-MoE activity, that is the strongest evidence that the burst is tied to the large expert storage materialization rather than scale/metadata creation.
-
-Keep the R25b `559.688 MiB` precursor separate; R26 is designed to localize the main constructor burst, not to explain that smaller pre-init event.
+Keep the R25b `559.688 MiB` precursor separate.
 
 ## Tests
-
-Regression coverage:
 
 - `tests/test_orcarouter_r26_construction_markers.py`;
 - `tests/test_orcarouter_r26_construction_overlap.py`;
 - `tests/test_orcarouter_r26_runner_transform.py`.
 
-The marker-patch test applies the real patch script to synthetic v0.29-shaped sources and validates AST plus marker ordering/counts. The analyzer test uses synthetic evidence with 90% of RM activity inside one ModelOpt-MoE call and requires the ModelOpt-MoE-primary discriminator. The runner-transform test extracts and executes the exact embedded R24→R26 harness transform.
-
 ## Validation
 
-Repository implementation and regression tests are green through branch head `9ef73559048f0c7661ab35ecbcc64b18386f96b8`.
+The R26 implementation and regression tests are present on current branch head `e70d4130eafb21f9b771e9731112dceda889cb9a`.
 
-CI #1096 is **SUCCESS**: shell syntax, ShellCheck, Python compile, full unit tests including all R26 marker/analyzer/runner-transform coverage, and whitespace all PASS.
+CI #1097 is **SUCCESS** at that head: shell syntax, ShellCheck, Python compile, full unit tests including R26 marker/analyzer/runner-transform coverage, and whitespace all PASS.
 
 ## Gate sequence
 
