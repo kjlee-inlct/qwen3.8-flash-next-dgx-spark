@@ -2,11 +2,15 @@
 
 ## Status
 
-**IMPLEMENTED — READ-ONLY POST-HOC ONLY — CI REQUIRED — NO NEW LIVE RUN AUTHORIZED**
+**COMPLETED — READ-ONLY POST-HOC PASS — `R28B_HYPER_CONNECTION_RM_ACTIVITY_SPARSE_ACROSS_CALLS` — NO NEW LIVE RUN AUTHORIZED**
 
 Canonical predecessor:
 
 - `orcarouter-r28-unquant-linear-boundary-result-20261005.md`
+
+Canonical result:
+
+- `orcarouter-r28b-unquant-call-pattern-result-20261005.md`
 
 R28 closed as:
 
@@ -30,7 +34,7 @@ R28 localized `36752.000 MiB` of the `42554.375 MiB` R26 non-MoE residual inside
 
 Several individual calls aligned with `800.000 MiB` RM activity while requesting only roughly `6.25–6.56 MiB` nominal BF16 payload.
 
-Before adding another live marker, determine whether this is a sparse/discrete RM request pattern across many small constructor calls.
+Before adding another live marker, R28b tested whether this was a sparse/discrete RM request pattern across many small constructor calls.
 
 ## Analyzer
 
@@ -49,37 +53,93 @@ The analyzer reads:
 
 It does not invoke Docker, systemd, CUDA, sudo, tracefs, or the model runtime.
 
-## Outputs
+## Completed result
 
-The analyzer reports:
+Across 678 selected unquantized Linear calls:
 
-- selected unquantized call count;
-- positive-RM versus zero-RM call counts;
-- per-call RM-activity histogram;
-- raw RM request-size histogram inside unquantized intervals;
-- family call / positive / zero / request / RM / nominal-payload totals;
-- `hyper_connection` activity and request-size histograms;
-- hyper-connection positive layer indices and gap histogram;
-- per-component hyper-connection totals;
-- top 32 individual calls;
-- nominal-payload/RM Pearson diagnostics;
-- uncovered R26-residual request-size histogram;
-- top uncovered RM requests plus immediately preceding/following unquantized prefixes.
+```text
+positive_rm_calls=56
+zero_rm_calls=622
+positive_rm_call_pct=8.259587
+```
 
-Semantics remain strict:
+The positive-call/request histogram is:
 
-- RM bytes are logical allocation activity volume, not resident ownership;
-- payload bytes are nominal weight-tensor payload;
-- temporal alignment does not establish causal ownership;
-- correlation or a repeated chunk size does not by itself identify the CUDA/RM allocator policy that created it.
+```text
+20 MiB x 9
+30 MiB x 1
+128 MiB x 1
+800 MiB x 44
+1214 MiB x 1
+```
 
-## Decision
+Payload/RM correlation diagnostics:
 
-If only a minority of hyper-connection calls carry the majority of RM activity and those calls show a repeated large request size such as ~`800 MiB`, prefer an allocator-growth/reservation discriminator next rather than another model-component boundary marker.
+```text
+payload_rm_pearson_all=0.149977822
+payload_rm_pearson_positive=-0.035821511
+```
 
-If RM activity instead scales broadly with hyper-connection payload/call type, narrow the model constructor to that exact component before considering a behavior-changing mitigation.
+Hyper-connection closes as a sparse placement boundary:
 
-If the uncovered `5802.375 MiB` is dominated by one or two repeated request sizes located between consistent constructor prefixes, use those contexts to define the next boundary.
+```text
+calls=194
+positive=32
+zero=162
+rm_activity_mib=25600.000
+nominal_payload_mib=1242.500
+positive_request_histogram=800.000 MiB x 32
+```
+
+Both main hyper components carry the same fixed positive chunk:
+
+```text
+input_mix_weight_down_block_inject: 21 positive / 16800 MiB
+input_mix_weight_up:                11 positive /  8800 MiB
+```
+
+The uncovered R26 residual remains `5802.375 MiB` and itself contains:
+
+```text
+800 MiB x 4
+1214 MiB x 1
+```
+
+plus smaller repeated requests.
+
+Read-only non-mutation passed:
+
+- managed container ID unchanged;
+- managed `StartedAt` unchanged;
+- `model_restart=NO`;
+- `candidate_launch=NO`;
+- `kprobe_change=NO`;
+- `evidence_mutation=NO`.
+
+## Interpretation
+
+The R28b observation satisfies the plan's allocator-growth branch:
+
+- only a minority of hyper-connection calls carry RM activity;
+- all RM-positive hyper calls align with exactly one fixed `800 MiB` request;
+- the same `800 MiB` request size also appears in other families and outside unquantized Linear intervals;
+- nominal payload does not scale with the positive RM activity.
+
+Therefore another model-component boundary marker is lower value than a global allocator/backing-growth discriminator.
+
+This remains a temporal observation. It does not prove exact resident ownership or identify a CUDA/RM policy responsible for the repeated chunk.
+
+## Final discriminator
+
+```text
+R28B_HYPER_CONNECTION_RM_ACTIVITY_SPARSE_ACROSS_CALLS
+```
+
+## Next direction
+
+Use the preserved R28 evidence first. The next read-only discriminator should classify the **entire constructor RM order-4 stream**, especially `800 MiB` / `1214 MiB` events, against inherited ModelOpt-MoE, Qwen4 layer and unquantized Linear intervals.
+
+The goal is to decide whether repeated large requests behave as a global backing/reservation growth cadence independent of the current model family.
 
 No R29 live run is authorized by this plan. H11 remains deferred.
 
