@@ -15,9 +15,9 @@ Read the current closure in this order:
 7. `orcarouter-r26-construction-boundary-result-20261005.md`
 8. `orcarouter-r27-linear-residual-result-20261005.md`
 9. `orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
-10. `orcarouter-r28-unquant-linear-boundary-plan-20261005.md`
-11. `orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
-12. `orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
+10. `orcarouter-r28-unquant-linear-boundary-result-20261005.md`
+11. `orcarouter-r28b-unquant-call-pattern-result-20261005.md`
+12. `orcarouter-r29-global-rm-chunk-cadence-plan-20261005.md`
 
 Supporting gate history remains canonical:
 
@@ -33,7 +33,11 @@ Supporting gate history remains canonical:
 - `orcarouter-r27-linear-image-preflight-result-20261005.md`
 - `orcarouter-r27-live-harness-preflight-result-20261005.md`
 - `orcarouter-r27-h6-quant-routing-inspection-plan-20261005.md`
+- `orcarouter-r28-unquant-linear-boundary-plan-20261005.md`
 - `orcarouter-r28-repository-gate-result-20261005.md`
+- `orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
+- `orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
+- `orcarouter-r28b-unquant-call-pattern-plan-20261005.md`
 
 Strict classification policy remains:
 
@@ -168,7 +172,7 @@ Therefore R27's zero W4A16-linear calls are treated as a real routing result, no
 
 ## R28 — unquantized Linear boundary
 
-R28 repository, static-image, and guarded harness gates are now **PASS**. Exactly one guarded live R28 measurement is authorized next.
+R28 is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY PASS — BURST_UNCHANGED**.
 
 Canonical:
 
@@ -176,34 +180,96 @@ Canonical:
 - `orcarouter-r28-repository-gate-result-20261005.md`
 - `orcarouter-r28-unquant-linear-image-preflight-result-20261005.md`
 - `orcarouter-r28-unquant-linear-live-harness-preflight-result-20261005.md`
+- `orcarouter-r28-unquant-linear-boundary-result-20261005.md`
 
-Validated static image:
+Matched mechanism:
 
-- image: `vllm-orcarouter-v029-r28-unquant-linear-marker:v1`
-- image ID: `sha256:54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f`
-- R28 label: `unquant-linear-boundary-v1`
-- inherited R26 constructor contract: PASS
-- inherited R26 ModelOpt-MoE contract: PASS
-- inherited R27 Qwen4 layer contract: PASS
-- R28 unquantized Linear contract: PASS
+- order-4 calls/activity: `526` / `77405.938 MiB`;
+- largest five-second residual: `77923.969 MiB`;
+- R22 ratio: `103.707743%`;
+- strict RM OOM count: `0`;
+- burst band: `BURST_UNCHANGED`.
 
-Harness preflight closure:
+The clean host-stability classification does not promote H6 to a mitigation: the structural burst remained unchanged.
 
-- `stale_probe_groups=NONE`
-- `r28_probe_definition_contract=PASS`
-- predecessor age `3989.048 s >= 2700 s`
-- `rm_probe_target_count=2`
-- `R24_PREFLIGHT=PASS`
-- `R28_LIVE_PREFLIGHT=PASS`
-- `R28_HARNESS_PREFLIGHT_RC=0`
-- managed runtime ID / StartedAt unchanged
-- exact OrcaRouter READY with `max_model_len=262144`
-- live evidence path absent after preflight
-- experiment container absent after preflight
-- stale `r28_rm` group absent after preflight
+R28 localization:
 
-R28 narrows the next question to `UnquantizedLinearMethod.create_weights()` only. It keeps direct-RM activity and nominal `torch.empty` weight payload as separate quantities, aggregates overlap by exact prefix family, and preserves the inherited R26/R27 boundaries.
+- R26 residual outside ModelOpt-MoE: `42554.375 MiB`;
+- unquantized Linear overlap: `36752.000 MiB`;
+- coverage: `86.364798%`;
+- uncovered residual: `5802.375 MiB`;
+- nominal unquantized payload: `7879.477 MiB`.
 
-The next action is exactly one guarded R28 live measurement using the existing runner and reserved fresh evidence path. Do not broaden tracing and do not apply H11 before R28 closes.
+Family activity:
+
+```text
+hyper_connection=25600 MiB
+self_attn=8928 MiB
+linear_attn=820 MiB
+other=1374 MiB
+ple=30 MiB
+shared_expert=0 MiB
+router=0 MiB
+```
+
+Final discriminator:
+
+`RM_ORDER4_R26_RESIDUAL_MIXED_OUTSIDE_UNQUANTIZED_LINEAR_CONSTRUCTION`
+
+## R28b — sparse per-call RM pattern closure
+
+R28b is **COMPLETED — READ-ONLY POST-HOC PASS**.
+
+Canonical:
+
+- `orcarouter-r28b-unquant-call-pattern-plan-20261005.md`
+- `orcarouter-r28b-unquant-call-pattern-result-20261005.md`
+
+Across 678 selected unquantized Linear calls:
+
+- RM-positive: `56` (`8.259587%`);
+- RM-zero: `622`;
+- positive request histogram: `20 MiB x9`, `30 MiB x1`, `128 MiB x1`, `800 MiB x44`, `1214 MiB x1`;
+- payload/RM Pearson: `0.149977822` overall, `-0.035821511` positive-only.
+
+Hyper-connection specifically:
+
+- calls: `194`;
+- positive: `32`;
+- zero: `162`;
+- positive request size: exactly `800 MiB x32`;
+- RM activity: `25600 MiB`;
+- nominal payload: `1242.500 MiB`.
+
+The same `800 MiB` size appears in other model families and four times in the uncovered R26 residual. The uncovered residual also contains another `1214 MiB` event.
+
+Final discriminator:
+
+`R28B_HYPER_CONNECTION_RM_ACTIVITY_SPARSE_ACROSS_CALLS`
+
+This demotes another model-component marker split. The next discriminator should test the entire constructor RM stream for repeated large chunks spanning multiple inherited boundaries.
+
+## R29 — global RM chunk cadence
+
+R29 is **IMPLEMENTED — READ-ONLY POST-HOC ONLY — CI REQUIRED — NO LIVE RUN AUTHORIZED**.
+
+Canonical plan:
+
+- `orcarouter-r29-global-rm-chunk-cadence-plan-20261005.md`
+
+Analyzer:
+
+- `scripts/benchmark/analyze-orcarouter-r29-global-rm-chunk-cadence.py`
+
+R29 uses only preserved R28 evidence and classifies the full selected-constructor order-4 request stream against:
+
+- R26 ModelOpt-MoE intervals;
+- R27 Qwen4Exp layer intervals;
+- R28 unquantized Linear intervals;
+- other constructor regions.
+
+Repeated large requests are discovered from the data (`>=256 MiB`, count >=2) and compared by region, layer type, interarrival timing and intervening request count.
+
+No Docker launch, model restart, new image, kprobe mutation, or evidence mutation is authorized. H11 remains deferred.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
