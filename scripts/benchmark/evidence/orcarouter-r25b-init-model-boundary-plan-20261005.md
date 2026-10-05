@@ -2,7 +2,7 @@
 
 ## Status
 
-**LIVE ATTEMPT 01 SETUP INVALID — PROBE-GROUP FIX IMPLEMENTED — RETRY BLOCKED PENDING RECOVERY + CORRECTED PREFLIGHT**
+**ATTEMPT 01 SETUP INVALID — RECOVERY + CORRECTED PREFLIGHT PASS — ATTEMPT 02 LIVE MEASURED RETRY AUTHORIZED**
 
 R25 read-only localization showed that the R24 64 KiB NVIDIA RM episode is only about 3.218 seconds long even though checkpoint weight filling takes 522.10 seconds. `99.276945%` of traced order-4 activity falls between the existing `Loading model from scratch...` marker and `Loading weights took ...`, but the first approximately `559.688 MiB` begins about `0.395 s` before the existing model-load marker.
 
@@ -20,7 +20,7 @@ R25 therefore narrows the next question to model/parameter construction versus c
 
 Does the approximately 77 GiB 64 KiB `nv_alloc_pages` episode occur primarily inside `initialize_model()` before checkpoint weight filling begins?
 
-This is still a localization discriminator, not a mitigation test.
+This remains a localization discriminator, not a mitigation test.
 
 ## Diagnostic image
 
@@ -76,7 +76,7 @@ The R25b runner does **not** edit the historical R24 runner. Instead it creates 
 3. shell kprobe group variable → `r25b_rm`;
 4. all exactly four hard-coded R24 kprobe definitions → `r25b_rm/...`.
 
-The transform now requires exactly four probe-definition replacements, rejects any remaining `r24_rm/` definition, and requires exactly four resulting `r25b_rm/` definitions. A regression test executes the exact embedded transform against the canonical R24 harness.
+The transform requires exactly four probe-definition replacements, rejects any remaining `r24_rm/` definition, and requires exactly four resulting `r25b_rm/` definitions. A regression test executes the exact embedded transform against the canonical R24 harness.
 
 The corrected retry evidence directory is:
 
@@ -131,22 +131,55 @@ Root cause: the initial wrapper changed `GROUP="r24_rm"` to `GROUP="r25b_rm"`, b
 
 This failure occurred before candidate launch and produced **no R25b localization measurement**. Classification is **SETUP INVALID**.
 
-Because cleanup used `GROUP=r25b_rm`, stale `r24_rm` probe events may remain. Managed restoration must also be verified explicitly on the DGX host. The partial attempt-01 evidence is preserved.
+The partial attempt-01 evidence remains preserved at:
 
-## Retry gate
+`/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005`
 
-A retry is **not** authorized yet. Before the retry:
+## Completed recovery + corrected preflight gate
 
-1. verify the managed OrcaRouter service/API is restored and READY;
-2. inspect and remove only the exact stale `r24_rm` / `r25b_rm` groups from the failed attempt if present;
-3. preserve attempt-01 evidence unchanged;
-4. pull the corrected wrapper and require green CI;
-5. run corrected R25b `--preflight` using the new `-02` evidence path;
-6. require `stale_probe_groups=NONE`, `r25b_probe_definition_contract=PASS`, and `R25B_LIVE_PREFLIGHT=PASS` before authorizing another live run.
+Canonical result:
 
-## Live measured-run boundary after retry authorization
+- `orcarouter-r25b-recovery-corrected-preflight-result-20261005.md`
 
-When the corrected retry gate passes, the live run must use the dedicated wrapper with both explicit controls:
+Observed recovery:
+
+- managed service active;
+- exact OrcaRouter served identity READY after 0 s;
+- managed container id `22c78d93eef27e1777c760ff7bd0868824dddd61261fbd9f7a541f6a6fe58efc`;
+- managed `StartedAt=2026-10-05T02:54:12.603514562Z`;
+- R25b experiment container absent;
+- failed-attempt `r24_rm` group present with exactly the expected four RM events;
+- `r25b_rm` absent;
+- cleanup restricted to those four known events;
+- `stale_probe_cleanup=APPLIED`;
+- `stale_probe_cleanup=PASS`.
+
+Corrected preflight then observed:
+
+- `stale_probe_groups=NONE`;
+- `r25_marker_contract=PASS`;
+- `R25B_IMAGE_PREFLIGHT=PASS`;
+- `r25b_probe_definition_contract=PASS`;
+- `R24_PREFLIGHT=PASS`;
+- `R25B_LIVE_PREFLIGHT=PASS`;
+- predecessor age `8585.831 s` versus required `2700 s`;
+- `predecessor_age_ok=1`;
+- RM probe target count `2`;
+- KV bytes `17179869184`;
+- retry evidence `/tmp/orcarouter-hybrid-r25b-init-model-boundary-02-20261005`;
+- no model restart, managed-service mutation, or persistent VM tuning during preflight.
+
+The managed container id and `StartedAt` remained exactly unchanged before and after corrected preflight.
+
+Final host-side gate token:
+
+`R25B_RECOVERY_AND_CORRECTED_PREFLIGHT=PASS`
+
+Therefore exactly one corrected measured retry is authorized.
+
+## Attempt-02 live measured-run boundary
+
+Attempt 02 must use the dedicated wrapper with both explicit controls:
 
 - mode: `run`;
 - environment acknowledgement: `ORCA_R25B_LIVE_ACK=YES`.
@@ -185,8 +218,8 @@ H11 is potentially relevant only after initialization is implicated because it c
 
 ## Validation
 
-The previous authorized head `009c8d47595765ca5dcf366500dfdc8de8bd2257` passed CI #1072, but that CI did not include the newly discovered probe-definition fix.
+The corrected implementation head `ae6ffe1fde09bc966a7d5cee58a947a666da2d86` passed CI #1077: shell syntax, ShellCheck, Python compile, full unit tests including the probe-transform regression, and whitespace all PASS.
 
-The corrected retry must not proceed until the new fix/regression-test head is CI green.
+The subsequent commits that record the corrected runtime preflight are documentation-only. Their final head must also be CI green before attempt 02 is launched.
 
 PR #244 remains open. No merge is implied.
