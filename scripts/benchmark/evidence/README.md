@@ -14,7 +14,8 @@ Read the current closure in this order:
 6. `orcarouter-r25b-init-model-boundary-result-20261005.md`
 7. `orcarouter-r26-construction-boundary-result-20261005.md`
 8. `orcarouter-r27-linear-residual-result-20261005.md`
-9. `orcarouter-r27-h6-quant-routing-inspection-plan-20261005.md`
+9. `orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
+10. `orcarouter-r28-unquant-linear-boundary-plan-20261005.md`
 
 Supporting gate history remains canonical:
 
@@ -29,6 +30,7 @@ Supporting gate history remains canonical:
 - `orcarouter-r27-linear-residual-plan-20261005.md`
 - `orcarouter-r27-linear-image-preflight-result-20261005.md`
 - `orcarouter-r27-live-harness-preflight-result-20261005.md`
+- `orcarouter-r27-h6-quant-routing-inspection-plan-20261005.md`
 
 Strict classification policy remains:
 
@@ -44,26 +46,9 @@ R21/R22 establish a common early physical-page burst of about 75 GiB over roughl
 
 R23 closes the observed driver-level endpoint to direct NVIDIA RM system-memory allocation (`nv_alloc_pages` / `nv_alloc_system_pages`) rather than selected UVM allocation boundaries. Same-window 64 KiB RM activity is `74537.938 MiB` versus `75083.652 MiB` residual growth (`99.273191%`); selected UVM coverage is `0.000000%`.
 
-Canonical lower-level evidence:
-
-- `r9-acceptance-gate-20261002.md`
-- `r9-rm-sysmem-root-cause-20261002.md`
-- `orcarouter-managed-rmsys-r10b-02-rm-oom-20261003.md`
-- `orcarouter-managed-rmsys-r11-allocator-state-20261003.md`
-- `orcarouter-managed-rmsys-r21-pagecache-reclaim-result-20261004.md`
-- `orcarouter-managed-rmsys-r22-v029-mmap-result-20261004.md`
-- `orcarouter-managed-rmsys-r21-r22-mmap-comparison-20261004.md`
-- `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
-- `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
-
 Broad watermark/compaction/drop-cache/swap/static-high-order-state tuning was rejected as a deterministic production fix. Conditioning remains a measurement control.
 
 ## R24 — H6 W4A16 mitigation discriminator
-
-Canonical:
-
-- `orcarouter-hybrid-r24-kv16-rm-mitigation-plan-20261004.md`
-- `orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
 
 R24 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**.
 
@@ -94,14 +79,8 @@ Attempt 01 remains permanently SETUP INVALID. Attempt 02 is the valid measuremen
 
 R26 is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-Matched mechanism:
-
 - order-4 calls/activity: `526` / `77405.938 MiB`;
 - strict RM OOM count: `2`;
-- burst band: `BURST_UNCHANGED`.
-
-Constructor split:
-
 - before constructor: `559.688 MiB`;
 - inside constructor: `76846.250 MiB` (`99.276945%`);
 - after constructor: `0.000 MiB`;
@@ -113,30 +92,17 @@ Final discriminator:
 
 `RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`
 
-H11 remained deferred because the unlocalized constructor residual was larger than the entire ModelOpt-MoE contribution.
-
 ## R27 — exact Qwen4Exp residual localization
-
-Canonical sequence:
-
-- `orcarouter-r27-linear-residual-plan-20261005.md`
-- `orcarouter-r27-linear-image-preflight-result-20261005.md`
-- `orcarouter-r27-live-harness-preflight-result-20261005.md`
-- `orcarouter-r27-linear-residual-result-20261005.md`
 
 R27 is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-The matched mechanism again reproduced unchanged:
+The matched mechanism reproduced unchanged:
 
 - largest five-second residual: `77858.105 MiB`;
 - R22 ratio: `103.620087%`;
 - order-4 calls/activity: `526` / `77405.938 MiB`;
 - strict RM OOM count: `2`;
-- burst band: `BURST_UNCHANGED`.
-
-The R26 residual reproduced exactly:
-
-`r26_residual_outside_moe.activity_mib=42554.250`
+- R26 residual outside ModelOpt-MoE: `42554.250 MiB`.
 
 The proposed ordinary dense ModelOpt-W4A16 explanation was rejected by direct runtime observation:
 
@@ -147,22 +113,15 @@ w4a16_linear.activity_mib=0.000
 w4a16_linear.pct_of_r26_residual=0.000000
 ```
 
-The markers were statically validated in the exact W4A16 method before the run, while Qwen4Exp markers from the same candidate log were observed. Therefore this specific dense W4A16 method was not selected during the primary constructor.
-
 Qwen4Exp decoder-layer localization:
 
 - selected layers: `48`;
 - decoder-layer RM activity: `73440.250 MiB`;
 - decoder-layer fraction of constructor: `95.567773%`;
-- constructor outside selected layers: `3406.000 MiB`.
-
-Non-MoE activity inside selected decoder layers:
-
-- linear attention: `20150.250 MiB`;
-- qwen sparse attention: `18998.000 MiB`;
-- sum: `39148.250 MiB` = `91.996099%` of the R26 residual.
-
-The non-MoE residual is nearly balanced across layer types, so neither layer type alone explains it.
+- constructor outside selected layers: `3406.000 MiB`;
+- linear-attention non-MoE: `20150.250 MiB`;
+- qwen sparse/full-attention non-MoE: `18998.000 MiB`;
+- selected-layer non-MoE sum: `39148.250 MiB` = `91.996099%` of the R26 residual.
 
 Final discriminator:
 
@@ -170,21 +129,57 @@ Final discriminator:
 
 Managed restoration returned exact OrcaRouter READY after `832 s`; final command RC was zero.
 
-## Current next engineering direction
+## R27 routing closure — why W4A16 dense markers were absent
 
-Do not repeat R27, do not apply H11 yet, and do not broaden kernel tracing.
-
-R27 showed that assuming a specific dense quant method is unsafe: H6 changes the checkpoint-level `quant_algo`, but individual Qwen4Exp modules may receive `quant_config=None` or be excluded and therefore use an unquantized method.
-
-The only authorized next action is the **read-only H6 quantization-routing inspection** documented in:
+Canonical:
 
 - `orcarouter-r27-h6-quant-routing-inspection-plan-20261005.md`
-- helper: `../inspect-orcarouter-r27-h6-quant-routing.py`
+- `orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
 
-This inspection must not restart the managed model or launch another RM measurement.
+The completed read-only inspection is **PASS** and did not restart the model, mutate the service, launch a GPU model, or create an RM trace.
 
-If static config/source routing fully explains the zero W4A16 call count, use those exact families for the next narrow boundary. If it does not, R28 may instrument generic `LinearBase` create-weights dispatch by actual prefix, subclass, selected quant-method class, dimensions, and dtype.
+H6 remained the intended config-only W4A16 control:
 
-No R28 live run is authorized yet.
+```text
+manifest.variant=h6-modelopt-w4a16
+manifest.quant_algo_before=NVFP4
+manifest.quant_algo_after=W4A16_NVFP4
+manifest.safetensor_bytes_changed=0
+quant.quant_method=modelopt
+quant.quant_algo=W4A16_NVFP4
+```
+
+The inherited ignore list includes `*.self_attn.*` and `*.linear_attn.*`, with approximate checkpoint-prefix counts `117` and `252` respectively, plus broad shared-expert/router, hyper-connection, PLE, MTP, visual, embedding and lm-head exclusions.
+
+Exact source checks passed:
+
+```text
+linear_none_selects_unquantized=PASS
+modelopt_exclusion_selects_unquantized=PASS
+modelopt_w4a16_class_selection_exists=PASS
+qwen4_modelopt_fp4_optout_helper=PASS
+qsa_qkv_uses_modelopt_fp4_optout=PASS
+```
+
+Therefore R27's zero W4A16-linear calls are treated as a real routing result, not a marker failure. The relevant decoder attention families route through `UnquantizedLinearMethod`, with an additional explicit QSA qkv ModelOpt-FP4 opt-out.
+
+## R28 — unquantized Linear boundary
+
+R28 is implemented in the repository but **not authorized for a live run yet**.
+
+Files:
+
+- `../patch-v029-r28-unquant-linear-markers.py`
+- `../Dockerfile.v029-r28-unquant-linear-markers`
+- `../benchmark/check-orcarouter-r28-unquant-linear-image.sh`
+- `../benchmark/analyze-orcarouter-r28-unquant-linear-overlap.py`
+- `../benchmark/run-orcarouter-r28-unquant-linear-boundary.sh`
+- `orcarouter-r28-unquant-linear-boundary-plan-20261005.md`
+
+R28 narrows the next question to `UnquantizedLinearMethod.create_weights()` only. It keeps direct-RM activity and nominal `torch.empty` weight payload as separate quantities, aggregates overlap by exact prefix family, and preserves the inherited R26/R27 boundaries.
+
+Required next gates are repository CI, marker-image build/static preflight, managed non-mutation verification, and guarded harness preflight. Only after those close PASS may one live R28 measurement be considered.
+
+Do not repeat R27, do not apply H11 yet, and do not broaden kernel tracing.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
