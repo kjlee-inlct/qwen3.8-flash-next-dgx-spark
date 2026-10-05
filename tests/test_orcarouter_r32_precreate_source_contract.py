@@ -41,33 +41,46 @@ def FusedMoEFactory():
             3,
         )
 
-    def test_sparse_moe_order_is_scoped_to_target_class(self):
+    def test_sparse_moe_order_is_scoped_and_gate_class_agnostic(self):
         tree = r32.ast.parse(
             """
 class Distractor:
     def __init__(self):
         self.experts = FusedMoEFactory()
-        self.shared_expert_gate = ReplicatedLinear()
-        self.gate = GateLinear()
+        self.shared_expert_gate = WhateverSharedGate()
+        self.gate = WhateverGate()
 
 class Qwen3NextSparseMoeBlock:
     def __init__(self):
-        self.gate = GateLinear()
-        self.shared_expert_gate = ReplicatedLinear()
+        self.gate = InstalledGateImplementation()
+        self.shared_expert_gate: object = InstalledSharedGateImplementation()
         self.experts = FusedMoEFactory()
 """
         )
         cls = r32.find_class(tree, "Qwen3NextSparseMoeBlock")
         func = r32.find_func(cls.body, "__init__")
-        gate = r32.find_self_assignment_call_lineno(func, "gate", "GateLinear")
-        shared = r32.find_self_assignment_call_lineno(
-            func, "shared_expert_gate", "ReplicatedLinear"
+        gate_line, gate_call = r32.find_self_assignment_call(func, "gate")
+        shared_line, shared_call = r32.find_self_assignment_call(
+            func, "shared_expert_gate"
         )
-        experts = r32.find_self_assignment_call_lineno(
-            func, "experts", "FusedMoEFactory"
+        experts_line, experts_call = r32.find_self_assignment_call(func, "experts")
+        self.assertLess(gate_line, shared_line)
+        self.assertLess(shared_line, experts_line)
+        self.assertEqual(gate_call, "InstalledGateImplementation")
+        self.assertEqual(shared_call, "InstalledSharedGateImplementation")
+        self.assertEqual(experts_call, "FusedMoEFactory")
+
+    def test_self_assignment_locator_requires_unique_assignment(self):
+        tree = r32.ast.parse(
+            """
+def f():
+    self.gate = FirstGate()
+    self.gate = SecondGate()
+"""
         )
-        self.assertLess(gate, shared)
-        self.assertLess(shared, experts)
+        func = r32.find_func(tree.body, "f")
+        with self.assertRaises(SystemExit):
+            r32.find_self_assignment_call(func, "gate")
 
 
 if __name__ == "__main__":
