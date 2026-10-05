@@ -2,7 +2,7 @@
 
 ## Status
 
-**STATIC IMAGE PREFLIGHT PASS / LIVE RUNNER IMPLEMENTED — LIVE HARNESS PREFLIGHT NEXT**
+**LIVE HARNESS PREFLIGHT PASS — LIVE MEASURED RUN AUTHORIZED**
 
 R25 read-only localization showed that the R24 64 KiB NVIDIA RM episode is only about 3.218 seconds long even though checkpoint weight filling takes 522.10 seconds. `99.276945%` of traced order-4 activity falls between the existing `Loading model from scratch...` marker and `Loading weights took ...`, but the first approximately `559.688 MiB` begins about `0.395 s` before the existing model-load marker.
 
@@ -41,7 +41,7 @@ The image derives directly from `vllm-orcarouter-v029:v1`. It adds only these IN
 
 It does not change checkpoint contents, parameter classes, quantization behavior, runtime flags, PLE mmap, exact QSA, KV size, host conditioning, allocator behavior, or post-load handling.
 
-## Completed build/static-preflight gate
+## Completed image/static gate
 
 Canonical result:
 
@@ -87,31 +87,42 @@ and the R25b runner explicitly refuses to reuse that path or the R24 experiment 
 
 Default invocation is safe: calling the R25b runner with no arguments performs `--preflight`. A live run additionally requires both explicit `run` mode and `ORCA_R25B_LIVE_ACK=YES`.
 
-## Live preflight gate
+## Completed live-harness preflight gate
 
-The next action is **preflight only**:
+Canonical result:
 
-`scripts/benchmark/run-orcarouter-r25b-init-model-boundary.sh --preflight`
+- `orcarouter-r25b-live-harness-preflight-result-20261005.md`
 
-This gate runs the marker-image contract plus the inherited R24 prerequisites, including:
+Observed result:
 
-- managed service/API healthy;
-- installed managed profile is OrcaRouter;
-- required H3/H4/H5/H6 checkpoints and H6 manifest valid;
-- diagnostic image inherits the exact v0.29 stability label;
-- predecessor runtime age meets the existing 2700 s minimum;
-- direct RM probe targets are available;
-- unique R25b experiment container does not already exist;
-- unique R25b evidence path does not already exist;
-- preserved R24 evidence path exists and is not reused.
+- `R25B_IMAGE_PREFLIGHT=PASS`;
+- `R24_PREFLIGHT=PASS`;
+- `R25B_LIVE_PREFLIGHT=PASS`;
+- `R25B_PREFLIGHT_AND_NONMUTATION=PASS`;
+- predecessor age: `40516.906 s` (minimum `2700 s`);
+- `predecessor_age_ok=1`;
+- RM probe target count: `2`;
+- candidate image: `vllm-orcarouter-v029-r25-init-marker:v1`;
+- KV bytes: `17179869184`;
+- unique experiment container: `qwen38-hybrid-r25b-init-marker`;
+- unique evidence path: `/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005`;
+- preserved R24 evidence: `/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004`;
+- model restart during preflight: NO;
+- managed-service mutation during preflight: NO;
+- persistent VM tuning: NO.
 
-A successful preflight must end in `R25B_LIVE_PREFLIGHT=PASS` and performs no model restart or managed-service mutation.
+The managed container ID and `StartedAt` remained exactly unchanged before and after the live-harness preflight.
 
-**Do not start the live run until this preflight is observed PASS.**
+The live measured run is therefore authorized as the next experiment.
 
-## Live-run boundary
+## Live measured-run boundary
 
-When separately authorized after a PASS preflight, the live run preserves the R24 matched controls and strict host-stability policy while using the unique R25b container/evidence path.
+The live run must be invoked only through the dedicated wrapper with both explicit controls:
+
+- mode: `run`;
+- environment acknowledgement: `ORCA_R25B_LIVE_ACK=YES`.
+
+The run preserves the R24 matched controls and strict host-stability policy while using the unique R25b container/evidence path.
 
 The RM trace remains restricted to the already-closed boundaries:
 
@@ -147,14 +158,8 @@ H11 is potentially relevant only after initialization is implicated because it c
 
 ## Validation
 
-Current branch head before this documentation-only CI-success stamp:
+The implementation and documentation through branch head `84cb923b022057c6997f54b374c83e7a25838011` passed CI #1068: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace all PASS.
 
-- `29ec13358eb9401040a88c767998a2869ce19203`
-- CI #1066: **SUCCESS**
-- shell syntax: PASS
-- ShellCheck: PASS
-- Python compile: PASS
-- full unit tests: PASS
-- whitespace: PASS
+The subsequent live-harness preflight result is a runtime evidence update; any resulting documentation-only head must remain green before repository closure work.
 
 PR #244 remains open. No merge is implied.
