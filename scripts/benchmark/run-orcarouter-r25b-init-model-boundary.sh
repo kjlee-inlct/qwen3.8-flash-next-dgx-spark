@@ -63,25 +63,42 @@ source = pathlib.Path(sys.argv[1])
 target = pathlib.Path(sys.argv[2])
 container = sys.argv[3]
 lines = source.read_text(encoding="utf-8").splitlines()
-counts = {"root": 0, "container": 0, "group": 0}
+counts = {"root": 0, "container": 0, "group": 0, "probe_defs": 0}
 out: list[str] = []
 for line in lines:
     if line.startswith("SCRIPT_ROOT="):
-        out.append('SCRIPT_ROOT="${ORCA_R25B_SCRIPT_ROOT:?ORCA_R25B_SCRIPT_ROOT required}"')
+        line = 'SCRIPT_ROOT="${ORCA_R25B_SCRIPT_ROOT:?ORCA_R25B_SCRIPT_ROOT required}"'
         counts["root"] += 1
     elif line.startswith("EXPERIMENT_CONTAINER="):
-        out.append(f'EXPERIMENT_CONTAINER="{container}"')
+        line = f'EXPERIMENT_CONTAINER="{container}"'
         counts["container"] += 1
     elif line.startswith("GROUP="):
-        out.append('GROUP="r25b_rm"')
+        line = 'GROUP="r25b_rm"'
         counts["group"] += 1
-    else:
-        out.append(line)
-if counts != {"root": 1, "container": 1, "group": 1}:
-    raise SystemExit(f"R24 harness transform contract changed: {counts}")
-target.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+    if "r24_rm/" in line:
+        counts["probe_defs"] += line.count("r24_rm/")
+        line = line.replace("r24_rm/", "r25b_rm/")
+    out.append(line)
+
+expected = {"root": 1, "container": 1, "group": 1, "probe_defs": 4}
+if counts != expected:
+    raise SystemExit(f"R24 harness transform contract changed: {counts} != {expected}")
+rendered = "\n".join(out) + "\n"
+if "r24_rm/" in rendered:
+    raise SystemExit("R25b transformed harness still contains r24_rm probe definitions")
+if rendered.count("r25b_rm/") != 4:
+    raise SystemExit("R25b transformed harness must contain exactly four r25b_rm probe definitions")
+target.write_text(rendered, encoding="utf-8")
 PY
 chmod 700 "${TMP_HARNESS}"
+
+grep -Fq 'GROUP="r25b_rm"' "${TMP_HARNESS}" || fail "R25b probe group transform missing"
+[[ "$(grep -Fc 'r25b_rm/' "${TMP_HARNESS}")" == 4 ]] || fail "R25b probe definition transform count mismatch"
+if grep -Fq 'r24_rm/' "${TMP_HARNESS}"; then
+    fail "R24 probe definitions leaked into transformed R25b harness"
+fi
+printf 'r25b_probe_definition_contract=PASS\n'
 
 run_underlying_preflight() {
     ORCA_R25B_SCRIPT_ROOT="${SCRIPT_ROOT}" \
