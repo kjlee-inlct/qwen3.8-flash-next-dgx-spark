@@ -7,6 +7,8 @@ import unittest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 ANALYZER = REPO / "scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py"
+RUNNER = REPO / "scripts/benchmark/run-orcarouter-r25b-init-model-boundary.sh"
+R24_HARNESS = REPO / "scripts/benchmark/run-orcarouter-hybrid-r24-kv16-rm-mitigation.sh"
 
 
 class R25bInitModelOverlapTest(unittest.TestCase):
@@ -44,6 +46,35 @@ class R25bInitModelOverlapTest(unittest.TestCase):
             self.assertIn("rm_order4.total_activity_mib=2.000", proc.stdout)
             self.assertIn("rm_order4.inside_init_activity_mib=2.000", proc.stdout)
             self.assertIn("rm_order4.inside_init_pct=100.000000", proc.stdout)
+
+    def test_r25b_runner_rewrites_all_r24_probe_definitions(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        prefix = 'python3 - "${R24_HARNESS}" "${TMP_HARNESS}" "${EXPERIMENT_CONTAINER}" <<\'PY\'\n'
+        start = runner.index(prefix) + len(prefix)
+        end = runner.index("\nPY\nchmod 700", start)
+        transform = runner[start:end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rendered = pathlib.Path(tmp) / "r25b-harness.sh"
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-",
+                    str(R24_HARNESS),
+                    str(rendered),
+                    "qwen38-hybrid-r25b-test",
+                ],
+                input=transform,
+                text=True,
+                check=True,
+                capture_output=True,
+            )
+            text = rendered.read_text(encoding="utf-8")
+
+        self.assertEqual(text.count("r25b_rm/"), 4)
+        self.assertNotIn("r24_rm/", text)
+        self.assertIn('GROUP="r25b_rm"', text)
+        self.assertIn('EXPERIMENT_CONTAINER="qwen38-hybrid-r25b-test"', text)
 
 
 if __name__ == "__main__":
