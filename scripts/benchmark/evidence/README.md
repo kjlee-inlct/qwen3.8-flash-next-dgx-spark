@@ -135,14 +135,33 @@ Repository implementation includes:
 - `scripts/benchmark/analyze-orcarouter-hybrid-r24-rm-mitigation.py` — residual/RM/high-order comparison against R22;
 - `tests/test_orcarouter_hybrid_r24_rm_mitigation.py` — fixed-control, identity, trace-scope, restoration, and classification contracts.
 
-Post-run cleanup restarted `qwen38-flash-next.service` and the unit reported `active`, but the immediate `/health` call disconnected before READY was confirmed. This does not invalidate the completed H6 measurement; restored managed API readiness remains a follow-up confirmation item.
+The immediate post-run `/health` disconnect is now closed as a normal restoration interval. Follow-up verification showed the managed service remained active, committed and attested its runtime transition at `2026-10-05 00:45:28 KST`, `scripts/wait-ready.sh` returned `READY after 0s`, `/health` succeeded, and `/v1/models` returned the exact OrcaRouter served identity. Managed restoration is therefore **CLOSED / PASS**.
+
+The later unprivileged `journalctl -k` output is not used to claim absence of later RM messages because it printed the system-journal permission warning.
+
+## R25 userspace load-phase localization
+
+- `orcarouter-r25-load-phase-localization-plan-20261005.md`
+
+R25 begins with a **read-only post-hoc** analysis of the preserved R24 evidence rather than another live model restart. The purpose is to place the closed 64 KiB RM episode relative to coarse vLLM userspace phases: model start, weight loading, post-load/model finalization, and CUDA graph capture.
+
+The analyzer uses only timestamped `candidate-container.log`, the three preserved wall-clock/monotonic anchor pairs, `rm-trace.txt`, `r24-analysis.txt`, and host page size. It does not alter the model, service, Docker state, VM settings, tracepoints, or kernel state.
+
+Repository implementation includes:
+
+- `scripts/benchmark/analyze-orcarouter-r24-load-phase.py` — wall/monotonic alignment and RM/load-phase overlap analysis;
+- `tests/test_orcarouter_r24_load_phase.py` — weight-phase localization and missing-marker regression coverage.
+
+The analysis explicitly keeps `nv_alloc_pages` bytes as activity volume rather than resident ownership and treats phase alignment as temporal correlation rather than causal proof.
+
+Existing H11/H12 compressed-tensors loader controls are potentially useful only after this localization: H11 changes packed expert weights to `ModelWeightParameter`, while H12 preserves those objects across post-load rename. They should not be selected for another live run unless the post-hoc phase result points to the corresponding load/post-load boundary.
 
 ## Current next engineering direction
 
 Do not repeat H6 merely to seek a different outcome, and do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, function-graph, UVM, or all-driver tracing.
 
-R24 rejects the H6 ModelOpt W4A16 checkpoint/loader representation as a host-stability mitigation under R22-matched controls. The next discriminator must target a variable with an explicit mechanism for changing the **source or shape of the approximately 75 GiB direct RM 64 KiB system-memory demand**, rather than only changing checkpoint labels or quantization metadata.
+Run the read-only R25 load-phase localization first. If the full 64 KiB RM episode lies within model-start → weight-load completion, the next live instrumentation should target the smallest practical weight allocation/loading boundary. If it begins after weight-load completion, target post-load conversion/materialization instead. If the preserved log lacks a decisive marker, add only the smallest missing userspace marker rather than broadening trace scope.
 
-Before the next live experiment, confirm that the restored managed runtime is API READY and preserve that confirmation. Conditioning and mmap remain measurement controls/discriminators, not accepted production mitigations.
+Conditioning and mmap remain measurement controls/discriminators, not accepted production mitigations.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
