@@ -1,63 +1,62 @@
 # Benchmark evidence index
 
-This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, and allocator experiments. Historical per-run documents should remain immutable in meaning: later analysis may add links or later-closure notes, but should not rewrite what a run actually observed.
+This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
-## Current host-stability / RM allocator closure
+## Current host-stability / RM allocator chain
 
-Start with the R9–R22 allocator closure, then R23 ownership, R24 mitigation, R25 coarse userspace localization, R25b exact `initialize_model()` localization, and R26 construction-boundary localization:
+Read the current closure in this order:
 
-- `orcarouter-managed-rmsys-r9-r22-allocator-closure-20261004.md`
-- `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
-- `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
-- `orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
-- `orcarouter-r25-load-phase-localization-result-20261005.md`
+1. `orcarouter-managed-rmsys-r9-r22-allocator-closure-20261004.md`
+2. `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
+3. `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
+4. `orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
+5. `orcarouter-r25-load-phase-localization-result-20261005.md`
+6. `orcarouter-r25b-init-model-boundary-result-20261005.md`
+7. `orcarouter-r26-construction-boundary-result-20261005.md`
+8. `orcarouter-r27-linear-residual-plan-20261005.md`
+
+Supporting R25b/R26 gate history remains canonical:
+
 - `orcarouter-r25b-init-model-boundary-plan-20261005.md`
 - `orcarouter-r25b-init-model-image-preflight-result-20261005.md`
 - `orcarouter-r25b-live-harness-preflight-result-20261005.md`
 - `orcarouter-r25b-live-attempt01-probe-group-invalid-20261005.md`
 - `orcarouter-r25b-recovery-corrected-preflight-result-20261005.md`
-- `orcarouter-r25b-init-model-boundary-result-20261005.md`
 - `orcarouter-r26-construction-boundary-plan-20261005.md`
-
-R21/R22 established a common early physical-page burst of about 75 GiB over roughly five seconds. R23 closes the observed driver-level ownership endpoint to direct NVIDIA RM system-memory allocation (`nv_alloc_pages` / `nv_alloc_system_pages`) rather than the selected UVM allocation boundaries. In the independently selected R23 five-second window, 64 KiB RM activity is `74,537.938 MiB` versus `75,083.652 MiB` unexplained-residual growth (`99.273191%`), while selected UVM coverage is `0.000000%`.
-
-R24 tested H6 ModelOpt W4A16 under R22-matched 16 GiB runtime controls. It did not mitigate the mechanism: largest five-second residual `77,937.680 MiB`, R22 ratio `103.725991%`, same-window RM activity `77,405.938 MiB`, and one strict RM OOM. Classification remains **FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**.
-
-R25 then localized that R24 RM activity with preserved evidence only. The RM order-4 episode lasts about `3.217673 s`, while checkpoint filling continues for `522.10 s`; `99.276945%` of traced RM activity lies between the coarse model-start and weight-load-completion markers. The first approximately `559.688 MiB` starts about `0.395 s` before the old model-start log, making the exact `initialize_model()` boundary the next highest-information discriminator.
-
-R25b completed that boundary measurement. Attempt 01 was setup-invalid before candidate launch because the wrapper changed the shell kprobe group but not four inherited hard-coded probe definitions; the stale group was later verified and cleaned, the transform was fixed and regression-tested, and corrected preflight passed. Attempt 02 then completed as `VALID_MEASURED` with **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
-
-R25b exact alignment:
-
-- total order-4 RM activity: `77405.938 MiB`;
-- before selected `initialize_model()`: `559.688 MiB`;
-- inside selected `initialize_model()`: `76846.250 MiB`;
-- after selected `initialize_model()`: `0.000 MiB`;
-- inside-init fraction: `99.276945%`;
-- init duration: `3.161066 s`;
-- RM episode duration: `3.468940 s`;
-- strict discriminator: `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL`.
-
-The strict label reflects a real approximately `0.418 s` / `559.688 MiB` precursor before the marker. Engineering closure is that the primary approximately 75–77 GiB burst occurs during the first `initialize_model()` / immediate model-construction interval, while the long checkpoint-fill phase continues separately and owns none of the remaining traced order-4 activity after init return.
-
-R26 is the next observational discriminator. It keeps the R24/R25b runtime and narrow RM trace unchanged while adding INFO-only boundaries around the top-level `model_class(...)` constructor, `ModelOptNvFp4FusedMoE.create_weights()`, and the large routed-expert `w13_weight` / `w2_weight` allocations. Repository implementation is complete and CI-tested; the next gate is **static image build + static image preflight only**. No R26 live run is authorized yet.
+- `orcarouter-r26-construction-image-preflight-result-20261005.md`
+- `orcarouter-r26-live-harness-preflight-result-20261005.md`
 
 Strict classification policy remains:
 
 > Any confirmed `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` in a valid measured run is HOST-STABILITY FAIL even if fallback recovers and the runtime reaches READY.
 
-RM logical requested bytes remain activity volume rather than exact resident ownership. Userspace marker alignment is temporal localization rather than causal proof.
+FUNCTIONAL and HOST-STABILITY classifications must remain separate.
 
-## Lower-level allocator mechanism
+RM logical requested bytes remain allocation activity volume, not exact resident ownership. Userspace marker alignment remains temporal localization, not causal proof.
+
+## R9–R23 allocator / ownership closure
+
+R11 closes the lower-level mechanism to node0 Normal-zone Unmovable order-4 demand, Movable fallback/pageblock stealing, failed high-order acquisition, rollback, and immediate order-0 retry.
+
+R21/R22 establish a common early physical-page burst of about 75 GiB over roughly five seconds. mmap materially reduces later PLE swap/residency pressure but does not remove the common early burst or strict RM failure.
+
+R23 closes the observed driver-level endpoint to direct NVIDIA RM system-memory allocation (`nv_alloc_pages` / `nv_alloc_system_pages`) rather than the selected UVM allocation boundaries. In the independently selected R23 five-second window, 64 KiB RM activity is `74537.938 MiB` versus `75083.652 MiB` residual growth (`99.273191%`); selected UVM coverage is `0.000000%`.
+
+Canonical lower-level evidence:
 
 - `r9-acceptance-gate-20261002.md`
 - `r9-rm-sysmem-root-cause-20261002.md`
 - `orcarouter-managed-rmsys-r10b-02-rm-oom-20261003.md`
 - `orcarouter-managed-rmsys-r11-allocator-state-20261003.md`
+- `orcarouter-managed-rmsys-r21-pagecache-reclaim-result-20261004.md`
+- `orcarouter-managed-rmsys-r22-v029-mmap-result-20261004.md`
+- `orcarouter-managed-rmsys-r21-r22-mmap-comparison-20261004.md`
+- `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
+- `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
 
-R11 is the canonical exact zone/migratetype closure: node0 Normal-zone Unmovable order-4 demand, Movable fallback/pageblock stealing, failed chunk acquisition, rollback, and immediate order-0 retry.
+## Conditioning / rejected broad mitigations
 
-## Conditioning / mitigation experiments
+Canonical conditioning experiments:
 
 - `orcarouter-managed-rmsys-r12-precompact-20261003.md`
 - `orcarouter-managed-rmsys-r13-proactive80-20261003.md`
@@ -70,49 +69,37 @@ R11 is the canonical exact zone/migratetype closure: node0 Normal-zone Unmovable
 - `orcarouter-managed-rmsys-r19-stoponly-control-20261004.md`
 - `orcarouter-managed-rmsys-r20-poststop-compact-invalid-20261004.md`
 
-These runs collectively reject broad watermark/compaction/full-stop/static-high-order-state explanations as deterministic production fixes.
+These collectively reject broad watermark/compaction/drop-cache/swap/static-high-order-state tuning as a deterministic production fix. Conditioning remains a measurement control.
 
-## R21 / R22 startup-collapse evidence
+## R24 — H6 W4A16 mitigation discriminator
 
-- `orcarouter-managed-rmsys-r21-pagecache-reclaim-plan-20261004.md`
-- `orcarouter-managed-rmsys-r21-pagecache-reclaim-result-20261004.md`
-- `orcarouter-managed-rmsys-r21-collapse-onset-20261004.md`
-- `orcarouter-managed-rmsys-r22-v029-mmap-plan-20261004.md`
-- `orcarouter-managed-rmsys-r22-v029-mmap-result-20261004.md`
-- `orcarouter-managed-rmsys-r21-r22-mmap-comparison-20261004.md`
-- `orcarouter-managed-rmsys-r21-r22-unaccounted-trajectory-20261004.md`
-
-Both R21 and R22 are `VALID_RM_OOM`. mmap materially reduces later PLE swap/residency pressure but does not remove the common early burst or strict RM failure.
-
-## R23 ownership closure
-
-- `orcarouter-managed-rmsys-r23-early-burst-ownership-plan-20261004.md`
-- `orcarouter-managed-rmsys-r23-probe-preflight-result-20261004.md`
-- `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
-- `orcarouter-managed-rmsys-r23-ownership-closure-20261004.md`
-
-R23 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL**. The narrow trace captured 668 successful `nv_alloc_pages` calls and 599 successful `nv_alloc_system_pages` calls. Selected UVM PMA/DMA/PMM boundaries were silent, and the two observed `uvm_mem_alloc` calls wrapped zero RM calls.
-
-## R24 H6 16 GiB discriminator
+Canonical:
 
 - `orcarouter-hybrid-r24-kv16-rm-mitigation-plan-20261004.md`
 - `orcarouter-hybrid-r24-kv16-rm-mitigation-result-20261005.md`
 
-R24 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**. Managed restoration was later verified healthy and is closed PASS.
+R24 is **VALID_RM_OOM — FUNCTIONAL PASS / HOST-STABILITY FAIL — H6 NO RM MITIGATION**.
 
-## R25 load-phase localization
+Under R22-matched v0.29 PLE-mmap/exact-QSA controls and forced 16 GiB KV:
+
+- largest five-second residual: `77937.680 MiB`;
+- R22 ratio: `103.725991%`;
+- same-window order-4 RM activity: `77405.938 MiB`;
+- strict RM OOM count: `1`;
+- burst band: `BURST_UNCHANGED`.
+
+Managed restoration is CLOSED/PASS.
+
+## R25 — coarse userspace load-phase localization
+
+Canonical:
 
 - `orcarouter-r25-load-phase-localization-plan-20261005.md`
 - `orcarouter-r25-load-phase-localization-result-20261005.md`
 
-R25 is a completed read-only post-hoc localization. It does not itself prove the userspace cause, but it excludes post-load/CUDA-graph timing as the primary location of the short common RM episode and prioritizes exact early model construction boundaries.
+R25 is a completed read-only post-hoc localization. The RM order-4 episode lasts only about `3.217673 s`, while checkpoint filling continues for `522.10 s`. `99.276945%` of traced activity lies between the coarse model-start and weight-load-completion markers, and the first `559.688 MiB` begins before the old model-start log. This excluded post-load/CUDA-graph timing as the primary location and prioritized exact model-construction boundaries.
 
-Repository implementation:
-
-- `scripts/benchmark/analyze-orcarouter-r24-load-phase.py`
-- `tests/test_orcarouter_r24_load_phase.py`
-
-## R25b initialize_model boundary discriminator
+## R25b — exact initialize_model boundary
 
 Canonical sequence:
 
@@ -123,44 +110,98 @@ Canonical sequence:
 - `orcarouter-r25b-recovery-corrected-preflight-result-20261005.md`
 - `orcarouter-r25b-init-model-boundary-result-20261005.md`
 
-Repository implementation:
+Attempt 01 is permanently **SETUP INVALID / NO MEASUREMENT CLAIM**. Attempt 02 is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-- `scripts/patch-v029-r25-init-model-markers.py`
-- `scripts/Dockerfile.v029-r25-init-model-markers`
-- `scripts/benchmark/check-orcarouter-r25b-init-model-image.sh`
-- `scripts/benchmark/run-orcarouter-r25b-init-model-boundary.sh`
-- `scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py`
-- `tests/test_orcarouter_r25b_init_model_overlap.py`
+Exact R25b alignment:
 
-R25b is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**. The primary RM episode is localized to the first `initialize_model()` interval with a small pre-init precursor. Managed restoration closed PASS after `880 s`, and the final wrapper/command returned zero.
+- total order-4 RM activity: `77405.938 MiB`;
+- before selected `initialize_model()`: `559.688 MiB`;
+- inside: `76846.250 MiB`;
+- after: `0.000 MiB`;
+- inside fraction: `99.276945%`;
+- init duration: `3.161066 s`;
+- RM episode duration: `3.468940 s`;
+- strict discriminator: `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL`.
 
-## R26 construction / ModelOpt-MoE boundary discriminator
+The strict label reflects a real small pre-init precursor. Engineering closure is that the primary approximately 75–77 GiB episode occurs during first-model construction, not the long checkpoint-fill phase.
+
+## R26 — constructor / ModelOpt-MoE split
+
+Canonical sequence:
 
 - `orcarouter-r26-construction-boundary-plan-20261005.md`
+- `orcarouter-r26-construction-image-preflight-result-20261005.md`
+- `orcarouter-r26-live-harness-preflight-result-20261005.md`
+- `orcarouter-r26-construction-boundary-result-20261005.md`
+
+R26 is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**.
+
+The matched mechanism reproduced unchanged:
+
+- largest five-second residual: `77940.164 MiB`;
+- R22 ratio: `103.729297%`;
+- burst band: `BURST_UNCHANGED`;
+- order-4 calls/activity: `526` / `77405.938 MiB`;
+- strict RM OOM count: `2`.
+
+Top-level constructor alignment exactly preserved the R25b split:
+
+- before constructor: `559.688 MiB`;
+- inside constructor: `76846.250 MiB` (`99.276945%`);
+- after constructor: `0.000 MiB`.
+
+New R26 split:
+
+- ModelOpt-MoE create-weights: `34292.000 MiB` (`44.301511%` of total; `44.624168%` of constructor);
+- packed w13+w2: `29976.000 MiB` (`38.725711%` of total; `87.413974%` of ModelOpt-MoE);
+- ModelOpt-MoE non-packed: `4316.000 MiB`;
+- constructor activity outside ModelOpt-MoE: `42554.250 MiB`.
+
+Final discriminator:
+
+`RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`
+
+This result is decisive against applying H11 immediately: routed-expert packed storage is meaningful, but a larger constructor component remains outside ModelOpt-MoE. H11 remains deferred until that residual is localized.
+
+Managed restoration returned exact OrcaRouter READY after `879 s` and is CLOSED/PASS.
+
+## R27 — W4A16-linear / exact Qwen4Exp residual discriminator
+
+Plan:
+
+- `orcarouter-r27-linear-residual-plan-20261005.md`
 
 Repository implementation:
 
-- `scripts/patch-v029-r26-construction-markers.py`
-- `scripts/Dockerfile.v029-r26-construction-markers`
-- `scripts/benchmark/check-orcarouter-r26-construction-image.sh`
-- `scripts/benchmark/analyze-orcarouter-r26-construction-overlap.py`
-- `scripts/benchmark/run-orcarouter-r26-construction-boundary.sh`
-- `tests/test_orcarouter_r26_construction_markers.py`
-- `tests/test_orcarouter_r26_construction_overlap.py`
-- `tests/test_orcarouter_r26_runner_transform.py`
+- `scripts/patch-v029-r27-linear-boundary-markers.py`
+- `scripts/Dockerfile.v029-r27-linear-boundary-markers`
+- `scripts/benchmark/check-orcarouter-r27-linear-image.sh`
+- `scripts/benchmark/analyze-orcarouter-r27-linear-overlap.py`
+- `scripts/benchmark/run-orcarouter-r27-linear-boundary.sh`
+- `tests/test_orcarouter_r27_linear_markers.py`
+- `tests/test_orcarouter_r27_linear_overlap.py`
+- `tests/test_orcarouter_r27_runner_transform.py`
 
-R26 is **IMPLEMENTED — STATIC IMAGE BUILD/PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**. It refines the R25b first-init interval into the top-level constructor, ModelOpt NVFP4 routed-expert `create_weights()`, and w13/w2 packed-storage allocation boundaries. The R26 runner preserves the matched R24 controls, transforms all four RM probe definitions to a unique `r26_rm` group, blocks stale R24/R25b/R26 groups, and requires exact managed OrcaRouter identity during post-run restoration.
+R27 targets the `42554.250 MiB` R26 residual. It instruments the exact v0.29 `Qwen4ExpDecoderLayer` construction path and `ModelOptNvFp4W4A16LinearMethod.create_weights()`, including the packed W4A16 `weight` allocation sub-boundary.
+
+Source inspection closes an important false lead before another live run: the matched runtime has `VLLM_PLE_MMAP=1`, and the v0.29 PLE patch replaces the giant `PLEVocabParallelEmbedding` with a small `_MmapNgramEmbedding` placeholder during constructor execution while passing `quant_config=None`. The large N-gram table is later mmap-backed, so R27 does not broaden into PLE table/page-fault tracing.
+
+R27 remains observational. Current gate sequence:
+
+1. repository CI green;
+2. build marker-only R27 image;
+3. static image/preflight + managed non-mutation;
+4. canonical static result;
+5. guarded harness preflight + managed non-mutation;
+6. canonical harness result;
+7. only then one live R27 measurement.
+
+**No R27 live run is authorized yet.**
 
 ## Current next engineering direction
 
-Do not repeat H6 merely to seek a different outcome, and do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, function-graph, UVM, or all-driver tracing.
+Do not repeat H6 or R26, do not apply H11 yet, and do not return to broad watermark, compaction, drop-cache, swap, UVM, page-allocation, scheduler, function-graph, CUDA-API, Python-profiler, or PLE page-fault tracing.
 
-Build the R26 marker-only image and run **static image preflight only**, with managed container ID and `StartedAt` checked before and after. Do not start the R26 harness preflight or any live R26 measured run until the static image gate is canonically closed.
-
-If a later R26 measured run places at least 90% of total order-4 RM activity inside `ModelOptNvFp4FusedMoE.create_weights()`, parameter/storage construction is directly implicated and the next discriminator may isolate H11-like parameter-object/storage semantics. If ModelOpt-MoE coverage is low while constructor coverage remains high, instrument the smallest remaining constructor subpath instead. Keep the approximately `559.688 MiB` pre-init precursor separate from the primary 76.8 GiB burst.
-
-H11 is now materially relevant because initialization/parameter construction is implicated, but behavior-changing H11 work should follow this R26 internal construction-boundary measurement. H12 remains lower priority because the traced RM episode is already finished before post-load processing.
-
-Conditioning and mmap remain measurement controls/discriminators, not accepted production mitigations.
+The next highest-information question is whether ordinary ModelOpt W4A16 linear construction explains the R26 `42554.250 MiB` non-MoE constructor residual. If it does, the packed W4A16 weight sub-boundary will show whether storage materialization itself dominates. If it does not, Qwen4Exp layer-type and per-layer residual totals will identify the smallest remaining constructor path.
 
 PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
