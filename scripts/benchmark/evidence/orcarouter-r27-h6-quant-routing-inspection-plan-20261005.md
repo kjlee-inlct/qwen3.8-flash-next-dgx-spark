@@ -2,87 +2,74 @@
 
 ## Status
 
-**IMPLEMENTED — READ-ONLY INSPECTION NEXT — NO MODEL RESTART — NO LIVE RM RUN AUTHORIZED**
+**COMPLETED — READ-ONLY PASS — ROUTING EXPLAINS ZERO W4A16 DENSE CALLS — NO GENERIC R28 DISPATCH RUN NEEDED**
 
 R27 is closed as:
 
 **VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL — `RM_ORDER4_R26_RESIDUAL_MIXED_WITHIN_QWEN4_LAYERS`**
 
-Canonical predecessor:
+Canonical predecessor/result:
 
 - `scripts/benchmark/evidence/orcarouter-r27-linear-residual-result-20261005.md`
+- `scripts/benchmark/evidence/orcarouter-r27-h6-quant-routing-inspection-result-20261005.md`
 
 R27 found zero runtime invocations of `ModelOptNvFp4W4A16LinearMethod.create_weights()` despite the H6 checkpoint declaring `W4A16_NVFP4`, while `91.996099%` of the R26 non-MoE residual remained inside selected Qwen4 decoder layers.
 
-The next question is therefore routing, not another allocator trace.
+The completed read-only inspection explains that result as routing rather than marker failure.
 
-## Objective
+## Completed observations
 
-Determine, without loading or restarting a model:
+H6 remains the intended config-only control:
 
-1. the exact H6 `quantization_config` fields;
-2. inherited `ignore` / `exclude_modules` patterns;
-3. whether those patterns approximately cover large checkpoint module families;
-4. config-group structure, if present;
-5. source-level reasons selected Qwen4Exp subpaths may force `quant_config=None` or an unquantized method.
+```text
+manifest.variant=h6-modelopt-w4a16
+manifest.parent_variant=h5-neutral-input-scale
+manifest.quant_algo_before=NVFP4
+manifest.quant_algo_after=W4A16_NVFP4
+manifest.safetensor_bytes_changed=0
+quant.quant_method=modelopt
+quant.quant_algo=W4A16_NVFP4
+```
 
-This inspection must remain read-only.
+The inherited ModelOpt ignore list contains broad decoder families including:
 
-## Inspector
+```text
+*.self_attn.*
+*.linear_attn.*
+*.mlp.gate*
+*.mlp.shared_expert.*
+*.mlp.shared_expert_gate*
+*hyper_connection*
+*.ple.*
+```
 
-Repository helper:
+Approximate checkpoint-prefix diagnostics found `117` matches under `*.self_attn.*` and `252` under `*.linear_attn.*`.
 
-- `scripts/benchmark/inspect-orcarouter-r27-h6-quant-routing.py`
+The exact R27 image source contract passed:
 
-Default checkpoint:
+```text
+linear_none_selects_unquantized=PASS
+modelopt_exclusion_selects_unquantized=PASS
+modelopt_w4a16_class_selection_exists=PASS
+qwen4_modelopt_fp4_optout_helper=PASS
+qsa_qkv_uses_modelopt_fp4_optout=PASS
+R27_SOURCE_ROUTING_CONTRACT=PASS
+```
 
-`models/qwen3.8-h6-modelopt-w4a16`
+Managed runtime identity and StartedAt were unchanged across the inspection. No model launch, restart, RM trace, or persistent tuning occurred.
 
-The helper reads only:
+## Decision closure
 
-- `config.json`;
-- `model.safetensors.index.json`;
-- `.qwen38-hybrid-manifest.json`.
+The `Config/source routing explains zero W4A16 calls` branch is selected.
 
-It does not import vLLM, instantiate the model, touch CUDA, alter symlinks, or change checkpoint files.
+Do not perform a generic R28 all-quant-method dispatch run merely to rediscover the same routing. The next useful boundary is narrower: `UnquantizedLinearMethod.create_weights()` only.
 
-Its checkpoint-name matching against ignore/exclude patterns is explicitly **approximate** because exact vLLM routing also applies packed-module mapping and model-specific `quant_config=None` overrides.
+This is necessary because the selected decoder non-MoE RM activity (`39,148.250 MiB`) is much larger than ordinary BF16 attention parameter payload. RM logical requested bytes remain activity volume, not exact resident ownership, so direct temporal overlap is required before inferring allocator amplification.
 
-## Static source contracts to verify
+## Next experiment constraint
 
-In the exact R27 diagnostic image, verify read-only that:
+R28 may instrument only the unquantized Linear create-weights path while inheriting the already validated narrow direct-RM trace and R26/R27 model/layer markers. It should aggregate overlap by exact prefix family and report dimensions/dtype without changing allocation semantics.
 
-- `LinearBase` chooses `UnquantizedLinearMethod()` when `quant_config is None`;
-- ModelOpt exclusion routing can return `UnquantizedLinearMethod()`;
-- `ModelOptNvFp4Config` selects `ModelOptNvFp4W4A16LinearMethod` only for modules that actually receive the ModelOpt config and are not excluded;
-- Qwen4Exp `without_modelopt_fp4()` converts `modelopt_fp4` to `None`;
-- Qwen4Exp QSA `qkv_proj` uses `without_modelopt_fp4(quant_config)`.
-
-These are source-routing facts only; they do not claim RM ownership.
-
-## Decision branches
-
-### Config/source routing explains zero W4A16 calls
-
-If H6 ignore/exclude patterns and explicit Qwen4Exp opt-outs account for the relevant dense families, record the routing closure and use those exact unquantized families to design the next allocator boundary. Do not perform a generic R28 live run merely to rediscover the same routing.
-
-### Config/source routing is insufficient
-
-If the read-only inspection cannot explain the zero W4A16 call count, R28 should be a marker-only generic LinearBase dispatch measurement. It must record:
-
-- parameter prefix;
-- LinearBase subclass;
-- actual selected `quant_method.__class__.__name__`;
-- input/output partition dimensions;
-- parameter dtype;
-- create-weights begin/end interval.
-
-The analyzer should aggregate direct-RM order-4 activity by actual quant-method class and prefix family. R28 must inherit the validated narrow R24 trace and strict host-stability classification.
-
-## Safety / gate
-
-No live R28 run is authorized by this document.
-
-Do not delete or reuse R27 evidence. Do not repeat R27. Do not apply H11 yet. Do not broaden into UVM, page-allocation, scheduler, function-graph, CUDA-API, Python-profiler, or PLE page-fault tracing.
+No H11 behavior change is authorized yet. Do not broaden into UVM, generic page allocation, scheduler, function-graph, CUDA-API, Python-profiler, or PLE page-fault tracing.
 
 PR #244 remains open. No merge is implied or authorized.
