@@ -4,7 +4,7 @@ This directory preserves canonical evidence for live DGX Spark runtime, profile-
 
 ## Current host-stability / RM allocator closure
 
-Start with the R9–R22 allocator closure, then R23 ownership, R24 mitigation, and R25/R25b userspace localization:
+Start with the R9–R22 allocator closure, then R23 ownership, R24 mitigation, R25 coarse userspace localization, and R25b exact `initialize_model()` localization:
 
 - `orcarouter-managed-rmsys-r9-r22-allocator-closure-20261004.md`
 - `orcarouter-managed-rmsys-r23-early-burst-ownership-result-20261004.md`
@@ -13,6 +13,10 @@ Start with the R9–R22 allocator closure, then R23 ownership, R24 mitigation, a
 - `orcarouter-r25-load-phase-localization-result-20261005.md`
 - `orcarouter-r25b-init-model-boundary-plan-20261005.md`
 - `orcarouter-r25b-init-model-image-preflight-result-20261005.md`
+- `orcarouter-r25b-live-harness-preflight-result-20261005.md`
+- `orcarouter-r25b-live-attempt01-probe-group-invalid-20261005.md`
+- `orcarouter-r25b-recovery-corrected-preflight-result-20261005.md`
+- `orcarouter-r25b-init-model-boundary-result-20261005.md`
 
 R21/R22 established a common early physical-page burst of about 75 GiB over roughly five seconds. R23 closes the observed driver-level ownership endpoint to direct NVIDIA RM system-memory allocation (`nv_alloc_pages` / `nv_alloc_system_pages`) rather than the selected UVM allocation boundaries. In the independently selected R23 five-second window, 64 KiB RM activity is `74,537.938 MiB` versus `75,083.652 MiB` unexplained-residual growth (`99.273191%`), while selected UVM coverage is `0.000000%`.
 
@@ -20,9 +24,20 @@ R24 tested H6 ModelOpt W4A16 under R22-matched 16 GiB runtime controls. It did n
 
 R25 then localized that R24 RM activity with preserved evidence only. The RM order-4 episode lasts about `3.217673 s`, while checkpoint filling continues for `522.10 s`; `99.276945%` of traced RM activity lies between the coarse model-start and weight-load-completion markers. The first approximately `559.688 MiB` starts about `0.395 s` before the old model-start log, making the exact `initialize_model()` boundary the next highest-information discriminator.
 
-R25b therefore adds only two INFO markers around vLLM v0.29 `initialize_model(...)`. The marker-only diagnostic image was built and passed its static contract check. The managed container id and `StartedAt` were identical before and after that build/static preflight, so no managed restart occurred.
+R25b completed that boundary measurement. Attempt 01 was setup-invalid before candidate launch because the wrapper changed the shell kprobe group but not four inherited hard-coded probe definitions; the stale group was later verified and cleaned, the transform was fixed and regression-tested, and corrected preflight passed. Attempt 02 then completed as `VALID_MEASURED` with **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-R25b now has a gated live runner and a focused overlap analyzer. The next action is **R25b live-harness preflight only**. The runner defaults to preflight and a live run requires explicit `run` plus `ORCA_R25B_LIVE_ACK=YES`. Preserved R24 evidence/container names are explicitly forbidden for reuse.
+R25b exact alignment:
+
+- total order-4 RM activity: `77405.938 MiB`;
+- before selected `initialize_model()`: `559.688 MiB`;
+- inside selected `initialize_model()`: `76846.250 MiB`;
+- after selected `initialize_model()`: `0.000 MiB`;
+- inside-init fraction: `99.276945%`;
+- init duration: `3.161066 s`;
+- RM episode duration: `3.468940 s`;
+- strict discriminator: `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL`.
+
+The strict label reflects a real approximately `0.418 s` / `559.688 MiB` precursor before the marker. Engineering closure is that the primary approximately 75–77 GiB burst occurs during the first `initialize_model()` / immediate model-construction interval, while the long checkpoint-fill phase continues separately and owns none of the remaining traced order-4 activity after init return.
 
 Strict classification policy remains:
 
@@ -96,10 +111,16 @@ Repository implementation:
 
 ## R25b initialize_model boundary discriminator
 
+Canonical sequence:
+
 - `orcarouter-r25b-init-model-boundary-plan-20261005.md`
 - `orcarouter-r25b-init-model-image-preflight-result-20261005.md`
+- `orcarouter-r25b-live-harness-preflight-result-20261005.md`
+- `orcarouter-r25b-live-attempt01-probe-group-invalid-20261005.md`
+- `orcarouter-r25b-recovery-corrected-preflight-result-20261005.md`
+- `orcarouter-r25b-init-model-boundary-result-20261005.md`
 
-Static image preflight is PASS. Repository implementation:
+Repository implementation:
 
 - `scripts/patch-v029-r25-init-model-markers.py`
 - `scripts/Dockerfile.v029-r25-init-model-markers`
@@ -108,13 +129,15 @@ Static image preflight is PASS. Repository implementation:
 - `scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py`
 - `tests/test_orcarouter_r25b_init_model_overlap.py`
 
-The next gate is live-harness **preflight only**. Do not start live R25b unless `R25B_LIVE_PREFLIGHT=PASS` is observed.
+R25b is **COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**. The primary RM episode is localized to the first `initialize_model()` interval with a small pre-init precursor. Managed restoration closed PASS after `880 s`, and the final wrapper/command returned zero.
 
 ## Current next engineering direction
 
 Do not repeat H6 merely to seek a different outcome, and do not return to broad watermark, compaction, drop-cache, swap, page-allocation, scheduler, function-graph, UVM, or all-driver tracing.
 
-Run only the gated R25b preflight next. If the later measured run places nearly all 64 KiB RM activity inside `initialize_model()`, the next discriminator should target construction/materialization shape. If activity materially starts after `INIT_MODEL_END`, instrument the smallest weight-loader boundary instead. H11 becomes relevant only if initialization/parameter construction is implicated; H12 remains lower priority for this host-stability question.
+The next discriminator should stay observational and split only the first `initialize_model()` path into a few stable boundaries: model-class resolution/constructor entry, top-level construction, routed-expert or packed-parameter/storage materialization, and constructor return. Keep the approximately `559.688 MiB` pre-init precursor as a distinct side observation rather than merging it into the primary 76.8 GiB burst.
+
+H11 is now materially relevant because initialization/parameter construction is implicated, but behavior-changing H11 work should follow one more internal construction-boundary measurement. H12 remains lower priority because the traced RM episode is already finished before post-load processing.
 
 Conditioning and mmap remain measurement controls/discriminators, not accepted production mitigations.
 
