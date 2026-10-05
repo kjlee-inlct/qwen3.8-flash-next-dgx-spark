@@ -2,7 +2,7 @@
 
 ## Status
 
-**LIVE HARNESS PREFLIGHT PASS — LIVE MEASURED RUN AUTHORIZED**
+**LIVE ATTEMPT 01 SETUP INVALID — PROBE-GROUP FIX IMPLEMENTED — RETRY BLOCKED PENDING RECOVERY + CORRECTED PREFLIGHT**
 
 R25 read-only localization showed that the R24 64 KiB NVIDIA RM episode is only about 3.218 seconds long even though checkpoint weight filling takes 522.10 seconds. `99.276945%` of traced order-4 activity falls between the existing `Loading model from scratch...` marker and `Loading weights took ...`, but the first approximately `559.688 MiB` begins about `0.395 s` before the existing model-load marker.
 
@@ -69,13 +69,20 @@ Repository additions:
 - `scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py`;
 - `tests/test_orcarouter_r25b_init_model_overlap.py`.
 
-The R25b runner does **not** edit the historical R24 runner. Instead it creates an ephemeral `/tmp` copy and changes only three harness-local identifiers:
+The R25b runner does **not** edit the historical R24 runner. Instead it creates an ephemeral `/tmp` copy and transforms only the R25b-local harness identity:
 
 1. repository-root injection so the temporary copy resolves the current checkout;
 2. experiment container name → `qwen38-hybrid-r25b-init-marker`;
-3. kprobe group name → `r25b_rm`.
+3. shell kprobe group variable → `r25b_rm`;
+4. all exactly four hard-coded R24 kprobe definitions → `r25b_rm/...`.
 
-The underlying R24 matched-control harness is otherwise reused unchanged. R25b sets its own diagnostic image and unique evidence directory:
+The transform now requires exactly four probe-definition replacements, rejects any remaining `r24_rm/` definition, and requires exactly four resulting `r25b_rm/` definitions. A regression test executes the exact embedded transform against the canonical R24 harness.
+
+The corrected retry evidence directory is:
+
+`/tmp/orcarouter-hybrid-r25b-init-model-boundary-02-20261005`
+
+The failed attempt-01 directory is preserved and must not be reused:
 
 `/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005`
 
@@ -83,17 +90,17 @@ The preserved R24 directory remains:
 
 `/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004`
 
-and the R25b runner explicitly refuses to reuse that path or the R24 experiment container name.
+The runner explicitly refuses to reuse the R24 path or container name. It also blocks preflight/live execution if stale `r24_rm` or `r25b_rm` kprobe groups are present.
 
-Default invocation is safe: calling the R25b runner with no arguments performs `--preflight`. A live run additionally requires both explicit `run` mode and `ORCA_R25B_LIVE_ACK=YES`.
+Default invocation remains safe: calling the R25b runner with no arguments performs `--preflight`. A live run additionally requires both explicit `run` mode and `ORCA_R25B_LIVE_ACK=YES`.
 
-## Completed live-harness preflight gate
+## Completed original live-harness preflight gate
 
 Canonical result:
 
 - `orcarouter-r25b-live-harness-preflight-result-20261005.md`
 
-Observed result:
+The original preflight passed and was non-mutating:
 
 - `R25B_IMAGE_PREFLIGHT=PASS`;
 - `R24_PREFLIGHT=PASS`;
@@ -104,27 +111,47 @@ Observed result:
 - RM probe target count: `2`;
 - candidate image: `vllm-orcarouter-v029-r25-init-marker:v1`;
 - KV bytes: `17179869184`;
-- unique experiment container: `qwen38-hybrid-r25b-init-marker`;
-- unique evidence path: `/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005`;
-- preserved R24 evidence: `/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004`;
 - model restart during preflight: NO;
 - managed-service mutation during preflight: NO;
 - persistent VM tuning: NO.
 
-The managed container ID and `StartedAt` remained exactly unchanged before and after the live-harness preflight.
+That preflight did not materialize the probe definitions, so it could not detect the later heredoc group mismatch.
 
-The live measured run is therefore authorized as the next experiment.
+## Live attempt 01 — setup invalid
 
-## Live measured-run boundary
+Canonical result:
 
-The live run must be invoked only through the dedicated wrapper with both explicit controls:
+- `orcarouter-r25b-live-attempt01-probe-group-invalid-20261005.md`
+
+The first live invocation passed the preflight and explicit ACK gate, then failed in `create_probes()` with:
+
+`ORCA_R24_ERROR: probe event not materialized: r25b_rm:nv_alloc_pages_entry`
+
+Root cause: the initial wrapper changed `GROUP="r24_rm"` to `GROUP="r25b_rm"`, but the inherited R24 probe-definition heredoc still created all four events under hard-coded `r24_rm/...` names. Validation therefore searched for `r25b_rm/...` events that had not been created.
+
+This failure occurred before candidate launch and produced **no R25b localization measurement**. Classification is **SETUP INVALID**.
+
+Because cleanup used `GROUP=r25b_rm`, stale `r24_rm` probe events may remain. Managed restoration must also be verified explicitly on the DGX host. The partial attempt-01 evidence is preserved.
+
+## Retry gate
+
+A retry is **not** authorized yet. Before the retry:
+
+1. verify the managed OrcaRouter service/API is restored and READY;
+2. inspect and remove only the exact stale `r24_rm` / `r25b_rm` groups from the failed attempt if present;
+3. preserve attempt-01 evidence unchanged;
+4. pull the corrected wrapper and require green CI;
+5. run corrected R25b `--preflight` using the new `-02` evidence path;
+6. require `stale_probe_groups=NONE`, `r25b_probe_definition_contract=PASS`, and `R25B_LIVE_PREFLIGHT=PASS` before authorizing another live run.
+
+## Live measured-run boundary after retry authorization
+
+When the corrected retry gate passes, the live run must use the dedicated wrapper with both explicit controls:
 
 - mode: `run`;
 - environment acknowledgement: `ORCA_R25B_LIVE_ACK=YES`.
 
-The run preserves the R24 matched controls and strict host-stability policy while using the unique R25b container/evidence path.
-
-The RM trace remains restricted to the already-closed boundaries:
+The RM trace remains restricted to:
 
 - `nv_alloc_pages`;
 - `nv_alloc_system_pages`;
@@ -132,7 +159,7 @@ The RM trace remains restricted to the already-closed boundaries:
 
 No UVM, generic page allocation, scheduler, function graph, CUDA API blanket tracing, or broad Python profiling is added.
 
-The post-run analyzer maps every valid begin/end marker pair onto the monotonic RM trace clock, selects the pair containing the most 64 KiB RM activity, and reports:
+The post-run analyzer reports:
 
 - clock-offset spread and classification tolerance;
 - selected `INIT_MODEL_BEGIN` / `INIT_MODEL_END` markers;
@@ -146,7 +173,7 @@ The post-run analyzer maps every valid begin/end marker pair onto the monotonic 
   - `RM_ORDER4_EXTENDS_AFTER_INITIALIZE_MODEL`;
   - `RM_ORDER4_STRADDLES_INITIALIZE_MODEL`.
 
-RM logical bytes remain activity volume, not exact resident ownership. Marker overlap remains temporal localization, not causal proof.
+RM logical bytes remain activity volume, not exact resident ownership. Marker overlap remains temporal localization rather than causal proof.
 
 ## Interpretation
 
@@ -158,8 +185,8 @@ H11 is potentially relevant only after initialization is implicated because it c
 
 ## Validation
 
-The implementation and documentation through branch head `84cb923b022057c6997f54b374c83e7a25838011` passed CI #1068: shell syntax, ShellCheck, Python compile, full unit tests, and whitespace all PASS.
+The previous authorized head `009c8d47595765ca5dcf366500dfdc8de8bd2257` passed CI #1072, but that CI did not include the newly discovered probe-definition fix.
 
-The subsequent live-harness preflight result is a runtime evidence update; any resulting documentation-only head must remain green before repository closure work.
+The corrected retry must not proceed until the new fix/regression-test head is CI green.
 
 PR #244 remains open. No merge is implied.
