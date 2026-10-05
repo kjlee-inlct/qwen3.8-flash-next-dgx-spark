@@ -1,0 +1,79 @@
+# R27 diagnostic image: partition the R26 constructor residual into
+# ModelOpt W4A16 linear allocation and Qwen4Exp decoder-layer boundaries.
+#
+# Marker-only: no checkpoint, tensor shape/value, parameter class, quantization,
+# allocator, PLE mmap, runtime, or control behavior is changed.
+FROM vllm-orcarouter-v029-r26-construction-marker:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG MODELOPT=${SP}/vllm/model_executor/layers/quantization/modelopt.py
+ARG QWEN4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
+ARG PLE_LAYER=${SP}/vllm/models/qwen4_exp/nvidia/ple_layer.py
+ARG PLE_MMAP=${SP}/vllm_ple_mmap.py
+
+COPY patch-v029-r27-linear-boundary-markers.py /tmp/patch-v029-r27-linear-boundary-markers.py
+RUN cp ${MODELOPT} ${MODELOPT}.r27.orig \
+ && cp ${QWEN4} ${QWEN4}.r27.orig \
+ && python3 /tmp/patch-v029-r27-linear-boundary-markers.py ${MODELOPT} ${QWEN4} \
+ && rm /tmp/patch-v029-r27-linear-boundary-markers.py \
+ && python3 - <<'PY'
+import ast
+import os
+
+sp = "/usr/local/lib/python3.12/dist-packages"
+paths = {
+    "loader": f"{sp}/vllm/model_executor/model_loader/utils.py",
+    "modelopt": f"{sp}/vllm/model_executor/layers/quantization/modelopt.py",
+    "qwen4": f"{sp}/vllm/models/qwen4_exp/nvidia/model.py",
+    "ple_layer": f"{sp}/vllm/models/qwen4_exp/nvidia/ple_layer.py",
+    "ple_mmap": f"{sp}/vllm_ple_mmap.py",
+}
+texts = {name: open(path, encoding="utf-8").read() for name, path in paths.items()}
+for name in ("loader", "modelopt", "qwen4", "ple_layer", "ple_mmap"):
+    ast.parse(texts[name])
+
+# Inherited R26 contract.
+assert texts["loader"].count("QWEN38_R26_MODEL_CTOR_BEGIN") == 1
+assert texts["loader"].count("QWEN38_R26_MODEL_CTOR_END") == 1
+for marker in (
+    "QWEN38_R26_MODELOPT_MOE_BEGIN",
+    "QWEN38_R26_MODELOPT_MOE_END",
+    "QWEN38_R26_MODELOPT_W13_BEGIN",
+    "QWEN38_R26_MODELOPT_W13_END",
+    "QWEN38_R26_MODELOPT_W2_BEGIN",
+    "QWEN38_R26_MODELOPT_W2_END",
+):
+    assert texts["modelopt"].count(marker) == 1, marker
+
+# New R27 W4A16 linear contract.
+for marker in (
+    "QWEN38_R27_W4A16_LINEAR_BEGIN",
+    "QWEN38_R27_W4A16_LINEAR_END",
+    "QWEN38_R27_W4A16_WEIGHT_BEGIN",
+    "QWEN38_R27_W4A16_WEIGHT_END",
+):
+    assert texts["modelopt"].count(marker) == 1, marker
+assert texts["modelopt"].count("_QWEN38_R27_W4A16_LINEAR_SEQ = 0") == 1
+assert "class ModelOptNvFp4W4A16LinearMethod" in texts["modelopt"]
+
+# New R27 exact Qwen4Exp layer contract.
+assert texts["qwen4"].count("QWEN38_R27_QWEN4_LAYER_BEGIN") == 1
+assert texts["qwen4"].count("QWEN38_R27_QWEN4_LAYER_END") == 1
+assert texts["qwen4"].count("_QWEN38_R27_QWEN4_LAYER_SEQ = 0") == 1
+assert "class Qwen4ExpDecoderLayer" in texts["qwen4"]
+assert "class Qwen4ExpForCausalLM" in texts["qwen4"]
+
+# The matched runtime's large PLE table must remain mmap-backed and replaced by
+# the v0.29 placeholder during constructor execution. This is why R27 does not
+# add a broad PLE-table allocation marker.
+assert os.environ.get("QWEN38_PLE_MMAP") == "1"
+assert "_ple_mmap_apply(Qwen4ExpNGramEmbedding)" in texts["ple_layer"]
+assert "def _apply_v029(cls: type)" in texts["ple_mmap"]
+assert 'embed_attr = "PLEVocabParallelEmbedding"' in texts["ple_mmap"]
+assert "_MmapNgramEmbedding(n, d)" in texts["ple_mmap"]
+assert "quant_config=None" in texts["ple_mmap"]
+
+print("R27 residual-constructor marker image validation passed")
+PY
+
+LABEL qwen38.r27="w4a16-linear-boundary-v1"
