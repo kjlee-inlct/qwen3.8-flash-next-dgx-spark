@@ -1,0 +1,12 @@
+# M1 inherits the exact R28 diagnostic image so R26/R27/R28 markers remain
+# available for any later measured comparison. This image changes only the
+# ModelOpt NVFP4 routed-expert w13 construction timing.
+FROM vllm-orcarouter-v029-r28-unquant-linear-marker:v1
+
+COPY scripts/patch-v029-m1-deferred-meta-w13.py /tmp/patch-v029-m1-deferred-meta-w13.py
+
+RUN python3 /tmp/patch-v029-m1-deferred-meta-w13.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py \
+    && rm -f /tmp/patch-v029-m1-deferred-meta-w13.py
+
+LABEL qwen38.m1="deferred-meta-w13-v1"
