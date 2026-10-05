@@ -1,0 +1,59 @@
+# R28 diagnostic image: test whether unquantized Linear parameter construction
+# explains the R27 decoder non-MoE direct-RM residual.
+#
+# Marker-only: no checkpoint, tensor shape/value, parameter class, quantization,
+# allocator, PLE mmap, runtime, or control behavior is changed.
+FROM vllm-orcarouter-v029-r27-linear-marker:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG LINEAR=${SP}/vllm/model_executor/layers/linear.py
+ARG LOADER=${SP}/vllm/model_executor/model_loader/utils.py
+ARG MODELOPT=${SP}/vllm/model_executor/layers/quantization/modelopt.py
+ARG QWEN4=${SP}/vllm/models/qwen4_exp/nvidia/model.py
+
+COPY patch-v029-r28-unquant-linear-markers.py /tmp/patch-v029-r28-unquant-linear-markers.py
+RUN cp ${LINEAR} ${LINEAR}.r28.orig \
+ && python3 /tmp/patch-v029-r28-unquant-linear-markers.py ${LINEAR} \
+ && rm /tmp/patch-v029-r28-unquant-linear-markers.py \
+ && python3 - <<'PY'
+import ast
+
+sp = "/usr/local/lib/python3.12/dist-packages"
+paths = {
+    "linear": f"{sp}/vllm/model_executor/layers/linear.py",
+    "loader": f"{sp}/vllm/model_executor/model_loader/utils.py",
+    "modelopt": f"{sp}/vllm/model_executor/layers/quantization/modelopt.py",
+    "qwen4": f"{sp}/vllm/models/qwen4_exp/nvidia/model.py",
+}
+texts = {name: open(path, encoding="utf-8").read() for name, path in paths.items()}
+for text in texts.values():
+    ast.parse(text)
+
+# Inherited R26/R27 contracts.
+assert texts["loader"].count("QWEN38_R26_MODEL_CTOR_BEGIN") == 1
+assert texts["loader"].count("QWEN38_R26_MODEL_CTOR_END") == 1
+for marker in (
+    "QWEN38_R26_MODELOPT_MOE_BEGIN",
+    "QWEN38_R26_MODELOPT_MOE_END",
+):
+    assert texts["modelopt"].count(marker) == 1, marker
+for marker in (
+    "QWEN38_R27_QWEN4_LAYER_BEGIN",
+    "QWEN38_R27_QWEN4_LAYER_END",
+):
+    assert texts["qwen4"].count(marker) == 1, marker
+
+# New R28 exact unquantized Linear contract.
+for marker in (
+    "QWEN38_R28_UNQUANT_LINEAR_BEGIN",
+    "QWEN38_R28_UNQUANT_LINEAR_END",
+):
+    assert texts["linear"].count(marker) == 1, marker
+assert texts["linear"].count("_QWEN38_R28_UNQUANT_LINEAR_SEQ = 0") == 1
+assert "class UnquantizedLinearMethod" in texts["linear"]
+assert "data=torch.empty(" in texts["linear"]
+
+print("R28 unquantized-linear marker image validation passed")
+PY
+
+LABEL qwen38.r28="unquant-linear-boundary-v1"

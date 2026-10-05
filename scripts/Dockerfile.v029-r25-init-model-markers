@@ -1,0 +1,27 @@
+# R25 diagnostic image: add only initialize_model begin/end timing markers.
+#
+# This derives from the exact R24 runtime image and intentionally changes no
+# model/runtime behavior beyond two INFO log lines in BaseModelLoader.load_model().
+FROM vllm-orcarouter-v029:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG BASE_LOADER=${SP}/vllm/model_executor/model_loader/base_loader.py
+
+COPY patch-v029-r25-init-model-markers.py /tmp/patch-v029-r25-init-model-markers.py
+RUN cp ${BASE_LOADER} ${BASE_LOADER}.r25.orig \
+ && python3 /tmp/patch-v029-r25-init-model-markers.py ${BASE_LOADER} \
+ && rm /tmp/patch-v029-r25-init-model-markers.py \
+ && python3 - <<'PY'
+import ast
+p = "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/model_loader/base_loader.py"
+s = open(p, encoding="utf-8").read()
+ast.parse(s)
+assert s.count('QWEN38_R25_INIT_MODEL_BEGIN') == 1
+assert s.count('QWEN38_R25_INIT_MODEL_END') == 1
+assert s.index('QWEN38_R25_INIT_MODEL_BEGIN') < s.index('model = initialize_model(')
+assert s.index('model = initialize_model(') < s.index('QWEN38_R25_INIT_MODEL_END')
+assert s.index('QWEN38_R25_INIT_MODEL_END') < s.index('self.load_weights(model, model_config)')
+print("R25 initialize_model marker image validation passed")
+PY
+
+LABEL qwen38.r25="init-model-boundary-v1"

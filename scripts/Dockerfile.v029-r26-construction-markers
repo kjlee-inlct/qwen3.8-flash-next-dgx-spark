@@ -1,0 +1,53 @@
+# R26 diagnostic image: refine the R25 initialize_model boundary into
+# top-level constructor and ModelOpt NVFP4 MoE packed-storage boundaries.
+#
+# Marker-only: no checkpoint, quantization, allocator, runtime, or control
+# behavior is changed.
+FROM vllm-orcarouter-v029-r25-init-marker:v1
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG LOADER_UTILS=${SP}/vllm/model_executor/model_loader/utils.py
+ARG MODELOPT=${SP}/vllm/model_executor/layers/quantization/modelopt.py
+
+COPY patch-v029-r26-construction-markers.py /tmp/patch-v029-r26-construction-markers.py
+RUN cp ${LOADER_UTILS} ${LOADER_UTILS}.r26.orig \
+ && cp ${MODELOPT} ${MODELOPT}.r26.orig \
+ && python3 /tmp/patch-v029-r26-construction-markers.py ${LOADER_UTILS} ${MODELOPT} \
+ && rm /tmp/patch-v029-r26-construction-markers.py \
+ && python3 - <<'PY'
+import ast
+
+paths = {
+    "loader": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/model_loader/utils.py",
+    "modelopt": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py",
+}
+texts = {name: open(path, encoding="utf-8").read() for name, path in paths.items()}
+for text in texts.values():
+    ast.parse(text)
+
+loader = texts["loader"]
+assert loader.count("QWEN38_R26_MODEL_CTOR_BEGIN") == 1
+assert loader.count("QWEN38_R26_MODEL_CTOR_END") == 1
+assert loader.index("QWEN38_R26_MODEL_CTOR_BEGIN") < loader.index(
+    "model = model_class(vllm_config=vllm_config, prefix=prefix)"
+)
+assert loader.index("model = model_class(vllm_config=vllm_config, prefix=prefix)") < loader.index(
+    "QWEN38_R26_MODEL_CTOR_END"
+)
+
+modelopt = texts["modelopt"]
+for marker in (
+    "QWEN38_R26_MODELOPT_MOE_BEGIN",
+    "QWEN38_R26_MODELOPT_MOE_END",
+    "QWEN38_R26_MODELOPT_W13_BEGIN",
+    "QWEN38_R26_MODELOPT_W13_END",
+    "QWEN38_R26_MODELOPT_W2_BEGIN",
+    "QWEN38_R26_MODELOPT_W2_END",
+):
+    assert modelopt.count(marker) == 1, marker
+assert modelopt.count("_QWEN38_R26_MODELOPT_MOE_SEQ = 0") == 1
+assert '"W4A16_NVFP4"' in modelopt
+print("R26 construction marker image validation passed")
+PY
+
+LABEL qwen38.r26="construction-boundary-v1"

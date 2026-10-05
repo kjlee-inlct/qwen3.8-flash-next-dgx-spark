@@ -5620,3 +5620,1286 @@ This PASS closes the specific host-stability repair gate for the reproduced
 failure mode. It does not claim indefinite soak stability or prove safety for
 arbitrarily larger concurrent workloads.
 
+### 2026-09-30 managed profile-switch live acceptance
+
+Live acceptance is being run on a single DGX Spark after updating the immutable
+managed release to
+`dd3127b54f4f5d817c4e8abfbc09e83180f21124`. This section records each
+completed profile-switch leg as evidence arrives; incomplete legs remain
+explicitly pending rather than being inferred from unit coverage.
+
+#### Leg 1: OrcaRouter Hybrid -> OrcaRouter
+
+Result: **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
+
+
+Pre-switch state:
+
+- active profile: `orcarouter-hybrid`;
+- update, runtime, and profile-switch transactions: all `idle`;
+- cumulative asset-ownership registry: absent, because this host predated the
+  registry rollout;
+- target OrcaRouter checkpoint and `vllm-skinny-tp1:v1` image were already
+  present on the host;
+- immutable current release:
+  `dd3127b54f4f5d817c4e8abfbc09e83180f21124`.
+
+Observed switch:
+
+- started at `2026-09-30T08:19:33+09:00`;
+- profile-switch transaction prepared
+  `orcarouter-hybrid -> orcarouter`;
+- target manifest activated before runtime cutover;
+- the managed replacement runtime reached committed healthy state;
+- runtime commit was recorded for `orcarouter`;
+- the target manifest was recovered/finalized to `PHASE=complete`;
+- switch command returned `0`;
+- completed at `2026-09-30T08:35:31+09:00`;
+- measured wall time: 958 seconds.
+
+Post-switch lifecycle state:
+
+- active profile: `orcarouter`;
+- model:
+  `models/qwen3.8-flash-next-orcarouter` at pinned revision
+  `c1209bda15a6bbc4c68b585e93d40c0d85f50306`;
+- image: `vllm-skinny-tp1:v1`;
+- update transaction: `idle`;
+- runtime transaction: `idle`;
+- profile-switch transaction: `idle`;
+- no candidate or backup profile-switch transient file remained.
+
+Ownership behavior:
+
+- the first cumulative registry was created successfully;
+- the pre-existing OrcaRouter model and image were recorded with
+  `owned=false`;
+- no ownership was synthesized for assets that existed before registry
+  adoption. This is the intended fail-closed legacy migration behavior.
+
+Post-switch validation:
+
+- `doctor.sh`: 0 failures, 1 warning;
+- warning: non-CMA available reserve was 5554 MiB, below the 6 GiB warning
+  floor;
+- non-CMA free memory: 5162 MiB, above the 2 GiB protection floor at the
+  final doctor snapshot;
+- swap free: 44 GiB, above the 8 GiB protection floor;
+- runtime attestation matched the immutable release and live container;
+- health endpoint passed;
+- `validate-runtime.py`: PASS;
+- chat, concurrency=3, health, models, streaming, and tool-call checks: all
+  PASS;
+- runtime validation elapsed time: 5.064 seconds.
+
+The later privileged kernel-journal reconstruction shows that this first leg
+was not host-stable despite its functional success. NVIDIA RM emitted
+`NV_ERR_NO_MEMORY` at 08:34:35-08:34:44 KST while the OrcaRouter replacement
+runtime was still starting. Monitor samples immediately around that window
+showed critically low non-CMA free memory while non-CMA available remained
+above the then-current gate for part of the startup. The same protection gap
+therefore affected both profile-switch directions, not only Hybrid restart.
+
+Current live matrix:
+
+```text
+Hybrid -> OrcaRouter              FUNCTIONAL PASS / HOST-STABILITY FAIL
+OrcaRouter -> Hybrid              FUNCTIONAL PASS / HOST-STABILITY FAIL
+Hybrid same-profile restart       FUNCTIONAL PASS / HOST-STABILITY FAIL
+Hybrid -> mazinb                  BLOCKED pending #246 trigger diagnosis/repair
+mazinb -> OrcaRouter              PENDING
+OrcaRouter -> Hybrid (final)      PENDING
+```
+
+#### Leg 2: OrcaRouter -> Hybrid
+
+The later investigation recovered the missing operator timeline and confirms
+that the actual reverse switch was run before the duplicate same-profile
+restart. Shell history records:
+
+- `./install.sh --model orcarouter-hybrid --lang en --yes` at
+  `2026-09-30T08:58:39+09:00`;
+- profile-switch status/post-gate commands at
+  `2026-09-30T09:13:29+09:00`.
+
+The service journal confirms that the switch held the installer lifecycle lock,
+stopped the previous runtime, started the Hybrid candidate, reached health,
+validated the model list, committed the nested runtime transaction, and wrote
+runtime attestation by `09:13:28+09:00`. The resulting active manifest was
+`orcarouter-hybrid`, which explains why the later 09:36 invocation was a
+same-profile resume rather than another profile switch.
+
+Functional classification:
+
+```text
+OrcaRouter -> Hybrid profile-switch path   PASS
+Runtime commit / attestation               PASS
+Hybrid API validation                      PASS
+Host-stability gate                        FAIL
+```
+
+The host-stability failure is not speculative. During the actual reverse switch
+the kernel emitted NVIDIA RM `NV_ERR_NO_MEMORY` at 09:11:00, 09:11:12, and
+09:12:38 KST. Monitor evidence shows why the protection policy missed the
+earlier pressure:
+
+- 09:04:48: non-CMA free 703 MiB, non-CMA available 36.4 GiB;
+- 09:06:49: non-CMA free 1110 MiB, non-CMA available 35.9 GiB;
+- 09:08:51: non-CMA free 1233 MiB, non-CMA available 37.0 GiB;
+- 09:09:51: non-CMA free 848 MiB, non-CMA available 39.0 GiB;
+- 09:11:52: non-CMA free 1049 MiB, non-CMA available 27.4 GiB.
+
+Because the then-current protection rule required both
+`noncma_free < 2 GiB` and `noncma_available < 10 GiB`, these low-free/high-
+available samples were not counted toward protection. Near 09:12 the available
+margin also collapsed and the counter reached 3/5 before memory recovered, but
+the RM failures had already occurred.
+
+#### Duplicate Hybrid same-profile restart
+
+A later command at `2026-09-30T09:36:58+09:00` ran
+`./install.sh --model orcarouter-hybrid --lang en --yes` while Hybrid was
+already active. It therefore resumed the complete Hybrid profile rather than
+performing a profile switch. The restart completed functionally:
+
+- command exit code: 0;
+- completed at `2026-09-30T09:51:28+09:00`;
+- elapsed: 870 seconds;
+- update/runtime/profile-switch transactions ended `idle`;
+- manifest ended `PHASE=complete` with `MODEL_PROFILE=orcarouter-hybrid`;
+- doctor: 0 failures, 1 expected non-CMA warning;
+- `validate-runtime.py`: PASS for chat, concurrency=3, health, models,
+  streaming, and tool calls.
+
+This restart independently reproduced the same host-memory failure class. The
+kernel logged additional `NV_ERR_NO_MEMORY` events at 09:39:41-09:39:44,
+09:48:55-09:49:06, and 09:50:13-09:50:41 KST. The monitor eventually reached
+`protect=5/5` at 09:37:24 on the previous Hybrid runtime and stopped it
+gracefully, demonstrating that the stop/transaction integration works when both
+the free and available conditions become low. The remaining defect is the
+available-memory gate suppressing protection when immediately free non-CMA
+pages are already critically low.
+
+#### #245 live release qualification
+
+The first repair was merged as
+`1188a96939c8df6ba506b1ccc24b248b7477e41c` (#245) and then exercised through
+the normal immutable-release cutover on the live DGX.
+
+Repository qualification passed 360 unit tests and the target release was
+staged, qualified, and verified. During the replacement Hybrid startup, the new
+monitor correctly recognized high-available low-free samples that the previous
+policy had ignored, but the policy was too aggressive for normal checkpoint
+loading:
+
+- monitor start: 11:19:17 KST;
+- checkpoint loading was still at 8/81 shards;
+- 11:23:43-11:23:51: five consecutive low-free samples accumulated;
+- non-CMA available remained about 34-36 GiB;
+- swap-free remained essentially unchanged at about 146188-146191 MiB;
+- the candidate was stopped by memory protection at 11:23:51.
+
+The release update therefore failed readiness and automatically restored the
+previous immutable release. Final lifecycle state after rollback was clean:
+
+```text
+CURRENT_RELEASE=dd3127b54f4f5d817c4e8abfbc09e83180f21124
+UPDATE_STATE=idle
+TRANSACTION_STATE=idle
+PROFILE_SWITCH_STATE=idle
+```
+
+The restored runtime passed doctor (0 failures, 1 warning) and
+`validate-runtime.py`. However, because rollback returned to the old monitor
+policy, the restored Hybrid runtime again emitted NVIDIA RM
+`NV_ERR_NO_MEMORY` at 11:34:34 and 11:36:17 KST. This proves both sides of the
+problem: #245 closes the high-available low-free blind spot, but treating every
+such sample as immediately protection-significant prevents a normal cold load.
+
+A second repair was merged as `ae7df5adb82077439dfbbd937b77924b0aa7805d`
+(#246). It uses the live evidence to
+distinguish the two cases without relying on a fixed startup timer:
+
+- low free + low available: protection-significant;
+- low free + at least 256 MiB swap consumption since monitor start:
+  protection-significant;
+- low free + high available + essentially unchanged swap:
+  warning-only checkpoint-loading transient;
+- absolute low SwapFree: protection-significant.
+
+The 256 MiB activity gate is evidence-driven: the failed #245 candidate reached
+low-free with only a few MiB of swap change, while the earlier RM-failure runs
+showed swap consumption growing by hundreds of MiB to multiple GiB before the
+allocation failures. #246 passed repository CI before squash merge.
+
+#### #246 live release qualification, first attempt
+
+The live immutable-release qualification started at 13:21:06 KST with the
+expected target `ae7df5adb82077439dfbbd937b77924b0aa7805d`. Repository
+qualification passed 361 tests, and the release was staged, qualified, and
+verified before cutover.
+
+The replacement Hybrid candidate progressed further than #245 but was still
+stopped by memory protection during checkpoint loading:
+
+- the replacement container remained active through 8/81 shards at about
+  3:51 of checkpoint loading;
+- it reached 10/81 shards at about 5:06;
+- by the 420-second cutover poll the container was already being removed;
+- the service explicitly reported
+  `Candidate runtime was stopped by memory protection during startup`;
+- release cutover failed readiness and update-release began restoring the
+  previous release pointer.
+
+Follow-up forensics identified the exact #246 protection trigger. The candidate
+monitor started with SwapFree 146171 MiB. During early shard loading, low
+non-CMA free samples remained warning-only while swap growth was 0-142 MiB.
+At 13:27:39 KST, with non-CMA available still 36305 MiB and non-CMA free
+1460 MiB, swap growth reached 327 MiB and the protection counter advanced to
+1/5. It then advanced every two seconds as swap growth rose through 391, 452,
+585, and 719 MiB, reaching 5/5 at 13:27:47 and stopping the candidate.
+
+This proves that the 256 MiB swap-activity gate is too sensitive for the normal
+Hybrid cold-load path. The low-available branch did not fire; reclaimable
+non-CMA available remained about 35-36 GiB throughout the stop sequence.
+
+The same forensic snapshot was taken while rollback service recovery was still
+in progress. The immutable release pointer had already returned to
+`dd3127b54f4f5d817c4e8abfbc09e83180f21124`, update state was idle, but the
+restored runtime transaction was still `validating` with its rollback
+container retained. The service was active and had reached 660 seconds of its
+1800-second readiness window. Doctor therefore reported missing runtime
+attestation, incomplete runtime transition, retained rollback container, and
+unhealthy API. These are consistent with an in-progress replacement runtime
+and must not be treated as proof of a stuck transaction without a later
+terminal-state observation.
+
+At 13:39:24-13:39:25 KST, while the restored old-policy Hybrid runtime was
+still loading, NVIDIA RM again emitted `NV_ERR_NO_MEMORY`. This independently
+confirms that simply allowing the cold-load pressure to continue under the old
+gate does not meet the host-stability acceptance criterion.
+
+#### Host-kernel regression hypothesis
+
+The host reports DGX Spark 7.5.0 while booted on
+`7.0.0-1019-nvidia`. This is now a higher-priority environmental hypothesis
+than further monitor-threshold tuning. NVIDIA's current DGX Spark release
+documentation lists the 7.5.0 Canonical kernel as 6.17, and recent NVIDIA
+Developer Forum reports describe a reproducible `7.0.0-1019-nvidia`
+regression on GB10 that can produce the same
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal` signature. Importantly, a
+reported single-node TP=1 vLLM case still failed with `kho=off` and stopped
+failing after booting 6.17.0-1032.
+
+The local inventory is now captured:
+
+- rollback completed cleanly: update/runtime/profile-switch transactions are
+  all idle;
+- the restored `dd3127b` Hybrid runtime reached health-ready, committed its
+  runtime transition, wrote attestation, and is healthy;
+- running kernel: `7.0.0-1019-nvidia`;
+- driver: `580.173.02`;
+- Secure Boot: enabled;
+- `6.17.0-1032-nvidia` kernel, headers, initrd, vmlinuz, and GRUB entry are
+  installed;
+- the running command line does not contain `kho=off`;
+- `/sys/kernel/debug/kho/out` exists, so KHO is active on this boot;
+- `/proc/meminfo` reports the anomalous combination `CmaTotal: 0 kB` while
+  `CmaFree` is non-zero (about 3.7 GiB);
+- current VM settings include `vm.swappiness=60`,
+  `vm.min_free_kbytes=45056`, `vm.watermark_scale_factor=10`, and
+  `vm.watermark_boost_factor=15000`.
+
+This strengthens the case for an OS/kernel A/B before any further application
+threshold changes, but it does not by itself prove the kernel is the root
+cause. Recent NVIDIA forum evidence is mixed: multiple GB10 users report the
+same `_memdescAllocInternal / NV_ERR_NO_MEMORY` signature on
+`7.0.0-1019-nvidia`, including a single-node TP=1 case where 6.17 removed the
+hang, while later reports also show at least one vLLM failure reproducing on
+6.17 under a CUDA-graph path. NVIDIA's current DGX Spark release documentation
+still lists Canonical kernel 6.17 for the 7.5.0 stack.
+
+The one-shot 6.17 preflight has now passed:
+
+- target: `6.17.0-1032-nvidia`;
+- kernel image, initrd, config, and headers are present;
+- `linux-modules-6.17.0-1032-nvidia` is installed;
+- matching `linux-modules-nvidia-580-open-6.17.0-1032-nvidia` is installed;
+- `nvidia`, `nvidia_uvm`, `nvidia_modeset`, and `nvidia_drm` all report
+  driver 580.173.02 and vermagic `6.17.0-1032-nvidia`;
+- all four NVIDIA modules are signed by Canonical, so the Secure Boot path is
+  qualified for the A/B;
+- GRUB contains an explicit 6.17.0-1032 advanced entry and `grub-reboot` is
+  available;
+- the running 7.0 config has
+  `CONFIG_KEXEC_HANDOVER_ENABLE_DEFAULT=y` and
+  `CONFIG_CMA_SIZE_MBYTES=0`, while the installed 6.17 config has
+  `CONFIG_CMA_SIZE_MBYTES=128` and does not show the default-enable KHO
+  symbol in the captured comparison;
+- `nvidia-spark-grub-kho` is available from the configured NVIDIA
+  repositories but is not installed.
+
+This is sufficient to proceed with a one-shot kernel A/B without changing the
+persistent GRUB default.
+
+The one-shot boot has now been armed successfully:
+
+- lifecycle precondition: update/runtime/profile-switch all idle;
+- current Hybrid health: PASS;
+- the managed service was disabled for controlled post-boot startup while
+  remaining active until reboot;
+- GRUB `next_entry` was set to
+  `Advanced options for DGX OS GNU/Linux>DGX OS GNU/Linux, with Linux 6.17.0-1032-nvidia`;
+- pre-reboot identity remained `7.0.0-1019-nvidia` with driver 580.173.02.
+
+The reboot completed on `6.17.0-1032-nvidia`, but the environment changed
+more than the intended kernel-only A/B. The login banner now reports DGX Spark
+7.6.0, the loaded NVIDIA driver is 580.178.04, and the boot command line now
+contains `kho=off`. KHO debugfs is absent and CMA is reported normally as
+128 MiB total with a small free remainder. The GRUB one-shot entry was consumed
+successfully, and the managed runtime service remained disabled/inactive as
+intended.
+
+Therefore this boot is **not** a pure 7.0-vs-6.17 kernel comparison. It is a
+post-update stack combining 6.17.0-1032, driver 580.178.04, and KHO disabled.
+This is still useful: after lifecycle recovery, validate the same Hybrid
+cold-start on this stack. A subsequent ordinary boot can then return to the
+persistent 7.0.0-1019 entry while retaining the same updated driver/KHO
+mitigation, allowing a cleaner kernel-only comparison.
+
+The reboot also exposed a separate runtime lifecycle crash boundary. The
+system came back with `TRANSACTION_STATE=rolling_back`,
+`HAD_PREVIOUS=1`, the canonical current container present and the rollback
+container absent. This is consistent with rollback having completed the
+candidate removal and rollback-container rename, but being interrupted before
+the transaction state file was cleared. PR #247 added explicit recovery for
+this deterministic state and regression tests for both pre- and post-rename
+rollback interruption points. It passed CI and was squash-merged as
+`f5e41aa4fa79c74e6652c04becc8d4c8cba077c1`.
+
+Lifecycle recovery was then exercised with merged #247
+(`f5e41aa4fa79c74e6652c04becc8d4c8cba077c1`). The observed
+`rolling_back` current-only state recovered exactly as intended to
+`TRANSACTION_STATE=idle`; no rollback container remained, and the canonical
+container was intentionally stopped again for the controlled A/B.
+
+#### Post-update 6.17 + 580.178.04 + KHO-off cold-start
+
+The controlled Hybrid cold-start on the updated host stack still reproduced
+the NVIDIA RM allocation failure:
+
+- kernel: `6.17.0-1032-nvidia`;
+- driver: `580.178.04`;
+- command line: `kho=off`;
+- CMA: 128 MiB total;
+- lifecycle precondition: update/runtime/profile-switch all idle;
+- cold-start window: 14:18:08-14:31:09 KST;
+- at 14:30:15 the monitor still reported about 32.3 GiB available and
+  9.2 GiB free;
+- at 14:30:25 the kernel emitted
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- by 14:30:27 available had collapsed to about 8.6 GiB and non-CMA free to
+  about 1.1 GiB;
+- the old deployed protection policy then accumulated 5/5 low-free +
+  low-available samples and stopped the runtime at 14:30:46;
+- runtime never reached health; doctor failures after the protected stop are
+  expected consequences of the intentionally stopped managed runtime rather
+  than independent root causes.
+
+This falsifies a single-cause explanation based only on the
+`7.0.0-1019-nvidia` KHO regression for this workload. The 7.0/KHO issue may
+still worsen host behavior, but the same RM allocation failure is reachable on
+6.17 with KHO disabled and the newer driver.
+
+The sharper failure signature is now a short allocation-pressure transition:
+available memory drops by more than 20 GiB within roughly 12 seconds near the
+late startup phase, and RM fails before the monitor can react.
+
+A stronger startup-allocation hypothesis is now visible. The vLLM progress
+sample immediately before the failure reported `Using BLNHC KV cache layout`.
+The managed Hybrid profile pins `--kv-cache-memory-bytes` to
+25769803776 bytes (24 GiB). The monitor then moved from about 32.3 GiB
+available at 14:30:15 to about 8.7 GiB at 14:30:27, a roughly 23.6 GiB drop.
+The magnitude and timing closely match the configured KV pool. This makes the
+late KV-cache allocation burst the highest-priority hypothesis for the RM
+failure on GB10 unified memory.
+
+Do not change the managed default from this correlation alone. A forensic
+follow-up confirmed that the canonical container currently visible after the
+protected stop is not the failed candidate: it is the previously preserved
+container restored by `abort-protected` (container ID
+`80653aeddd0a...`). This explains why a timestamp-filtered
+`docker logs qwen38-flash-next` query for the 14:28-14:31 failure window was
+empty. The failed candidate was removed during protected abort, while its
+stdout/stderr had already been followed by the managed systemd service.
+
+The restored container still confirms the managed command shape, including
+`--kv-cache-memory-bytes 25769803776`, PIECEWISE CUDA graphs, MTP k=2, and
+the same Hybrid H6 profile. vLLM 0.29 semantics also make the explicit
+`kv_cache_memory_bytes` value authoritative over
+`gpu_memory_utilization`.
+
+A follow-up query of the managed systemd journal for 14:28-14:31 did not
+recover the candidate's vLLM stdout/stderr. It contained only the service
+runner readiness poll, the memory-protection stop decision, rollback restore,
+and service deactivation. The kernel correlation still places
+`NV_ERR_NO_MEMORY` at 14:30:25. Therefore the exact vLLM allocation call at
+failure time remains unproven.
+
+The strongest remaining correlation is unchanged: the managed command pins
+`--kv-cache-memory-bytes 25769803776` (24 GiB), and the monitor observed
+about a 23.6 GiB fall in available memory across the late-startup transition.
+That is sufficient to justify a falsification control, not to claim root cause.
+
+The isolated 16 GiB KV control completed and changed the diagnosis:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- model/runtime settings were held constant, with only
+  `--kv-cache-memory-bytes` changed from 25769803776 (24 GiB) to
+  17179869184 (16 GiB);
+- the candidate reached health READY successfully;
+- vLLM reported `Model loading took 79.41 GiB`;
+- at 15:05:15.193 KST vLLM reported
+  `reserved 16.0 GiB memory for KV Cache`;
+- it then reported a 579,086-token GPU KV cache (2.21x the configured
+  262,144-token maximum request length);
+- at 15:05:15.668 KST, only about 0.48 seconds after the 16 GiB reservation
+  log, the kernel still emitted
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- CUDA graph capture did not begin until about 15:05:20, so this RM error
+  precedes graph capture and should not be attributed to cudagraph capture;
+- despite the RM error, initialization continued, graph capture completed,
+  and health became ready at 15:05:52;
+- the isolated protection monitor never advanced above `protect=0/3`;
+- the experiment container was stopped only after evidence collection;
+- managed update/runtime/profile-switch state remained idle, the managed
+  service remained disabled/inactive, and no managed `runtime-stop.env`
+  marker was created.
+
+Classification:
+
+```text
+16 GiB isolated Hybrid functional startup   PASS
+16 GiB isolated Hybrid host-stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB as sole root cause                    FALSIFIED
+KV-init allocation path                     highest-priority failure region
+CUDA graph capture                          not the trigger for this RM error
+```
+
+The explicit KV size therefore affects severity but does not explain the
+existence of the RM failure by itself. vLLM's worker API separates
+`determine_available_memory` from `initialize_from_config`, and
+`initialize_from_config` is the operation that allocates the device KV cache.
+The observed ordering is consistent with the failure occurring during that
+initialization region.
+
+The isolated 8 GiB KV control passed the startup host-stability gate:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- model/runtime settings were held constant, with only
+  `--kv-cache-memory-bytes` changed to 8589934592 (8 GiB);
+- the candidate reached health READY successfully;
+- vLLM reported `Model loading took 79.41 GiB`;
+- vLLM reported `reserved 8.0 GiB memory for KV Cache`;
+- the resulting KV capacity was 288,802 tokens, or 1.10x the configured
+  262,144-token maximum request length;
+- CUDA graph capture completed normally;
+- the kernel scan for the exact startup window returned no
+  `NV_ERR_NO_MEMORY`, `_memdescAllocInternal`, NVRM/Xid, OOM, or hung-task
+  matches;
+- the isolated protection monitor remained at `protect=0/3` throughout;
+- post-ready memory settled near 23 GiB available while immediately-free
+  non-CMA memory stayed around 1.6-1.7 GiB;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Classification:
+
+```text
+8 GiB isolated Hybrid functional startup   PASS
+8 GiB isolated Hybrid host stability        PASS (startup window)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size threshold                supported; boundary is between 8 and 16 GiB
+```
+
+The 8 GiB control was then closed cleanly and the entire run was re-scanned.
+The container was already exited with exit code 0 and was not OOM-killed.
+A post-ready kernel scan through 15:49:49 KST and a complete kernel-window scan
+from 15:31:51 onward returned no `NV_ERR_NO_MEMORY`,
+`_memdescAllocInternal`, NVRM/Xid, OOM, killed-process, hung-task, or lockup
+matches. Final host memory returned to roughly 124.6 GiB available, and managed
+update/runtime/profile-switch state remained idle with the managed service
+disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid functional startup   PASS
+8 GiB isolated Hybrid host stability        PASS (complete run)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 8 and 16 GiB
+```
+
+The isolated 12 GiB midpoint control also passed the complete run:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- only `--kv-cache-memory-bytes` changed to 12884901888 (12 GiB);
+- health reached READY at 16:08:53 KST;
+- vLLM reported `reserved 12.0 GiB memory for KV Cache`;
+- KV capacity was 433,944 tokens, or 1.66x the configured 262,144-token
+  maximum request length;
+- CUDA graph capture completed normally;
+- a 180-second post-ready soak completed with memory stable at roughly
+  19.6 GiB available and about 2.5 GiB immediately free;
+- the complete kernel window returned no `NV_ERR_NO_MEMORY`,
+  `_memdescAllocInternal`, NVRM/Xid, OOM, killed-process, hung-task, or
+  lockup matches;
+- the container stopped cleanly with exit code 0 and was not OOM-killed;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 12 and 16 GiB
+```
+
+The isolated 14 GiB control also passed the complete run:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- only `--kv-cache-memory-bytes` changed to 15032385536 (14 GiB);
+- health reached READY at 16:40:01 KST;
+- vLLM reported `reserved 14.0 GiB memory for KV Cache`;
+- KV capacity was 506,515 tokens, or 1.93x the configured 262,144-token
+  maximum request length;
+- CUDA graph capture completed normally;
+- a 180-second post-ready soak completed with memory stable near 17.2 GiB
+  available and about 2.6 GiB immediately free;
+- the complete kernel window returned no `NV_ERR_NO_MEMORY`,
+  `_memdescAllocInternal`, NVRM/Xid, OOM, killed-process, hung-task, or
+  lockup matches;
+- an independent live kernel watchdog also reported
+  `RM_ERROR_DETECTED=NO`;
+- the container stopped cleanly with exit code 0 and was not OOM-killed;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+14 GiB isolated Hybrid host stability       PASS
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 14 and 16 GiB
+```
+
+The preserved 15 GiB control was forensically resolved as a host-stability
+failure. Its exact command pins `--kv-cache-memory-bytes 16106127360`
+(15 GiB), with the same H6 Hybrid profile, MTP k=2, max model length 262144,
+and PIECEWISE CUDA graphs. It reached the late initialization path, reported
+`reserved 15.0 GiB memory for KV Cache`, produced a 542,060-token KV cache
+(2.07x the configured maximum request length), completed CUDA graph capture,
+and logged engine initialization completion.
+
+At 09:20:43.175604 KST the host kernel emitted the same
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal` failure seen at 16 and 24 GiB.
+The isolated memory monitor itself remained at `protect=0/3`, so it did not
+trigger the stop. Docker reported `OOMKilled=false`; its daemon log shows the
+container received SIGTERM and failed to exit within 10 seconds, after which
+Docker force-killed it. The resulting exit code 137 is therefore cleanup
+behavior, not evidence of a cgroup OOM kill. The independent RM marker file
+was absent, but that does not affect classification because the kernel failure
+is directly recorded.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+14 GiB isolated Hybrid host stability       PASS
+15 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+KV allocation-size boundary                 bracketed between 14 and 15 GiB
+```
+
+The isolated 14.5 GiB midpoint control failed before readiness:
+
+- host remained `6.17.0-1032-nvidia` + driver 580.178.04 + `kho=off`;
+- only `--kv-cache-memory-bytes` changed to 15569256448 (14.5 GiB);
+- at 10:55:10.918298 KST the live kernel watchdog captured
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- the watchdog immediately stopped the control container;
+- health was never reached, so the post-ready soak was skipped;
+- the complete kernel window contains the same RM allocation failure;
+- the container exited 137 with `OOMKilled=false`, consistent with watchdog
+  cleanup rather than a cgroup OOM kill;
+- managed update/runtime/profile-switch state remained idle and the managed
+  service remained disabled/inactive.
+
+Updated classification:
+
+```text
+8 GiB isolated Hybrid host stability        PASS
+12 GiB isolated Hybrid host stability       PASS
+14 GiB isolated Hybrid host stability       PASS
+14.5 GiB isolated Hybrid host stability     FAIL (NV_ERR_NO_MEMORY before READY)
+15 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+16 GiB isolated Hybrid host stability       FAIL (NV_ERR_NO_MEMORY)
+24 GiB managed Hybrid host stability        FAIL (NV_ERR_NO_MEMORY + protected stop)
+```
+
+Important phase correction: the 14.5 GiB failure occurred while checkpoint
+shards were still loading (roughly 93% complete). The run never emitted
+`Model loading took ...`, `reserved 14.5 GiB memory for KV Cache`, or a KV
+capacity line. Therefore this run does **not** support a monotonic
+KV-allocation-size boundary between 14.0 and 14.5 GiB. It instead demonstrates
+that the RM allocation failure can occur earlier in startup, before explicit
+KV cache initialization. The prior 15/16 GiB failures near late initialization
+remain valid observations, but the simple size-threshold hypothesis is no
+longer sufficient.
+
+The identical 14.5 GiB control was repeated and failed again, but at a
+different startup phase. This second run completed model loading, reported
+`Model loading took 79.41 GiB`, then at 11:11:50.789992 KST logged
+`reserved 14.5 GiB memory for KV Cache` and a 524,288-token KV cache
+(2.00x the configured 262,144-token maximum request length). At
+11:11:51.611787 KST, only about 0.82 seconds after the explicit KV reservation
+log, the host kernel emitted the same
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal` failure. The watchdog stopped
+the container before readiness; Docker again reported `OOMKilled=false`.
+
+This differs materially from the first 14.5 GiB run, where the RM failure
+occurred while checkpoint shards were still loading and before the explicit KV
+reservation log. Therefore the same exact 14.5 GiB configuration can fail at
+different allocation phases. The evidence supports a pressure-sensitive,
+non-deterministic host/NVIDIA-RM allocation failure rather than a single
+deterministic KV-cache allocation boundary.
+
+Current interpretation:
+
+```text
+14.0 GiB run #1     PASS
+14.5 GiB run #1     FAIL during shard loading
+14.5 GiB run #2     FAIL ~0.82 s after explicit KV reservation
+15 GiB              FAIL during late initialization
+16 GiB              FAIL during late initialization
+24 GiB              FAIL
+```
+
+The instrumented 14.0 GiB repeat did **not** remain stable. It reproduced the
+same host NVIDIA RM allocation failure at 11:24:44.814613 KST. The failure
+occurred as checkpoint loading completed: the run logged 100% of 81 shards and
+`Loading weights took 487.34 seconds`, but it never reached the explicit KV
+reservation/capacity messages. The watchdog stopped the container before
+readiness; Docker reported exit 137 with `OOMKilled=false`.
+
+Immediately before the RM error the monitor still showed tens of GiB of
+reclaimable/available memory (about 41.9 GiB at 11:24:43), while immediately
+free memory was only a few GiB and then fell to roughly 1 GiB. The monitor
+remained at `protect=0/3`, so the stop was caused by the independent RM-error
+watchdog, not the memory policy.
+
+This falsifies the working model that 14.0 GiB is a repeatably stable point and
+that a monotonic KV-cache-size threshold lies between 14.0 and 14.5 GiB.
+Observed RM failures now span multiple startup phases and multiple KV settings:
+
+```text
+8 GiB      PASS (complete run)
+12 GiB     PASS (complete run)
+14 GiB #1  PASS (complete run)
+14 GiB #2  FAIL at end of weight loading, before explicit KV reservation
+14.5 #1    FAIL during shard loading
+14.5 #2    FAIL ~0.82 s after explicit KV reservation
+15 GiB     FAIL during late initialization
+16 GiB     FAIL during late initialization
+24 GiB     FAIL
+```
+
+Allocator telemetry around the instrumented 14 GiB failure materially
+narrows the host-side mechanism.
+
+At 11:24:44.814613 KST the RM emitted
+`NV_ERR_NO_MEMORY ... _memdescAllocInternal`. During the preceding ~30 s,
+`MemAvailable` remained roughly 41-44 GiB until the immediate failure window,
+so the host was not globally out of reclaimable memory. In contrast, immediate
+free memory and Normal-zone buddy capacity collapsed sharply around the RM
+failure:
+
+- 11:24:41 buddy snapshot: Normal zone had ~2690 MiB buddy free and order-12
+  blocks available (largest represented block 16 MiB);
+- 11:24:44.713 memory sample: MemFree ~1966 MiB, MemAvailable ~40.4 GiB;
+- 11:24:44.814 RM allocation failure;
+- 11:24:45.719 memory sample: MemFree ~1079 MiB, MemAvailable ~35.9 GiB;
+- 11:24:46 buddy snapshot: Normal zone had only ~581 MiB buddy free and the
+  highest available order had fallen to order 10 (largest represented block
+  4 MiB).
+
+The 39-second vmstat window also shows active reclaim/compaction pressure:
+`allocstall_normal +82`, `allocstall_movable +16`,
+`compact_stall +295`, `compact_fail +85`, `compact_success +210`,
+~32.9 million pages scanned by compaction, ~2.15 million file pages scanned and
+stolen, and 4,879 major faults. Swap-out increased only 679 pages in the same
+window, so swap exhaustion or a large swap-out burst is not the primary
+correlate.
+
+The Normal-zone high-order state is also highly dynamic rather than simply
+monotonically depleted: the highest order moved from 13 to 11 to 12 to 7 to 12
+before the failure and then to 10 immediately after it. This supports a
+transient fragmentation/physical-allocation-pressure interpretation, but does
+not yet prove the exact order or contiguity requirement of the NVIDIA RM
+allocation because buddy snapshots are only 5-second samples and the RM's
+requested allocation geometry is unknown.
+
+Current host-side hypothesis: the RM failure is strongly associated with
+transient depletion/fragmentation of immediately allocatable Normal-zone pages
+under heavy file-cache reclaim/compaction, even while `MemAvailable` remains
+large. This is more specific than generic memory pressure and is consistent
+with the observed phase variability.
+
+The fresh instrumented 8 GiB control completed successfully:
+
+- health reached PASS at 11:54:25 KST;
+- the full 180-second post-ready soak completed;
+- vLLM reported `reserved 8.0 GiB memory for KV Cache`, 288,802 KV tokens,
+  and 1.10x concurrency at the configured 262,144-token maximum request
+  length;
+- the complete kernel window contained no matched host/GPU failure signals;
+- clean stop exited 0 with `OOMKilled=false`;
+- `KV8I_RESULT=PASS`, `RM_ERROR_DETECTED=NO`, and managed lifecycle state
+  remained idle/idle/idle with the service disabled/inactive.
+
+This comparator also falsifies a simple immediate-free-memory threshold. During
+the clean 8 GiB startup, `MemFree` repeatedly fell below 1 GiB (roughly
+0.69-0.94 GiB at several points during checkpoint loading) while
+`MemAvailable` remained tens of GiB, yet the run recovered and completed
+without an RM failure. The failing 14 GiB run therefore cannot be explained by
+`MemFree < 1-2 GiB` alone.
+
+The first attempt to perform the direct 8 GiB PASS vs 14 GiB FAIL telemetry
+comparison was invalid because the 8 GiB telemetry files had been overwritten
+by an accidental second invocation of the instrumentation wrapper. The first
+8 GiB run itself remains a valid functional/host-stability PASS, but its
+high-frequency `memory-1s.log`, `vmstat-1s.log`, and `buddyinfo-5s.log`
+cannot be used for the comparator.
+
+The second wrapper invocation reused the same evidence directory and opened
+those telemetry files for truncating output before the base control script
+failed its precondition on the already-existing stopped container. As a
+result, the comparator correctly produced no 8 GiB samples.
+
+The replacement 8 GiB R2 comparator had in fact already completed
+successfully before the later wrapper invocation was rejected by the new
+evidence-protection guard. The preserved R2 container used the intended
+8 GiB KV setting (8589934592 bytes), exited cleanly with code 0 and
+`OOMKilled=false`, completed engine initialization, served `/health`
+successfully, and shut down normally after the soak/control sequence.
+
+The R2 high-frequency telemetry is intact in
+`/tmp/hybrid-6.17-kv8-instrumented-r2-20261001`:
+`memory-1s.log` (~382 KiB), `vmstat-1s.log` (~867 KiB), and
+`buddyinfo-5s.log` (~50 KiB), together with complete container and kernel
+logs. Do not rerun or delete this comparator.
+
+The phase-aligned 8 GiB PASS vs 14 GiB FAIL comparison materially changes the
+allocator interpretation. Static memory pressure and buddy fragmentation do
+not discriminate the runs:
+
+- 8 GiB PASS reached a lower MemFree minimum (~886 MiB vs ~1057 MiB) and a
+  lower MemAvailable minimum (~23.6 GiB vs ~35.0 GiB);
+- both runs reached Normal-zone `highest_order=7` and `order9+=0 MiB`;
+- 8 GiB PASS reached ~725 MiB minimum Normal-zone buddy free vs ~568 MiB in
+  14 GiB FAIL;
+- the PASS run had far more major faults and swap-out activity
+  (`pgmajfault +64212`, `pswpout +49402`) than the FAIL run.
+
+The strongest discriminator is synchronous allocation/compaction pressure:
+the 14 GiB FAIL window recorded `allocstall_normal +82`,
+`compact_stall +295`, `compact_fail +85`, and
+`compact_success +210`, while the 8 GiB PASS window recorded
+`allocstall_normal +6` and zero `compact_stall/fail/success`. Direct file
+reclaim was also roughly 1.8x higher in the FAIL window
+(`pgscan_direct`/ `pgsteal_direct`).
+
+Therefore static high-order depletion is not sufficient to explain the RM
+failure. The leading host-side correlate is a burst of synchronous direct
+reclaim/compaction triggered around a demanding Normal-zone allocation. This
+may be the mechanism that causes the NVIDIA RM allocation to fail, or it may
+be a consequence of the same large/high-order allocation request; current
+counter data cannot distinguish cause from consequence.
+
+Next instrument the exact allocation episode with kernel tracepoints rather
+than further KV-size bisection. Capture compaction begin/end, page-allocation
+fragmentation/failure, and direct-reclaim begin/end events at sub-second
+resolution around one 8 GiB control and one failing higher-pressure control.
+This should reveal whether an RM request directly triggers synchronous
+compaction and which allocation order/migratetype/zone is involved.
+
+Tracepoint discovery on the live 6.17.0-1032-nvidia host passed. Tracefs is
+mounted at `/sys/kernel/tracing`; the kernel exposes
+`mm_compaction_begin/end`, direct-reclaim begin/end,
+`mm_page_alloc_extfrag`, and `mm_page_alloc`, together with the broader
+compaction/vmscan event families. `trace-cmd`, `perf`, and `bpftrace`
+are all installed.
+
+Root format inspection confirms the required fields are present:
+
+- `mm_compaction_try_to_compact_pages`: `order`, `gfp_mask`, `prio`;
+- `mm_compaction_begin/end`: PFN range, `sync`, and end `status`;
+- `mm_compaction_finished`: `nid`, zone index, `order`, result;
+- direct reclaim begin/end: allocation `order`, `gfp_flags`, reclaimed pages;
+- `mm_page_alloc_extfrag`: `alloc_order`, `fallback_order`,
+  allocation/fallback migratetypes, and `change_ownership`;
+- `mm_page_alloc`: `order`, `gfp_flags`, and migratetype.
+
+This is sufficient to trace the allocation episode without enabling all page
+allocations. Use `mm_page_alloc` only with an `order > 0` filter, while
+recording compaction/direct-reclaim/extfrag events unfiltered. The resulting
+trace should identify whether the RM error is preceded by a specific high-order
+request, synchronous compaction, fallback fragmentation, or failed reclaim.
+
+The first 14.5 GiB trace attempt was an execution-environment preflight
+failure, not a model or host-memory result. `trace-cmd record --user` invoked
+the control command with an environment in which the shell could not resolve
+even `mkdir`; the base control aborted immediately at line 11, no container
+was created, all trace event counts were zero, and the wall-clock run lasted
+about one second. The outer `trace-cmd` command returned zero, demonstrating
+that its exit status must not be used as the control-script result.
+
+A dedicated dropped-user preflight then passed with an explicit environment:
+uid 1001/`inlc`, HOME `/home/inlc`, and PATH
+`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. The child
+resolved mkdir/docker/bash/grep/sed/curl/systemctl/uname/date and completed a
+Docker client smoke test while trace-cmd recorded sched events successfully.
+Therefore the R3 failure was environmental, not a trace-cmd or permissions
+limitation.
+
+A subsequent command containing a literal documentation placeholder (`...`)
+was rejected by trace-cmd with “no event or plugin was specified”; it was not a
+model run.
+
+The next R4 preflight confirmed the explicit dropped-user environment itself
+was correct (uid/user/HOME/PATH and command resolution), but `sudo -n true`
+inside the `trace-cmd --user inlc` child required authentication. Because the
+shell was running with `set -e`, this aborted the session before trace/model
+startup. This is another NO-TEST result.
+
+Do not depend on reusing the interactive sudo timestamp from inside a
+trace-cmd dropped-user child. For the next trace attempt, keep privileged
+tracefs/journal work in the outer root-capable wrapper and make the dropped-user
+control path sudo-free.
+
+The generated R4 base control was audited: the only privileged operation is a
+single `sudo -n journalctl -k` block used for the complete kernel-window
+check. No other sudo usage is present.
+
+The downstream dependency was also audited. That block produces
+`KERNEL_ERRORS` and `KERNEL_PASS`; `KERNEL_PASS` is referenced only by
+the final result classification. Therefore R5 should not fake a kernel-pass
+value inside the dropped-user child. Instead, remove the kernel journal block
+and convert the child result to functional-only status. The outer privileged
+wrapper then captures the complete kernel window, classifies RM/host stability,
+and combines that with the child's READY/functional result into the canonical
+PASS / FUNCTIONAL_PASS_HOST_FAIL / FAIL outcome. This cleanly separates
+unprivileged model control from privileged host evidence collection.
+
+
+A later attempt to launch the R5 wrapper was blocked by its evidence-protection
+guard because container `qwen38-h6-kv145-trace-r5` already existed. No new
+test was started by that invocation. Treat the pre-existing container and
+`/tmp/hybrid-6.17-kv145-trace-r5-20261001` as potentially valid evidence
+until inspected; do not delete or rerun R5 before checking container state,
+timestamps, arguments, logs, and evidence files.
+
+
+Inspection confirms that the pre-existing R5 is a valid completed trace run,
+not stale state. The container used the intended 14.5 GiB KV setting
+(15569256448 bytes), completed model load and KV reservation, reached API
+health, survived the 180 s post-ready soak, and exited cleanly with code 0 and
+`OOMKilled=false`. The outer kernel window contains no matched RM/host
+failure signal, so this run is FUNCTIONAL PASS / HOST PASS.
+
+This is also important evidence against a deterministic 14.5 GiB boundary:
+previous 14.5 GiB controls failed in different startup phases, while this one
+passed. However, the trace instrumentation was extremely heavy:
+`allocator-trace.dat` is ~27 MiB and the decoded text is ~994 MiB, with about
+3.24M `mm_page_alloc_extfrag` events, 2.64M filtered `mm_page_alloc`
+events, 296k `mm_compaction_finished` events, 14.6k compaction requests, and
+~2k direct-reclaim intervals. Because this event volume can perturb startup
+timing, do not compare this traced PASS directly against the prior untraced
+FAIL as if instrumentation were neutral. First summarize the preserved R5
+histograms/event phases, then reduce the trace set before attempting a traced
+FAIL comparator.
+
+
+The R5 trace summary further falsifies synchronous compaction/direct reclaim as
+a sufficient failure condition. The traced PASS contained 992 synchronous
+compaction begins and 1,993 direct-reclaim intervals. Normal-zone compaction
+reported tens of thousands of `no_suitable_page` results, including 46,669
+at order 9, yet no RM/host error occurred. Compaction requests were dominated
+by order 4 (9,003), order 6 (3,944), and order 9 (1,586); direct reclaim also
+included 497 order-9 requests.
+
+
+Most order-9 activity is THP-related rather than evidence of an RM-specific
+order-9 request: 1,549/1,586 (~97.7%) order-9 compaction requests use
+`GFP_TRANSHUGE*`, and 488/497 (~98.2%) order-9 direct-reclaim requests do
+the same. This materially weakens the earlier interpretation that order-9
+buddy depletion identifies the RM allocation geometry. Treat order-9 pressure
+as mostly THP noise unless a future RM-correlated sequence shows otherwise.
+
+Task attribution is informative: `VLLM::Worker` generated most compaction
+requests (9,412) and direct reclaim events (1,257), while `UVM GPU1 BH`
+generated another 3,497 compaction requests and 211 direct-reclaim events.
+The extremely high event rate is mostly low-value extfrag/allocation traffic:
+~2.99M extfrag events are alloc_order 0. For a lower-overhead comparator, drop
+raw `mm_page_alloc` entirely and filter `mm_page_alloc_extfrag` to
+`alloc_order >= 4`; keep compaction try/begin/end and direct-reclaim begin/end.
+If still too heavy, further restrict extfrag to `alloc_order >= 6` or
+`change_ownership == 1`. The next objective is sequence attribution around an
+RM failure, not aggregate presence/absence of compaction.
+
+
+A subsequent 15 GiB R6 light-trace run progressed through the full model load,
+reserved the intended 15.0 GiB KV cache, completed CUDA graph capture and
+engine initialization, started the API server, and returned HTTP 200 from
+`/health`. It then completed the configured 180 s post-ready soak, returned
+HTTP 200 from `/v1/models`, and performed the expected clean shutdown. The
+container ended with exit code 0 and `OOMKilled=false`.
+
+Final evidence confirms a full PASS: `control.rc=0`,
+`functional.result=FUNCTIONAL_PASS`, the wall-clock and monotonic kernel
+error files are both empty, and `rm-trace-window.txt` contains
+`NO_RM_ERROR`. The light trace preserved 18,739 compaction requests, 18,436
+compaction begin/end pairs, 2,484 direct-reclaim begin/end pairs, and 227,933
+filtered extfrag events. The decoded trace is ~52 MiB versus ~994 MiB for R5,
+so the reduced profile lowers trace volume by roughly 19x while retaining the
+allocator signals of interest.
+
+This result confirms that 15 GiB is not a deterministic failure boundary:
+the earlier untraced 15 GiB control hit an RM allocation failure, while this
+light-traced 15 GiB run reached READY, survived the full soak, and completed
+without any matched host/GPU failure signal. The working hypothesis should
+therefore focus on timing-sensitive allocator/RM/UVM state interactions rather
+than a fixed KV-capacity threshold.
+
+
+The R6 PASS allocator baseline is now characterized. Compaction requests were
+18,739 total: order 4 = 15,226, order 6 = 2,123, and order 9 = 1,390.
+Of the order-9 requests, 1,380/1,390 (~99.3%) were `GFP_TRANSHUGE*`; only
+10 used the observed kernel high-order GFP combination. Direct reclaim was
+2,484 total: order 4 = 1,333, order 9 = 476, order 0 = 398, order 6 = 276,
+and order 2 = 1. Of the order-9 direct-reclaim events, 471/476 (~99.0%) were
+`GFP_TRANSHUGE*`.
+
+Filtered extfrag events totaled 227,933. Only 12,334 (~5.4%) changed pageblock
+ownership; only 58 (~0.025%) had alloc_order >= 9. The dominant extfrag
+patterns were alloc/fallback 4/4, 4/5, 4/6, and 6/6. Task attribution was also
+stable: `VLLM::Worker` generated 15,382 compaction requests and 1,613
+direct-reclaim events; `UVM GPU1 BH` generated 1,948 and 366 respectively.
+
+This means aggregate high-order pressure, synchronous reclaim, and even large
+fallback orders are all compatible with a clean PASS. The next failing trace
+should be compared against this baseline for rare sequence changes: non-THP
+order-9 activity, ownership-changing extfrag with large fallback distance, and
+short bursts from `UVM GPU1 BH` or `VLLM::Worker` immediately before the RM
+error.
+
+
+The 16 GiB R7 child control was generated from the validated R6 child with only
+the intended comparator substitutions: container `qwen38-h6-kv16-trace-r7`,
+port 8902, KV 17179869184 bytes, R7 evidence path, and R7 result labels. The
+verification found no stale R6 identifiers, no child sudo usage, and no
+`KERNEL_PASS`/`KERNEL_ERRORS` dependency. R7 should therefore reuse the
+R6 light-trace profile unchanged so that 15 GiB PASS and 16 GiB can be compared
+1:1.
+
+Do not continue to the mazinb live-switch leg until the exact #246 trigger is
+identified, any required repair is merged and promoted, and the Hybrid
+host-stability gate passes.
+
+This evidence validates the normal committed path only. Physical hard-power-loss
+recovery remains separate from the repository's mock crash-boundary coverage.
+
+
+The first live 16 GiB R7 light-trace execution completed the model-control path
+successfully but did not complete outer host classification because of a
+post-processing timestamp-format bug. The child reached READY, completed the
+180-second post-ready soak, served the expected model, reserved the requested
+16.0 GiB KV cache (579,086 tokens, 2.21x concurrency at max_model_len 262144),
+completed PIECEWISE CUDA graph capture and engine initialization, and then
+clean-stopped with container exit 0 and OOMKilled=false. The child emitted
+`KV16TR7_CHILD_RESULT=FUNCTIONAL_PASS`, and `trace-cmd` returned 0 with
+allocator trace data preserved.
+
+The outer wrapper then aborted while collecting the privileged journal window:
+GNU `date --iso-8601=ns` produced a locale-formatted fractional timestamp
+such as `2026-10-01T16:31:16,553377717+09:00`, and `journalctl --since`
+rejected the comma decimal separator with `Failed to parse timestamp`.
+Therefore this run is currently **FUNCTIONAL_PASS / HOST_NOT_CLASSIFIED**, not
+a final PASS and not a model failure. Do not rerun or delete R7. Preserve
+`/tmp/hybrid-6.17-kv16-trace-r7-20261001` and the outer temporary evidence,
+recover the kernel window from the saved epoch timestamps using a
+journalctl-safe whole-second format, then perform the deferred RM/host
+classification and R6 comparator. This also identifies a tooling fix for
+future reusable trace wrappers: never pass locale-sensitive
+`date --iso-8601=ns` output directly to journalctl.
+
+
+The deferred R7 host classification has now been recovered from the preserved
+evidence without rerunning the model. Final classification is
+**FUNCTIONAL_PASS_HOST_FAIL**.
+
+Recovered evidence:
+
+- `control.rc=0`;
+- child result `FUNCTIONAL_PASS`;
+- trace result `TRACE_PASS`, `trace-cmd.rc=0`;
+- container exited 0 with `OOMKilled=false`;
+- the kernel window contains
+  `NV_ERR_NO_MEMORY ... _memdescAllocInternal`;
+- first RM event:
+  wall time `2026-10-01T16:42:11.052575+09:00`,
+  monotonic `95871.841021`;
+- allocator event totals:
+  compaction try 8,772, compaction begin/end 7,102/7,102,
+  direct reclaim begin/end 6,784/6,784, and filtered extfrag 204,143.
+
+This run is especially valuable because the RM allocation failure did not kill
+the engine. The 16 GiB child subsequently reached health at 16:42:58 KST,
+completed the full 180-second post-ready soak, served the expected model, and
+clean-stopped with exit 0. Therefore `NV_ERR_NO_MEMORY` is not equivalent to
+immediate functional death in this environment, and watchdog-based immediate
+termination would have hidden useful post-error behavior.
+
+The R7 RM event occurred during late initialization, after model loading had
+completed and immediately around the KV/warmup/graph-init phase. The preserved
+R7 trace windows (`rm-trace-window.txt` and
+`rm-trace-window-10s.txt`) are now the primary evidence for the next causal
+comparison. Compare them against the R6 15 GiB PASS baseline for task/PID,
+order/GFP, non-THP high-order requests, direct-reclaim and compaction sequence,
+ownership-changing extfrag, fallback distance, and short bursts from
+`VLLM::Worker` and `UVM GPU1 BH`.
+
+Do not reinterpret the result as a fixed 16 GiB capacity boundary. A previous
+16 GiB run failed host stability, while this traced 16 GiB run still reached
+READY and served successfully after the RM error. The current evidence remains
+most consistent with a timing/state-sensitive RM/UVM/Linux-allocation
+interaction rather than a deterministic KV-size threshold.
+
+
+R7 RM-window analysis further narrows the causal ordering. In the recovered
+plus/minus-three-second window around RM monotonic 95871.841021, the analyzer
+parsed 30,106 events: 46 compaction attempts, 4,462 direct-reclaim begins, and
+21,032 filtered extfrag events. All 46 compaction attempts were from
+`VLLM::Worker` and were order 4. Direct reclaim was overwhelmingly
+`VLLM::Worker` (4,383 of 4,462), with 4,422 order-0 and only 40 order-4
+requests. No non-THP order-9-or-higher compaction/reclaim request was observed.
+
+The strongest timing observation is that the visible reclaim/compaction burst
+starts after the RM failure, not before it. The first high-signal
+ownership-changing extfrag event in the reported nearest-event list appears
+about +120 ms after the RM timestamp; the first reported compaction/reclaim
+bucket is +0.2 s, followed by a very large VLLM-worker reclaim storm from about
++0.9 s through +1.7 s. The nearest ownership-changing extfrag sequence is
+order-4 allocation falling back through very large blocks (including fallback
+orders 13, 12, 11, 10, and 9). In the full +/-3 s window,
+738 extfrag events changed ownership and 737 of those had fallback-order minus
+alloc-order >= 2.
+
+This ordering materially weakens a simple causal story in which a pre-existing
+Linux high-order allocator/fragmentation storm directly triggers the RM
+`NV_ERR_NO_MEMORY`. The currently observed sequence is instead compatible
+with the RM failure occurring first, followed roughly 0.1--0.2 s later by
+visible Linux allocator fallout under `VLLM::Worker`, or with both effects
+being driven by an earlier unobserved RM/UVM allocation state. Do not claim
+that the post-RM extfrag/reclaim burst caused the RM event. The next comparator
+should align the R6 PASS trace to the equivalent KV-reserve/late-init phase and
+use the same parser to determine which event sequence is unique to R7.
+
+
+Matched-phase comparison against the R6 15 GiB PASS baseline further weakens
+Linux allocator pressure as the direct trigger. The comparator aligned R6 to
+the same late-init phase as R7 by using the R7 KV-reserve-to-RM delay
+(+0.313407904 s). Monotonic calibration passed and both anchors lay inside
+their respective traces.
+
+In the +/-3 s matched windows, **all measured Linux allocator activity began
+after the phase anchor in both runs**. Pre-anchor counts were zero for
+compaction, direct reclaim, filtered extfrag, ownership-changing extfrag, and
+ownership-changing extfrag with fallback gap >= 2 in both R6 PASS and R7
+HOST_FAIL. The nearest ownership-changing extfrag was +97.403 ms in R6 PASS
+and +120.089 ms in R7 HOST_FAIL. The nearest compaction was +165.417 ms in R6
+and +218.679 ms in R7; the nearest direct reclaim was +166.194 ms in R6 and
++221.526 ms in R7.
+
+The post-anchor allocator pattern is not unique to the failing run. R6 PASS
+showed substantially *more* compaction and extfrag pressure than R7:
+14,189 vs 46 compaction attempts, 71,498 vs 21,032 filtered extfrag events,
+3,271 vs 738 ownership-changing extfrag events, and 2,048 vs 737 ownership
+changes with fallback gap >= 2. R6 PASS also exhibited the same characteristic
+order-4 ownership-changing fallback cascade through large blocks: first
+fallback 13, then 12, 11, and lower orders. That sequence began earlier in R6
+(+97 ms) than in R7 (+120 ms).
+
+The strongest qualitative difference is the *kind* of post-anchor recovery
+work, not a pre-RM precursor. R6 PASS entered an intense order-4 compaction
+phase almost immediately after the matched anchor, with 14,189 order-4
+compaction attempts and 1,285 order-4 direct-reclaim starts in the window.
+R7 HOST_FAIL had only 46 order-4 compaction attempts but later developed a
+large order-0 direct-reclaim storm: 4,422 of 4,462 reclaim starts were order 0,
+mostly from `VLLM::Worker`. The 100 ms timeline shows R6 heavy
+compaction/reclaim from roughly +0.1 s through +1.3 s while still passing,
+whereas R7's large VLLM order-0 reclaim burst begins mainly around +0.9 s and
+continues through +1.7 s after the RM event.
+
+Therefore the evidence does **not** support a causal model in which the
+measured Linux compaction/reclaim/extfrag burst precedes and triggers the RM
+`NV_ERR_NO_MEMORY`. The same or stronger post-anchor allocator stress exists
+in the PASS run, and no measured allocator precursor exists before either
+anchor. The primary remaining causal space is now an RM/UVM/internal physical
+allocation state that is not exposed by these Linux VM tracepoints, with the
+visible Linux allocator activity representing a common late-init response or
+downstream consequence rather than the unique cause of failure.
+
+Before adding more model runs, the next step should be static discovery of
+available NVIDIA/UVM tracepoints, trace events, and safe observable kernel
+symbols on this exact 6.17/580.178.04 host. Instrumentation should only be
+expanded if a concrete RM/UVM event or symbol can be identified; otherwise
+retain the current light-trace profile to avoid observer effects.
+
+
+### RM/UVM ftrace discovery on 580.178.04
+
+The corrected V3 discovery verified that the current 6.17 / 580.178.04 host
+exposes substantial driver-owned ftrace coverage:
+
+- NVIDIA registered trace events: 1 (`nvidia:nvidia_dev_xid`);
+- `[nvidia]` ftrace-visible functions: 925;
+- `[nvidia_uvm]` ftrace-visible functions: 2,123;
+- broad RM allocation-name candidates: 220;
+- broad UVM allocation/fault-name candidates: 1,159.
+
+Important concrete RM-side symbols include `nv_alloc_pages`,
+`nv_alloc_system_pages`, and `nv_alloc_contig_pages`. On NVIDIA's exact
+580.178.04 open-kernel source, `nv_alloc_pages()` is the top-level system
+memory dispatcher: it creates an allocation object, selects contiguous vs
+non-contiguous allocation, and calls `nv_alloc_contig_pages()` or
+`nv_alloc_system_pages()`. Those lower functions directly use Linux page
+allocation primitives.
+
+The same source also exposes a more interesting UVM-to-RM physical-memory
+boundary: `nvUvmInterfacePmaAllocPages()` calls
+`rm_gpu_ops_pma_alloc_pages()` and returns its `NV_STATUS` unchanged.
+This is closer to UVM/RM GPU physical allocation than the generic Linux VM
+tracepoints used in R6/R7.
+
+On the UVM side, `uvm_gpu_dma_alloc()` directly wraps coherent DMA
+allocation and returns `NV_ERR_NO_MEMORY` on allocation failure.
+`uvm_mem_alloc()` is a higher-level UVM memory allocator. By contrast,
+`mem_get_chunk()` is only a vidmem chunk lookup helper and is not a primary
+probe candidate.
+
+Before R8, validate exact ftrace visibility for a narrow shortlist rather than
+instrumenting hundreds of driver functions. The repository helper is:
+
+`scripts/benchmark/check-rm-uvm-probe-targets.sh`
+
+The preferred first R8 probe set, subject to exact-host visibility, is:
+
+1. `nv_alloc_pages` -- RM system-memory allocation dispatcher;
+2. `nvUvmInterfacePmaAllocPages` / `rm_gpu_ops_pma_alloc_pages` -- UVM to
+   RM PMA boundary;
+3. `uvm_gpu_dma_alloc` -- UVM coherent DMA allocation;
+4. optionally `uvm_mem_alloc` as higher-level UVM context.
+
+Keep the existing R6/R7 Linux allocator trace profile unchanged and add only
+the minimum driver probes required to distinguish whether the failing
+`_memdescAllocInternal` event corresponds to system-memory, PMA, or UVM DMA
+allocation. Do not add broad function tracing.
+
+
+The exact-host R8 probe-target validation has now completed. On the live
+6.17.0-1032-nvidia / 580.178.04 host the following targets are ftrace-visible:
+
+- `nv_alloc_pages [nvidia]`: PRESENT;
+- `nv_alloc_system_pages [nvidia]`: PRESENT;
+- `nv_alloc_contig_pages [nvidia]`: PRESENT;
+- `nvUvmInterfacePmaAllocPages [nvidia]`: PRESENT;
+- `uvm_gpu_dma_alloc [nvidia_uvm]`: PRESENT;
+- `uvm_mem_alloc [nvidia_uvm]`: PRESENT;
+- `uvm_pmm_gpu_alloc_kernel [nvidia_uvm]`: PRESENT;
+- `replayable_faults_isr_bottom_half [nvidia_uvm]`: PRESENT.
+
+`rm_gpu_ops_pma_alloc_pages [nvidia]` itself is not ftrace-visible on this
+build. This does not block PMA-boundary observation: in NVIDIA's exact
+580.178.04 open-kernel source, the visible exported
+`nvUvmInterfacePmaAllocPages()` allocates an RM stack, calls
+`rm_gpu_ops_pma_alloc_pages()`, and returns that `NV_STATUS` unchanged.
+It is therefore the preferred low-overhead PMA boundary probe.
+
+R8 should add only four driver paths to the existing R6/R7 light allocator
+profile:
+
+1. `nv_alloc_pages` entry/return, capturing page count, page size,
+   contiguous flag, and return status;
+2. `nvUvmInterfacePmaAllocPages` entry/return, capturing PMA page count,
+   page size, and return status;
+3. `uvm_gpu_dma_alloc` entry/return, capturing size, GFP flags, and return
+   status;
+4. `uvm_pmm_gpu_alloc_kernel` entry/return, capturing chunk count, chunk
+   size, flags, and return status.
+
+Do not enable broad function tracing. The repository R8 runner derives its
+model-control child from the preserved validated local R7 child so the serving
+logic remains unchanged, and supports a probe-only `--preflight` mode before
+any model run.
+
+
+### R8 RM/UVM probe preflight PASS
+
+The live-host R8 probe preflight now passes on kernel
+`6.17.0-1032-nvidia` / driver `580.178.04`.
+
+The final validated dynamic probe set is:
+
+- `r8_rmuvm:nv_alloc_pages_entry/ret`;
+- `r8_rmuvm:pma_alloc_entry/ret`
+  (`nvUvmInterfacePmaAllocPages`);
+- `r8_rmuvm:uvm_dma_alloc_entry/ret`;
+- `r8_rmuvm:uvm_pmm_alloc_entry/ret`.
+
+Preflight evidence established all of the following:
+
+- stale R8 probes were absent before creation;
+- all eight kprobe/kretprobe definitions were accepted;
+- all eight event directories materialized under
+  `/sys/kernel/tracing/events/r8_rmuvm`;
+- all eight formats were readable;
+- `trace-cmd record` accepted the complete R8 event set and returned
+  `rc=0`;
+- the zero-byte CPU payloads in the smoke run are expected because the smoke
+  child is only `true` and does not exercise model/RM/UVM allocation paths;
+- cleanup disabled the group and every individual event before removal;
+- all eight dynamic probes were removed cleanly at preflight exit.
+
+The prior preflight failures were tooling-only and remain **NO TEST** results:
+output-file precreation caused trace-cmd `EACCES`; earlier control-file writes
+either truncated prior definitions or used unsupported append semantics; stale
+enabled probes then produced `EBUSY` until the cleanup sequence was corrected
+to disable-before-remove.
+
+The R8 model experiment may now proceed with the repository runner. Preserve
+the R7 model-control semantics and the R6/R7 light Linux allocator profile;
+the only intended new observability is the four narrow RM/UVM entry/return
+probe pairs above. Do not add an RM watchdog: if `NV_ERR_NO_MEMORY` appears,
+allow normal startup/READY/soak behavior to continue so functional and host
+classification remain separate.

@@ -213,6 +213,40 @@ print_readiness_progress() {
   printf '  PLE worker  : %s\n' "${ple_worker_state}"
 }
 
+print_readiness_failure_diagnostics() {
+  local candidate_container_id="${1:-}"
+  local monitor_log="${STATE_DIR}/monitor.log"
+
+  printf '%s\n' 'Readiness failure diagnostics:' >&2
+  printf '%s\n' '--- systemd state ---' >&2
+  systemctl show "${UNIT}" \
+    --property=ActiveState,SubState,Result,ExecMainCode,ExecMainStatus \
+    --no-pager >&2 2>&1 || true
+
+  printf '%s\n' '--- service journal (tail) ---' >&2
+  journalctl -u "${UNIT}" -n 120 --no-pager -o cat >&2 2>&1 || true
+
+  printf '%s\n' '--- memory monitor (tail) ---' >&2
+  if [[ -r "${monitor_log}" ]]; then
+    tail -n 120 "${monitor_log}" >&2 || true
+  else
+    printf '(monitor log unavailable: %s)\n' "${monitor_log}" >&2
+  fi
+
+  printf '%s\n' '--- container state ---' >&2
+  if docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+    docker inspect --format \
+      'state={{.State.Status}} exit={{.State.ExitCode}} oom_killed={{.State.OOMKilled}} error={{json .State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' \
+      "${CONTAINER_NAME}" >&2 2>&1 || true
+    printf '%s\n' '--- container log (tail) ---' >&2
+    docker logs --timestamps --tail 200 "${CONTAINER_NAME}" >&2 2>&1 || true
+  elif [[ -n "${candidate_container_id}" ]]; then
+    printf 'candidate container unavailable (id=%s)\n' "${candidate_container_id}" >&2
+  else
+    printf '%s\n' '(candidate container unavailable)' >&2
+  fi
+}
+
 if [[ -e "${UNIT_FILE}" ]]; then
   managed_file "${UNIT_FILE}" || die "refusing to replace unmanaged unit: ${UNIT_FILE}"
 fi
@@ -259,10 +293,17 @@ if [[ "${START}" == 1 ]]; then
   systemctl stop "${UNIT}" 2>/dev/null || true
   systemctl start "${UNIT}"
   ready=0
+  candidate_container_id=""
   for attempt in $(seq 1 180); do
     unit_state="$(systemctl show "${UNIT}" --property=ActiveState --value)"
-    case "${unit_state}" in active|activating|reloading) ;; *) die "service stopped before readiness (state=${unit_state})" ;; esac
     candidate_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+    case "${unit_state}" in
+      active|activating|reloading) ;;
+      *)
+        print_readiness_failure_diagnostics "${candidate_container_id}"
+        die "service stopped before readiness (state=${unit_state})"
+        ;;
+    esac
     if [[ -n "${candidate_container_id}" && "${candidate_container_id}" != "${previous_container_id}" ]] && \
        curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1 && \
        runtime_commit_matches "${candidate_container_id}"; then
@@ -272,7 +313,10 @@ if [[ "${START}" == 1 ]]; then
     if (( attempt % 6 == 0 )); then print_readiness_progress "$((attempt * 10))" "${candidate_container_id}"; fi
     sleep 10
   done
-  [[ "${ready}" == 1 ]] || die "replacement runtime did not commit and attest within 30 minutes"
+  if [[ "${ready}" != 1 ]]; then
+    print_readiness_failure_diagnostics "${candidate_container_id:-}"
+    die "replacement runtime did not commit and attest within 30 minutes"
+  fi
   models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
   python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected' \
     "${SERVED_NAME}" <<<"${models}" || die "served model ID validation failed"

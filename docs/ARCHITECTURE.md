@@ -52,14 +52,26 @@ checkpoint-specific mixed-precision requirements must not leak into OrcaRouter d
 ### mazinb — experimental/installable
 
 `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` has a defined installer/runtime path,
-but it has **not** completed the full managed DGX Spark lifecycle qualification. The
-verified installer evidence so far is registry exposure plus a non-mutating dry-run with
-the pinned `f2c21eb` revision and the local `vllm-orcarouter-v029:v1` image plan.
+but it has **not** completed the full managed DGX Spark lifecycle qualification.
 
-Actual checkpoint download, image build, systemd startup/readiness, doctor, restart,
-uninstall preservation, API behavior, determinism/correctness, and performance remain
-qualification work. Until those gates pass, mazinb stays experimental even though it is
-selectable from `install.sh`.
+Verified managed-path evidence as of 2026-10-02 is:
+
+- the profile is exposed as experimental/installable by the registry;
+- the pinned checkpoint resolved to
+  `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`, was fully staged in the
+  repository-local managed model root, and has a complete model manifest;
+- the read-only Hybrid -> mazinb switch preflight passed with update/runtime/
+  profile-switch transactions all idle, the expected image present, and no
+  stale switch candidate/backup artifacts;
+- the installer wizard dry-run produced the intended
+  `orcarouter-hybrid -> mazinb` managed switch plan with monitor/protection,
+  API, and systemd-service settings while explicitly performing no mutation.
+
+Actual managed activation/systemd readiness, post-commit doctor/restart,
+uninstall preservation, API behavior, and managed-lifecycle correctness/performance
+qualification remain pending. Under the current strict Hybrid host-stability policy,
+the live Hybrid -> mazinb activation remains blocked unless the documented narrow
+recoverable-RM exception is explicitly adopted for that acceptance leg.
 
 ### OrcaRouter hybrid — experimental/installable
 
@@ -80,15 +92,36 @@ payload is inherited through the validated parent-link chain. The managed
 runtime therefore uses vLLM v0.29 with PLE mmap, exact QSA, MTP k=2, and
 read-only mounts for the OrcaRouter base, H3, H4-all, and H5 parents.
 
-This profile is experimental and non-default. The managed warm/reuse path has passed
-functional/restart validation, the no-uninstall Hybrid -> OrcaRouter -> Hybrid round trip
-has passed without checkpoint redownload/rebuild, and the 2026-09-29 CMA-aware
-host-stability repair gate passed 30/30 repeated runtime validations. Those gates are
-narrower than a clean-host qualification: the complete source-download + H3→H6 build +
-managed-service lifecycle on a genuinely clean DGX Spark has not yet been qualified.
-Historical checkpoint/determinism evidence also does not substitute for that clean-host
-gate, and this installer profile remains distinct from the separate H38 decoder-only
-runtime qualification track below.
+This profile is experimental and non-default. The managed warm/reuse path and
+Hybrid -> OrcaRouter -> Hybrid round trip passed functionally. A 2026-09-29
+CMA-aware monitor/protection repair also passed its then-defined 30/30 validation
+gate; that historical PASS must not be treated as the current host-stability
+classification.
+
+Subsequent live profile-switch/restart acceptance and the R8/R9 investigation
+reproduced NVIDIA RM `NV_ERR_NO_MEMORY` while the runtime could still reach READY,
+so the current strict classification is **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
+R9 captured the proximate mechanism: the NVIDIA RM Linux-sysmem path failed an
+approximately 16 GiB non-contiguous request when fulfilling it as 64 KiB/order-4
+physical chunks, rolled back the already allocated order-4 pages, and then
+succeeded immediately for the same logical byte count and captured allocation
+policy at 4 KiB/order-0 granularity. This rules out global host-memory exhaustion,
+swap exhaustion, a fixed KV threshold, or total request bytes as sufficient
+causes. The lower-level Linux zone/migratetype/buddy reason for the unavailable
+order-4 chunk remains unresolved.
+
+The repository documents a narrow optional
+`RECOVERABLE_RM_SYSMEM_FALLBACK` warning exception for this exact recoverable
+pattern, but it is not implicitly enabled. Unless that exception is explicitly
+adopted for an acceptance leg, any observed RM `NV_ERR_NO_MEMORY` keeps the
+Hybrid host classification at FAIL.
+
+These gates are still narrower than a clean-host qualification: the complete
+source-download + H3→H6 build + managed-service lifecycle on a genuinely clean
+DGX Spark has not yet been qualified. Historical checkpoint/determinism evidence
+also does not substitute for that clean-host gate, and this installer profile
+remains distinct from the separate H38 decoder-only runtime qualification track
+below.
 
 ### lychee888 — planned
 
