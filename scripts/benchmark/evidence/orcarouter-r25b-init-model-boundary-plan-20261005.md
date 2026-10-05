@@ -2,9 +2,13 @@
 
 ## Status
 
-**ATTEMPT 01 SETUP INVALID — RECOVERY + CORRECTED PREFLIGHT PASS — ATTEMPT 02 LIVE MEASURED RETRY AUTHORIZED**
+**COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL — PRIMARY RM BURST LOCALIZED TO `initialize_model()` WITH SMALL PRECURSOR**
 
-R25 read-only localization showed that the R24 64 KiB NVIDIA RM episode is only about 3.218 seconds long even though checkpoint weight filling takes 522.10 seconds. `99.276945%` of traced order-4 activity falls between the existing `Loading model from scratch...` marker and `Loading weights took ...`, but the first approximately `559.688 MiB` begins about `0.395 s` before the existing model-load marker.
+Canonical final result:
+
+- `orcarouter-r25b-init-model-boundary-result-20261005.md`
+
+R25 read-only localization showed that the R24 64 KiB NVIDIA RM episode is only about 3.218 seconds long even though checkpoint weight filling takes hundreds of seconds. R25b added exactly two userspace log boundaries around `initialize_model()` and then performed one corrected measured retry after attempt-01 setup invalidity was repaired.
 
 The pinned vLLM v0.29 `BaseModelLoader.load_model()` order is:
 
@@ -14,13 +18,24 @@ The pinned vLLM v0.29 `BaseModelLoader.load_model()` order is:
 4. online-quant finalization when applicable;
 5. `process_weights_after_loading(...)`.
 
-R25 therefore narrows the next question to model/parameter construction versus checkpoint filling. R25b adds exactly two userspace log boundaries around `initialize_model()` and otherwise preserves the R24 runtime/harness.
-
 ## Question
 
 Does the approximately 77 GiB 64 KiB `nv_alloc_pages` episode occur primarily inside `initialize_model()` before checkpoint weight filling begins?
 
-This remains a localization discriminator, not a mitigation test.
+**Answer: yes, with a small real precursor immediately before the marker.**
+
+Attempt 02 measured:
+
+- total RM order-4 activity: `77405.938 MiB`;
+- before selected init: `559.688 MiB`;
+- inside selected init: `76846.250 MiB`;
+- after selected init: `0.000 MiB`;
+- inside-init fraction: `99.276945%`;
+- discriminator: `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL`.
+
+The strict discriminator remains `STARTS_BEFORE` because the first RM activity precedes the marker by about `0.417859 s`, well beyond the `0.025 s` classification tolerance. But the primary approximately 75–77 GiB episode is now localized to the first `initialize_model()` / immediate model-construction interval rather than long checkpoint filling.
+
+This remains temporal localization rather than causal proof below that boundary.
 
 ## Diagnostic image
 
@@ -59,8 +74,6 @@ Observed diagnostic image:
 - managed-service mutation: NO;
 - persistent VM tuning: NO.
 
-The managed container id and `StartedAt` timestamp were identical before and after the image build/static preflight, closing this gate as non-mutating.
-
 ## Live runner
 
 Repository additions:
@@ -69,53 +82,34 @@ Repository additions:
 - `scripts/benchmark/analyze-orcarouter-r25b-init-model-overlap.py`;
 - `tests/test_orcarouter_r25b_init_model_overlap.py`.
 
-The R25b runner does **not** edit the historical R24 runner. Instead it creates an ephemeral `/tmp` copy and transforms only the R25b-local harness identity:
+The R25b runner does **not** edit the historical R24 runner. It creates an ephemeral `/tmp` copy and transforms only the R25b-local harness identity:
 
-1. repository-root injection so the temporary copy resolves the current checkout;
+1. repository-root injection;
 2. experiment container name → `qwen38-hybrid-r25b-init-marker`;
 3. shell kprobe group variable → `r25b_rm`;
 4. all exactly four hard-coded R24 kprobe definitions → `r25b_rm/...`.
 
-The transform requires exactly four probe-definition replacements, rejects any remaining `r24_rm/` definition, and requires exactly four resulting `r25b_rm/` definitions. A regression test executes the exact embedded transform against the canonical R24 harness.
+The corrected transform requires exactly four replacements, rejects any remaining `r24_rm/` definition, requires exactly four resulting `r25b_rm/` definitions, and is covered by a regression test executing the exact embedded transform against the canonical R24 harness.
 
-The corrected retry evidence directory is:
+Attempt-02 evidence:
 
 `/tmp/orcarouter-hybrid-r25b-init-model-boundary-02-20261005`
 
-The failed attempt-01 directory is preserved and must not be reused:
+Attempt-01 setup-invalid evidence remains preserved:
 
 `/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005`
 
-The preserved R24 directory remains:
+Preserved R24 evidence remains:
 
 `/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004`
 
-The runner explicitly refuses to reuse the R24 path or container name. It also blocks preflight/live execution if stale `r24_rm` or `r25b_rm` kprobe groups are present.
-
-Default invocation remains safe: calling the R25b runner with no arguments performs `--preflight`. A live run additionally requires both explicit `run` mode and `ORCA_R25B_LIVE_ACK=YES`.
-
-## Completed original live-harness preflight gate
+## Original live-harness preflight
 
 Canonical result:
 
 - `orcarouter-r25b-live-harness-preflight-result-20261005.md`
 
-The original preflight passed and was non-mutating:
-
-- `R25B_IMAGE_PREFLIGHT=PASS`;
-- `R24_PREFLIGHT=PASS`;
-- `R25B_LIVE_PREFLIGHT=PASS`;
-- `R25B_PREFLIGHT_AND_NONMUTATION=PASS`;
-- predecessor age: `40516.906 s` (minimum `2700 s`);
-- `predecessor_age_ok=1`;
-- RM probe target count: `2`;
-- candidate image: `vllm-orcarouter-v029-r25-init-marker:v1`;
-- KV bytes: `17179869184`;
-- model restart during preflight: NO;
-- managed-service mutation during preflight: NO;
-- persistent VM tuning: NO.
-
-That preflight did not materialize the probe definitions, so it could not detect the later heredoc group mismatch.
+The original preflight passed and was non-mutating, but it did not materialize the probe definitions and therefore could not detect the inherited heredoc group mismatch later exposed by attempt 01.
 
 ## Live attempt 01 — setup invalid
 
@@ -123,103 +117,104 @@ Canonical result:
 
 - `orcarouter-r25b-live-attempt01-probe-group-invalid-20261005.md`
 
-The first live invocation passed the preflight and explicit ACK gate, then failed in `create_probes()` with:
+Attempt 01 failed in `create_probes()` before candidate launch because the initial wrapper changed `GROUP="r24_rm"` to `GROUP="r25b_rm"`, while the inherited R24 probe-definition heredoc still created all four events under hard-coded `r24_rm/...` names.
 
-`ORCA_R24_ERROR: probe event not materialized: r25b_rm:nv_alloc_pages_entry`
+Classification remains **SETUP INVALID / NO R25b MEASUREMENT CLAIM**.
 
-Root cause: the initial wrapper changed `GROUP="r24_rm"` to `GROUP="r25b_rm"`, but the inherited R24 probe-definition heredoc still created all four events under hard-coded `r24_rm/...` names. Validation therefore searched for `r25b_rm/...` events that had not been created.
-
-This failure occurred before candidate launch and produced **no R25b localization measurement**. Classification is **SETUP INVALID**.
-
-The partial attempt-01 evidence remains preserved at:
-
-`/tmp/orcarouter-hybrid-r25b-init-model-boundary-01-20261005`
-
-## Completed recovery + corrected preflight gate
+## Recovery + corrected preflight
 
 Canonical result:
 
 - `orcarouter-r25b-recovery-corrected-preflight-result-20261005.md`
 
-Observed recovery:
+Recovery verified exact managed OrcaRouter readiness, found the stale `r24_rm` group with exactly the expected four RM events, removed only those known events, and then passed the corrected preflight:
 
-- managed service active;
-- exact OrcaRouter served identity READY after 0 s;
-- managed container id `22c78d93eef27e1777c760ff7bd0868824dddd61261fbd9f7a541f6a6fe58efc`;
-- managed `StartedAt=2026-10-05T02:54:12.603514562Z`;
-- R25b experiment container absent;
-- failed-attempt `r24_rm` group present with exactly the expected four RM events;
-- `r25b_rm` absent;
-- cleanup restricted to those four known events;
 - `stale_probe_cleanup=APPLIED`;
-- `stale_probe_cleanup=PASS`.
-
-Corrected preflight then observed:
-
+- `stale_probe_cleanup=PASS`;
 - `stale_probe_groups=NONE`;
 - `r25_marker_contract=PASS`;
 - `R25B_IMAGE_PREFLIGHT=PASS`;
 - `r25b_probe_definition_contract=PASS`;
 - `R24_PREFLIGHT=PASS`;
 - `R25B_LIVE_PREFLIGHT=PASS`;
-- predecessor age `8585.831 s` versus required `2700 s`;
-- `predecessor_age_ok=1`;
-- RM probe target count `2`;
-- KV bytes `17179869184`;
-- retry evidence `/tmp/orcarouter-hybrid-r25b-init-model-boundary-02-20261005`;
-- no model restart, managed-service mutation, or persistent VM tuning during preflight.
+- `R25B_RECOVERY_AND_CORRECTED_PREFLIGHT=PASS`.
 
-The managed container id and `StartedAt` remained exactly unchanged before and after corrected preflight.
+The managed container id and `StartedAt` remained unchanged across the corrected preflight.
 
-Final host-side gate token:
+## Attempt 02 — completed measured retry
 
-`R25B_RECOVERY_AND_CORRECTED_PREFLIGHT=PASS`
+Final result:
 
-Therefore exactly one corrected measured retry is authorized.
+- `orcarouter-r25b-init-model-boundary-result-20261005.md`
 
-## Attempt-02 live measured-run boundary
+The R24-matched measurement was valid:
 
-Attempt 02 must use the dedicated wrapper with both explicit controls:
+- `run_valid=1`;
+- `functional_class=PASS`;
+- `host_stability_class=FAIL`;
+- `rm_oom_count=3`;
+- `event_snapshot_count=3`;
+- `ORCA_R24_RESULT=VALID_RM_OOM`;
+- `ORCA_R25B_RESULT=VALID_MEASURED`;
+- final command RC `0`.
 
-- mode: `run`;
-- environment acknowledgement: `ORCA_R25B_LIVE_ACK=YES`.
+The common burst remained unchanged relative to R22:
 
-The RM trace remains restricted to:
+- largest 5 s residual: `+77870.578 MiB`;
+- candidate/R22 ratio: `103.636687%`;
+- band: `BURST_UNCHANGED`;
+- 64 KiB/order-4 calls: `526`;
+- total order-4 RM activity: `77405.938 MiB`.
 
-- `nv_alloc_pages`;
-- `nv_alloc_system_pages`;
-- optional static NVIDIA Xid event if available.
+Exact selected initialization alignment:
 
-No UVM, generic page allocation, scheduler, function graph, CUDA API blanket tracing, or broad Python profiling is added.
+- clock-offset spread: `6.176949 ms`;
+- classification tolerance: `0.025000 s`;
+- selected init duration: `3.161066 s`;
+- RM episode duration: `3.468940 s`;
+- before init: `559.688 MiB`;
+- inside init: `76846.250 MiB`;
+- after init: `0.000 MiB`;
+- inside-init fraction: `99.276945%`;
+- discriminator: `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL`.
 
-The post-run analyzer reports:
+The candidate log has two initialization marker pairs. The full traced order-4 episode ends before the first selected `INIT_MODEL_END`; it therefore does not extend into the first 601.96 s weight-fill interval or the later second init/69.95 s load interval.
 
-- clock-offset spread and classification tolerance;
-- selected `INIT_MODEL_BEGIN` / `INIT_MODEL_END` markers;
-- initialize-model duration;
-- first/last RM order-4 activity;
-- total, before-init, inside-init, and after-init RM activity;
-- inside-init percentage;
-- one discriminator:
-  - `RM_ORDER4_WITHIN_INITIALIZE_MODEL`;
-  - `RM_ORDER4_STARTS_BEFORE_INITIALIZE_MODEL`;
-  - `RM_ORDER4_EXTENDS_AFTER_INITIALIZE_MODEL`;
-  - `RM_ORDER4_STRADDLES_INITIALIZE_MODEL`.
+Managed restoration closed PASS:
 
-RM logical bytes remain activity volume, not exact resident ownership. Marker overlap remains temporal localization rather than causal proof.
+- `managed_restore_ready_rc=0`;
+- exact managed OrcaRouter READY after `880 s`;
+- restored model id `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`;
+- restored `max_model_len=262144`;
+- managed service active after restoration.
 
-## Interpretation
+## Interpretation / closure
 
-- If nearly all order-4 RM activity lies inside `initialize_model()`: close the next layer to CUDA-side model/parameter/storage construction and design the next discriminator around construction/materialization shape.
-- If substantial activity begins only after `INIT_MODEL_END`: instrument the smallest weight-loader boundary next.
-- If the episode starts materially before `INIT_MODEL_BEGIN` or straddles both sides: quantify that portion before changing behavior.
+R25b closes the current phase question as:
 
-H11 is potentially relevant only after initialization is implicated because it changes packed expert parameter construction. H12 remains lower priority for this host-stability question because it changes a later post-load wrapping/rename path.
+`small pre-init precursor (~560 MiB) -> first initialize_model() (~76.85 GiB RM order-4 activity) -> no remaining order-4 activity after init -> long checkpoint filling continues separately`
+
+The approximately `559.688 MiB` precursor is real and should remain a separate side observation because it starts about `0.418 s` before `INIT_MODEL_BEGIN`, well outside the 25 ms tolerance.
+
+The primary approximately 75–77 GiB direct-RM burst is now localized to the first `initialize_model()` / model-construction interval. This materially implicates constructor/parameter/storage materialization rather than checkpoint filling or post-load wrapping.
+
+H11 is therefore now relevant as a hypothesis, but changing H11 behavior should follow one more observational boundary split inside `initialize_model()` rather than precede it. H12 remains lower priority because all traced order-4 activity is finished before post-load processing.
+
+## Next engineering direction
+
+Do not repeat H6 and do not broaden tracing.
+
+The next discriminator should add only a few stable markers inside the first `initialize_model()` path to separate:
+
+1. model-class resolution/import and constructor entry;
+2. top-level model/module construction;
+3. routed-expert / packed expert parameter construction or storage materialization;
+4. constructor return.
+
+Keep the approximately 560 MiB pre-init precursor separate from the main 76.8 GiB burst.
 
 ## Validation
 
-The corrected implementation head `ae6ffe1fde09bc966a7d5cee58a947a666da2d86` passed CI #1077: shell syntax, ShellCheck, Python compile, full unit tests including the probe-transform regression, and whitespace all PASS.
-
-The subsequent commits that record the corrected runtime preflight are documentation-only. Their final head must also be CI green before attempt 02 is launched.
+The corrected implementation head `ae6ffe1fde09bc966a7d5cee58a947a666da2d86` passed CI #1077. The pre-attempt documentation head `42b2e3bb97a0631993e0dac430710142dac87a3c` passed CI #1079. The final result/documentation head must remain green before starting the next discriminator.
 
 PR #244 remains open. No merge is implied.
