@@ -2,28 +2,23 @@
 
 ## Status
 
-**IMPLEMENTED / READ-ONLY POST-HOC ANALYSIS NOT YET RUN**
+**COMPLETED — READ-ONLY POST-HOC PASS**
 
-R24 rejects H6 ModelOpt W4A16 as a host-stability mitigation under R22-matched 16 GiB runtime controls. The early direct NVIDIA RM system-memory burst remains unchanged and one strict RM OOM still occurs.
+Canonical result:
 
-R25 therefore does not begin with another live checkpoint/config experiment. Its first step is a zero-restart, read-only localization pass over the preserved R24 evidence.
+`orcarouter-r25-load-phase-localization-result-20261005.md`
+
+R24 rejects H6 ModelOpt W4A16 as a host-stability mitigation under R22-matched 16 GiB runtime controls. R25 therefore used the preserved R24 evidence only; it did not restart the model, mutate the managed service, or change host/kernel state.
 
 ## Question
 
 Which coarse userspace model-loading phase contains the already-closed approximately 77 GiB 64 KiB-path `nv_alloc_pages` episode?
 
-The intended distinction is:
-
-1. model/weight loading;
-2. post-load model finalization/materialization;
-3. CUDA graph capture / later initialization;
-4. insufficient log milestones to distinguish them.
-
-This is temporal phase localization, not causal proof.
+The intended distinction was model/weight loading versus post-load finalization versus later CUDA-graph/runtime initialization. This is temporal phase localization, not causal proof.
 
 ## Preserved evidence used
 
-The analyzer consumes only the existing R24 evidence directory:
+The analyzer consumed only the existing R24 evidence directory:
 
 - `candidate-container.log` captured with `docker logs --timestamps`;
 - `candidate-request-iso.txt` + `candidate-request-monotonic-ns.txt`;
@@ -33,61 +28,78 @@ The analyzer consumes only the existing R24 evidence directory:
 - `r24-analysis.txt`;
 - `host-page-size.txt`.
 
-No service, model, Docker container, VM setting, tracepoint, or kernel state is changed.
+No service, model, Docker container, VM setting, tracepoint, or kernel state was changed.
 
-## Clock alignment
+## Observed result
 
-The analyzer derives wall-clock to monotonic offset from three preserved anchor pairs and reports their offset spread. Timestamped container log lines are then mapped onto the same monotonic clock as the RM trace.
+Clock alignment used three preserved anchors with `4.907608 ms` maximum offset spread.
 
-The relevant log markers are searched conservatively:
+R24 five-second burst:
 
-- `Loading model from scratch`;
-- a weight-load completion line such as `Loading weights took ...` / `Loading model weights took ...`;
-- a model-load completion line such as `Model loading took ...`;
-- CUDA graph capture start when present.
+- start: `382548.943040064`;
+- end: `382553.943487653`;
+- residual increase: `+77937.680 MiB`.
 
-The analyzer also prints nearby loading/materialization milestones around the independently selected R24 five-second burst.
+Observed 64 KiB/order-4 RM episode:
 
-## RM accounting
+- first call: `382550.429568000`;
+- last call: `382553.647241000`;
+- duration: approximately `3.217673 s`;
+- total activity: `77405.938 MiB`;
+- all `77405.938 MiB` lies inside the independently selected five-second burst.
 
-Only the already-closed `nv_alloc_pages` 64 KiB path is used. Logical activity bytes retain the established R23/R24 semantics:
+Mapped userspace markers:
 
-`page_count * host_page_size`
+- engine initialization: `382544.232777357`;
+- `Loading model from scratch...`: `382550.824214458`;
+- `Loading weights took 522.10 seconds`: `383076.126421452`;
+- `Model loading took 79.41 GiB memory and 610.328639 seconds`: `383160.989125490`;
+- no decisive CUDA-graph-start marker was required for this discriminator.
 
-where host page size is the preserved system page size (4096 bytes on the measured host).
+The existing model-load-start → weight-load-end interval contains `76846.250 MiB`, or `99.276945%`, of traced order-4 activity. Only approximately `559.688 MiB` (`0.723055%`) occurs before the existing `Loading model from scratch...` marker, and that leading portion starts only about `0.394646 s` earlier.
 
-These bytes are activity volume, not exact resident ownership.
+The live post-hoc discriminator is therefore:
 
-## Discriminators
+`RM_ORDER4_ACTIVITY_PARTLY_BEFORE_MODEL_LOAD`
 
-The analyzer emits one of:
+This label is intentionally conservative. The material conclusion is that the approximately 77 GiB RM episode is concentrated in the first approximately 3.2 seconds of model construction/loading and finishes hundreds of seconds before checkpoint filling and model-load completion.
 
-- `RM_ORDER4_ACTIVITY_WITHIN_WEIGHT_LOAD_INTERVAL`;
-- `RM_ORDER4_ACTIVITY_STRADDLES_WEIGHT_LOAD_END`;
-- `RM_ORDER4_ACTIVITY_AFTER_WEIGHT_LOAD`;
-- `RM_ORDER4_ACTIVITY_PARTLY_BEFORE_MODEL_LOAD`;
-- `INSUFFICIENT_WEIGHT_LOAD_MILESTONES`.
+## Source-order interpretation
 
-If the full 64 KiB RM episode lies inside the model-start → weight-load-end interval, the next live R25 instrumentation should target the narrowest practical weight allocation/loading/materialization boundary rather than post-load or CUDA-graph code.
+Pinned vLLM v0.29 `BaseModelLoader.load_model()` executes:
 
-If the episode begins after the weight-load completion marker, the next live probe should instead target post-load conversion/materialization.
+1. enter target device context;
+2. `initialize_model(...)`;
+3. `load_weights(...)`;
+4. online-quant finalization when applicable;
+5. `process_weights_after_loading(...)`.
 
-If the log lacks a decisive weight marker, preserve the inconclusive result and add only the smallest marker needed to distinguish those phases; do not broaden to generic Python, CUDA, UVM, scheduler, or all-driver tracing.
+`DefaultModelLoader.load_weights()` emits `Loading weights took ...` only after the model's safetensors iterator has been consumed.
 
-## Existing repository controls relevant to follow-up
+Therefore the timing is much more consistent with the earliest CUDA-side model/parameter/storage materialization around `initialize_model()` / immediate loader entry than with the full 522 s safetensors fill, post-load processing, or CUDA-graph capture. This remains a hypothesis until the exact `initialize_model()` boundary is measured.
 
-The repository already contains loader-shape controls that may become useful only after phase localization:
+## Consequence for H11/H12
 
-- H11 changes packed expert weights from plain `torch.nn.Parameter` to `ModelWeightParameter` while preserving on-disk names/values;
-- H12 preserves those packed parameter objects through the compressed-tensors post-load rename instead of wrapping `.data` in new `torch.nn.Parameter` objects.
+R25 does not justify a direct H12 host-stability run. H12 changes a later post-load parameter wrapping/rename path, while the RM episode is already over hundreds of seconds earlier.
 
-These controls are not automatically selected for a live R25 run. The post-hoc result must first show whether the RM episode is in weight load versus post-load finalization, and any later use of H11/H12 must be justified by that phase result.
+H11 remains potentially relevant later because it changes packed expert parameter construction. It should only be used after an exact initialization-boundary discriminator shows that construction is inside the RM episode.
 
-## Implementation
+## Follow-up
 
-- `scripts/benchmark/analyze-orcarouter-r24-load-phase.py`
-- `tests/test_orcarouter_r24_load_phase.py`
+The next phase is R25b:
 
-The analysis is intentionally read-only and can be run against the preserved R24 evidence without disturbing the now-restored managed service.
+`orcarouter-r25b-init-model-boundary-plan-20261005.md`
+
+R25b adds only two INFO markers around `initialize_model()` in a diagnostic image derived from the exact R24 base image. Before any live run, the required action is **image build + static image preflight only**. A model restart is not authorized by this plan.
+
+Implementation:
+
+- `scripts/benchmark/analyze-orcarouter-r24-load-phase.py`;
+- `tests/test_orcarouter_r24_load_phase.py`;
+- `scripts/patch-v029-r25-init-model-markers.py`;
+- `scripts/Dockerfile.v029-r25-init-model-markers`;
+- `scripts/benchmark/check-orcarouter-r25b-init-model-image.sh`.
+
+Do not broaden to generic Python profiling, CUDA API blanket tracing, UVM, scheduler, generic page allocation, function graph, or all-driver tracing.
 
 PR #244 remains open; no merge is implied.
