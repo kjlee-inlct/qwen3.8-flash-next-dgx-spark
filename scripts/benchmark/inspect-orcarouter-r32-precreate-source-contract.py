@@ -109,6 +109,34 @@ def find_assignment_call_lineno(func: ast.AST, target_name: str, call_suffix: st
     return rows[0]
 
 
+def find_self_assignment_call_lineno(
+    func: ast.AST, target_attr: str, call_suffix: str
+) -> int:
+    """Locate one ``self.<attr> = <call>`` inside the supplied function only."""
+    rows: list[int] = []
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not (
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == "self"
+            and target.attr == target_attr
+        ):
+            continue
+        if not isinstance(node.value, ast.Call):
+            continue
+        if call_name(node.value).endswith(call_suffix):
+            rows.append(node.lineno)
+    if len(rows) != 1:
+        raise SystemExit(
+            f"expected one self.{target_attr}=*{call_suffix} in target function, "
+            f"found {len(rows)}"
+        )
+    return rows[0]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
@@ -137,13 +165,20 @@ def main() -> int:
         and required_qwen4["attn_hc"] < required_qwen4["mlp_hc"]
     )
 
-    # Qwen3Next Sparse-MoE constructor ordering.
-    gate_pos = qwen3.find("self.gate = GateLinear(")
-    shared_gate_pos = qwen3.find("self.shared_expert_gate = ReplicatedLinear(")
-    experts_pos = qwen3.find("self.experts = FusedMoEFactory(")
-    sparse_order_pass = min(gate_pos, shared_gate_pos, experts_pos) >= 0 and (
-        gate_pos < shared_gate_pos < experts_pos
+    # Qwen3Next Sparse-MoE constructor ordering. Scope the AST lookup to the
+    # exact class/function; whole-file string.find() is invalid because other
+    # classes in qwen3_next.py may contain the same assignment spellings.
+    qwen3_tree = ast.parse(qwen3)
+    sparse_cls = find_class(qwen3_tree, "Qwen3NextSparseMoeBlock")
+    sparse_init = find_func(sparse_cls.body, "__init__")
+    gate_line = find_self_assignment_call_lineno(sparse_init, "gate", "GateLinear")
+    shared_gate_line = find_self_assignment_call_lineno(
+        sparse_init, "shared_expert_gate", "ReplicatedLinear"
     )
+    experts_line = find_self_assignment_call_lineno(
+        sparse_init, "experts", "FusedMoEFactory"
+    )
+    sparse_order_pass = gate_line < shared_gate_line < experts_line
 
     # FusedMoEFactory direct allocations before RoutedExperts construction.
     factory_tree = ast.parse(factory)
@@ -161,11 +196,10 @@ def main() -> int:
     routed_allocs = direct_alloc_calls_before(routed_init, create_line)
 
     # Ordering anchors inside RoutedExperts.
-    routed_text_before = routed[:]
-    idx_update = routed_text_before.find("self.update_expert_map_info()")
-    idx_quant = routed_text_before.find("self.quant_method = self._get_quant_method(")
-    idx_round = routed_text_before.find("self.quant_method.maybe_roundup_sizes(")
-    idx_create = routed_text_before.find("self.quant_method.create_weights(layer=self")
+    idx_update = routed.find("self.update_expert_map_info()")
+    idx_quant = routed.find("self.quant_method = self._get_quant_method(")
+    idx_round = routed.find("self.quant_method.maybe_roundup_sizes(")
+    idx_create = routed.find("self.quant_method.create_weights(layer=self")
     routed_order_pass = min(idx_update, idx_quant, idx_round, idx_create) >= 0 and (
         idx_update < idx_quant < idx_round < idx_create
     )
@@ -178,6 +212,9 @@ def main() -> int:
     print(f"qwen4_decoder_attention_before_mlp={'PASS' if qwen4_order_pass else 'FAIL'}")
     print(f"qwen4_decoder_hyperconnection_after_mlp={'PASS' if qwen4_order_pass else 'FAIL'}")
     print(f"sparse_moe_gate_before_factory={'PASS' if sparse_order_pass else 'FAIL'}")
+    print(f"sparse_moe_gate_line={gate_line}")
+    print(f"sparse_moe_shared_gate_line={shared_gate_line}")
+    print(f"sparse_moe_factory_line={experts_line}")
     print(f"routed_experts_order_contract={'PASS' if routed_order_pass else 'FAIL'}")
     print(f"factory_pre_routed_direct_tensor_alloc_count={len(factory_allocs)}")
     print(
