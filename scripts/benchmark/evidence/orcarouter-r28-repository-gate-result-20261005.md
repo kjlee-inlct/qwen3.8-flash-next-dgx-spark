@@ -23,11 +23,7 @@ Implemented files:
 
 Implementation head `496eaadb9fc56e268bcfcb080be6a45879709ba4` passed CI #1141.
 
-The subsequent documentation-only status update produced final branch head:
-
-`225c9719aec6910de975c867d0a28c6549ae772b`
-
-CI #1142 on that exact head also completed **SUCCESS**.
+The subsequent documentation-status head `225c9719aec6910de975c867d0a28c6549ae772b` also passed CI #1142 with **SUCCESS**.
 
 Validated steps include:
 
@@ -37,18 +33,21 @@ Validated steps include:
 - full unit tests: PASS;
 - whitespace checks: PASS.
 
+This evidence document was added after those checks and changes no R28 executable code or test semantics.
+
 ## Gate closure
 
 Repository implementation is closed PASS. This result does not make a live functional or host-stability claim.
 
 Next permitted action is DGX static work only:
 
-1. pull exact head `225c9719aec6910de975c867d0a28c6549ae772b`;
-2. build `vllm-orcarouter-v029-r28-unquant-linear-marker:v1` from the already validated R27 image;
-3. run `check-orcarouter-r28-unquant-linear-image.sh`;
-4. prove managed container ID / StartedAt and exact OrcaRouter model identity unchanged;
-5. run the guarded R28 harness in `--preflight` mode only;
-6. canonicalize those gates before considering one live measurement.
+1. fast-forward the branch to the current remote head;
+2. verify that the checked-out head contains tested head `225c9719aec6910de975c867d0a28c6549ae772b` as an ancestor;
+3. build `vllm-orcarouter-v029-r28-unquant-linear-marker:v1` from the already validated R27 image;
+4. run `check-orcarouter-r28-unquant-linear-image.sh`;
+5. prove managed container ID / StartedAt and exact OrcaRouter model identity unchanged;
+6. run the guarded R28 harness in `--preflight` mode only;
+7. canonicalize those gates before considering one live measurement.
 
 No live R28 run is authorized by this document. H11 remains deferred.
 
