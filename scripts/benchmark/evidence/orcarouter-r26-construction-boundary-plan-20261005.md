@@ -2,11 +2,15 @@
 
 ## Status
 
-**STATIC IMAGE PASS — HARNESS PREFLIGHT PASS — SINGLE LIVE MEASURED RUN AUTHORIZED**
+**COMPLETED — VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL — `RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`**
 
-R25b is closed as **VALID_MEASURED — FUNCTIONAL PASS / HOST-STABILITY FAIL**. Its valid attempt-02 localized `76,846.250 MiB` of `77,405.938 MiB` total 64 KiB direct-NVIDIA-RM order-4 activity (`99.276945%`) inside the first `initialize_model()` interval, with `559.688 MiB` before the marker and `0.000 MiB` after it. The main burst therefore belongs to immediate model construction rather than the later long checkpoint-fill path.
+Canonical result:
 
-R26 moves inward observationally. It does not change parameter classes, tensor shapes, dtypes, quantization behavior, allocator behavior, runtime flags, or VM policy.
+- `scripts/benchmark/evidence/orcarouter-r26-construction-boundary-result-20261005.md`
+
+R25b had localized `76,846.250 MiB` of `77,405.938 MiB` total 64 KiB direct-NVIDIA-RM order-4 activity (`99.276945%`) inside the first `initialize_model()` interval, with `559.688 MiB` before the marker and `0.000 MiB` after it. R26 moved inward observationally and split that constructor interval into top-level construction, ModelOpt NVFP4 routed-expert creation, and packed w13/w2 allocation boundaries.
+
+R26 did not alter parameter classes, tensor shapes, dtypes, quantization behavior, allocator behavior, runtime flags, PLE mmap, exact QSA, KV size, model length, speculative decode, or VM policy.
 
 ## Question
 
@@ -16,7 +20,7 @@ Within the first `initialize_model()` call, is the approximately 76.8 GiB main R
 2. `ModelOptNvFp4FusedMoE.create_weights()` for routed experts; and, if so,
 3. the large packed `w13_weight` / `w2_weight` storage allocations specifically?
 
-This is a localization discriminator, not a mitigation test.
+This was a localization discriminator, not a mitigation test.
 
 ## Pinned vLLM v0.29 path
 
@@ -26,9 +30,9 @@ The v0.29 model-loader `initialize_model()` resolves/configures the model class 
 
 inside `set_current_vllm_config(...)`.
 
-The H6 matched-control checkpoint declares `W4A16_NVFP4`. vLLM v0.29 routes this NVFP4 MoE construction through `ModelOptNvFp4FusedMoE.create_weights()`, which creates the routed-expert `w13_weight` and `w2_weight` `ModelWeightParameter` objects from `torch.empty(...)` before scales/metadata. Those are the highest-information allocation boundaries to measure before any H11-like behavior-changing experiment.
+The H6 matched-control checkpoint declares `W4A16_NVFP4`. vLLM v0.29 routes NVFP4 MoE construction through `ModelOptNvFp4FusedMoE.create_weights()`, which creates routed-expert `w13_weight` and `w2_weight` `ModelWeightParameter` objects from `torch.empty(...)` before scales/metadata.
 
-## Diagnostic image
+## Diagnostic implementation
 
 Repository components:
 
@@ -54,8 +58,6 @@ R26 adds INFO markers around:
 - `ModelOptNvFp4FusedMoE.create_weights()` begin/end with a process-local sequence number;
 - `w13_weight` allocation begin/end;
 - `w2_weight` allocation begin/end.
-
-It does not alter tensor shapes, dtypes, parameter classes, checkpoint mappings, quantization methods, allocator behavior, runtime flags, PLE mmap, exact QSA, KV size, model length, speculative decode, or post-load processing.
 
 ## Static image gate — CLOSED / PASS
 
@@ -83,7 +85,7 @@ Canonical result:
 
 - `scripts/benchmark/evidence/orcarouter-r26-live-harness-preflight-result-20261005.md`
 
-DGX harness preflight used repository head `80efd0e789493fd69ca6455ff794308f8723adff` and reported:
+Observed preflight:
 
 ```text
 stale_probe_groups=NONE
@@ -102,85 +104,138 @@ R26_HARNESS_PREFLIGHT_RC=0
 R26_HARNESS_PREFLIGHT_AND_NONMUTATION=PASS
 ```
 
-Matched-control identity remained:
+Matched-control identity remained H6 ModelOpt W4A16 with forced `17179869184`-byte KV and the same narrow RM probe targets.
+
+## Live measured run — CLOSED / VALID
+
+The single authorized live run used repository head:
+
+`fd71744f9663b6dd29d09abfdd00cf4d3b8254a2`
+
+Final validity/classification:
 
 ```text
-profile=orcarouter-hybrid
-candidate_checkpoint=/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-h6-modelopt-w4a16
-candidate_image=vllm-orcarouter-v029-r26-construction-marker:v1
-candidate_image_label=v0.29+qsa-layer-type+ple-mmap+exact-qsa+fla
-kv_bytes=17179869184
+run_valid=1
+candidate_start_rc=0
+collector_rc=0
+trace_rc=0
+trace_report_rc=0
+analyzer_rc=0
+wait_ready_rc=0
+api_ready=1
+protected_stop=0
+trace_window_valid=1
+candidate_identity_valid=1
+functional_class=PASS
+host_stability_class=FAIL
+rm_oom_count=2
+event_snapshot_count=2
+ORCA_R24_RESULT=VALID_RM_OOM
+ORCA_R26_RESULT=VALID_MEASURED
+R26_COMMAND_RC=0
 ```
 
-Evidence/container identities are unique:
+Two strict `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` events were observed, so HOST-STABILITY remains FAIL even though functional readiness and restoration succeeded.
 
-- preserved R24 evidence: `/tmp/orcarouter-hybrid-r24-kv16-rm-mitigation-01-20261004`
-- R26 evidence: `/tmp/orcarouter-hybrid-r26-construction-boundary-01-20261005`
-- experiment container: `qwen38-hybrid-r26-construction-marker`
+The matched burst remained unchanged:
 
-Managed non-mutation also passed through harness preflight: the exact container ID and `StartedAt` above remained unchanged, service stayed active, and exact OrcaRouter identity remained READY.
+```text
+baseline.r22_largest_5s_residual_mib=75138.043
+candidate.largest_5s.delta_mib=+77940.164
+candidate_to_r22_burst_pct=103.729297
+candidate_burst_reduction_pct=-3.729297
+burst_band=BURST_UNCHANGED
+nv_alloc_pages.order4_calls.total=526
+nv_alloc_pages.order4_activity_mib.total=77405.938
+```
 
-No live model load or RM measurement occurred in either preflight gate.
+H6 therefore remains rejected as a host-stability mitigation.
 
-## Evidence analyzer
+## R26 localization result
 
-`analyze-orcarouter-r26-construction-overlap.py` selects the top-level model-constructor interval containing the most 64 KiB RM activity and reports:
+Top-level constructor alignment:
 
-- total / before-constructor / inside-constructor / after-constructor RM activity;
-- constructor coverage;
-- selected ModelOpt-MoE `create_weights()` call count and union activity;
-- `w13` activity;
-- `w2` activity;
-- packed `w13+w2` union activity;
-- ModelOpt-MoE activity outside packed allocations;
-- constructor activity outside ModelOpt-MoE;
-- five largest ModelOpt-MoE calls by RM activity.
+```text
+clock_offset_spread_ms=5.052328
+classification_tolerance_s=0.025000
+model_ctor.duration_s=3.130943
+rm_order4.total_activity_mib=77405.938
+rm_order4.before_model_ctor_activity_mib=559.688
+rm_order4.inside_model_ctor_activity_mib=76846.250
+rm_order4.after_model_ctor_activity_mib=0.000
+rm_order4.inside_model_ctor_pct=99.276945
+```
 
-The 90% threshold is an analysis discriminator only, not a memory-safety threshold. Possible labels:
+This reproduces R25b at the tighter constructor boundary: the primary burst is model construction, not later checkpoint filling.
 
-- `RM_ORDER4_PRIMARY_IN_MODELOPT_MOE_CREATE_WEIGHTS`
-- `RM_ORDER4_PRIMARY_IN_MODEL_CONSTRUCTOR_OUTSIDE_MODELOPT_MOE`
-- `RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`
-- `RM_ORDER4_NOT_LOCALIZED_TO_SELECTED_MODEL_CONSTRUCTOR`
+ModelOpt-MoE contribution:
 
-RM bytes remain allocation activity volume, not exact resident ownership. Marker overlap remains temporal localization, not causal proof.
+```text
+modelopt_moe.marker_pair_count_total=48
+modelopt_moe.selected_call_count=48
+modelopt_moe.activity_mib=34292.000
+modelopt_moe.pct_of_total=44.301511
+modelopt_moe.pct_of_model_ctor=44.624168
+```
 
-## Guarded live run
+Packed expert allocation split:
 
-The validated runner is:
+```text
+modelopt_w13.activity_mib=19200.000
+modelopt_w2.activity_mib=10776.000
+modelopt_packed_w13_w2.activity_mib=29976.000
+modelopt_packed_w13_w2.pct_of_total=38.725711
+modelopt_packed_w13_w2.pct_of_modelopt_moe=87.413974
+modelopt_moe_nonpacked.activity_mib=4316.000
+```
 
-`scripts/benchmark/run-orcarouter-r26-construction-boundary.sh`
+Residual constructor activity outside ModelOpt-MoE:
 
-It reuses an ephemeral transformed copy of the historical R24 matched-control harness. The transform changes only repository-root injection, experiment-container identity, kprobe group `r26_rm`, and exactly four hard-coded inherited `r24_rm/...` probe definitions. The canonical R24 harness itself is not edited.
+```text
+model_ctor_outside_modelopt_moe.activity_mib=42554.250
+```
 
-A live run requires both:
+Final discriminator:
 
-- explicit `run` mode;
-- `ORCA_R26_LIVE_ACK=YES`.
+`RM_ORDER4_MIXED_WITHIN_MODEL_CONSTRUCTOR`
 
-The runner rejects stale `r24_rm`, `r25b_rm`, or `r26_rm` groups and existing evidence/container collisions. Managed restoration requires exact served identity `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`.
+## Interpretation
 
-## Trace scope
+R26 answers the original question as follows:
 
-Keep only the already-closed narrow RM trace:
+1. **Yes** — the main episode remains almost entirely inside top-level model construction (`99.276945%`).
+2. **No** — ModelOpt routed-expert `create_weights()` is not the dominant explanation of the whole episode (`44.301511%` of total).
+3. **Within the ModelOpt-MoE contribution, yes** — packed w13+w2 intervals explain `87.413974%` of ModelOpt-MoE activity, but only `38.725711%` of total activity.
+4. A larger `42554.250 MiB` constructor component remains outside ModelOpt-MoE.
 
-- `nv_alloc_pages`;
-- `nv_alloc_system_pages`;
-- existing kernel-error capture.
+Therefore the R26 plan's low-MoE-coverage branch is taken: **do not apply H11 yet**. H11 may affect a meaningful ~30 GiB expert-storage component, but it cannot currently explain the larger residual constructor activity and would confound localization if applied now.
 
-Do not add UVM, generic page allocation, scheduler, function graph, blanket CUDA API tracing, or broad Python profiling.
+RM bytes remain allocation activity volume rather than exact resident ownership. Marker overlap remains temporal localization rather than causal proof.
 
-## Strict classification
+## Managed restoration — CLOSED / PASS
 
-For the live R26 measurement, keep functional and host-stability classification separate. Any confirmed `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` in a valid measured run remains **HOST-STABILITY FAIL**, even if fallback succeeds and runtime reaches READY.
+The wrapper reported:
 
-R26 is still useful as a localization measurement under HOST-STABILITY FAIL if the run itself is valid and marker/trace evidence is complete.
+`managed_restore_ready_rc=0`
 
-## Interpretation / next branch
+The managed runtime returned READY after `879 s` with exact identity:
 
-If ModelOpt-MoE `create_weights()` contains at least 90% of total order-4 RM activity, parameter/storage construction is directly implicated. If packed `w13+w2` intervals also dominate ModelOpt-MoE activity, the next discriminator should target expert storage/parameter construction semantics, making H11 materially actionable.
+- `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`
+- `max_model_len=262144`
 
-If constructor coverage remains high but ModelOpt-MoE coverage is low, do not apply H11; instead instrument the smallest remaining constructor subpath. Keep the R25b `559.688 MiB` precursor separate from the main burst.
+A final independent readiness check returned READY immediately and the service was active.
+
+## Next discriminator
+
+Do not repeat H6 or R26, do not apply H11 yet, and do not broaden kernel/VM tracing.
+
+The next observational discriminator should partition the `42554.250 MiB` constructor activity outside ModelOpt-MoE. Highest-information boundaries are:
+
+- ModelOpt W4A16 linear `create_weights()` allocations outside routed experts;
+- Qwen3Next layer-family construction boundaries (linear-attention/full-attention and other non-expert components);
+- the matched PLE / N-gram embedding construction or mmap boundary if source inspection confirms it is entered inside the selected constructor interval.
+
+Before another live run, inspect the exact pinned PLE/N-gram construction path and add only the minimum stable INFO markers required to account for this residual. Keep the `559.688 MiB` pre-constructor precursor separate.
 
 ## Gate sequence
 
@@ -192,7 +247,8 @@ If constructor coverage remains high but ModelOpt-MoE coverage is low, do not ap
 6. guarded R26 harness preflight — **CLOSED / PASS**;
 7. harness managed non-mutation — **CLOSED / PASS**;
 8. canonical harness-preflight result — **CLOSED / PASS**;
-9. one guarded R26 live measured run — **AUTHORIZED / NEXT**;
-10. canonical live result and next discriminator — pending measured evidence.
+9. one guarded R26 live measured run — **CLOSED / VALID_MEASURED**;
+10. canonical R26 live result — **CLOSED / PASS**;
+11. next residual-constructor discriminator — **NEXT**.
 
 PR #244 remains open. No merge is implied or authorized.
