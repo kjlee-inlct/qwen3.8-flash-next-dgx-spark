@@ -13,6 +13,9 @@ SP="/usr/local/lib/python3.12/dist-packages"
 MODELOPT="${SP}/vllm/model_executor/layers/quantization/modelopt.py"
 BASE_LOADER="${SP}/vllm/model_executor/model_loader/base_loader.py"
 LAYERWISE="${SP}/vllm/model_executor/model_loader/reload/layerwise.py"
+RELOAD_UTILS="${SP}/vllm/model_executor/model_loader/reload/utils.py"
+META="${SP}/vllm/model_executor/model_loader/reload/meta.py"
+ROUTED="${SP}/vllm/model_executor/layers/fused_moe/routed_experts.py"
 LINEAR="${SP}/vllm/model_executor/layers/linear.py"
 LOADER_UTILS="${SP}/vllm/model_executor/model_loader/utils.py"
 QWEN4="${SP}/vllm/models/qwen4_exp/nvidia/model.py"
@@ -41,22 +44,45 @@ m1="$(docker image inspect "${IMAGE}" --format '{{ index .Config.Labels "qwen38.
 
 docker run --rm -i --entrypoint python3 "${IMAGE}" - \
     "${MODELOPT}" "${BASE_LOADER}" "${LAYERWISE}" \
+    "${RELOAD_UTILS}" "${META}" "${ROUTED}" \
     "${LINEAR}" "${LOADER_UTILS}" "${QWEN4}" <<'PY'
 import ast
 import pathlib
 import sys
 
-modelopt_path, base_loader_path, layerwise_path, linear_path, loader_path, qwen4_path = (
-    map(pathlib.Path, sys.argv[1:])
-)
+(
+    modelopt_path,
+    base_loader_path,
+    layerwise_path,
+    reload_utils_path,
+    meta_path,
+    routed_path,
+    linear_path,
+    loader_path,
+    qwen4_path,
+) = map(pathlib.Path, sys.argv[1:])
+
 modelopt = modelopt_path.read_text(encoding="utf-8")
 base_loader = base_loader_path.read_text(encoding="utf-8")
 layerwise = layerwise_path.read_text(encoding="utf-8")
+reload_utils = reload_utils_path.read_text(encoding="utf-8")
+meta = meta_path.read_text(encoding="utf-8")
+routed = routed_path.read_text(encoding="utf-8")
 linear = linear_path.read_text(encoding="utf-8")
 loader = loader_path.read_text(encoding="utf-8")
 qwen4 = qwen4_path.read_text(encoding="utf-8")
 
-for text in (modelopt, base_loader, layerwise, linear, loader, qwen4):
+for text in (
+    modelopt,
+    base_loader,
+    layerwise,
+    reload_utils,
+    meta,
+    routed,
+    linear,
+    loader,
+    qwen4,
+):
     ast.parse(text)
 
 # Inherited diagnostic markers must remain exact.
@@ -137,10 +163,35 @@ for needle in (
     if needle not in layerwise:
         raise SystemExit(f"layerwise lifecycle contract missing: {needle}")
 
+# RoutedExperts must own the quant method before create_weights installs M1.
+routed_quant = routed.index("self.quant_method = self._get_quant_method(")
+routed_create = routed.index("self.quant_method.create_weights(layer=self, **moe_quant_params)")
+if routed_quant >= routed_create:
+    raise SystemExit("RoutedExperts quant_method-before-create contract mismatch")
+
+# Completion accounting must exclude non-checkpoint routing buffers.
+for needle in (
+    "if name not in SKIP_LOAD_TENSORS",
+    "tensor.numel()",
+):
+    if needle not in reload_utils:
+        raise SystemExit(f"layer-size skip contract missing: {needle}")
+for tensor_name in (
+    '"_expert_map"',
+    '"expert_mask"',
+    '"expert_global_to_physical"',
+    '"expert_physical_to_global"',
+    '"expert_local_to_global"',
+):
+    if tensor_name not in meta:
+        raise SystemExit(f"SKIP_LOAD_TENSORS contract missing: {tensor_name}")
+
 print("m1_inherited_r26_contract=PASS")
 print("m1_inherited_r27_contract=PASS")
 print("m1_inherited_r28_contract=PASS")
 print("m1_w13_meta_only_contract=PASS")
+print("m1_quant_method_before_create_contract=PASS")
+print("m1_skip_noncheckpoint_buffers_contract=PASS")
 print("m1_native_layerwise_lifecycle_contract=PASS")
 print("m1_direct_uva_absent=PASS")
 PY
