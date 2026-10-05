@@ -2,11 +2,15 @@
 
 ## Status
 
-**IMPLEMENTED — READ-ONLY POST-HOC ONLY — CI REQUIRED — NO NEW LIVE RUN AUTHORIZED**
+**COMPLETED — READ-ONLY POST-HOC PASS — NO NEW LIVE RUN AUTHORIZED**
 
 Canonical predecessor:
 
 - `orcarouter-r28b-unquant-call-pattern-result-20261005.md`
+
+Canonical result:
+
+- `orcarouter-r29-global-rm-chunk-cadence-result-20261006.md`
 
 R28b closed as:
 
@@ -24,7 +28,7 @@ Key R28b observations:
 - uncovered R26 residual still contains `800 MiB x 4` and `1214 MiB x 1`;
 - payload/RM Pearson diagnostics are weak (`0.149977822` overall, `-0.035821511` positive-only).
 
-This makes another model-component split lower value than checking whether repeated large RM requests span multiple inherited constructor boundaries.
+This made another model-component split lower value than checking whether repeated large RM requests span multiple inherited constructor boundaries.
 
 ## Objective
 
@@ -89,19 +93,46 @@ R29_REPEATED_LARGE_RM_CHUNKS_REGION_LOCALIZED
 R29_NO_REPEATED_LARGE_RM_CHUNK_PATTERN
 ```
 
+## Completed result
+
+R29 completed read-only with:
+
+```text
+constructor_order4_request_count=464
+constructor_order4_activity_mib=76846.375
+repeated_large_request_sizes_mib=400.000,800.000,1214.000
+spanning_repeated_large_request_sizes_mib=800.000,1214.000
+r29_discriminator=R29_REPEATED_LARGE_RM_CHUNKS_SPAN_MULTIPLE_CONSTRUCTOR_BOUNDARIES
+```
+
+The three repeated large-size series are:
+
+```text
+400 MiB x48  -> modelopt_moe:48
+800 MiB x48  -> unquant_linear:44, other_ctor:4
+1214 MiB x2  -> unquant_linear:1, other_ctor:1
+```
+
+The 400 MiB and 800 MiB streams both recur at nearly identical ~52 ms median cadence. The visible event stream also shows ordinal adjacency such as `800 -> 400` at request indices `48 -> 49`, `60 -> 61`, and `68 -> 69`.
+
+Therefore the strict R29 cross-boundary discriminator is valid, but it is not sufficient by itself to justify immediately instrumenting deeper allocator internals. The equal 48-count series and apparent adjacent ordering introduce a stronger candidate explanation: a deterministic per-decoder-layer two-phase request cadence.
+
 ## Interpretation gate
 
-If a repeated large size such as `800 MiB` spans ModelOpt-MoE, unquantized Linear, and other constructor regions, treat model-prefix alignment as a placement boundary rather than ownership evidence and move the next investigation toward a narrow allocator/backing-growth boundary.
+R29 established that repeated `800 MiB` and `1214 MiB` requests span userspace constructor regions, so nearest-prefix alignment must not be promoted to causal ownership.
 
-If repeated large chunks remain confined to one constructor region, retain that region as the next narrow candidate before instrumenting a lower-level boundary.
+R29 also established a new follow-up requirement: test the 48-count 800/400 streams as chronological pairs against the 48 inherited decoder layers before choosing a lower allocator boundary.
 
-If there is no repeated large chunk pattern in the full constructor stream, reassess the R28b local pattern before designing another experiment.
+That follow-up is R29b:
+
+- `orcarouter-r29b-layer-chunk-pairing-plan-20261006.md`
+- `scripts/benchmark/analyze-orcarouter-r29b-layer-chunk-pairing.py`
 
 RM bytes remain logical direct-RM allocation activity volume, not exact resident ownership. Marker alignment remains temporal localization, not causal proof.
 
 ## Safety / execution policy
 
-R29 is post-hoc only.
+R29 was post-hoc only.
 
 - no model restart;
 - no candidate model launch;
@@ -110,6 +141,6 @@ R29 is post-hoc only.
 - no persistent VM tuning;
 - no R28 evidence mutation.
 
-No R29 live run is authorized by this plan. H11 remains deferred.
+No R29 live run is authorized. H11 remains deferred.
 
 PR #244 remains open and unmerged.
