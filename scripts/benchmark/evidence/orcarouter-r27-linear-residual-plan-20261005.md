@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED — REPOSITORY CI REQUIRED — STATIC IMAGE BUILD/PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**
+**IMPLEMENTED — REPOSITORY CI PASS — STATIC IMAGE BUILD/PREFLIGHT PASS — HARNESS PREFLIGHT NEXT — NO LIVE RUN AUTHORIZED YET**
 
 R26 is closed as:
 
@@ -11,6 +11,15 @@ R26 is closed as:
 Canonical predecessor:
 
 - `scripts/benchmark/evidence/orcarouter-r26-construction-boundary-result-20261005.md`
+
+R27 static-image gate:
+
+- `scripts/benchmark/evidence/orcarouter-r27-linear-image-preflight-result-20261005.md`
+- image: `vllm-orcarouter-v029-r27-linear-marker:v1`
+- image id: `sha256:e9e92c5cb98d443a8410f21345cb0e07c30c9e7c84516cedcc2a6dc213934119`
+- static image contract: **PASS**
+- managed container ID / `StartedAt`: unchanged
+- exact managed OrcaRouter identity: revalidated
 
 R26 reproduced `77,405.938 MiB` total direct-NVIDIA-RM order-4 activity, with `76,846.250 MiB` (`99.276945%`) inside the first top-level model constructor, `559.688 MiB` before it, and `0.000 MiB` after it. However, `ModelOptNvFp4FusedMoE.create_weights()` accounted for only `34,292.000 MiB` (`44.301511%` of total), leaving `42,554.250 MiB` elsewhere in the constructor.
 
@@ -56,7 +65,7 @@ to the Qwen4Exp PLE layer.
 
 The vendored v0.29 mmap patch then replaces `PLEVocabParallelEmbedding` during N-gram embedding construction with `_MmapNgramEmbedding` and calls the stock constructor with `quant_config=None`. The giant N-gram table is therefore not materialized as the stock embedding parameter during constructor execution; shard tensors are later served from mmap.
 
-R27 static preflight explicitly re-verifies this placeholder contract. Therefore R27 does not add broad PLE tracing merely because the on-disk PLE table is large.
+R27 static preflight revalidated this placeholder contract as `r27_ple_mmap_placeholder_contract=PASS`. Therefore R27 does not add broad PLE tracing merely because the on-disk PLE table is large.
 
 ## Highest-information remaining allocation boundary
 
@@ -71,7 +80,7 @@ R27 measures the complete W4A16-linear `create_weights()` interval and the packe
 
 ## R27 markers
 
-New patch:
+Patch:
 
 - `scripts/patch-v029-r27-linear-boundary-markers.py`
 
@@ -96,21 +105,23 @@ The layer marker begins immediately after `self.layer_idx` is known, before the 
 
 ## Diagnostic image
 
-New Dockerfile:
+Dockerfile:
 
 - `scripts/Dockerfile.v029-r27-linear-boundary-markers`
 
-Planned tag:
+Built tag:
 
 `vllm-orcarouter-v029-r27-linear-marker:v1`
+
+Image id:
+
+`sha256:e9e92c5cb98d443a8410f21345cb0e07c30c9e7c84516cedcc2a6dc213934119`
 
 Base image:
 
 `vllm-orcarouter-v029-r26-construction-marker:v1`
 
-This preserves all validated R25/R26 markers and adds only R27 source instrumentation.
-
-Expected inherited labels:
+Validated inherited labels:
 
 ```text
 qwen38.stability-candidate=v0.29+qsa-layer-type+ple-mmap+exact-qsa+fla
@@ -118,31 +129,41 @@ qwen38.r25=init-model-boundary-v1
 qwen38.r26=construction-boundary-v1
 ```
 
-New label:
+Validated new label:
 
 `qwen38.r27=w4a16-linear-boundary-v1`
 
-## Static image contract
+## Static image contract — CLOSED PASS
 
 Checker:
 
 - `scripts/benchmark/check-orcarouter-r27-linear-image.sh`
 
-It verifies:
+The live host static gate reported:
 
-- inherited R26 top-level constructor marker contract;
-- inherited R26 ModelOpt-MoE/w13/w2 marker contract;
-- exact R27 W4A16-linear marker contract;
-- exact `Qwen4ExpDecoderLayer` marker contract;
-- presence of `Qwen4ExpForCausalLM` in the patched exact source;
-- inherited stability/R25/R26 labels and exact R27 label;
-- PLE mmap hook and v0.29 placeholder contract.
+```text
+r26_inherited_constructor_contract=PASS
+r26_inherited_modelopt_moe_contract=PASS
+r27_w4a16_linear_contract=PASS
+r27_qwen4_layer_contract=PASS
+r27_ple_mmap_placeholder_contract=PASS
+R27_IMAGE_PREFLIGHT=PASS
+model_restart=NO
+managed_service_mutation=NO
+persistent_vm_tuning=NO
+R27_STATIC_PREFLIGHT_RC=0
+R27_BUILD_AND_STATIC_PREFLIGHT=PASS
+```
 
-Static preflight must report no model restart, no managed-service mutation, and no persistent VM tuning.
+Managed container ID and `StartedAt` were exactly unchanged across build/static preflight, and exact `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` with `max_model_len=262144` remained READY.
+
+Canonical result:
+
+- `scripts/benchmark/evidence/orcarouter-r27-linear-image-preflight-result-20261005.md`
 
 ## Evidence analyzer
 
-New analyzer:
+Analyzer:
 
 - `scripts/benchmark/analyze-orcarouter-r27-linear-overlap.py`
 
@@ -174,7 +195,7 @@ RM requested bytes remain allocation activity volume, not exact resident ownersh
 
 ## Guarded runner
 
-New runner:
+Runner:
 
 - `scripts/benchmark/run-orcarouter-r27-linear-boundary.sh`
 
@@ -236,16 +257,16 @@ The missing activity lies outside decoder-layer construction (for example top-le
 - `tests/test_orcarouter_r27_linear_overlap.py`;
 - `tests/test_orcarouter_r27_runner_transform.py`.
 
-The tests validate the actual marker patch, synthetic residual attribution, and exact four-probe R24-to-R27 harness transform.
+Repository CI for the implementation head closed SUCCESS, including shell syntax, ShellCheck, Python compile, unit tests, and whitespace checks.
 
 ## Gate sequence
 
-1. repository CI green — **NEXT**;
-2. build `vllm-orcarouter-v029-r27-linear-marker:v1`;
-3. static R27 image preflight only;
-4. verify managed container ID / `StartedAt` unchanged;
-5. record static result canonically;
-6. run guarded R27 harness preflight only;
+1. repository CI green — **PASS**;
+2. build `vllm-orcarouter-v029-r27-linear-marker:v1` — **PASS**;
+3. static R27 image preflight only — **PASS**;
+4. verify managed container ID / `StartedAt` unchanged — **PASS**;
+5. record static result canonically — **PASS**;
+6. run guarded R27 harness preflight only — **NEXT**;
 7. record harness preflight canonically;
 8. only then authorize one live measured R27 run.
 
