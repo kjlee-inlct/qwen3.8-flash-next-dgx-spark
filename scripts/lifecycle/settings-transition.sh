@@ -456,7 +456,7 @@ recover_transaction() {
 }
 
 [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
-[[ -x "${MANAGE_PROXY}" && -x "${MANAGE_SERVICE}" && -x "${RUNTIME_TRANSITION}" && -x "${WAIT_READY}" ]] || die 'required lifecycle helper is unavailable'
+[[ -x "${MANAGE_PROXY}" && -x "${MANAGE_SERVICE}" && -r "${RUNTIME_TRANSITION}" && -x "${WAIT_READY}" ]] || die 'required lifecycle helper is unavailable'
 [[ $# -ge 1 ]] || { usage >&2; exit 2; }
 action="$1"; shift
 
