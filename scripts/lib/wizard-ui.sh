@@ -19,7 +19,7 @@ if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then
     printf 'ERROR: installer plan helper missing: %s\n' "${INSTALL_PLAN_HELPER}" >&2
     return 1
   }
-  # shellcheck source=scripts/lib/install-plan.sh
+  # shellcheck source=install-plan.sh
   source "${INSTALL_PLAN_HELPER}"
 fi
 
