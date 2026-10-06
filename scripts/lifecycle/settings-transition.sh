@@ -181,6 +181,14 @@ preflight_current_resources() {
   fi
 }
 
+proxy_settings_equal() {
+  local left="$1" right="$2" key
+  for key in API_ACCESS_MODE API_DOCKER_PORT API_LAN_ADDRESS API_LAN_PORT PROXY_ENABLED PROXY_OWNED PROXY_PORT; do
+    [[ "$(manifest_value "${left}" "${key}")" == "$(manifest_value "${right}" "${key}")" ]] || return 1
+  done
+  return 0
+}
+
 proxy_args_for_prefix() {
   local prefix="$1" mode docker_port lan_address lan_port
   mode="$(manifest_value "${prefix}" API_ACCESS_MODE)"
@@ -207,9 +215,16 @@ apply_proxy_for_prefix() {
     return 0
   fi
   [[ "${desired_owned}" == 1 ]] || die 'non-local API target must own its proxy resources'
-  if proxy_installed && [[ "${current_owned}" != 1 ]]; then
-    [[ "${trusted_recovery}" == 1 ]] && transaction_proxy_owned || \
-      die 'refusing to replace proxy resources not proven to belong to this transaction'
+  if proxy_installed; then
+    if [[ "${current_owned}" != 1 ]]; then
+      [[ "${trusted_recovery}" == 1 ]] && transaction_proxy_owned || \
+        die 'refusing to replace proxy resources not proven to belong to this transaction'
+    fi
+    # A settings transaction must not churn existing managed proxy units when
+    # the desired endpoint configuration is semantically identical.
+    if proxy_settings_equal "${desired}" "${current}"; then
+      return 0
+    fi
   fi
   proxy_args_for_prefix "${desired}"
   sudo_locked "${MANAGE_PROXY}" "${PROXY_ARGS[@]}"
