@@ -10,11 +10,13 @@ WIZARD = ROOT / "scripts" / "lib" / "wizard-ui.sh"
 
 
 class CompletedInstallSettingsHelperTests(unittest.TestCase):
-    def test_helper_is_preview_only_and_non_persistent(self) -> None:
+    def test_helper_defaults_to_preview_and_delegates_live_apply(self) -> None:
         text = HELPER.read_text(encoding="utf-8")
-        self.assertIn("DRY_RUN=1", text)
         self.assertIn("INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=1", text)
-        self.assertNotIn("write_state ", text)
+        self.assertIn("INSTALL_COMPLETED_SETTINGS_APPLY=1", text)
+        self.assertIn("write_state complete", text)
+        self.assertIn("settings-transition.sh", text)
+        self.assertNotIn("scripts/lifecycle/", text)
         self.assertNotIn("manage-service.sh", text)
         self.assertNotIn("manage-proxy.sh", text)
         self.assertNotIn("profile-switch-transition.sh", text)
