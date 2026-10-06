@@ -272,7 +272,7 @@ install_completed_manager_input_hook() {
 
 install_completed_manager_info_hook() {
   local message="$1"
-  if [[ "${INSTALL_COMPLETED_ACTION:-}" != profile && ( "${message}" == Current\ profile:* || "${message}" == 현재\ profile:* ) ]]; then
+  if [[ "${INSTALL_COMPLETED_SUPPRESS_PROFILE_SELECTION:-0}" == 1 && ( "${message}" == Current\ profile:* || "${message}" == 현재\ profile:* ) ]]; then
     return 0
   fi
   return 1
