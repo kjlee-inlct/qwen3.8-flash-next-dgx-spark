@@ -291,16 +291,30 @@ and reapplies staged values immediately before `install_plan_finalize`. Current-
 refresh reuses the existing `REFRESH_PROFILE_DEFAULTS` implementation. Settings preview explicitly
 forces dry-run and has no `write_state`, proxy/service mutation, or lifecycle-transition call.
 
-This slice intentionally stops at a safe normalized plan preview. The next P0 slice must close the
-proxy/service cleanup gap and provide a recoverable live settings transaction before the settings
-editor may apply changes to a real managed host.
+Guarded DGX acceptance on implementation head `603aa0391d436eb2a6bd459d924ddcff2d0f5a5c`
+passed after CI #1228 passed 499 tests. The settings action retained `orcarouter`, staged monitor
+values `7/3/11/9 GiB`, 6 consecutive samples and a 30-second heartbeat, normalized the current
+LAN configuration to `local only: 127.0.0.1:8888`, and staged service disable as `Docker container
+via immutable current release`. The command line intentionally omitted `--dry-run`; the settings
+manager itself forced the existing `DRY-RUN complete` path.
+
+Post-run checks proved the preview was non-mutating: `install.env` and `runtime-commit.env` digests
+were unchanged, the managed service remained active, container ID and `StartedAt` were unchanged,
+no runtime/update/profile-switch transaction file was created, and the live proxy listeners
+remained present at the Docker bridge and LAN addresses. The first acceptance wrapper had one
+harness-only false negative because it grepped `This PC only` while the canonical renderer emits
+`local only`; the corrected invariant check passed without rerunning the installer.
+
+This slice therefore accepts the settings editor only as a normalized non-mutating preview. The
+next P0 slice must close the proxy/service cleanup gap and provide a recoverable live settings
+transaction before the settings editor may apply changes to a real managed host.
 
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
 3. **Common normalized plan** — implemented; CI and guarded DGX dry-run accepted.
-4. **Completed-install settings management** — preview/action UI implemented in the current slice;
+4. **Completed-install settings management** — preview/action UI implemented and DGX accepted;
    live settings transaction, dry-run control, and start/restart policy remain.
 5. **Registry/profile-manager metadata** — derive profile UI from registry and combine it with
    `manage-models.sh` inventory; centralize option metadata.
