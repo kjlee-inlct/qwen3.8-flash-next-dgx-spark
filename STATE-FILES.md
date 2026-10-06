@@ -7,12 +7,15 @@ Qwen38 uses small state files to coordinate release/update/runtime/profile-switc
 The following files are parsed by the strict state parser (`scripts/lib/state_file.py`, with `scripts/state_file.py` retained as a compatibility entry point) and are never evaluated as shell code:
 
 - `~/.local/state/qwen38-spark/update-transition.env`
+- `~/.local/state/qwen38-spark/runtime-transition.env`
 - `~/.local/state/qwen38-spark/runtime-stop.env`
 - `~/.local/state/qwen38-spark/runtime-commit.env`
 - `~/.local/state/qwen38-spark/profile-switch-transition.env`
 - `~/.local/share/qwen38-spark/qualified/<release>.env`
 
 The parser uses a schema-specific key whitelist and rejects unknown, duplicate, missing, or malformed keys and values. Bash consumers receive validated key/value pairs through a NUL-delimited stream and assign only whitelisted variable names with `printf -v`.
+
+`runtime-transition.env` is parsed with the dedicated `runtime-transition` schema before rollback/recovery decisions are made. It binds the transaction phase, canonical/rollback container names, whether a previous runtime existed, and the update timestamp. The runtime transition helper never sources this file; malformed state fails closed.
 
 `profile-switch-transition.env` is parsed with the dedicated `profile-switch` schema. It binds the source/target profiles, phase, backup/candidate manifest paths, their recorded digests, and update timestamp. The profile-switch helper never sources this file; malformed or ambiguous state fails closed.
 
