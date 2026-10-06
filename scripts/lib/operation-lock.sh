@@ -26,7 +26,7 @@ operation_lock_settings_guard() {
   [[ -f "${phase_file}" && ! -L "${phase_file}" ]] || \
     operation_lock_die "settings transaction marker is unsafe: ${phase_file}" || return 1
   IFS= read -r phase <"${phase_file}" || phase=unknown
-  operation_lock_die "an interrupted settings transaction is active (${phase}); run scripts/lifecycle/settings-transition.sh recover first" || return 1
+  operation_lock_die "an interrupted settings transaction is active (${phase}); recover it before another lifecycle mutation" || return 1
 }
 
 acquire_operation_lock() {
