@@ -93,6 +93,28 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("mazinb", model)
         self.assertIn("16 GiB", model)
 
+    def test_state_file_docs_include_runtime_transition_strict_parser(self) -> None:
+        text = read("STATE-FILES.md")
+        self.assertIn("runtime-transition.env", text)
+        self.assertIn("dedicated `runtime-transition` schema", text)
+        self.assertIn("malformed state fails closed", text)
+
+    def test_script_maps_include_profile_switch_lifecycle_surface(self) -> None:
+        layout = read("scripts/README.md")
+        lifecycle = read("scripts/lifecycle/README.md")
+
+        self.assertIn("profile-switch-transition.sh", layout)
+        self.assertIn("lifecycle/profile-switch-transition.sh", layout)
+        self.assertIn("profile-switch transaction logic", lifecycle)
+        self.assertIn("`profile-switch-transition.sh`", lifecycle)
+
+    def test_installable_mazinb_download_docs_do_not_require_candidate_flag(self) -> None:
+        text = read("scripts/README.md")
+        self.assertIn("Installable profiles such as `mazinb` no longer require `--candidate`", text)
+        self.assertIn("MODEL_PROFILE=mazinb ./scripts/download-weights.sh --check", text)
+        self.assertIn("MODEL_PROFILE=mazinb ./scripts/download-weights.sh\n", text)
+        self.assertNotIn("MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate --check", text)
+
 
 if __name__ == "__main__":
     unittest.main()
