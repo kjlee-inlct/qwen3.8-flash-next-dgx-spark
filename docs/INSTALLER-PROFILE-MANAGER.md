@@ -273,11 +273,36 @@ helper test also verifies path canonicalization and snapshot reapplication. This
 not add the completed-install settings editor, option metadata registry, new lifecycle state,
 or any runtime/profile qualification change.
 
+### DGX acceptance — normalized plan
+
+The implementation head `d528f4f2f4b4d270e81edec3cf47d2218f74b886` passed guarded
+acceptance on the same DGX Spark after CI #1218 had passed all 493 tests. The installed state
+was already `PHASE=complete`, the managed service was active, and no runtime/update/profile-
+switch transaction existed before the test.
+
+The completed-install Wizard dry-run selected NVIDIA and passed through the normalized `[6/6]`
+review boundary with `profile: nvidia` and `orcarouter -> nvidia`. The plan retained the
+existing model root, monitor/protection thresholds, LAN/API settings, PLE swap, and managed
+systemd service configuration.
+
+The dry-run was proven non-mutating across both lifecycle and live runtime state:
+
+- `install.env` SHA-256 was unchanged;
+- `runtime-commit.env` SHA-256 was unchanged;
+- service state remained `active`;
+- the live container ID was unchanged;
+- container `StartedAt` remained `2026-10-05T12:32:36.149058234Z`;
+- no runtime/update/profile-switch transaction file was created.
+
+This accepts the common normalized-plan boundary on the real managed host. It is still only a
+non-mutating preview; it does not constitute a live NVIDIA switch, runtime qualification, or
+host-stability result.
+
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
-3. **Common normalized plan** — implemented in this slice; CI/acceptance gates still apply.
+3. **Common normalized plan** — implemented; CI #1218 and guarded DGX dry-run accepted.
 4. **Completed-install settings management** — runtime/API/service/default-refresh/start and
    dry-run actions with the same plan core.
 5. **Registry/profile-manager metadata** — derive profile UI from registry and combine it
