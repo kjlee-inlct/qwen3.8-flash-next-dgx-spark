@@ -6,7 +6,7 @@ The baseline inspected at the start of this work was `main` at `aab3cd48ba0af204
 
 ## Product contract
 
-The managed product has one lifecycle. `install.sh`, the installation manifest, cumulative asset ownership, profile-switch/runtime/update transaction helpers, immutable releases, and the managed systemd service remain authoritative. A profile switch is **not** uninstall + reinstall.
+The managed product has one lifecycle. `install.sh`, the installation manifest, cumulative asset ownership, profile-switch/runtime/update/settings transaction helpers, immutable releases, and the managed systemd service remain authoritative. A profile switch is **not** uninstall + reinstall.
 
 The target UX contract is:
 
@@ -18,7 +18,7 @@ The target UX contract is:
 - fresh install, interrupted resume, completed-install management, and profile switch are distinct applicability contexts and must not be conflated;
 - preview paths are non-mutating, while live changes must preserve transaction/recovery and ownership semantics.
 
-`tests/test_installer_option_parity.py` freezes the CLI inventory and bounds known Wizard parity debt so new flags cannot silently escape the inventory.
+`tests/test_installer_option_parity.py` freezes the CLI inventory and prevents user-facing setting parity debt from silently returning.
 
 ## Existing lifecycle reused by this work
 
@@ -28,6 +28,7 @@ The following existing contracts are reused rather than reimplemented:
 - `scripts/manage-models.sh` — local model/image inventory, retirement, migration, and root relocation operations;
 - `scripts/lifecycle/profile-switch-transition.sh` — persisted managed profile replacement;
 - `scripts/runtime/runtime-transition.sh` — candidate/rollback runtime replacement;
+- `scripts/lifecycle/settings-transition.sh` — recoverable completed-install settings-only mutation;
 - update transition helpers — immutable release cutover;
 - `scripts/lib/state_file.py` — strict state-file parsing;
 - `scripts/lib/asset_ownership.py` — cumulative asset ownership/fingerprints;
@@ -63,32 +64,32 @@ A valid measured `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` event remains a st
 
 ## CLI ↔ Wizard inventory
 
-“Both” means a Wizard field exists somewhere. A completed-install settings preview now covers the persisted runtime/API/service surface, but live apply remains intentionally closed until cleanup semantics are transactional.
+“Both” means a Wizard field exists somewhere. Completed-install management covers the persisted runtime/API/service surface, including preview/live apply and immediate/deferred runtime restart.
 
 | Setting / command | CLI | Wizard | Current applicability / classification |
 | --- | --- | --- | --- |
 | language | `--lang` | yes | fresh selection; saved language reused on existing install |
 | profile | `--model` | yes | fresh and completed-install profile selection |
 | model root | `--model-root` | yes | fresh install; profile switch retains existing root by design |
-| config override | `--config-override` | yes | fresh live path; completed-install settings preview |
+| config override | `--config-override` | yes | fresh path and completed-install settings editor; profile-required compatibility overrides cannot be cleared |
 | list profiles | `--list-models` | no field | informational CLI command; profile-manager inventory view is P1 |
 | list backends | `--list-backends` | no field | informational CLI command |
-| monitor enable/disable | `--monitor` / `--no-monitor` | yes | fresh live path; completed-install settings preview |
-| protection | `--protect` | yes | fresh live path; completed-install settings preview |
-| MemAvailable threshold | `--monitor-min-available-gib` | yes | fresh live path; completed-install settings preview |
-| MemFree threshold | `--monitor-min-free-gib` | yes | fresh live path; completed-install settings preview |
-| MemAvailable gate | `--monitor-free-gate-gib` | yes | fresh live path; completed-install settings preview |
-| SwapFree threshold | `--monitor-min-swap-free-gib` | yes | fresh live path; completed-install settings preview |
-| consecutive samples | `--monitor-consecutive` | yes | fresh live path; completed-install settings preview |
-| monitor heartbeat | `--monitor-heartbeat` | yes | fresh live path; completed-install settings preview |
-| API access mode | `--api-access` | yes | fresh live path; completed-install settings preview |
-| Docker API port | `--api-docker-port` | yes | fresh live path; completed-install settings preview |
-| LAN address | `--api-lan-address` | yes | fresh live path; completed-install settings preview |
-| LAN port | `--api-lan-port` | yes | fresh live path; completed-install settings preview |
-| service enabled/disabled | `--service` / `--no-service` | yes | fresh live path; completed-install settings preview |
-| start policy | default / `--no-start` | no | remaining user-facing Wizard debt |
+| monitor enable/disable | `--monitor` / `--no-monitor` | yes | fresh and completed-install settings editor |
+| protection | `--protect` | yes | fresh and completed-install settings editor |
+| MemAvailable threshold | `--monitor-min-available-gib` | yes | fresh and completed-install settings editor |
+| MemFree threshold | `--monitor-min-free-gib` | yes | fresh and completed-install settings editor |
+| MemAvailable gate | `--monitor-free-gate-gib` | yes | fresh and completed-install settings editor |
+| SwapFree threshold | `--monitor-min-swap-free-gib` | yes | fresh and completed-install settings editor |
+| consecutive samples | `--monitor-consecutive` | yes | fresh and completed-install settings editor |
+| monitor heartbeat | `--monitor-heartbeat` | yes | fresh and completed-install settings editor |
+| API access mode | `--api-access` | yes | fresh and completed-install settings editor |
+| Docker API port | `--api-docker-port` | yes | fresh and completed-install settings editor |
+| LAN address | `--api-lan-address` | yes | fresh and completed-install settings editor |
+| LAN port | `--api-lan-port` | yes | fresh and completed-install settings editor |
+| service enabled/disabled | `--service` / `--no-service` | yes | fresh and completed-install settings editor |
+| start policy | default / `--no-start` | yes | completed-install editor asks restart now vs defer |
 | refresh profile defaults | `--refresh-profile-defaults` | yes | completed-install management action; existing core reused |
-| dry-run | `--dry-run` | no normal field | remaining user-facing Wizard debt; settings editor currently forces it for safety |
+| dry-run | `--dry-run` | yes | completed-install editor defaults to preview and requires explicit live apply |
 | non-interactive confirmation | `--yes` | n/a | execution control; no Wizard field required |
 | manifest migration | `--migrate-manifest` | n/a | maintenance command; no normal Wizard field required |
 | help | `--help` / `-h` | n/a | informational control |
@@ -107,15 +108,17 @@ An incomplete manifest continues the existing resume path. It must **not** expos
 
 ### Completed managed install
 
-A complete managed install enters an installed-setup management menu before the existing profile selector. The menu currently offers profile selection/switch, runtime/API/service settings preview, current-profile default refresh, or cancel.
+A complete managed install enters an installed-setup management menu before the existing profile selector. The menu offers profile selection/switch, runtime/API/service settings edit, current-profile default refresh, or cancel.
 
 Profile selection still shows the four installable profiles, marks the active profile, defaults to the current profile, and enters the existing transactional profile-switch core only when the target changes. `lychee888` remains non-selectable.
 
 The settings editor stages config override, monitor/protection thresholds, API access/ports, and service enablement in memory. Staged values are applied immediately before the shared `[6/6]` normalized-plan boundary, after manifest parsing and CLI override resolution. This keeps the existing parser/validation/plan path authoritative rather than duplicating it in the UI.
 
-The settings action is deliberately **preview-only** in the current slice. It forces the existing dry-run exit and therefore does not write the manifest or change proxy/service/runtime resources.
+Preview remains the default. Without CLI `--dry-run`, the editor explicitly asks whether to apply after final-plan review; choosing live apply then asks whether runtime changes should restart now or be deferred. CLI `--dry-run` always forces preview. Live mutation begins only after the existing final `Continue?` / `계속 진행합니까?` approval.
 
-## Priority classification after completed-settings preview slice
+Profiles that require a compatibility override, currently `orcarouter`, do not expose “clear override” in completed-install settings. An existing installer-owned compatibility config stays owned when retained; replacing it with an external custom config transfers the manifest to unowned custom-config semantics only after transaction commit.
+
+## Priority classification after transactional completed-settings slice
 
 ### P0 — product contract / operator correctness
 
@@ -123,15 +126,16 @@ The settings action is deliberately **preview-only** in the current slice. It fo
 - **Implemented:** CLI and Wizard converge on one normalized final-plan snapshot before review/execution.
 - **Implemented:** completed-install management menu and runtime/API/service settings editor feed the normalized plan.
 - **Implemented:** current-profile default refresh is reachable from the Wizard through the existing `REFRESH_PROFILE_DEFAULTS` path.
-- **Pending:** live settings apply with transactional/recoverable cleanup of owned proxy and managed service resources.
-- **Pending:** normal Wizard controls for dry-run and start/restart policy.
+- **Implemented:** live settings apply has transactional/recoverable cleanup and creation of owned proxy and managed service resources.
+- **Implemented:** completed-install Wizard exposes preview/live choice and immediate/deferred runtime restart; the option-parity test has no remaining user-facing setting debt.
+- **Pending acceptance:** guarded DGX preview on the final implementation head, followed by a deliberately scoped live transaction validation only after preview invariants pass.
 
 ### P1 — architecture / drift prevention
 
 - centralize user-facing option metadata;
 - derive Wizard profile display/status metadata from the profile registry;
 - add a profile-manager view combining registry availability with local asset inventory;
-- resolve remaining contextual parity for language/model-root/execution controls;
+- resolve remaining contextual presentation differences for language/model-root/execution controls without creating duplicate state;
 - show the equivalent CLI invocation in the final plan once normalized configuration is fully authoritative.
 
 ### P2 — operator polish
@@ -146,14 +150,31 @@ Profile selection does not duplicate switch logic. Existing strict manifest pars
 
 Dry-run must remain non-mutating: no transaction state, manifest change, download, swap, release, service, proxy, container, or asset-ownership mutation.
 
-### Settings apply safety gap
+### Settings apply transaction
 
-Live settings apply is intentionally closed in the current slice because the existing resume path is not symmetric for two destructive changes:
+`scripts/lifecycle/settings-transition.sh` is the settings-only lifecycle boundary. It does not add a new state parser or supervisor: both the live and candidate manifests are parsed through `state_file.py install-maintenance`, and runtime restart continues to reuse the existing managed service or `scripts/runtime/runtime-transition.sh` path.
 
-- changing managed API access from Docker/LAN to `local` does not currently remove the owned proxy resources;
-- changing from managed systemd service to no-service does not currently remove the owned unit.
+The transaction rejects model/runtime identity changes such as profile, repository/revision, model directory, image, served name, and swap identity. Target API/service ownership must match the target settings, a settings transaction cannot overlap profile/update/runtime transitions, and the shared operation lock blocks unrelated lifecycle mutators while interrupted settings state exists.
 
-Allowing live settings apply before those cleanup paths are transactional/recoverable could leave `install.env` claiming one configuration while old host resources remain active. The settings UI therefore forces dry-run until this gap is closed.
+The persisted transaction keeps fixed backup/target manifests, their digests, start policy, previous runtime activity markers, and a bounded phase. The apply phases are:
+
+1. `preparing` — backup/target are validated and persisted while the live manifest remains unchanged;
+2. `activation-guarded` — an existing owned service is boot-disabled before target-manifest activation, so a reboot cannot automatically launch an uncommitted target through systemd;
+3. `activated` — the target manifest is live while owned proxy/service/runtime resources are being moved;
+4. `resources-applied` — target resources are verified, with service boot-enable still deferred;
+5. `committing` — the target service is boot-enabled when requested, final resources are verified, released installer-owned config is cleaned safely, and transaction artifacts are removed.
+
+Rollback/recovery restores the backup manifest and symmetrically recreates/removes owned proxy and service resources. Recovery trusts only resource ownership proven by the backup or target manifest, preventing an interruption immediately after activation from misclassifying the previous owned resources as unmanaged. If the previous runtime was not running, rollback also prevents an accidentally started target runtime from being left behind.
+
+An interrupted settings transaction intentionally blocks other lifecycle mutation until explicit recovery. The operator recovery entry point is:
+
+```bash
+bash scripts/lifecycle/settings-transition.sh recover
+```
+
+This is a fail-closed recovery contract, not a claim that every incomplete transaction is automatically completed on host boot.
+
+Installer-owned `config.vllm.json` is not silently orphaned. A settings candidate may not invent new config ownership; an owned managed config may only retain its existing ownership/path, and when a committed change releases that owned config in favor of an allowed unowned configuration, the old managed file is removed only at commit. Rollback leaves it intact.
 
 ## Common normalized plan — 2026-10-06
 
@@ -163,23 +184,31 @@ The normalized-plan DGX dry-run was accepted on implementation head `d528f4f2f4b
 
 ## Completed-install settings management — preview slice — 2026-10-06
 
-`scripts/lib/install-completed-manager.sh` adds the installed-setup management UI without adding a new execution engine. It is sourced only for `install.sh`; uninstall and other Wizard consumers do not inherit installer-specific state.
+`scripts/lib/install-completed-manager.sh` added the installed-setup management UI without adding a new execution engine. It is sourced only for `install.sh`; uninstall and other Wizard consumers do not inherit installer-specific state.
 
-The management UI stages settings in memory, lets the existing manifest/CLI resolution complete, and reapplies staged values immediately before `install_plan_finalize`. Current-profile default refresh reuses the existing `REFRESH_PROFILE_DEFAULTS` implementation. Settings preview explicitly forces dry-run and has no `write_state`, proxy/service mutation, or lifecycle-transition call.
+The management UI stages settings in memory, lets the existing manifest/CLI resolution complete, and reapplies staged values immediately before `install_plan_finalize`. Current-profile default refresh reuses the existing `REFRESH_PROFILE_DEFAULTS` implementation.
 
-Guarded DGX acceptance on implementation head `603aa0391d436eb2a6bd459d924ddcff2d0f5a5c` passed after CI #1228 passed 499 tests. The settings action retained `orcarouter`, staged monitor values `7/3/11/9 GiB`, 6 consecutive samples and a 30-second heartbeat, normalized the current LAN configuration to `local only: 127.0.0.1:8888`, and staged service disable as `Docker container via immutable current release`. The command line intentionally omitted `--dry-run`; the settings manager itself forced the existing `DRY-RUN complete` path.
+Guarded DGX acceptance on implementation head `603aa0391d436eb2a6bd459d924ddcff2d0f5a5c` passed after CI #1228 passed 499 tests. The settings action retained `orcarouter`, staged monitor values `7/3/11/9 GiB`, 6 consecutive samples and a 30-second heartbeat, normalized the current LAN configuration to `local only: 127.0.0.1:8888`, and staged service disable as `Docker container via immutable current release`. The command line intentionally omitted `--dry-run`; that preview slice forced the existing `DRY-RUN complete` path.
 
 Post-run checks proved the preview was non-mutating: `install.env` and `runtime-commit.env` digests were unchanged, the managed service remained active, container ID and `StartedAt` were unchanged, no runtime/update/profile-switch transaction file was created, and the live proxy listeners remained present at the Docker bridge and LAN addresses. The first acceptance wrapper had one harness-only false negative because it grepped `This PC only` while the canonical renderer emits `local only`; the corrected invariant check passed without rerunning the installer.
 
-This slice therefore accepts the settings editor only as a normalized non-mutating preview. The next P0 slice must close the proxy/service cleanup gap and provide a recoverable live settings transaction before the settings editor may apply changes to a real managed host.
+That preview acceptance remains valid evidence for the editor and normalized plan, but it is not evidence for the live transaction or host stability.
+
+## Completed-install settings management — transactional apply slice — 2026-10-06
+
+Live apply is implemented on branch head `933a3dc0b01f68f0c3986913ff8cccef8a2a4317`, validated by CI #1257. The branch adds the recoverable settings transaction, service boot-enable deferral, symmetric proxy/service rollback, config-ownership cleanup, commit-failure propagation, and rootless resource integration coverage.
+
+The rootless transaction tests cover both directions of the destructive resource boundary: local/no-service → Docker proxy + managed service proves the service is installed but boot-disabled until commit and enabled only at commit; Docker/service → local/no-service proves removal during apply and restoration of proxy/service ownership during rollback. Additional tests cover activation interruption, activation-guard recovery, immutable identity rejection, operation-lock exclusion, config ownership claims, committed cleanup, rollback preservation, and manager commit failure followed by recovery.
+
+No DGX live settings mutation has been accepted by this section yet. The next acceptance step is a guarded final-head dry-run proving non-mutation, followed only then by a narrowly scoped live settings transaction with before/after/recovery invariants. Neither step is runtime host-stability qualification.
 
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
 3. **Common normalized plan** — implemented and DGX dry-run accepted.
-4. **Completed-install settings management** — preview/action UI implemented and DGX accepted; live settings transaction, dry-run control, and start/restart policy remain.
+4. **Completed-install settings management** — preview/action UI accepted on DGX; transactional live apply and Wizard execution-policy parity implemented in code and CI #1257 green; final-head guarded DGX acceptance remains.
 5. **Registry/profile-manager metadata** — derive profile UI from registry and combine it with `manage-models.sh` inventory; centralize option metadata.
-6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when a phase explicitly requires it.
+6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when the phase explicitly requires it.
 
 Do not reopen R23–R32 allocator localization, merge the separate M1 mitigation line, or claim H38 as the current transactional managed OrcaRouter profile as part of this work.
