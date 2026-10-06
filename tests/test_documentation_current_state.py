@@ -17,8 +17,9 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("NV_ERR_NO_MEMORY", text)
         self.assertIn("R9–R32 allocator/localization closure", text)
         self.assertIn("not a proven discriminator for RM failure", text)
-        self.assertIn("after squash merge of PR #248", text)
-        self.assertIn("af3119fdcdc75be9ea5a8403a127d825cf238bc6", text)
+        self.assertIn("Last synchronized: 2026-10-06", text)
+        self.assertIn("The version on `main` is authoritative", text)
+        self.assertIn("would make that marker stale as soon as it is merged", text)
 
     def test_root_readme_tracks_current_managed_status(self) -> None:
         text = read("README.md")
