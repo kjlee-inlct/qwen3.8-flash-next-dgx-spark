@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # Installer-only completed-install management UI.
 #
-# This helper is sourced by wizard-ui.sh only when the caller is install.sh. It
-# stages settings in memory and reapplies them immediately before the shared 6/6
-# normalized-plan boundary. It performs no host mutation and creates no state.
+# Settings are staged in memory and reapplied immediately before the shared 6/6
+# normalized-plan boundary. Preview remains the safe default. Explicit live apply
+# is handed to the recoverable settings transaction only after final plan approval.
 
 INSTALL_COMPLETED_ACTION=""
 INSTALL_COMPLETED_SUPPRESS_PROFILE_SELECTION=0
 INSTALL_COMPLETED_PENDING_SETTINGS=0
 INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
+INSTALL_COMPLETED_SETTINGS_APPLY=0
+INSTALL_COMPLETED_CLI_DRY_RUN=0
+INSTALL_COMPLETED_MANAGER_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+INSTALL_COMPLETED_SETTINGS_TRANSITION="${INSTALL_COMPLETED_MANAGER_ROOT}/scripts/lifecycle/settings-transition.sh"
 
 install_completed_bool_default() {
   [[ "$1" == 1 ]] && printf 'yes\n' || printf 'no\n'
@@ -26,6 +30,7 @@ install_completed_current_config_label() {
 
 install_completed_stage_settings() {
   local answer monitor_default protect_default service_default api_default detected_lan
+  INSTALL_COMPLETED_CLI_DRY_RUN="${DRY_RUN:-0}"
 
   INSTALL_COMPLETED_CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
   INSTALL_COMPLETED_CONFIG_OWNED="${CONFIG_OWNED:-0}"
@@ -160,12 +165,34 @@ install_completed_stage_settings() {
     wizard_yes_no 'Use the systemd service that starts at boot?' "${service_default}" && INSTALL_COMPLETED_SERVICE_ENABLED=1 || INSTALL_COMPLETED_SERVICE_ENABLED=0
   fi
 
-  # Until the apply transaction for settings-only changes lands, this UI is
-  # deliberately preview-only. That prevents stale proxy/service resources from
-  # being left behind when switching LAN -> local or service -> no-service.
-  DRY_RUN=1
-  INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=1
   INSTALL_COMPLETED_PENDING_SETTINGS=1
+  INSTALL_COMPLETED_SETTINGS_APPLY=0
+  INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=1
+  if [[ "${INSTALL_COMPLETED_CLI_DRY_RUN}" == 1 ]]; then
+    DRY_RUN=1
+    [[ "${UI_LANG}" == ko ]] && wizard_info '명령행 --dry-run이 설정되어 변경 내용을 미리보기만 합니다.' || wizard_info 'CLI --dry-run is set; settings will be previewed only.'
+    return 0
+  fi
+
+  if [[ "${UI_LANG}" == ko ]]; then
+    if wizard_yes_no '최종 계획 확인 후 이 설정을 실제로 적용합니까?' no; then
+      INSTALL_COMPLETED_SETTINGS_APPLY=1
+      INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
+      DRY_RUN=0
+      wizard_yes_no 'runtime 설정을 지금 재시작하여 적용합니까?' yes && START=1 || START=0
+    else
+      DRY_RUN=1
+    fi
+  else
+    if wizard_yes_no 'Apply these settings after the final plan review?' no; then
+      INSTALL_COMPLETED_SETTINGS_APPLY=1
+      INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
+      DRY_RUN=0
+      wizard_yes_no 'Restart the runtime now to apply runtime settings?' yes && START=1 || START=0
+    else
+      DRY_RUN=1
+    fi
+  fi
 }
 
 install_completed_apply_staged_settings() {
@@ -186,6 +213,51 @@ install_completed_apply_staged_settings() {
   API_LAN_ADDRESS="${INSTALL_COMPLETED_API_LAN_ADDRESS}"
   API_LAN_PORT="${INSTALL_COMPLETED_API_LAN_PORT}"
   SERVICE_ENABLED="${INSTALL_COMPLETED_SERVICE_ENABLED}"
+
+  if [[ "${API_ACCESS_MODE}" == local ]]; then
+    PROXY_ENABLED=0
+    PROXY_OWNED=0
+  else
+    PROXY_ENABLED=1
+    PROXY_OWNED=1
+  fi
+  PROXY_PORT="${API_DOCKER_PORT}"
+  SERVICE_OWNED="${SERVICE_ENABLED}"
+}
+
+install_completed_execute_settings_transaction() {
+  local candidate old_state_write rc
+  [[ "${INSTALL_COMPLETED_SETTINGS_APPLY:-0}" == 1 ]] || return 0
+  [[ "${DRY_RUN:-0}" == 0 ]] || return 0
+  [[ -n "${STATE_FILE:-}" ]] || die 'settings transaction requires the installer manifest path'
+  [[ -x "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" ]] || die "settings transaction helper is unavailable: ${INSTALL_COMPLETED_SETTINGS_TRANSITION}"
+  declare -F write_state >/dev/null 2>&1 || die 'settings transaction requires installer manifest writer'
+
+  candidate="${STATE_FILE}.settings-input"
+  [[ ! -e "${candidate}" && ! -L "${candidate}" ]] || die "stale settings input exists: ${candidate}"
+  old_state_write="${STATE_WRITE_FILE:-${STATE_FILE}}"
+  STATE_WRITE_FILE="${candidate}"
+  write_state complete
+  STATE_WRITE_FILE="${old_state_write}"
+
+  if ! bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" prepare "${candidate}" "${START}"; then
+    rm -f -- "${candidate}"
+    return 1
+  fi
+  if ! bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" apply; then
+    return 1
+  fi
+  if ! bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" commit; then
+    rc=$?
+    bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" recover || true
+    return "${rc}"
+  fi
+
+  if [[ "${UI_LANG}" == ko ]]; then
+    printf '\n설정 변경이 transaction으로 적용 및 검증되었습니다.\n  manifest: %s\n' "${STATE_FILE}"
+  else
+    printf '\nSettings were applied and verified transactionally.\n  manifest: %s\n' "${STATE_FILE}"
+  fi
 }
 
 install_completed_choose_action() {
@@ -202,7 +274,7 @@ install_completed_choose_action() {
     printf '설치 관리%s\n\n' "${WIZARD_RESET}"
     wizard_info "현재 profile: ${MODEL_PROFILE}"
     wizard_menu_option 1 '모델 profile 선택 / 전환'
-    wizard_menu_option 2 '런타임 / API / 서비스 설정 미리보기'
+    wizard_menu_option 2 '런타임 / API / 서비스 설정 편집'
     wizard_menu_option 3 '현재 profile 기본값 새로고침'
     wizard_menu_option 4 '취소'
     wizard_input answer '선택' 1
@@ -210,7 +282,7 @@ install_completed_choose_action() {
     printf 'Installed setup management%s\n\n' "${WIZARD_RESET}"
     wizard_info "Current profile: ${MODEL_PROFILE}"
     wizard_menu_option 1 'Select / switch model profile'
-    wizard_menu_option 2 'Preview runtime / API / service settings'
+    wizard_menu_option 2 'Edit runtime / API / service settings'
     wizard_menu_option 3 'Refresh current profile defaults'
     wizard_menu_option 4 'Cancel'
     wizard_input answer 'Select' 1
@@ -252,6 +324,17 @@ install_completed_manager_step_hook() {
     install_completed_apply_staged_settings
   fi
   return 1
+}
+
+# Called by wizard_yes_no after a positive answer. The final Continue prompt is
+# the normalized-plan approval boundary; live settings apply starts only there.
+install_completed_manager_yes_no_hook() {
+  local prompt="$1" result="$2"
+  [[ "${result}" == yes ]] || return 0
+  [[ "${INSTALL_COMPLETED_ACTION:-}" == settings && "${INSTALL_COMPLETED_SETTINGS_APPLY:-0}" == 1 ]] || return 0
+  [[ "${prompt}" == 'Continue?' || "${prompt}" == '계속 진행합니까?' ]] || return 0
+  install_completed_execute_settings_transaction || return $?
+  exit 0
 }
 
 # Return 0 when the model-selector menu item should be suppressed.
