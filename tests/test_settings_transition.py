@@ -160,6 +160,7 @@ class SettingsTransitionTests(unittest.TestCase):
             "    ;;\n"
             "  create)\n"
             "    : >\"${root}/service-installed\"\n"
+            "    : >\"${root}/service-created\"\n"
             "    enable=1\n"
             "    for arg in \"$@\"; do [[ \"${arg}\" != --no-enable ]] || enable=0; done\n"
             "    if [[ \"${enable}\" == 1 ]]; then : >\"${root}/service-enabled\"; else rm -f -- \"${root}/service-enabled\"; fi\n"
@@ -258,6 +259,55 @@ class SettingsTransitionTests(unittest.TestCase):
             self.assertIn("API_ACCESS_MODE=docker", manifest.read_text(encoding="utf-8"))
             self.assertIn("SERVICE_ENABLED=1", manifest.read_text(encoding="utf-8"))
             self.assertFalse((home / "state/qwen38-spark/settings-transition.phase").exists())
+
+    def test_enabled_service_no_start_preserves_existing_unit_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state/qwen38-spark"
+            state.mkdir(parents=True)
+            manifest = state / "install.env"
+            candidate = home / "candidate.env"
+            manifest.write_text(
+                self.manifest_text(home, api_mode="docker", service_enabled=1),
+                encoding="utf-8",
+            )
+            candidate.write_text(
+                self.manifest_text(
+                    home,
+                    heartbeat=30,
+                    api_mode="docker",
+                    service_enabled=1,
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "state"),
+                "XDG_DATA_HOME": str(home / "data"),
+            }
+            env, resources = self.setup_fake_resources(home, env)
+            (resources / "proxy-port").write_text("8000\n", encoding="utf-8")
+            (resources / "service-installed").touch()
+            (resources / "service-enabled").touch()
+
+            prepared = self.run_transition(env, "prepare", str(candidate), "0")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            applied = self.run_transition(env, "apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+
+            # Activation may temporarily disable boot start, but a retained
+            # managed service with deferred runtime restart must not be
+            # recreated or rewritten.
+            self.assertTrue((resources / "service-installed").exists())
+            self.assertFalse((resources / "service-enabled").exists())
+            self.assertFalse((resources / "service-created").exists())
+
+            committed = self.run_transition(env, "commit")
+            self.assertEqual(committed.returncode, 0, committed.stderr)
+            self.assertTrue((resources / "service-installed").exists())
+            self.assertTrue((resources / "service-enabled").exists())
+            self.assertFalse((resources / "service-created").exists())
 
     def test_destructive_resource_change_rolls_back_symmetrically(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
