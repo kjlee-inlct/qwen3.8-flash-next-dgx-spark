@@ -134,6 +134,7 @@ class SettingsTransitionTests(unittest.TestCase):
             "    printf '  listener  : 172.17.0.1:%s\\n' \"${port}\"\n"
             "    ;;\n"
             "  create)\n"
+            "    : >\"${root}/proxy-created\"\n"
             "    shift; port=8000\n"
             "    while [[ $# -gt 0 ]]; do\n"
             "      if [[ \"$1\" == --docker-port ]]; then port=\"$2\"; shift; fi\n"
@@ -302,12 +303,14 @@ class SettingsTransitionTests(unittest.TestCase):
             self.assertTrue((resources / "service-installed").exists())
             self.assertFalse((resources / "service-enabled").exists())
             self.assertFalse((resources / "service-created").exists())
+            self.assertFalse((resources / "proxy-created").exists())
 
             committed = self.run_transition(env, "commit")
             self.assertEqual(committed.returncode, 0, committed.stderr)
             self.assertTrue((resources / "service-installed").exists())
             self.assertTrue((resources / "service-enabled").exists())
             self.assertFalse((resources / "service-created").exists())
+            self.assertFalse((resources / "proxy-created").exists())
 
     def test_destructive_resource_change_rolls_back_symmetrically(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
