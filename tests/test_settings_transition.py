@@ -14,7 +14,15 @@ OPERATION_LOCK = ROOT / "scripts" / "lib" / "operation-lock.sh"
 
 
 class SettingsTransitionTests(unittest.TestCase):
-    def manifest_text(self, home: Path, *, heartbeat: int = 60, profile: str = "orcarouter") -> str:
+    def manifest_text(
+        self,
+        home: Path,
+        *,
+        heartbeat: int = 60,
+        profile: str = "orcarouter",
+        config_override: str = "",
+        config_owned: int = 0,
+    ) -> str:
         model_dir = home / "models" / "qwen3.8-flash-next-orcarouter"
         return "\n".join(
             [
@@ -32,8 +40,8 @@ class SettingsTransitionTests(unittest.TestCase):
                 "IMAGE_OWNED=0",
                 "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
                 "CONTAINER_NAME=qwen38-flash-next",
-                "CONFIG_OVERRIDE=",
-                "CONFIG_OWNED=0",
+                f"CONFIG_OVERRIDE={config_override}",
+                f"CONFIG_OWNED={config_owned}",
                 "MONITOR_PROTECT=0",
                 "MONITOR_ENABLED=1",
                 "MONITOR_MIN_AVAILABLE_GIB=6",
@@ -140,6 +148,23 @@ class SettingsTransitionTests(unittest.TestCase):
             self.assertEqual(manifest.read_bytes(), before)
             self.assertFalse((state / "settings-transition.phase").exists())
 
+    def test_recover_activation_guard_restores_backup_before_target_activation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest, candidate, env = self.setup_state(home)
+            before = manifest.read_bytes()
+            self.assertEqual(self.run_transition(env, "prepare", str(candidate), "0").returncode, 0)
+
+            state = home / "state/qwen38-spark"
+            (state / "settings-transition.phase").write_text(
+                "activation-guarded\n", encoding="utf-8"
+            )
+            recovered = self.run_transition(env, "recover")
+
+            self.assertEqual(recovered.returncode, 0, recovered.stderr)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((state / "settings-transition.phase").exists())
+
     def test_operation_lock_blocks_other_mutators_during_transaction(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -182,6 +207,97 @@ class SettingsTransitionTests(unittest.TestCase):
             result = self.run_transition(env, "prepare", str(candidate), "0")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("MODEL_PROFILE", result.stderr)
+
+    def test_prepare_rejects_new_config_ownership_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            _, candidate, env = self.setup_state(home)
+            managed_config = home / "state/qwen38-spark/config.vllm.json"
+            managed_config.write_text("{}\n", encoding="utf-8")
+            candidate.write_text(
+                self.manifest_text(
+                    home,
+                    heartbeat=30,
+                    config_override=str(managed_config),
+                    config_owned=1,
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_transition(env, "prepare", str(candidate), "0")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cannot claim new config ownership", result.stderr)
+
+    def test_commit_removes_released_installer_owned_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state/qwen38-spark"
+            state.mkdir(parents=True)
+            managed_config = state / "config.vllm.json"
+            managed_config.write_text("{}\n", encoding="utf-8")
+            manifest = state / "install.env"
+            candidate = home / "candidate.env"
+            manifest.write_text(
+                self.manifest_text(
+                    home,
+                    config_override=str(managed_config),
+                    config_owned=1,
+                ),
+                encoding="utf-8",
+            )
+            candidate.write_text(self.manifest_text(home, heartbeat=30), encoding="utf-8")
+            env = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "state"),
+                "XDG_DATA_HOME": str(home / "data"),
+            }
+
+            self.assertEqual(self.run_transition(env, "prepare", str(candidate), "0").returncode, 0)
+            applied = self.run_transition(env, "apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertTrue(managed_config.exists())
+
+            committed = self.run_transition(env, "commit")
+            self.assertEqual(committed.returncode, 0, committed.stderr)
+            self.assertFalse(managed_config.exists())
+            self.assertIn("CONFIG_OWNED=0", manifest.read_text(encoding="utf-8"))
+
+    def test_rollback_preserves_installer_owned_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state/qwen38-spark"
+            state.mkdir(parents=True)
+            managed_config = state / "config.vllm.json"
+            managed_config.write_text("{}\n", encoding="utf-8")
+            manifest = state / "install.env"
+            candidate = home / "candidate.env"
+            manifest.write_text(
+                self.manifest_text(
+                    home,
+                    config_override=str(managed_config),
+                    config_owned=1,
+                ),
+                encoding="utf-8",
+            )
+            before = manifest.read_bytes()
+            candidate.write_text(self.manifest_text(home, heartbeat=30), encoding="utf-8")
+            env = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "state"),
+                "XDG_DATA_HOME": str(home / "data"),
+            }
+
+            self.assertEqual(self.run_transition(env, "prepare", str(candidate), "0").returncode, 0)
+            applied = self.run_transition(env, "apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            rolled_back = self.run_transition(env, "rollback")
+
+            self.assertEqual(rolled_back.returncode, 0, rolled_back.stderr)
+            self.assertTrue(managed_config.exists())
+            self.assertEqual(manifest.read_bytes(), before)
 
 
 if __name__ == "__main__":
