@@ -50,13 +50,21 @@ install_completed_stage_settings() {
     wizard_info "현재 config: $(install_completed_current_config_label)"
     wizard_menu_option 1 '현재 config 설정 유지'
     wizard_menu_option 2 'custom config.json 경로 설정 / 변경'
-    wizard_menu_option 3 'custom override 해제'
+    if [[ "${PROFILE_CONFIG_OVERRIDE:-0}" == 1 ]]; then
+      wizard_info '이 profile은 자동 호환 config가 필요하므로 override 해제는 지원하지 않습니다.'
+    else
+      wizard_menu_option 3 'custom override 해제'
+    fi
     wizard_input answer 'config 선택' 1
   else
     wizard_info "Current config: $(install_completed_current_config_label)"
     wizard_menu_option 1 'Keep current config setting'
     wizard_menu_option 2 'Set / replace custom config.json path'
-    wizard_menu_option 3 'Clear custom override'
+    if [[ "${PROFILE_CONFIG_OVERRIDE:-0}" == 1 ]]; then
+      wizard_info 'This profile requires its compatibility config; clearing the override is not supported.'
+    else
+      wizard_menu_option 3 'Clear custom override'
+    fi
     wizard_input answer 'Config selection' 1
   fi
   case "${answer}" in
@@ -68,9 +76,14 @@ install_completed_stage_settings() {
         wizard_input INSTALL_COMPLETED_CONFIG_OVERRIDE 'Absolute path or ~/path/to/config.json' "${CONFIG_OVERRIDE:-}"
       fi
       [[ -n "${INSTALL_COMPLETED_CONFIG_OVERRIDE}" ]] || die "config override path cannot be empty"
-      INSTALL_COMPLETED_CONFIG_OWNED=0
+      if [[ "${CONFIG_OWNED:-0}" == 1 && "${INSTALL_COMPLETED_CONFIG_OVERRIDE}" == "${CONFIG_OVERRIDE:-}" ]]; then
+        INSTALL_COMPLETED_CONFIG_OWNED=1
+      else
+        INSTALL_COMPLETED_CONFIG_OWNED=0
+      fi
       ;;
     3)
+      [[ "${PROFILE_CONFIG_OVERRIDE:-0}" != 1 ]] || die 'this model profile requires its compatibility config override'
       INSTALL_COMPLETED_CONFIG_OVERRIDE=""
       INSTALL_COMPLETED_CONFIG_OWNED=0
       ;;
