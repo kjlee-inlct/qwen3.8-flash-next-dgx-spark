@@ -373,4 +373,4 @@ Model-prefix/component localization is now closed. Do not add more model-prefix,
 
 R33 is optional and is **not** automatically authorized. A new live allocator-focused discriminator is justified only if an actionable mitigation requires identifying the exact lower-level transition responsible for the 800 MiB request.
 
-PR #244 remains intentionally open and must not be merged before mitigation/Hybrid closure and explicit merge timing.
+PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6` on 2026-10-06. The R9–R32 allocator/localization chain above is therefore the post-merge canonical repository state. The unqualified M1 mitigation prototype was intentionally excluded from that merge and remains a separate follow-up track.

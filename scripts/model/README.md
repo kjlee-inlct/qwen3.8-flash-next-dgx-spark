@@ -33,18 +33,17 @@ This directory contains canonical model-profile, checkpoint-inspection, and conf
 
 Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/prepare-config.py` are compatibility entry points.
 
-
 ## Installer model status
 
-`model-profiles.sh` is also the source of truth for which checkpoint profiles
+`model-profiles.sh` is the source of truth for which checkpoint profiles
 `install.sh` may select:
 
 | Profile | Status | Installable |
 |---|---|---:|
-| `orcarouter` | stable/default, qualified | yes |
+| `orcarouter` | stable/default; 16 GiB managed KV resilience default | yes |
 | `nvidia` | experimental | yes |
-| `mazinb` | experimental; checkpoint staged + switch preflight/wizard dry-run PASS; live managed activation pending | yes |
-| `orcarouter-hybrid` | experimental, generated H6; warm/reuse + round-trip functional PASS; current strict host-stability FAIL after R9; clean-host full build pending | yes |
+| `mazinb` | experimental; live managed activation exercised; current 16 GiB managed KV reaches functional readiness but strict RM host-stability remains FAIL | yes |
+| `orcarouter-hybrid` | experimental, generated H6; warm/reuse + round-trip functional PASS; R23–R32 allocator/localization closure complete; strict host-stability FAIL remains | yes |
 | `lychee888` | planned | no |
 
 A profile is not made installable merely because checkpoint metadata exists.
@@ -52,21 +51,41 @@ The registry must also have a defined preparation/runtime path and the managed
 lifecycle must accept the profile. However, `installable=yes` is an implementation
 state, not proof that the full DGX managed-service qualification has passed.
 
+Current managed KV values are resilience settings, not host-stability certificates.
+Any confirmed NVIDIA RM `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` in a valid
+measurement remains HOST-STABILITY FAIL even when fallback recovers and the runtime
+reaches READY.
+
 `orcarouter-hybrid` uses the H3 -> H4-all -> H5 -> H6 preparation chain and has
 passed warm/reuse managed operation and the Hybrid -> OrcaRouter -> Hybrid
 transactional round trip functionally. The 2026-09-29 CMA-aware repair gate also
 passed its then-defined repeated-validation criteria, but later live switch/restart
-runs and the R8/R9 investigation reproduced recoverable NVIDIA RM
+runs and the R8–R32 investigation reproduced recoverable NVIDIA RM
 `NV_ERR_NO_MEMORY`. The current strict classification is therefore
-**FUNCTIONAL PASS / HOST-STABILITY FAIL**. R9 localized the proximate mechanism
-to an RM Linux-sysmem order-4/64 KiB physical-chunk allocation failure with
-rollback followed by successful order-0/4 KiB fallback for the same logical
-request and captured allocation policy. The optional narrow recoverable-RM
-warning exception is documented separately and is not implicitly enabled.
+**FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-Its genuinely clean-host source-download/build/service lifecycle is still
-pending, so Hybrid remains experimental. `lychee888` remains blocked.
+The allocator investigation is no longer open at the R9 boundary. The canonical
+closure indexed under `../benchmark/evidence/README.md` now establishes:
 
+- node0 Normal-zone Unmovable order-4 demand, Movable fallback/pageblock stealing,
+  failed high-order acquisition, rollback, and immediate order-0 retry;
+- a common early roughly 75 GiB physical-page burst separated from later PLE/swap
+  pressure;
+- direct NVIDIA RM system-memory allocation through `nv_alloc_pages` /
+  `nv_alloc_system_pages` as the measured driver-level endpoint;
+- no structural-burst mitigation from the H6 W4A16/16 GiB candidate;
+- first model construction / Qwen4Exp decoder construction as the dominant userspace
+  timing boundary;
+- exact ownership of the repeated 400 MiB family by packed `w13_weight` construction;
+- a paired 800 MiB family that occurs before ModelOpt-MoE create-weights and spans
+  mixed userspace placements, supporting a lower/global backing-growth event rather
+  than direct ownership by a single model-prefix marker.
+
+The optional narrow recoverable-RM warning exception remains documented separately
+and is not implicitly enabled.
+
+The genuinely clean-host source-download/build/service lifecycle is still pending,
+so Hybrid remains experimental. `lychee888` remains blocked.
 
 ### OrcaRouter hybrid installer profile
 
@@ -95,33 +114,34 @@ scripts/model/validate-orcarouter-hybrid.py
 
 ### mazinb installer promotion status
 
-The installer exposes mazinb as an experimental/installable profile, but this is
-not yet a full managed-service qualification result.
+The installer exposes mazinb as an experimental/installable profile. It has moved
+beyond preflight-only status, but it still does **not** have a clean strict
+HOST-STABILITY qualification.
 
-Verified DGX Spark evidence as of 2026-10-02:
+Verified DGX Spark evidence includes:
 
 - `./install.sh --list-models` exposes `mazinb` as
   `experimental / installable=1`;
 - the pinned source ref `f2c21eb` resolved to full SHA
   `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`;
-- the complete 173.64 GiB checkpoint was staged under the active repository-local
-  managed model root and all required files were verified before the project model
-  manifest was marked `complete`;
-- the read-only Hybrid -> mazinb preflight passed with all three lifecycle
-  transactions idle, the expected image/checkpoint present, and no stale
-  profile-switch candidate/backup artifacts;
-- `./install.sh --model mazinb --model-root <managed-root> --dry-run` produced
-  the intended `orcarouter-hybrid -> mazinb` managed switch plan, including
-  checkpoint-default config, memory monitor/protection, API/LAN settings, and
-  installer-owned systemd service, then explicitly exited without mutating
-  download/swap/release/API/service/Docker/manifest state.
+- the complete checkpoint was staged under the managed model root and all required
+  files were verified before the project model manifest was marked `complete`;
+- the read-only Hybrid -> mazinb preflight and installer wizard dry-run passed;
+- the original managed 24 GiB activation failed the strict RM host-stability gate;
+- a controlled temporary 16 GiB comparison could pass under one allocator state, so
+  reduced KV remained useful resilience evidence but not a deterministic fix;
+- the managed profile was promoted to the 16 GiB resilience value and subsequently
+  reached functional readiness, but a valid managed run still contained confirmed RM
+  `NV_ERR_NO_MEMORY`, leaving the result **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-Actual live profile activation, systemd startup/readiness and runtime commit,
-post-commit doctor/restart, uninstall preservation, managed API behavior, and
-managed-lifecycle correctness/performance remain pending. Under the current
-strict Hybrid host-stability policy, live Hybrid -> mazinb activation remains
-blocked unless the documented narrow recoverable-RM exception is explicitly
-adopted for that acceptance leg.
+The current profile description therefore means exactly this: mazinb is an implemented
+and selectable experimental profile with a 16 GiB managed KV resilience value. It is
+not yet qualified as host-stable, and READY/runtime-commit success does not override
+strict RM kernel evidence.
+
+Clean-host managed activation, post-commit doctor/restart, uninstall preservation,
+managed API behavior, correctness/performance, and repeated host-stability qualification
+remain required before promotion beyond experimental status.
 
 ## Installer ownership vs model inventory
 
@@ -175,7 +195,6 @@ canonical download is preserved as `.partial-backup*`; complete conflicts, unexp
 symlinks, running-container mounts, and cross-filesystem migrations are rejected.
 After migration, `./model` is retained as a compatibility symlink and rerunning the
 command is idempotent.
-
 
 ### Managed model-root relocation
 

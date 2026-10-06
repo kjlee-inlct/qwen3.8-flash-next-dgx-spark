@@ -1,5 +1,11 @@
 # OrcaRouter R28 — static DGX next steps — 2026-10-05
 
+> **Historical / superseded execution instruction.** This file records the gate state
+> before the R28 live measurement was authorized. R28 was subsequently executed and
+> closed as a valid measured run. Do not use the commands or authorization state below
+> as the current next step. See `orcarouter-r28-unquant-linear-boundary-result-20261005.md`
+> and the current chain in `README.md`.
+
 R28 repository implementation is closed PASS. No live R28 measurement is authorized yet.
 
 The next DGX action is static-only:
