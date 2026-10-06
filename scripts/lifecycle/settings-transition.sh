@@ -261,9 +261,10 @@ start_standalone_for_prefix() {
 
 apply_service_for_prefix() {
   local desired="$1" current="$2" start="$3" defer_enable="${4:-0}" trusted_recovery="${5:-0}"
-  local desired_enabled desired_owned current_owned root
+  local desired_enabled desired_owned current_enabled current_owned root
   desired_enabled="$(manifest_value "${desired}" SERVICE_ENABLED)"
   desired_owned="$(manifest_value "${desired}" SERVICE_OWNED)"
+  current_enabled="$(manifest_value "${current}" SERVICE_ENABLED)"
   current_owned="$(manifest_value "${current}" SERVICE_OWNED)"
 
   if [[ "${desired_enabled}" == 1 ]]; then
@@ -272,6 +273,16 @@ apply_service_for_prefix() {
       [[ "${trusted_recovery}" == 1 ]] && transaction_service_owned || \
         die 'refusing to replace a managed service not proven to belong to this transaction'
     fi
+
+    # Settings-only transactions do not need to rewrite an already-managed unit
+    # when boot-service ownership stays enabled and runtime restart is deferred.
+    # The activation guard has already disabled boot start; commit re-enables the
+    # exact same unit. This preserves immutable-release provenance and makes a
+    # semantic no-op transaction byte-identical at the service-unit boundary.
+    if service_installed && [[ "${current_enabled}" == 1 && "${start}" == 0 ]]; then
+      return 0
+    fi
+
     root="$(runtime_root)"
     service_args=(create --runtime-root "${root}" --yes)
     [[ "${defer_enable}" == 1 ]] && service_args+=(--no-enable) || service_args+=(--enable)
