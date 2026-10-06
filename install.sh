@@ -24,6 +24,7 @@ DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 CURRENT_RELEASE_LINK="${DATA_HOME}/current"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
+CONFIG_OVERRIDE_CLI=""
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
@@ -383,8 +384,71 @@ restore_profile_switch_manifest_on_exit() {
   return "${rc}"
 }
 
+wizard_choose_model_profile() {
+  local current_profile="${1:-}" mode="${2:-fresh}" default_choice=1 answer
+  local orcarouter_detail nvidia_detail mazinb_detail hybrid_detail
+
+  case "${current_profile}" in
+    nvidia) default_choice=2 ;;
+    mazinb) default_choice=3 ;;
+    orcarouter-hybrid) default_choice=4 ;;
+    *) default_choice=1 ;;
+  esac
+
+  if [[ "${UI_LANG}" == ko ]]; then
+    if [[ "${mode}" == existing ]]; then
+      wizard_step 1 1 '모델 선택 / 전환'
+      wizard_info "현재 profile: ${current_profile}"
+    else
+      wizard_step 2 6 '모델 선택'
+    fi
+    orcarouter_detail='Stable / 기본 프로필 / NVFP4'
+    nvidia_detail='Experimental / NVIDIA 비교 프로필'
+    mazinb_detail='Experimental / BF16 PLE + NVFP4 experts'
+    hybrid_detail='Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
+  else
+    if [[ "${mode}" == existing ]]; then
+      wizard_step 1 1 'Model selection'
+      wizard_info "Current profile: ${current_profile}"
+    else
+      wizard_step 2 6 'Model selection'
+    fi
+    orcarouter_detail='Stable / default profile / NVFP4'
+    nvidia_detail='Experimental / NVIDIA comparison profile'
+    mazinb_detail='Experimental / BF16 PLE + NVFP4 experts'
+    hybrid_detail='Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
+  fi
+
+  [[ "${current_profile}" != orcarouter ]] || orcarouter_detail+=" / Active"
+  [[ "${current_profile}" != nvidia ]] || nvidia_detail+=" / Active"
+  [[ "${current_profile}" != mazinb ]] || mazinb_detail+=" / Active"
+  [[ "${current_profile}" != orcarouter-hybrid ]] || hybrid_detail+=" / Active"
+
+  wizard_menu_option 1 'OrcaRouter Uncensored' "${orcarouter_detail}"
+  wizard_menu_option 2 'NVIDIA Official NVFP4' "${nvidia_detail}"
+  wizard_menu_option 3 'mazinb NVFP4' "${mazinb_detail}"
+  wizard_menu_option 4 'OrcaRouter Hybrid H6' "${hybrid_detail}"
+  if [[ "${mode}" == existing ]]; then
+    [[ "${UI_LANG}" == ko ]] && wizard_menu_option 5 '취소' || wizard_menu_option 5 'Cancel'
+  fi
+  [[ "${UI_LANG}" == ko ]] && wizard_input answer '선택' "${default_choice}" || wizard_input answer 'Select' "${default_choice}"
+
+  case "${answer}" in
+    1|orcarouter) MODEL_PROFILE=orcarouter ;;
+    2|nvidia) MODEL_PROFILE=nvidia ;;
+    3|mazinb) MODEL_PROFILE=mazinb ;;
+    4|orcarouter-hybrid) MODEL_PROFILE=orcarouter-hybrid ;;
+    5)
+      [[ "${mode}" == existing ]] || die "invalid model selection"
+      [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+      exit 0
+      ;;
+    *) die "invalid model selection" ;;
+  esac
+}
+
 usage() {
-  printf 'Usage: ./install.sh [--model PROFILE] [--model-root PATH] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
+  printf 'Usage: ./install.sh [--model PROFILE] [--model-root PATH] [--config-override PATH] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-min-available-gib N] [--monitor-min-free-gib N] [--monitor-free-gate-gib N] [--monitor-min-swap-free-gib N] [--monitor-consecutive N] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
   printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
 }
 ask_yes_no() {
@@ -410,6 +474,7 @@ while [[ $# -gt 0 ]]; do
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
+    --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; CONFIG_OVERRIDE_CLI="$2"; shift ;;
     --list-models) LIST_MODELS=1 ;;
     --list-backends) LIST_BACKENDS=1 ;;
     --monitor) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=0 ;;
@@ -459,6 +524,15 @@ if [[ -r "${STATE_FILE}" ]]; then
   [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
   manifest_profile="$(read_manifest_profile)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
   manifest_phase="$(read_manifest_phase)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+  if [[ "${manifest_phase}" == complete && "${YES}" != 1 && -z "${MODEL_CLI}" ]]; then
+    parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+    [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
+    [[ -n "${UI_LANG}" ]] || UI_LANG=ko
+    [[ "${UI_LANG}" == en || "${UI_LANG}" == ko ]] || die "--lang must be en or ko"
+    [[ "${UI_LANG}" == ko ]] && wizard_header 'Qwen3.8 Flash Next - DGX Spark 설치' || wizard_header 'Qwen3.8 Flash Next - DGX Spark Setup'
+    wizard_choose_model_profile "${manifest_profile}" existing
+    MODEL_CLI="${MODEL_PROFILE}"
+  fi
   if [[ "${manifest_phase}" == uninstalled ]]; then
     # A normal uninstall preserves the manifest so ownership/history are not lost.
     # Treat that state as a fresh profile selection, while retaining shared swap
@@ -509,6 +583,10 @@ MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
 [[ -z "${MONITOR_MIN_SWAP_FREE_CLI}" ]] || MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_CLI}"
 [[ -z "${MONITOR_CONSECUTIVE_CLI}" ]] || MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE_CLI}"
 [[ -z "${MONITOR_HEARTBEAT_CLI}" ]] || MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT_CLI}"
+if [[ -n "${CONFIG_OVERRIDE_CLI}" ]]; then
+  CONFIG_OVERRIDE="${CONFIG_OVERRIDE_CLI}"
+  CONFIG_OWNED=0
+fi
 validate_monitor_settings
 [[ -z "${MODEL_CLI}" ]] || MODEL_PROFILE="${MODEL_CLI}"
 if [[ "${PROFILE_SWITCH}" == 1 && -z "${MODEL_ROOT_CLI}" && -z "${MODEL_ROOT_ENV}" ]]; then
@@ -563,7 +641,7 @@ API_LAN_PORT="${API_LAN_PORT:-8001}"
 
 [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
 
-if [[ "${RESUME}" == 0 && "${YES}" != 1 && -z "${CLI_LANG}" ]]; then
+if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 && "${YES}" != 1 && -z "${CLI_LANG}" ]]; then
   wizard_header 'Qwen3.8 Flash Next - DGX Spark Setup'
   wizard_step 1 6 '언어 선택 / Language'
   wizard_menu_option 1 '한국어' '기본값 / Default'
@@ -591,31 +669,11 @@ elif [[ "${YES}" == 1 || -n "${CLI_LANG}" ]]; then
 fi
 
 if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_CLI}" ]]; then
-  if [[ "${UI_LANG}" == ko ]]; then
-    wizard_step 2 6 '모델 선택'
-    wizard_menu_option 1 'OrcaRouter Uncensored' 'Stable / 기본 프로필 / NVFP4'
-    wizard_menu_option 2 'NVIDIA Official NVFP4' 'Experimental / NVIDIA 비교 프로필'
-    wizard_menu_option 3 'mazinb NVFP4' 'Experimental / BF16 PLE + NVFP4 experts'
-    wizard_menu_option 4 'OrcaRouter Hybrid H6' 'Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
-    wizard_input answer '선택' 1
-  else
-    wizard_step 2 6 'Model selection'
-    wizard_menu_option 1 'OrcaRouter Uncensored' 'Stable / default profile / NVFP4'
-    wizard_menu_option 2 'NVIDIA Official NVFP4' 'Experimental / NVIDIA comparison profile'
-    wizard_menu_option 3 'mazinb NVFP4' 'Experimental / BF16 PLE + NVFP4 experts'
-    wizard_menu_option 4 'OrcaRouter Hybrid H6' 'Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
-    wizard_input answer 'Select' 1
-  fi
-  case "${answer}" in
-    2|nvidia) MODEL_PROFILE=nvidia ;;
-    3|mazinb) MODEL_PROFILE=mazinb ;;
-    4|orcarouter-hybrid) MODEL_PROFILE=orcarouter-hybrid ;;
-    *) MODEL_PROFILE=orcarouter ;;
-  esac
+  wizard_choose_model_profile "" fresh
   reload_profile_for_model_root || exit $?
 fi
 
-if [[ "${YES}" != 1 && "${RESUME}" != 1 && -z "${MODEL_ROOT_CLI}" && -z "${MODEL_ROOT_ENV}" ]]; then
+if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 && -z "${MODEL_ROOT_CLI}" && -z "${MODEL_ROOT_ENV}" ]]; then
   if [[ "${UI_LANG}" == ko ]]; then
     wizard_step 3 6 '모델 저장 위치'
   else
@@ -687,7 +745,7 @@ if [[ "${MIGRATE_MANIFEST}" == 1 ]]; then
   exit 0
 fi
 [[ "$(uname -m)" == aarch64 ]] || printf 'WARNING: expected aarch64, found %s\n' "$(uname -m)"
-if [[ "${YES}" != 1 && "${RESUME}" != 1 ]]; then
+if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 ]]; then
   [[ "${UI_LANG}" == ko ]] && wizard_step 4 6 '런타임 설정' || wizard_step 4 6 'Runtime settings'
   if [[ -n "${CONFIG_OVERRIDE}" ]]; then
     if [[ "${UI_LANG}" == ko ]]; then
