@@ -3,7 +3,7 @@
 Status: **CURRENT-FACING DOCUMENTATION AUDITED — HISTORICAL EVIDENCE PRESERVED**
 
 This document records the repository-wide Markdown audit boundary after PR #248 and the
-follow-up root-README synchronization.
+follow-up root-README/lifecycle-documentation synchronization.
 
 ## Audit rule
 
@@ -47,7 +47,7 @@ evidence index.
 
 ## Corrections closed by this audit
 
-The audit corrected or explicitly scoped the following stale statements:
+The audit corrected or explicitly scoped the following stale statements and omissions:
 
 - mazinb is experimental/installable and has been exercised through live managed
   activation; it is no longer described as dry-run-only or activation-pending;
@@ -66,7 +66,14 @@ The audit corrected or explicitly scoped the following stale statements:
 - root `README.md` now distinguishes the transactional managed installer path from the
   historical/manual NVIDIA `scripts/serve.sh` path;
 - H38 decoder-only qualification remains explicitly separate from managed-service
-  promotion.
+  promotion;
+- `STATE-FILES.md` now includes `runtime-transition.env` in the strict-parser boundary and
+  documents its dedicated `runtime-transition` schema;
+- `scripts/lifecycle/README.md` and `scripts/README.md` now include the persisted
+  `profile-switch-transition.sh` lifecycle surface;
+- installable mazinb download examples use the normal registry path without implying that
+  `--candidate` is required. The compatibility flag remains documented for tracked
+  non-installable download profiles.
 
 ## Historical preservation boundary
 
@@ -81,16 +88,19 @@ meaning of the ledger and is not part of this audit.
 
 ## Regression guard
 
-`tests/test_documentation_current_state.py` protects the volatile current-state claims,
-including:
+`tests/test_documentation_current_state.py` protects the volatile current-state and
+structure claims, including:
 
 - current 16 GiB managed KV wording;
 - mazinb installability/managed activation status;
 - Hybrid strict host-stability classification;
-- post-merge PR #244 state;
+- post-merge PR #244/#248 synchronization;
 - monitor heuristic wording;
 - explicit historical scoping of superseded evidence;
-- root README synchronization with `docs/CURRENT-STATUS.md`.
+- root README synchronization with `docs/CURRENT-STATUS.md`;
+- strict parsing of `runtime-transition.env`;
+- the profile-switch lifecycle helper in the canonical/stable script maps;
+- normal mazinb download examples without a required `--candidate` flag.
 
 Future changes that alter these facts should update implementation, canonical current-state
 documentation, and the regression guard together rather than allowing the documents to drift.
