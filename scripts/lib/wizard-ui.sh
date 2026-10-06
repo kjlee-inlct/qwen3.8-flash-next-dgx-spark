@@ -139,6 +139,13 @@ wizard_secret() {
   printf -v "${variable}" '%s' "${secret_value}"
 }
 
+wizard_yes_no_hook() {
+  local prompt="$1" result="$2"
+  if declare -F install_completed_manager_yes_no_hook >/dev/null 2>&1; then
+    install_completed_manager_yes_no_hook "${prompt}" "${result}"
+  fi
+}
+
 wizard_yes_no() {
   local prompt="$1" default="${2:-yes}" answer suffix
   case "${default}" in
@@ -149,11 +156,21 @@ wizard_yes_no() {
   while true; do
     wizard_read_raw answer "${WIZARD_BLUE}${prompt}${WIZARD_RESET} ${suffix}: "
     case "${answer}" in
-      y|Y|yes|YES|Yes|예) return 0 ;;
-      n|N|no|NO|No|아니오) return 1 ;;
+      y|Y|yes|YES|Yes|예)
+        wizard_yes_no_hook "${prompt}" yes || return $?
+        return 0
+        ;;
+      n|N|no|NO|No|아니오)
+        wizard_yes_no_hook "${prompt}" no || return $?
+        return 1
+        ;;
       "")
-        [[ "${default}" == yes || "${default}" == y || "${default}" == Y ]]
-        return
+        if [[ "${default}" == yes || "${default}" == y || "${default}" == Y ]]; then
+          wizard_yes_no_hook "${prompt}" yes || return $?
+          return 0
+        fi
+        wizard_yes_no_hook "${prompt}" no || return $?
+        return 1
         ;;
       *) wizard_warning "Please answer y/n (예/아니오)." ;;
     esac
