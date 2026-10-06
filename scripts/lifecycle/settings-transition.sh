@@ -12,11 +12,12 @@ PROFILE_SWITCH_STATE="${STATE_HOME}/profile-switch-transition.env"
 UPDATE_STATE="${STATE_HOME}/update-transition.env"
 RUNTIME_STATE="${STATE_HOME}/runtime-transition.env"
 RUNTIME_COMMIT_FILE="${STATE_HOME}/runtime-commit.env"
-CURRENT_RELEASE_LINK="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark/current"
-MANAGE_PROXY="${SCRIPT_ROOT}/scripts/manage-proxy.sh"
-MANAGE_SERVICE="${SCRIPT_ROOT}/scripts/manage-service.sh"
-RUNTIME_TRANSITION="${SCRIPT_ROOT}/scripts/runtime/runtime-transition.sh"
-WAIT_READY="${SCRIPT_ROOT}/scripts/runtime/wait-ready.sh"
+CURRENT_RELEASE_LINK="${QWEN38_CURRENT_RELEASE_LINK:-${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark/current}"
+MANAGE_PROXY="${QWEN38_MANAGE_PROXY_HELPER:-${SCRIPT_ROOT}/scripts/manage-proxy.sh}"
+MANAGE_SERVICE="${QWEN38_MANAGE_SERVICE_HELPER:-${SCRIPT_ROOT}/scripts/manage-service.sh}"
+RUNTIME_TRANSITION="${QWEN38_RUNTIME_TRANSITION_HELPER:-${SCRIPT_ROOT}/scripts/runtime/runtime-transition.sh}"
+WAIT_READY="${QWEN38_WAIT_READY_HELPER:-${SCRIPT_ROOT}/scripts/runtime/wait-ready.sh}"
+SYSTEMCTL="${QWEN38_SYSTEMCTL:-systemctl}"
 
 PHASE_FILE="${STATE_HOME}/settings-transition.phase"
 START_MARKER="${STATE_HOME}/settings-transition.start"
@@ -43,7 +44,7 @@ sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 container_running() { [[ "$(docker inspect -f '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)" == true ]]; }
 
 settings_phase_valid() {
-  case "$1" in preparing|activated|resources-applied|committing|rolling-back) return 0 ;; *) return 1 ;; esac
+  case "$1" in preparing|activation-guarded|activated|resources-applied|committing|rolling-back) return 0 ;; *) return 1 ;; esac
 }
 write_phase() {
   local phase="$1" temporary="${PHASE_FILE}.tmp"
@@ -130,6 +131,12 @@ validate_settings_pair() {
     *) die 'invalid candidate API access mode' ;;
   esac
   [[ "${CANDIDATE_SERVICE_ENABLED}" == "${CANDIDATE_SERVICE_OWNED}" ]] || die 'settings target service ownership must match service enablement'
+  if [[ "${CANDIDATE_CONFIG_OWNED}" == 1 ]]; then
+    [[ "${BASE_CONFIG_OWNED}" == 1 && "${CANDIDATE_CONFIG_OVERRIDE}" == "${BASE_CONFIG_OVERRIDE}" ]] || \
+      die 'settings-only candidate cannot claim new config ownership'
+    [[ "${CANDIDATE_CONFIG_OVERRIDE}" == "${STATE_HOME}/config.vllm.json" ]] || \
+      die 'owned config must remain the managed config.vllm.json path'
+  fi
 }
 
 acquire_transition_lock() {
@@ -151,7 +158,10 @@ sudo_locked() {
 proxy_installed() { "${MANAGE_PROXY}" status >/dev/null 2>&1; }
 service_status_text() { "${MANAGE_SERVICE}" status 2>/dev/null || true; }
 service_installed() { grep -Fq 'installed : yes' <<<"$(service_status_text)"; }
-service_active() { systemctl is-active --quiet qwen38-flash-next.service 2>/dev/null; }
+service_enabled() { grep -Fq 'enabled   : yes' <<<"$(service_status_text)"; }
+service_active() { "${SYSTEMCTL}" is-active --quiet qwen38-flash-next.service 2>/dev/null; }
+transaction_proxy_owned() { [[ "${BACKUP_PROXY_OWNED:-0}" == 1 || "${TARGET_PROXY_OWNED:-0}" == 1 ]]; }
+transaction_service_owned() { [[ "${BACKUP_SERVICE_OWNED:-0}" == 1 || "${TARGET_SERVICE_OWNED:-0}" == 1 ]]; }
 
 preflight_current_resources() {
   parse_manifest "${INSTALL_STATE_FILE}" LIVE || die 'live installation manifest failed strict maintenance parsing'
@@ -162,6 +172,7 @@ preflight_current_resources() {
   fi
   if service_installed; then
     [[ "${LIVE_SERVICE_OWNED}" == 1 ]] || die 'managed service exists but the live manifest does not own it'
+    [[ "${LIVE_SERVICE_ENABLED}" != 1 ]] || service_enabled || die 'live manifest enables the managed service but the unit is disabled'
   elif [[ "${LIVE_SERVICE_OWNED}" == 1 ]]; then
     die 'live manifest owns the managed service but the unit is missing'
   fi
@@ -181,20 +192,24 @@ proxy_args_for_prefix() {
 }
 
 apply_proxy_for_prefix() {
-  local desired="$1" current="$2" mode desired_owned current_owned
+  local desired="$1" current="$2" trusted_recovery="${3:-0}" mode desired_owned current_owned
   mode="$(manifest_value "${desired}" API_ACCESS_MODE)"
   desired_owned="$(manifest_value "${desired}" PROXY_OWNED)"
   current_owned="$(manifest_value "${current}" PROXY_OWNED)"
   if [[ "${mode}" == local ]]; then
     if proxy_installed; then
-      [[ "${current_owned}" == 1 ]] || die 'refusing to remove proxy resources not owned by the current manifest'
+      if [[ "${current_owned}" != 1 ]]; then
+        [[ "${trusted_recovery}" == 1 ]] && transaction_proxy_owned || \
+          die 'refusing to remove proxy resources not proven to belong to this transaction'
+      fi
       sudo_locked "${MANAGE_PROXY}" remove --yes
     fi
     return 0
   fi
   [[ "${desired_owned}" == 1 ]] || die 'non-local API target must own its proxy resources'
-  if proxy_installed; then
-    [[ "${current_owned}" == 1 ]] || die 'refusing to replace proxy resources not owned by the current manifest'
+  if proxy_installed && [[ "${current_owned}" != 1 ]]; then
+    [[ "${trusted_recovery}" == 1 ]] && transaction_proxy_owned || \
+      die 'refusing to replace proxy resources not proven to belong to this transaction'
   fi
   proxy_args_for_prefix "${desired}"
   sudo_locked "${MANAGE_PROXY}" "${PROXY_ARGS[@]}"
@@ -245,18 +260,21 @@ start_standalone_for_prefix() {
 }
 
 apply_service_for_prefix() {
-  local desired="$1" current="$2" start="$3" desired_enabled desired_owned current_owned root
+  local desired="$1" current="$2" start="$3" defer_enable="${4:-0}" trusted_recovery="${5:-0}"
+  local desired_enabled desired_owned current_owned root
   desired_enabled="$(manifest_value "${desired}" SERVICE_ENABLED)"
   desired_owned="$(manifest_value "${desired}" SERVICE_OWNED)"
   current_owned="$(manifest_value "${current}" SERVICE_OWNED)"
 
   if [[ "${desired_enabled}" == 1 ]]; then
     [[ "${desired_owned}" == 1 ]] || die 'enabled service target must own the managed unit'
-    if service_installed; then
-      [[ "${current_owned}" == 1 ]] || die 'refusing to replace a managed service not owned by the current manifest'
+    if service_installed && [[ "${current_owned}" != 1 ]]; then
+      [[ "${trusted_recovery}" == 1 ]] && transaction_service_owned || \
+        die 'refusing to replace a managed service not proven to belong to this transaction'
     fi
     root="$(runtime_root)"
     service_args=(create --runtime-root "${root}" --yes)
+    [[ "${defer_enable}" == 1 ]] && service_args+=(--no-enable) || service_args+=(--enable)
     [[ "${start}" == 1 ]] && service_args+=(--start) || service_args+=(--no-start)
     sudo_locked "${MANAGE_SERVICE}" "${service_args[@]}"
     return 0
@@ -264,7 +282,10 @@ apply_service_for_prefix() {
 
   [[ "${desired_owned}" == 0 ]] || die 'disabled service target must not claim service ownership'
   if service_installed; then
-    [[ "${current_owned}" == 1 ]] || die 'refusing to remove a managed service not owned by the current manifest'
+    if [[ "${current_owned}" != 1 ]]; then
+      [[ "${trusted_recovery}" == 1 ]] && transaction_service_owned || \
+        die 'refusing to remove a managed service not proven to belong to this transaction'
+    fi
     sudo_locked "${MANAGE_SERVICE}" remove --yes
   fi
   if [[ "${start}" == 1 ]]; then
@@ -294,12 +315,16 @@ verify_proxy_for_prefix() {
 }
 
 verify_service_for_prefix() {
-  local prefix="$1" start="$2" enabled served text
+  local prefix="$1" start="$2" expect_enabled="${3:-1}" enabled served text
   enabled="$(manifest_value "${prefix}" SERVICE_ENABLED)"
   if [[ "${enabled}" == 1 ]]; then
     text="$(service_status_text)"
     grep -Fq 'installed : yes' <<<"${text}" || return 1
-    grep -Fq 'enabled   : yes' <<<"${text}" || return 1
+    if [[ "${expect_enabled}" == 1 ]]; then
+      grep -Fq 'enabled   : yes' <<<"${text}" || return 1
+    else
+      grep -Fq 'enabled   : no' <<<"${text}" || return 1
+    fi
     if [[ "${start}" == 1 ]]; then
       grep -Fq 'active    : yes' <<<"${text}" || return 1
       served="$(manifest_value "${prefix}" SERVED_NAME)"
@@ -314,9 +339,36 @@ verify_service_for_prefix() {
   fi
 }
 verify_resources_for_prefix() {
-  local prefix="$1" start="$2"
+  local prefix="$1" start="$2" expect_service_enabled="${3:-1}"
   verify_proxy_for_prefix "${prefix}" || die "settings transaction proxy verification failed for ${prefix}"
-  verify_service_for_prefix "${prefix}" "${start}" || die "settings transaction service/runtime verification failed for ${prefix}"
+  verify_service_for_prefix "${prefix}" "${start}" "${expect_service_enabled}" || \
+    die "settings transaction service/runtime verification failed for ${prefix}"
+}
+
+disable_service_boot_for_activation() {
+  service_installed || return 0
+  [[ "${BACKUP_SERVICE_OWNED}" == 1 ]] || die 'cannot guard an unowned managed service before settings activation'
+  sudo_locked "${SYSTEMCTL}" disable qwen38-flash-next.service >/dev/null
+}
+
+cleanup_released_owned_config() {
+  local previous="${BACKUP_CONFIG_OVERRIDE:-}" target="${TARGET_CONFIG_OVERRIDE:-}"
+  [[ "${BACKUP_CONFIG_OWNED:-0}" == 1 ]] || return 0
+  [[ -n "${previous}" && "${previous}" != "${target}" ]] || return 0
+  [[ "${previous}" == "${STATE_HOME}/config.vllm.json" ]] || die 'refusing to remove an owned config outside the managed state path'
+  if [[ -e "${previous}" || -L "${previous}" ]]; then
+    [[ -f "${previous}" && ! -L "${previous}" ]] || die 'managed config path is not a regular file'
+    rm -f -- "${previous}"
+  fi
+}
+
+finalize_target_resources() {
+  if [[ "${TARGET_SERVICE_ENABLED}" == 1 ]]; then
+    service_installed || die 'target service disappeared before settings commit'
+    sudo_locked "${SYSTEMCTL}" enable qwen38-flash-next.service >/dev/null
+  fi
+  verify_resources_for_prefix TARGET "${SETTINGS_START}" 1
+  cleanup_released_owned_config
 }
 
 restore_backup() {
@@ -328,14 +380,18 @@ restore_backup() {
   write_phase rolling-back
   atomic_copy "${BACKUP_MANIFEST}" "${INSTALL_STATE_FILE}"
   if [[ "${target_loaded}" == 1 ]]; then
-    apply_proxy_for_prefix BACKUP TARGET
+    apply_proxy_for_prefix BACKUP TARGET 1
     if [[ "${BACKUP_SERVICE_ENABLED}" == 1 ]]; then
       [[ -f "${PREV_SERVICE_ACTIVE_MARKER}" ]] && restore_start=1 || restore_start=0
     else
       [[ -f "${PREV_CONTAINER_RUNNING_MARKER}" ]] && restore_start=1 || restore_start=0
     fi
-    apply_service_for_prefix BACKUP TARGET "${restore_start}"
-    verify_resources_for_prefix BACKUP "${restore_start}"
+    apply_service_for_prefix BACKUP TARGET "${restore_start}" 0 1
+    if [[ "${restore_start}" == 0 ]]; then
+      if service_installed; then sudo_locked "${SYSTEMCTL}" stop qwen38-flash-next.service >/dev/null 2>&1 || true; fi
+      docker rm -f qwen38-flash-next >/dev/null 2>&1 || true
+    fi
+    verify_resources_for_prefix BACKUP "${restore_start}" 1
   fi
   clear_transaction
   printf 'Settings transaction rolled back to the previous complete manifest.\n'
@@ -378,8 +434,6 @@ apply_transaction() {
   local live_sha
   live_sha="$(sha256_file "${INSTALL_STATE_FILE}")"
   [[ "${live_sha}" == "${BACKUP_SHA}" ]] || die 'live manifest changed after settings transaction prepare'
-  atomic_copy "${TARGET_MANIFEST}" "${INSTALL_STATE_FILE}"
-  write_phase activated
 
   rollback_on_error() {
     local rc="$?"
@@ -397,22 +451,30 @@ apply_transaction() {
   trap 'rollback_on_error' ERR
   trap 'false' INT TERM
 
+  write_phase activation-guarded
+  disable_service_boot_for_activation
+  atomic_copy "${TARGET_MANIFEST}" "${INSTALL_STATE_FILE}"
+  write_phase activated
   apply_proxy_for_prefix TARGET BACKUP
-  apply_service_for_prefix TARGET BACKUP "${SETTINGS_START}"
-  verify_resources_for_prefix TARGET "${SETTINGS_START}"
+  apply_service_for_prefix TARGET BACKUP "${SETTINGS_START}" 1
+  verify_resources_for_prefix TARGET "${SETTINGS_START}" 0
   write_phase resources-applied
   trap - ERR INT TERM
-  printf 'Settings resources applied and verified.\n'
+  printf 'Settings resources applied and verified with boot enable deferred until commit.\n'
 }
 
 commit_transaction() {
   load_phase
   [[ "${SETTINGS_PHASE}" == resources-applied || "${SETTINGS_PHASE}" == committing ]] || die "cannot commit settings transaction from phase: ${SETTINGS_PHASE}"
   verify_artifacts
+  parse_manifest "${BACKUP_MANIFEST}" BACKUP || die 'settings backup manifest failed strict parsing'
   parse_manifest "${TARGET_MANIFEST}" TARGET || die 'settings target manifest failed strict parsing'
   [[ "$(sha256_file "${INSTALL_STATE_FILE}")" == "${TARGET_SHA}" ]] || die 'live manifest no longer matches the settings target'
-  verify_resources_for_prefix TARGET "${SETTINGS_START}"
-  write_phase committing
+  if [[ "${SETTINGS_PHASE}" == resources-applied ]]; then
+    verify_resources_for_prefix TARGET "${SETTINGS_START}" 0
+    write_phase committing
+  fi
+  finalize_target_resources
   clear_transaction
   printf 'Settings transaction committed.\n'
 }
@@ -439,13 +501,14 @@ recover_transaction() {
         die 'cannot recover preparing settings transaction: live manifest matches neither backup nor target'
       fi
       ;;
-    activated|resources-applied|rolling-back)
+    activation-guarded|activated|resources-applied|rolling-back)
       restore_backup
       ;;
     committing)
+      parse_manifest "${BACKUP_MANIFEST}" BACKUP || die 'settings backup manifest failed strict parsing'
       parse_manifest "${TARGET_MANIFEST}" TARGET || die 'settings target manifest failed strict parsing'
       if [[ "$(sha256_file "${INSTALL_STATE_FILE}")" == "${TARGET_SHA}" ]]; then
-        verify_resources_for_prefix TARGET "${SETTINGS_START}"
+        finalize_target_resources
         clear_transaction
         printf 'Interrupted settings commit finalized.\n'
       else
