@@ -54,6 +54,7 @@ class InstallerPlanParityTests(unittest.TestCase):
             if ":" not in raw_line:
                 continue
             key, value = raw_line.strip().split(":", 1)
+            key = key.strip()
             if key in self.PLAN_KEYS:
                 result[key] = value.strip()
         return result
