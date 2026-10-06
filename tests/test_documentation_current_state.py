@@ -34,6 +34,16 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertNotIn("That closes the reproduced failure mode", text)
         self.assertNotIn("24 GiB of pinned KV", text)
 
+    def test_root_readme_historical_performance_interpretation_is_consistent(self) -> None:
+        text = read("README.md")
+        self.assertIn("## Two historical NVIDIA results worth explaining", text)
+        self.assertIn("Earlier Inferact checkpoint: MTP k=2, not k=3", text)
+        self.assertIn("later profiler and PLE-sync ablation below reject", text)
+        self.assertIn("The remaining decode gap is profiled but not fully closed", text)
+        self.assertIn("PLE-sync ablation changed step rate by", text)
+        self.assertNotIn("**Nothing here is profiled.**", text)
+        self.assertNotIn("PLE round trip is the leading suspect", text)
+
     def test_runtime_readme_does_not_call_24gib_the_current_mazinb_default(self) -> None:
         text = read("scripts/runtime/README.md")
         self.assertIn("16 GiB KV cache (`17179869184` bytes)", text)

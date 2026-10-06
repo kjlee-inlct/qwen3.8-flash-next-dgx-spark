@@ -73,7 +73,14 @@ The audit corrected or explicitly scoped the following stale statements and omis
   `profile-switch-transition.sh` lifecycle surface;
 - installable mazinb download examples use the normal registry path without implying that
   `--candidate` is required. The compatibility flag remains documented for tracked
-  non-installable download profiles.
+  non-installable download profiles;
+- root `README.md` now scopes the `MTP k=2` result to the earlier Inferact checkpoint so it
+  cannot be confused with the later official NVIDIA checkpoint whose measured optimum was
+  `k=3`;
+- root `README.md` no longer carries the stale claim that nothing was profiled or that the
+  PLE CPU→GPU round trip remains the leading decode suspect. The same document already
+  records a ~117-step GPU profile and a PLE-sync ablation showing only a 0.6% step-rate
+  effect, so current interpretation points instead to the measured GEMM/kernel gap.
 
 ## Historical preservation boundary
 
@@ -100,7 +107,9 @@ structure claims, including:
 - root README synchronization with `docs/CURRENT-STATUS.md`;
 - strict parsing of `runtime-transition.env`;
 - the profile-switch lifecycle helper in the canonical/stable script maps;
-- normal mazinb download examples without a required `--candidate` flag.
+- normal mazinb download examples without a required `--candidate` flag;
+- historical Inferact-vs-official NVIDIA MTP scope and the profiler/PLE-ablation decode
+  interpretation in the root README.
 
 Future changes that alter these facts should update implementation, canonical current-state
 documentation, and the regression guard together rather than allowing the documents to drift.

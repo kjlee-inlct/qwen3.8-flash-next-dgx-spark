@@ -101,8 +101,10 @@ Almost nothing. Measured during decode:
 **~73 KiB of disk reads per decoded token** — about 18 pages, matching the ~16 n-gram rows
 a token touches. At NVMe latency that is roughly 2 ms against 57 ms/token, i.e. **3%**.
 
-The bottleneck is elsewhere: the per-step CPU→GPU round trip plus 512-expert MoE and QSA
-decode latency. Nothing here is bandwidth-limited the way a dense model is.
+The remaining decode gap was initially suspected to include the per-step CPU→GPU PLE
+round trip alongside MoE/QSA work. The later profiler and PLE-sync ablation below reject
+PLE synchronization as the primary bottleneck: disabling that path changed step rate by
+only 0.6%, while dense BF16 GEMM accounts for most measured GPU time.
 
 ---
 
@@ -348,12 +350,14 @@ matched fresh-container and isolated fresh-compile determinism matrices. See
 Prefill is the axis where this model's sparse attention pays off, and it is the reason to
 be on vLLM rather than a GGUF at all — QSA prefill kernels do not exist in llama.cpp.
 
-## Two results worth explaining
+## Two historical NVIDIA results worth explaining
 
-**MTP: k=2, not k=3.** vLLM logs per-position acceptance. Over 5,928 drafts at k=3 this
-configuration gives **0.682 / 0.445 / 0.299**, decaying by a steady factor of 0.66 per
-position. Solving the two measured points (17.4 unspeculated, 27.5 at k=3) for the draft
-cost puts one MTP forward at **10.5% of a target forward**, which makes the curve computable:
+**Earlier Inferact checkpoint: MTP k=2, not k=3.** This subsection predates the official
+NVIDIA checkpoint discussed above; its measured optimum was k=2. vLLM logs per-position
+acceptance. Over 5,928 drafts at k=3 this configuration gives **0.682 / 0.445 / 0.299**,
+decaying by a steady factor of 0.66 per position. Solving the two measured points (17.4
+unspeculated, 27.5 at k=3) for the draft cost puts one MTP forward at **10.5% of a target
+forward**, which makes the curve computable:
 
 | k | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|
@@ -987,9 +991,11 @@ This is not an optimized configuration. Things that are open:
   isolated fresh-compile lifecycle. Compile/cache state was explicitly controlled with
   separate cache roots rather than assumed irrelevant. The exact tested scope and remaining
   limitations are recorded in `docs/H38-DETERMINISM.md`.
-- **Nothing here is profiled.** The per-step CPU→GPU PLE round trip is the leading suspect
-  for decode being ~30 tok/s against a ~90 tok/s bandwidth ceiling, but that is an
-  inference from the arithmetic, not a measurement.
+- **The remaining decode gap is profiled but not fully closed.** The measured profile puts
+  73% of decode GPU time in dense BF16 GEMM, and the PLE-sync ablation changed step rate by
+  only 0.6%. The unresolved gap therefore points to kernel/weight-format work rather than
+  an unmeasured PLE-sync hypothesis; the historical ~90 tok/s bandwidth ceiling is not
+  claimed as an achievable end-to-end target.
 
 ---
 
