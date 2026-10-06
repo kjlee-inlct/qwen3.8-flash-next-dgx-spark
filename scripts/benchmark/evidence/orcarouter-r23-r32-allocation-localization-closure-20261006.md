@@ -4,6 +4,11 @@ Status: **CLOSED FOR MODEL-COMPONENT OWNERSHIP LOCALIZATION — ALLOCATOR/BACKIN
 
 This closure connects the driver-level ownership evidence from R23 to the exact userspace/source localization completed in R32.
 
+Repository state note: PR #244 was squash-merged into `main` as
+`5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6` on 2026-10-06. The engineering
+closure below is therefore part of the canonical `main` history. The M1 mitigation
+prototype was intentionally excluded from that merge and remains a separate follow-up.
+
 ## Evidence chain
 
 ### R23 — driver endpoint
@@ -178,4 +183,4 @@ R33 is optional, not required for the model-component root-cause closure. A new 
 
 Do not broaden to UVM, generic page allocation, scheduler tracing, function graph, blanket CUDA API tracing, broad Python profiling, or broad memory-tuning experiments.
 
-H11 remains deferred until its current-project meaning and validation target are made unambiguous. PR #244 remains open/unmerged.
+H11 remains deferred until its current-project meaning and validation target are made unambiguous. PR #244 is merged; any H11 or R33 work is a separate follow-up and is not part of this closure.
