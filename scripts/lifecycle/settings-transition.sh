@@ -407,17 +407,41 @@ restore_backup() {
   atomic_copy "${BACKUP_MANIFEST}" "${INSTALL_STATE_FILE}"
   if [[ "${target_loaded}" == 1 ]]; then
     apply_proxy_for_prefix BACKUP TARGET 1
-    if [[ "${BACKUP_SERVICE_ENABLED}" == 1 ]]; then
-      [[ -f "${PREV_SERVICE_ACTIVE_MARKER}" ]] && restore_start=1 || restore_start=0
+
+    # When runtime restart was explicitly deferred and service enablement did
+    # not change, neither apply nor rollback should touch the running runtime.
+    # Restore only boot enablement and verify the exact pre-transaction
+    # service/container activity markers instead of recreating the service.
+    if [[ "${SETTINGS_START}" == 0 && "${BACKUP_SERVICE_ENABLED}" == "${TARGET_SERVICE_ENABLED}" ]]; then
+      apply_service_for_prefix BACKUP TARGET 0 0 1
+      if [[ "${BACKUP_SERVICE_ENABLED}" == 1 ]]; then
+        service_installed || die 'backup managed service disappeared during rollback'
+        sudo_locked "${SYSTEMCTL}" enable qwen38-flash-next.service >/dev/null
+      fi
+      if [[ -f "${PREV_SERVICE_ACTIVE_MARKER}" ]]; then
+        service_active || die 'rollback changed previously active service state'
+      else
+        ! service_active || die 'rollback unexpectedly activated the managed service'
+      fi
+      if [[ -f "${PREV_CONTAINER_RUNNING_MARKER}" ]]; then
+        container_running || die 'rollback stopped the previously running container'
+      else
+        ! container_running || die 'rollback unexpectedly started the runtime container'
+      fi
+      verify_resources_for_prefix BACKUP 0 1
     else
-      [[ -f "${PREV_CONTAINER_RUNNING_MARKER}" ]] && restore_start=1 || restore_start=0
+      if [[ "${BACKUP_SERVICE_ENABLED}" == 1 ]]; then
+        [[ -f "${PREV_SERVICE_ACTIVE_MARKER}" ]] && restore_start=1 || restore_start=0
+      else
+        [[ -f "${PREV_CONTAINER_RUNNING_MARKER}" ]] && restore_start=1 || restore_start=0
+      fi
+      apply_service_for_prefix BACKUP TARGET "${restore_start}" 0 1
+      if [[ "${restore_start}" == 0 ]]; then
+        if service_installed; then sudo_locked "${SYSTEMCTL}" stop qwen38-flash-next.service >/dev/null 2>&1 || true; fi
+        docker rm -f qwen38-flash-next >/dev/null 2>&1 || true
+      fi
+      verify_resources_for_prefix BACKUP "${restore_start}" 1
     fi
-    apply_service_for_prefix BACKUP TARGET "${restore_start}" 0 1
-    if [[ "${restore_start}" == 0 ]]; then
-      if service_installed; then sudo_locked "${SYSTEMCTL}" stop qwen38-flash-next.service >/dev/null 2>&1 || true; fi
-      docker rm -f qwen38-flash-next >/dev/null 2>&1 || true
-    fi
-    verify_resources_for_prefix BACKUP "${restore_start}" 1
   fi
   clear_transaction
   printf 'Settings transaction rolled back to the previous complete manifest.\n'
