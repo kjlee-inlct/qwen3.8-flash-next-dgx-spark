@@ -11,8 +11,6 @@ INSTALL_COMPLETED_PENDING_SETTINGS=0
 INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
 INSTALL_COMPLETED_SETTINGS_APPLY=0
 INSTALL_COMPLETED_CLI_DRY_RUN=0
-INSTALL_COMPLETED_MANAGER_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-INSTALL_COMPLETED_SETTINGS_TRANSITION="${INSTALL_COMPLETED_MANAGER_ROOT}/scripts/lifecycle/settings-transition.sh"
 
 install_completed_bool_default() {
   [[ "$1" == 1 ]] && printf 'yes\n' || printf 'no\n'
@@ -226,11 +224,15 @@ install_completed_apply_staged_settings() {
 }
 
 install_completed_execute_settings_transaction() {
-  local candidate old_state_write rc
+  local candidate old_state_write rc settings_transition
   [[ "${INSTALL_COMPLETED_SETTINGS_APPLY:-0}" == 1 ]] || return 0
   [[ "${DRY_RUN:-0}" == 0 ]] || return 0
   [[ -n "${STATE_FILE:-}" ]] || die 'settings transaction requires the installer manifest path'
-  [[ -x "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" ]] || die "settings transaction helper is unavailable: ${INSTALL_COMPLETED_SETTINGS_TRANSITION}"
+  settings_transition="${INSTALL_COMPLETED_SETTINGS_TRANSITION:-}"
+  if [[ -z "${settings_transition}" && -n "${PROFILE_SWITCH_TRANSITION:-}" ]]; then
+    settings_transition="${PROFILE_SWITCH_TRANSITION%/*}/settings-transition.sh"
+  fi
+  [[ -r "${settings_transition}" ]] || die "settings transaction helper is unavailable: ${settings_transition:-unset}"
   declare -F write_state >/dev/null 2>&1 || die 'settings transaction requires installer manifest writer'
 
   candidate="${STATE_FILE}.settings-input"
@@ -240,16 +242,16 @@ install_completed_execute_settings_transaction() {
   write_state complete
   STATE_WRITE_FILE="${old_state_write}"
 
-  if ! bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" prepare "${candidate}" "${START}"; then
+  if ! bash "${settings_transition}" prepare "${candidate}" "${START}"; then
     rm -f -- "${candidate}"
     return 1
   fi
-  if ! bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" apply; then
+  if ! bash "${settings_transition}" apply; then
     return 1
   fi
-  if ! bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" commit; then
+  if ! bash "${settings_transition}" commit; then
     rc=$?
-    bash "${INSTALL_COMPLETED_SETTINGS_TRANSITION}" recover || true
+    bash "${settings_transition}" recover || true
     return "${rc}"
   fi
 
