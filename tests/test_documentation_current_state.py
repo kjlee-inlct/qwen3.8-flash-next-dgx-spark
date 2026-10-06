@@ -52,6 +52,20 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("not as HOST-STABILITY evidence by itself", text)
         self.assertNotIn("This preserves the observed healthy large-checkpoint shard-loading transient", text)
 
+    def test_historical_execution_documents_are_explicitly_scoped(self) -> None:
+        r28 = read("scripts/benchmark/evidence/orcarouter-r28-static-dgx-next-steps-20261005.md")
+        report = read("scripts/benchmark/evidence/nvidia-gb10-rm-sysmem-report-draft-20261002.md")
+        closure = read("scripts/benchmark/evidence/branch-closure-profile-switch-acceptance-20261006.md")
+        r23_r32 = read("scripts/benchmark/evidence/orcarouter-r23-r32-allocation-localization-closure-20261006.md")
+
+        self.assertIn("Historical / superseded execution instruction", r28)
+        self.assertIn("R28 was subsequently executed", r28)
+        self.assertIn("HISTORICAL R9-ERA INTERNAL DRAFT", report)
+        self.assertIn("R11 localized node0 Normal-zone", report)
+        self.assertIn("SQUASH-MERGED INTO `main`", closure)
+        self.assertIn("5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6", closure)
+        self.assertIn("PR #244 is merged", r23_r32)
+
     def test_registry_and_docs_agree_mazinb_is_installable_experimental(self) -> None:
         registry = read("scripts/model/model-profiles.sh")
         architecture = read("docs/ARCHITECTURE.md")
