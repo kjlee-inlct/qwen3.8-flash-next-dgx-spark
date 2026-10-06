@@ -10,17 +10,24 @@ WIZARD_BOLD=""
 WIZARD_RESET=""
 
 # install.sh has a six-step review boundary shared by CLI and Wizard flows. Load
-# the installer-only plan normalizer only for that caller; uninstall/other UI
+# installer-only UI/plan helpers only for that caller; uninstall/other UI
 # consumers remain independent of installer configuration semantics.
 if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then
   WIZARD_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
   INSTALL_PLAN_HELPER="${WIZARD_LIB_DIR}/install-plan.sh"
+  INSTALL_COMPLETED_MANAGER_HELPER="${WIZARD_LIB_DIR}/install-completed-manager.sh"
   [[ -r "${INSTALL_PLAN_HELPER}" ]] || {
     printf 'ERROR: installer plan helper missing: %s\n' "${INSTALL_PLAN_HELPER}" >&2
     return 1
   }
+  [[ -r "${INSTALL_COMPLETED_MANAGER_HELPER}" ]] || {
+    printf 'ERROR: completed-install manager helper missing: %s\n' "${INSTALL_COMPLETED_MANAGER_HELPER}" >&2
+    return 1
+  }
   # shellcheck source=install-plan.sh
   source "${INSTALL_PLAN_HELPER}"
+  # shellcheck source=install-completed-manager.sh
+  source "${INSTALL_COMPLETED_MANAGER_HELPER}"
 fi
 
 wizard_init() {
@@ -49,6 +56,11 @@ wizard_header() {
 
 wizard_step() {
   local current="$1" total="$2" title="$3"
+  if declare -F install_completed_manager_step_hook >/dev/null 2>&1; then
+    if install_completed_manager_step_hook "${current}" "${total}" "${title}"; then
+      return 0
+    fi
+  fi
   if [[ "${current}" == 6 && "${total}" == 6 ]] && declare -F install_plan_finalize >/dev/null 2>&1; then
     install_plan_finalize
   fi
@@ -57,6 +69,11 @@ wizard_step() {
 }
 
 wizard_info() {
+  if declare -F install_completed_manager_info_hook >/dev/null 2>&1; then
+    if install_completed_manager_info_hook "$*"; then
+      return 0
+    fi
+  fi
   printf '%sℹ  %s%s\n' "${WIZARD_BLUE}" "$*" "${WIZARD_RESET}"
 }
 
@@ -74,6 +91,11 @@ wizard_error() {
 
 wizard_menu_option() {
   local number="$1" title="$2" detail="${3:-}"
+  if declare -F install_completed_manager_menu_option_hook >/dev/null 2>&1; then
+    if install_completed_manager_menu_option_hook "${number}" "${title}" "${detail}"; then
+      return 0
+    fi
+  fi
   printf '  %s) %s\n' "${number}" "${title}"
   [[ -z "${detail}" ]] || printf '     %s\n' "${detail}"
 }
@@ -100,6 +122,13 @@ wizard_read_raw() {
 
 wizard_input() {
   local variable="$1" prompt="$2" default="${3:-}" input_value=""
+  if declare -F install_completed_manager_input_hook >/dev/null 2>&1; then
+    WIZARD_INPUT_HOOK_VALUE=""
+    if install_completed_manager_input_hook "${prompt}" "${default}"; then
+      printf -v "${variable}" '%s' "${WIZARD_INPUT_HOOK_VALUE}"
+      return 0
+    fi
+  fi
   wizard_read_raw input_value "${WIZARD_BLUE}${prompt}${WIZARD_RESET} [${default}]: "
   printf -v "${variable}" '%s' "${input_value:-${default}}"
 }

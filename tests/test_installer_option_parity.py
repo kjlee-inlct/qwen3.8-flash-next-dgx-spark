@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 INSTALLER = ROOT / "install.sh"
+COMPLETED_MANAGER = ROOT / "scripts" / "lib" / "install-completed-manager.sh"
 
 
 class InstallerOptionParityTests(unittest.TestCase):
@@ -53,12 +54,10 @@ class InstallerOptionParityTests(unittest.TestCase):
     }
 
     # Known product debt is kept explicit so CI prevents the gap from growing.
-    # These are user-facing execution/settings choices that still need a Wizard
-    # control in a later phase of the profile-manager work.
+    # These execution choices still need a normal Wizard control.
     KNOWN_WIZARD_PARITY_DEBT = {
         "--dry-run",
         "--no-start",
-        "--refresh-profile-defaults",
     }
 
     WIZARD_MARKERS = {
@@ -81,10 +80,12 @@ class InstallerOptionParityTests(unittest.TestCase):
         "--api-lan-port": "wizard_input API_LAN_PORT",
         "--service": "Install a systemd service that starts at boot?",
         "--no-service": "Install a systemd service that starts at boot?",
+        "--refresh-profile-defaults": "REFRESH_PROFILE_DEFAULTS=1",
     }
 
     def setUp(self) -> None:
         self.installer = INSTALLER.read_text(encoding="utf-8")
+        self.wizard_surface = self.installer + "\n" + COMPLETED_MANAGER.read_text(encoding="utf-8")
 
     def parser_flags(self) -> set[str]:
         parser = self.installer.split('while [[ $# -gt 0 ]]; do', 1)[1].split("\ndone", 1)[0]
@@ -107,7 +108,7 @@ class InstallerOptionParityTests(unittest.TestCase):
 
         for flag, marker in sorted(self.WIZARD_MARKERS.items()):
             with self.subTest(flag=flag):
-                self.assertIn(marker, self.installer)
+                self.assertIn(marker, self.wizard_surface)
 
 
 if __name__ == "__main__":
