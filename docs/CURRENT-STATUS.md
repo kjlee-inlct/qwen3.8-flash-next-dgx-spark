@@ -5,8 +5,9 @@ Dated benchmark/evidence documents preserve what was known at the time of each r
 use this file plus `scripts/benchmark/evidence/README.md` when deciding what is true
 **now**.
 
-Last synchronized: 2026-10-06 against `main` after squash merge of PR #248 as
-`af3119fdcdc75be9ea5a8403a127d825cf238bc6`.
+Last synchronized: 2026-10-06. The version on `main` is authoritative; do not encode a
+specific "last documentation PR" or commit SHA here because the synchronization change
+itself would make that marker stale as soon as it is merged.
 
 Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 `docs/ARCHITECTURE.md`, `scripts/model/README.md`, and
