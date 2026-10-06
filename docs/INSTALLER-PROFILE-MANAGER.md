@@ -147,19 +147,19 @@ The first implemented profile-manager slice changes the old “resume only” be
 
 The planned `lychee888` profile is not selectable.
 
-## Priority classification after first slice
+## Priority classification after normalized-plan slice
 
 ### P0 — product contract / operator correctness
 
-- **Implemented in this slice:** completed-install Wizard can select/switch profile by
-  entering the existing CLI transactional switch core.
-- **Implemented in this slice:** Wizard config-override choice now has a direct
-  `--config-override PATH` CLI representation.
+- **Implemented:** completed-install Wizard can select/switch profile by entering the
+  existing CLI transactional switch core.
+- **Implemented:** Wizard config-override choice has a direct `--config-override PATH` CLI
+  representation.
+- **Implemented:** CLI and Wizard converge on one normalized final-plan snapshot before
+  review/execution, with semantic parity tests for fresh install and completed profile switch.
 - Add a completed-install “settings only” action that edits runtime/monitor/API/service
   values without implying a profile switch.
 - Add Wizard controls for `dry-run`, start/restart policy, and profile-default refresh.
-- Make Wizard and CLI produce one normalized plan object/representation and semantic parity
-  tests for fresh/resume/switch.
 
 ### P1 — architecture / drift prevention
 
@@ -223,12 +223,13 @@ The profile-manager work should keep or add coverage for:
 
 ## DGX acceptance — 2026-10-06
 
-Guarded acceptance was performed on the single DGX Spark before merging this slice.
-The installed manifest was initially at `PHASE=service_ready`, so the installer correctly
-remained on the interrupted-install resume path and did not expose profile selection.
-Before changing that phase, the existing runtime was proven against the strict state parsers,
-managed systemd ownership, immutable `current` release, runtime-commit attestation, live
-container ID/image, `/model` mount, served-model command line, and `/v1/models` identity.
+Guarded acceptance was performed on the single DGX Spark before merging the completed-install
+selector slice. The installed manifest was initially at `PHASE=service_ready`, so the
+installer correctly remained on the interrupted-install resume path and did not expose
+profile selection. Before changing that phase, the existing runtime was proven against the
+strict state parsers, managed systemd ownership, immutable `current` release, runtime-commit
+attestation, live container ID/image, `/model` mount, served-model command line, and
+`/v1/models` identity.
 
 Only after those checks passed was `PHASE=service_ready` atomically recovered to
 `PHASE=complete`. That recovery was runtime-neutral: the service remained active, the
@@ -248,19 +249,41 @@ The completed-install Wizard dry-run then passed with these observations:
 This validates the non-mutating completed-install selector and shared profile-switch planning
 boundary. It is not a live NVIDIA replacement or a new host-stability qualification result.
 
+## Common normalized plan — 2026-10-06
+
+The next slice introduces `scripts/lib/install-plan.sh` as an installer-only normalized plan
+boundary. It is loaded by the shared Wizard helper only when the caller is `install.sh`, and
+runs immediately before the normal `[6/6]` review step. This preserves the existing lifecycle
+entry points while giving CLI and Wizard one convergence point after all user input has been
+collected.
+
+The boundary:
+
+- reuses the existing monitor/API validators rather than defining new validation rules;
+- canonicalizes model root, model directory, config-override path, and generated Hybrid paths;
+- captures profile/model/image/config/monitor/API/service/switch/start/dry-run values into a
+  versioned `PLAN_*` snapshot (`PLAN_SCHEMA_VERSION=1`);
+- reapplies that snapshot to the effective execution variables before the existing plan
+  renderer and lifecycle code continue;
+- performs no host mutation and creates no new persisted state format.
+
+Regression coverage now compares the semantic final plan produced by equivalent fresh CLI and
+Wizard inputs, and by equivalent completed-install CLI/Wizard profile-switch inputs. A direct
+helper test also verifies path canonicalization and snapshot reapplication. This slice does
+not add the completed-install settings editor, option metadata registry, new lifecycle state,
+or any runtime/profile qualification change.
+
 ## Phase sequence
 
-1. **Inventory/parity foundation** — freeze actual flags and known debt in tests and this
-   document.
-2. **Completed-install selector** — expose profile selection while delegating to existing
-   transactional switch logic.
-3. **Common normalized plan** — converge Wizard and CLI configuration construction.
+1. **Inventory/parity foundation** — implemented.
+2. **Completed-install selector** — implemented and DGX dry-run accepted.
+3. **Common normalized plan** — implemented in this slice; CI/acceptance gates still apply.
 4. **Completed-install settings management** — runtime/API/service/default-refresh/start and
    dry-run actions with the same plan core.
 5. **Registry/profile-manager metadata** — derive profile UI from registry and combine it
    with `manage-models.sh` inventory.
-6. **Acceptance/docs** — all CI green, guarded DGX dry-run first, then live managed switch
-   validation, recovery/restoration verification, and documentation synchronization.
+6. **Acceptance/docs** — all CI green, guarded DGX dry-run first for material UI/lifecycle
+   changes, then live managed switch validation only when a phase explicitly requires it.
 
 Do not reopen R23–R32 allocator localization, merge the separate M1 mitigation line, or claim
 H38 as the current transactional managed OrcaRouter profile as part of this work.
