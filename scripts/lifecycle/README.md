@@ -1,17 +1,18 @@
 # Lifecycle helpers
 
-This directory contains canonical immutable-release qualification, bootstrap, and update-transaction logic.
+This directory contains canonical immutable-release qualification, bootstrap, update-transaction, and managed profile-switch transaction logic.
 
 ## Responsibilities
 
 - Bootstrap and qualify immutable releases.
 - Manage update-transition state and cutover transaction boundaries.
+- Manage persisted managed-profile replacement/recovery boundaries.
 - Enforce fail-closed qualification and lifecycle serialization rules.
 
 ## Dependencies
 
 - May use shared parsers, release-manifest validation, and operation locking from `../lib/`.
-- May call stable operator entry points needed to apply a qualified release.
+- May call stable operator entry points needed to apply a qualified release or managed profile.
 - May coordinate runtime replacement, but runtime container validation/rollback mechanics remain owned by `../runtime/`.
 
 ## Non-responsibilities
@@ -25,5 +26,9 @@ This directory contains canonical immutable-release qualification, bootstrap, an
 - `bootstrap-release.sh`
 - `qualify-release.sh`
 - `update-transition.sh`
+- `profile-switch-transition.sh`
 
-Top-level compatibility paths such as `scripts/qualify-release.sh` should remain thin delegators.
+Top-level compatibility paths such as `scripts/qualify-release.sh`,
+`scripts/update-transition.sh`, and `scripts/profile-switch-transition.sh` should remain
+thin delegators. Operator-facing transaction recovery/status commands use those stable
+paths; new internal code should target the canonical implementation here.
