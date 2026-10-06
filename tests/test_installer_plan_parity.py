@@ -242,7 +242,7 @@ printf '%s\n' \
             wizard = self.run_installer(
                 home,
                 ["--lang", "en", "--no-start", "--dry-run"],
-                answers="2\ny\n",
+                answers="1\n2\ny\n",
             )
 
             self.assertEqual(cli.returncode, 0, cli.stderr)
