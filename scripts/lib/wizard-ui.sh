@@ -9,6 +9,20 @@ WIZARD_RED=""
 WIZARD_BOLD=""
 WIZARD_RESET=""
 
+# install.sh has a six-step review boundary shared by CLI and Wizard flows. Load
+# the installer-only plan normalizer only for that caller; uninstall/other UI
+# consumers remain independent of installer configuration semantics.
+if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then
+  WIZARD_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+  INSTALL_PLAN_HELPER="${WIZARD_LIB_DIR}/install-plan.sh"
+  [[ -r "${INSTALL_PLAN_HELPER}" ]] || {
+    printf 'ERROR: installer plan helper missing: %s\n' "${INSTALL_PLAN_HELPER}" >&2
+    return 1
+  }
+  # shellcheck source=scripts/lib/install-plan.sh
+  source "${INSTALL_PLAN_HELPER}"
+fi
+
 wizard_init() {
   if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
     WIZARD_BLUE=$'\033[0;34m'
@@ -35,7 +49,11 @@ wizard_header() {
 
 wizard_step() {
   local current="$1" total="$2" title="$3"
-  printf '\n%s%s[%s/%s] %s%s\n\n'     "${WIZARD_BLUE}" "${WIZARD_BOLD}" "${current}" "${total}" "${title}" "${WIZARD_RESET}"
+  if [[ "${current}" == 6 && "${total}" == 6 ]] && declare -F install_plan_finalize >/dev/null 2>&1; then
+    install_plan_finalize
+  fi
+  printf '\n%s%s[%s/%s] %s%s\n\n' \
+    "${WIZARD_BLUE}" "${WIZARD_BOLD}" "${current}" "${total}" "${title}" "${WIZARD_RESET}"
 }
 
 wizard_info() {
