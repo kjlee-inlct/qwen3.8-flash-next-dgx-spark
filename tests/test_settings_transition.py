@@ -103,7 +103,10 @@ class SettingsTransitionTests(unittest.TestCase):
             fake_bin / "docker",
             "#!/usr/bin/env bash\n"
             "case \"${1:-}\" in\n"
-            "  inspect) printf 'false\\n'; exit 0 ;;\n"
+            "  inspect)\n"
+            "    if [[ \"${TEST_FAKE_CONTAINER_RUNNING:-0}\" == 1 ]]; then printf 'true\\n'; else printf 'false\\n'; fi\n"
+            "    exit 0\n"
+            "    ;;\n"
             "  rm) exit 0 ;;\n"
             "  *) exit 0 ;;\n"
             "esac\n",
@@ -114,7 +117,7 @@ class SettingsTransitionTests(unittest.TestCase):
             "set -e\n"
             'root="${TEST_FAKE_RESOURCES:?}"\n'
             "case \"${1:-}\" in\n"
-            "  is-active) exit 1 ;;\n"
+            "  is-active) [[ \"${TEST_FAKE_SERVICE_ACTIVE:-0}\" == 1 ]] ;;\n"
             "  enable) : >\"${root}/service-enabled\" ;;\n"
             "  disable) rm -f -- \"${root}/service-enabled\" ;;\n"
             "  stop|reset-failed) ;;\n"
@@ -311,6 +314,56 @@ class SettingsTransitionTests(unittest.TestCase):
             self.assertTrue((resources / "service-enabled").exists())
             self.assertFalse((resources / "service-created").exists())
             self.assertFalse((resources / "proxy-created").exists())
+
+    def test_deferred_rollback_preserves_active_runtime_without_recreating_units(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state/qwen38-spark"
+            state.mkdir(parents=True)
+            manifest = state / "install.env"
+            candidate = home / "candidate.env"
+            manifest.write_text(
+                self.manifest_text(home, api_mode="docker", service_enabled=1),
+                encoding="utf-8",
+            )
+            before = manifest.read_bytes()
+            candidate.write_text(
+                self.manifest_text(
+                    home,
+                    heartbeat=30,
+                    api_mode="docker",
+                    service_enabled=1,
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "state"),
+                "XDG_DATA_HOME": str(home / "data"),
+            }
+            env, resources = self.setup_fake_resources(home, env)
+            env["TEST_FAKE_SERVICE_ACTIVE"] = "1"
+            env["TEST_FAKE_CONTAINER_RUNNING"] = "1"
+            (resources / "proxy-port").write_text("8000\n", encoding="utf-8")
+            (resources / "service-installed").touch()
+            (resources / "service-enabled").touch()
+
+            prepared = self.run_transition(env, "prepare", str(candidate), "0")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            applied = self.run_transition(env, "apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertIn("MONITOR_HEARTBEAT=30", manifest.read_text(encoding="utf-8"))
+            self.assertFalse((resources / "service-created").exists())
+            self.assertFalse((resources / "proxy-created").exists())
+
+            rolled_back = self.run_transition(env, "rollback")
+            self.assertEqual(rolled_back.returncode, 0, rolled_back.stderr)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertTrue((resources / "service-enabled").exists())
+            self.assertFalse((resources / "service-created").exists())
+            self.assertFalse((resources / "proxy-created").exists())
+            self.assertFalse((state / "settings-transition.phase").exists())
 
     def test_destructive_resource_change_rolls_back_symmetrically(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
