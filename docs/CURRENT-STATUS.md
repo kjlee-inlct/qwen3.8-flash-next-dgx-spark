@@ -5,8 +5,15 @@ Dated benchmark/evidence documents preserve what was known at the time of each r
 use this file plus `scripts/benchmark/evidence/README.md` when deciding what is true
 **now**.
 
-Last synchronized: 2026-10-06, after squash merge of PR #244 into `main` as
-`5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6`.
+Last synchronized: 2026-10-06. The version on `main` is authoritative; do not encode a
+specific "last documentation PR" or commit SHA here because the synchronization change
+itself would make that marker stale as soon as it is merged.
+
+Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
+`docs/ARCHITECTURE.md`, `scripts/model/README.md`, and
+`scripts/runtime/README.md`) should agree with this status. Dated evidence remains
+historical even when it contains then-current words such as `pending`, `next`, or
+`current`.
 
 ## Managed model profiles
 
