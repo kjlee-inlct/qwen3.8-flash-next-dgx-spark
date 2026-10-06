@@ -22,8 +22,11 @@ class SettingsTransitionTests(unittest.TestCase):
         profile: str = "orcarouter",
         config_override: str = "",
         config_owned: int = 0,
+        api_mode: str = "local",
+        service_enabled: int = 0,
     ) -> str:
         model_dir = home / "models" / "qwen3.8-flash-next-orcarouter"
+        proxy_enabled = 0 if api_mode == "local" else 1
         return "\n".join(
             [
                 "SCHEMA_VERSION=4",
@@ -50,15 +53,15 @@ class SettingsTransitionTests(unittest.TestCase):
                 "MONITOR_MIN_SWAP_FREE_GIB=8",
                 "MONITOR_CONSECUTIVE=5",
                 f"MONITOR_HEARTBEAT={heartbeat}",
-                "API_ACCESS_MODE=local",
+                f"API_ACCESS_MODE={api_mode}",
                 "API_DOCKER_PORT=8000",
                 "API_LAN_ADDRESS=",
                 "API_LAN_PORT=8001",
-                "PROXY_ENABLED=0",
-                "PROXY_OWNED=0",
+                f"PROXY_ENABLED={proxy_enabled}",
+                f"PROXY_OWNED={proxy_enabled}",
                 "PROXY_PORT=8000",
-                "SERVICE_ENABLED=0",
-                "SERVICE_OWNED=0",
+                f"SERVICE_ENABLED={service_enabled}",
+                f"SERVICE_OWNED={service_enabled}",
                 "SERVICE_UNIT=qwen38-flash-next.service",
                 "UI_LANG=en",
                 "",
@@ -79,6 +82,109 @@ class SettingsTransitionTests(unittest.TestCase):
             "XDG_DATA_HOME": str(home / "data"),
         }
         return manifest, candidate, env
+
+    def write_executable(self, path: Path, text: str) -> None:
+        path.write_text(text, encoding="utf-8")
+        path.chmod(0o755)
+
+    def setup_fake_resources(self, home: Path, env: dict[str, str]) -> tuple[dict[str, str], Path]:
+        fake_bin = home / "fake-bin"
+        resources = home / "fake-resources"
+        release = home / "release"
+        current = home / "data/qwen38-spark/current"
+        fake_bin.mkdir()
+        resources.mkdir()
+        release.mkdir()
+        current.parent.mkdir(parents=True, exist_ok=True)
+        current.symlink_to(release, target_is_directory=True)
+
+        self.write_executable(fake_bin / "sudo", "#!/usr/bin/env bash\nexec \"$@\"\n")
+        self.write_executable(
+            fake_bin / "docker",
+            "#!/usr/bin/env bash\n"
+            "case \"${1:-}\" in\n"
+            "  inspect) printf 'false\\n'; exit 0 ;;\n"
+            "  rm) exit 0 ;;\n"
+            "  *) exit 0 ;;\n"
+            "esac\n",
+        )
+        self.write_executable(
+            fake_bin / "systemctl",
+            "#!/usr/bin/env bash\n"
+            "set -e\n"
+            'root="${TEST_FAKE_RESOURCES:?}"\n'
+            "case \"${1:-}\" in\n"
+            "  is-active) exit 1 ;;\n"
+            "  enable) : >\"${root}/service-enabled\" ;;\n"
+            "  disable) rm -f -- \"${root}/service-enabled\" ;;\n"
+            "  stop|reset-failed) ;;\n"
+            "  *) ;;\n"
+            "esac\n",
+        )
+        proxy = fake_bin / "manage-proxy"
+        self.write_executable(
+            proxy,
+            "#!/usr/bin/env bash\n"
+            "set -e\n"
+            'root="${TEST_FAKE_RESOURCES:?}"\n'
+            "case \"${1:-}\" in\n"
+            "  status)\n"
+            "    [[ -f \"${root}/proxy-port\" ]] || exit 1\n"
+            "    port=\"$(cat \"${root}/proxy-port\")\"\n"
+            "    printf '  listener  : 172.17.0.1:%s\\n' \"${port}\"\n"
+            "    ;;\n"
+            "  create)\n"
+            "    shift; port=8000\n"
+            "    while [[ $# -gt 0 ]]; do\n"
+            "      if [[ \"$1\" == --docker-port ]]; then port=\"$2\"; shift; fi\n"
+            "      shift\n"
+            "    done\n"
+            "    printf '%s\\n' \"${port}\" >\"${root}/proxy-port\"\n"
+            "    ;;\n"
+            "  remove) rm -f -- \"${root}/proxy-port\" ;;\n"
+            "  *) exit 2 ;;\n"
+            "esac\n",
+        )
+        service = fake_bin / "manage-service"
+        self.write_executable(
+            service,
+            "#!/usr/bin/env bash\n"
+            "set -e\n"
+            'root="${TEST_FAKE_RESOURCES:?}"\n'
+            "case \"${1:-}\" in\n"
+            "  status)\n"
+            "    if [[ -f \"${root}/service-installed\" ]]; then installed=yes; else installed=no; fi\n"
+            "    if [[ -f \"${root}/service-enabled\" ]]; then enabled=yes; else enabled=no; fi\n"
+            "    printf 'Qwen runtime service status\\n  installed : %s\\n  enabled   : %s\\n  active    : no\\n' \"${installed}\" \"${enabled}\"\n"
+            "    [[ \"${installed}\" == yes ]]\n"
+            "    ;;\n"
+            "  create)\n"
+            "    : >\"${root}/service-installed\"\n"
+            "    enable=1\n"
+            "    for arg in \"$@\"; do [[ \"${arg}\" != --no-enable ]] || enable=0; done\n"
+            "    if [[ \"${enable}\" == 1 ]]; then : >\"${root}/service-enabled\"; else rm -f -- \"${root}/service-enabled\"; fi\n"
+            "    ;;\n"
+            "  remove) rm -f -- \"${root}/service-installed\" \"${root}/service-enabled\" ;;\n"
+            "  *) exit 2 ;;\n"
+            "esac\n",
+        )
+        runtime_transition = fake_bin / "runtime-transition"
+        runtime_transition.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        wait_ready = fake_bin / "wait-ready"
+        self.write_executable(wait_ready, "#!/usr/bin/env bash\nexit 0\n")
+
+        fake_env = {
+            **env,
+            "PATH": f"{fake_bin}:{env['PATH']}",
+            "TEST_FAKE_RESOURCES": str(resources),
+            "QWEN38_MANAGE_PROXY_HELPER": str(proxy),
+            "QWEN38_MANAGE_SERVICE_HELPER": str(service),
+            "QWEN38_RUNTIME_TRANSITION_HELPER": str(runtime_transition),
+            "QWEN38_WAIT_READY_HELPER": str(wait_ready),
+            "QWEN38_SYSTEMCTL": str(fake_bin / "systemctl"),
+            "QWEN38_CURRENT_RELEASE_LINK": str(current),
+        }
+        return fake_env, resources
 
     def run_transition(
         self, env: dict[str, str], *args: str
@@ -116,6 +222,81 @@ class SettingsTransitionTests(unittest.TestCase):
             self.assertIn("MONITOR_HEARTBEAT=30", manifest.read_text(encoding="utf-8"))
             self.assertFalse(Path(str(manifest) + ".settings-backup").exists())
             self.assertFalse(Path(str(manifest) + ".settings-candidate").exists())
+
+    def test_resource_create_defers_service_enable_until_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest, candidate, env = self.setup_state(home)
+            candidate.write_text(
+                self.manifest_text(
+                    home,
+                    heartbeat=30,
+                    api_mode="docker",
+                    service_enabled=1,
+                ),
+                encoding="utf-8",
+            )
+            env, resources = self.setup_fake_resources(home, env)
+
+            prepared = self.run_transition(env, "prepare", str(candidate), "0")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            applied = self.run_transition(env, "apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertTrue((resources / "proxy-port").exists())
+            self.assertTrue((resources / "service-installed").exists())
+            self.assertFalse((resources / "service-enabled").exists())
+            self.assertEqual(
+                (home / "state/qwen38-spark/settings-transition.phase").read_text(encoding="utf-8"),
+                "resources-applied\n",
+            )
+
+            committed = self.run_transition(env, "commit")
+            self.assertEqual(committed.returncode, 0, committed.stderr)
+            self.assertTrue((resources / "proxy-port").exists())
+            self.assertTrue((resources / "service-installed").exists())
+            self.assertTrue((resources / "service-enabled").exists())
+            self.assertIn("API_ACCESS_MODE=docker", manifest.read_text(encoding="utf-8"))
+            self.assertIn("SERVICE_ENABLED=1", manifest.read_text(encoding="utf-8"))
+            self.assertFalse((home / "state/qwen38-spark/settings-transition.phase").exists())
+
+    def test_destructive_resource_change_rolls_back_symmetrically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / "state/qwen38-spark"
+            state.mkdir(parents=True)
+            manifest = state / "install.env"
+            candidate = home / "candidate.env"
+            manifest.write_text(
+                self.manifest_text(home, api_mode="docker", service_enabled=1),
+                encoding="utf-8",
+            )
+            before = manifest.read_bytes()
+            candidate.write_text(self.manifest_text(home, heartbeat=30), encoding="utf-8")
+            env = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "state"),
+                "XDG_DATA_HOME": str(home / "data"),
+            }
+            env, resources = self.setup_fake_resources(home, env)
+            (resources / "proxy-port").write_text("8000\n", encoding="utf-8")
+            (resources / "service-installed").touch()
+            (resources / "service-enabled").touch()
+
+            prepared = self.run_transition(env, "prepare", str(candidate), "0")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            applied = self.run_transition(env, "apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertFalse((resources / "proxy-port").exists())
+            self.assertFalse((resources / "service-installed").exists())
+
+            rolled_back = self.run_transition(env, "rollback")
+            self.assertEqual(rolled_back.returncode, 0, rolled_back.stderr)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertTrue((resources / "proxy-port").exists())
+            self.assertTrue((resources / "service-installed").exists())
+            self.assertTrue((resources / "service-enabled").exists())
+            self.assertFalse((state / "settings-transition.phase").exists())
 
     def test_rollback_restores_previous_complete_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
