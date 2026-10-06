@@ -11,7 +11,7 @@ Files directly under `scripts/` fall into one of three intentionally different r
 | Role | Purpose | Examples | Relocation policy |
 |---|---|---|---|
 | Upstream-derived | Preserve provenance and compatibility with the upstream repository layout. | `serve.sh`, `bench-prefill.py`, `download-weights.sh`, `patch-*.py`, `Dockerfile.*` | Keep the upstream path. |
-| Stable operator entry point | Human- or service-facing command whose path is part of the operational interface. | `doctor.sh`, `manage-*.sh`, `release-manager.sh`, `update-release.sh`, `runtime-transition.sh` | Keep the public path stable; move implementation only when a thin entry point can preserve compatibility. |
+| Stable operator entry point | Human- or service-facing command whose path is part of the operational interface. | `doctor.sh`, `manage-*.sh`, `release-manager.sh`, `update-release.sh`, `runtime-transition.sh`, `profile-switch-transition.sh` | Keep the public path stable; move implementation only when a thin entry point can preserve compatibility. |
 | Compatibility shim | Legacy helper path that forwards to a canonical implementation in a role directory. | `qualify-release.sh`, `collect-diagnostics.sh`, `validate-runtime.py`, `state_file.py` | Keep thin; new internal code must target the canonical path. |
 
 Canonical repository-specific implementation belongs in `scripts/<role>/`, currently:
@@ -64,6 +64,7 @@ entry points and remain directly available:
 - `update-release.sh`
 - `runtime-transition.sh`
 - `update-transition.sh`
+- `profile-switch-transition.sh`
 - `preflight-runtime.sh`
 - `service-runner.sh`
 
@@ -75,8 +76,13 @@ implementations live under role-specific directories:
 
 - `bootstrap-release.sh` -> `lifecycle/bootstrap-release.sh`
 - `qualify-release.sh` -> `lifecycle/qualify-release.sh`
+- `update-transition.sh` -> `lifecycle/update-transition.sh`
+- `profile-switch-transition.sh` -> `lifecycle/profile-switch-transition.sh`
 - `collect-diagnostics.sh` -> `diagnostics/collect-diagnostics.sh`
 - `monitor-runtime.sh` -> `runtime/monitor-runtime.sh`
+- `runtime-transition.sh` -> `runtime/runtime-transition.sh`
+- `preflight-runtime.sh` -> `runtime/preflight-runtime.sh`
+- `service-runner.sh` -> `runtime/service-runner.sh`
 - `validate-runtime.py` -> `runtime/validate_runtime.py`
 - `model-profiles.sh` -> `model/model-profiles.sh`
 - `inspect-model.py` -> `model/inspect_model.py`
@@ -92,10 +98,10 @@ canonical path rather than adding new dependencies on a shim.
 
 Repository-specific implementations are organized as follows:
 
-- `lib/`: reusable Python helpers shared by lifecycle/runtime scripts.
+- `lib/`: reusable Python helpers shared across lifecycle/runtime scripts.
 - `diagnostics/`: read-only diagnostics and support-bundle implementation.
 - `runtime/`: runtime transition, preflight, service runner, monitor, and runtime validation.
-- `lifecycle/`: immutable-release bootstrap, qualification, and update transaction logic.
+- `lifecycle/`: immutable-release bootstrap, qualification, update transaction, and profile-switch transaction logic.
 - `model/`: model profile, checkpoint inspection, and config preparation helpers.
 - `benchmark/`: canonical read-only benchmark runner and benchmark helpers.
 
@@ -112,6 +118,7 @@ Canonical implementations include:
 - `runtime/wait-ready.sh`
 - `runtime/validate_runtime.py`
 - `lifecycle/update-transition.sh`
+- `lifecycle/profile-switch-transition.sh`
 - `lifecycle/bootstrap-release.sh`
 - `lifecycle/qualify-release.sh`
 - `model/model-profiles.sh`
@@ -124,10 +131,16 @@ Canonical implementations include:
 ## Model download transport
 
 `scripts/download-weights.sh` keeps revision pinning, disk-reserve checks, the
-project model manifest, candidate-profile guards, and SHA-256 verification in the
-host script. For large checkpoints, transfer is delegated to
+project model manifest, profile guards, and SHA-256 verification in the host script.
+For large checkpoints, transfer is delegated to
 `huggingface_hub.snapshot_download()` inside an existing local Docker image when
 available.
+
+Installable profiles such as `mazinb` no longer require `--candidate`; the normal
+registry path accepts them directly. `--candidate` is retained as an explicit escape
+hatch for a tracked download profile that is not yet installable through the managed
+installer. It bypasses only the installability guard; it does not make that profile
+qualified or selectable by `install.sh`.
 
 The host does not need the Hugging Face Python package installed. The default
 container image is `vllm-orcarouter-v029:v1`; override it with
@@ -149,11 +162,11 @@ host Python packaging a prerequisite.
 Examples:
 
 ```bash
-MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate --check
-MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh --check
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh
 
 HF_DOWNLOAD_MAX_WORKERS=12 \
-MODEL_PROFILE=mazinb ./scripts/download-weights.sh --candidate
+MODEL_PROFILE=mazinb ./scripts/download-weights.sh
 ```
 
 ## Storage management
