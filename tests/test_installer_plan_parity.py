@@ -156,6 +156,7 @@ class InstallerPlanParityTests(unittest.TestCase):
                 [
                     "--lang",
                     "en",
+                    "--yes",
                     "--model",
                     "nvidia",
                     "--no-start",
