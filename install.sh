@@ -524,7 +524,7 @@ if [[ -r "${STATE_FILE}" ]]; then
   [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
   manifest_profile="$(read_manifest_profile)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
   manifest_phase="$(read_manifest_phase)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
-  if [[ "${manifest_phase}" == complete && "${YES}" != 1 && -z "${MODEL_CLI}" ]]; then
+  if [[ "${manifest_phase}" == complete && "${YES}" != 1 && "${MIGRATE_MANIFEST}" != 1 && -z "${MODEL_CLI}" ]]; then
     parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
     [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
     [[ -n "${UI_LANG}" ]] || UI_LANG=ko
