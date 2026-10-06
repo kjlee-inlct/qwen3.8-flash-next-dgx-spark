@@ -45,6 +45,13 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertNotIn("PR #244 remains intentionally open", text)
         self.assertNotIn("must not be merged before mitigation", text)
 
+    def test_operations_describes_monitor_as_heuristic_not_host_classifier(self) -> None:
+        text = read("OPERATIONS.md")
+        self.assertIn("implemented safety heuristic", text)
+        self.assertIn("false-positive protected stop", text)
+        self.assertIn("not as HOST-STABILITY evidence by itself", text)
+        self.assertNotIn("This preserves the observed healthy large-checkpoint shard-loading transient", text)
+
     def test_registry_and_docs_agree_mazinb_is_installable_experimental(self) -> None:
         registry = read("scripts/model/model-profiles.sh")
         architecture = read("docs/ARCHITECTURE.md")
