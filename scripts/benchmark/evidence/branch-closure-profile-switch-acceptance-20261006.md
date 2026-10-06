@@ -1,6 +1,11 @@
 # Branch closure — `docs/live-profile-switch-acceptance-20260930` — 2026-10-06
 
-Status: **CLOSED — READY FOR FINAL CI / SQUASH MERGE — NO NEW PRODUCT FEATURE WORK**
+Status: **CLOSED — SQUASH-MERGED INTO `main` AS `5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6`**
+
+> Historical note: this document was written as the final pre-merge gate for PR #244.
+> The gate completed successfully and PR #244 was squash-merged on 2026-10-06.
+> The requirements below are retained as the historical merge boundary, not as
+> currently pending work.
 
 ## Purpose
 
@@ -44,7 +49,7 @@ RM requested bytes remain allocation activity volume, not exact resident ownersh
 
 ## Follow-up mitigation work
 
-The first deferred/meta-w13 mitigation prototype (M1) is intentionally **not part of this merge closure**.
+The first deferred/meta-w13 mitigation prototype (M1) was intentionally **not part of this merge closure**.
 
 It is preserved on the dedicated follow-up branch:
 
@@ -52,7 +57,7 @@ It is preserved on the dedicated follow-up branch:
 
 M1 remains static-only / not live-qualified. No production mitigation claim follows from its existence.
 
-Future mitigation qualification must happen independently of this PR.
+Future mitigation qualification must happen independently of the merged PR #244 closure.
 
 ## Follow-up installer/product work
 
@@ -84,13 +89,16 @@ The registry declares four installable profiles:
 
 This is a registry statement, not a claim of equal production qualification.
 
-## Merge boundary
+## Historical merge boundary
 
-No additional allocator experiment, M1 experiment, or installer/product feature is required before merging this branch.
+No additional allocator experiment, M1 experiment, or installer/product feature was required before merging this branch.
 
-Required final gate:
+The final gate was:
 
-1. final branch CI is green;
-2. PR #244 remains mergeable;
+1. final branch CI green;
+2. PR #244 mergeable;
 3. squash merge into `main`;
-4. start installer/profile-manager and M1 qualification from separate follow-up branches.
+4. installer/profile-manager and M1 qualification continue from separate follow-up branches.
+
+Result: **completed**. PR #244 was squash-merged into `main` as
+`5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6` on 2026-10-06.
