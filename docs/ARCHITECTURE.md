@@ -35,6 +35,16 @@ selectability is not itself a qualification claim. Experimental profiles can the
 installable while some or all DGX managed-lifecycle gates remain pending. Promotion to
 stable still requires the full gate above.
 
+The project additionally keeps **FUNCTIONAL** and **HOST-STABILITY** classifications
+separate. Any confirmed NVIDIA RM `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` in a
+valid measured run is HOST-STABILITY FAIL even if fallback recovers and the runtime
+reaches READY. Managed defaults such as the 16 GiB KV resilience setting do not override
+that strict evidence rule.
+
+Current host-stability and allocator closure is indexed in
+`scripts/benchmark/evidence/README.md`. Historical experiment documents preserve what
+was known at the time and must not be read as the current project-state summary.
+
 ## Model profiles
 
 ### OrcaRouter — stable/default
@@ -44,6 +54,10 @@ All performance work is subordinate to stability and correctness on this profile
 Experimental image/kernel work must remain opt-in until it passes the qualification
 gates above.
 
+The managed OrcaRouter profile currently uses the 16 GiB KV resilience default.
+That setting reduces one controllable pressure source but is not itself a proof that
+driver-level RM allocation failure has been eliminated.
+
 ### NVIDIA — experimental
 
 The NVIDIA profile is maintained as an optional comparison/compatibility path. Its
@@ -51,27 +65,28 @@ checkpoint-specific mixed-precision requirements must not leak into OrcaRouter d
 
 ### mazinb — experimental/installable
 
-`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` has a defined installer/runtime path,
-but it has **not** completed the full managed DGX Spark lifecycle qualification.
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` has a defined installer/runtime path and
+has now been exercised through live managed activation, but it has **not** completed a
+clean HOST-STABILITY qualification.
 
-Verified managed-path evidence as of 2026-10-02 is:
+The checkpoint is pinned to the verified source revision
+`f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f` and remains exposed as
+experimental/installable. The original 2026-10-02 managed activation used a 24 GiB KV
+cache and failed the strict host-stability gate. A controlled temporary 16 GiB run showed
+that reduced KV can improve the outcome under one allocator state, but that contrast did
+not prove a deterministic fix. The managed profile was subsequently moved to the 16 GiB
+resilience value and reached READY, yet a valid managed run still recorded confirmed RM
+`NV_ERR_NO_MEMORY`, so the classification remained **FUNCTIONAL PASS /
+HOST-STABILITY FAIL**.
 
-- the profile is exposed as experimental/installable by the registry;
-- the pinned checkpoint resolved to
-  `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`, was fully staged in the
-  repository-local managed model root, and has a complete model manifest;
-- the read-only Hybrid -> mazinb switch preflight passed with update/runtime/
-  profile-switch transactions all idle, the expected image present, and no
-  stale switch candidate/backup artifacts;
-- the installer wizard dry-run produced the intended
-  `orcarouter-hybrid -> mazinb` managed switch plan with monitor/protection,
-  API, and systemd-service settings while explicitly performing no mutation.
+Therefore:
 
-Actual managed activation/systemd readiness, post-commit doctor/restart,
-uninstall preservation, API behavior, and managed-lifecycle correctness/performance
-qualification remain pending. Under the current strict Hybrid host-stability policy,
-the live Hybrid -> mazinb activation remains blocked unless the documented narrow
-recoverable-RM exception is explicitly adopted for that acceptance leg.
+- mazinb is installable and can participate in the managed profile-switch lifecycle;
+- 16 GiB is the current managed KV resilience value, not a qualification certificate;
+- READY, runtime commit, or successful fallback must never be promoted to HOST-STABILITY
+  PASS when strict RM failure evidence is present;
+- clean-host lifecycle, restart/doctor, correctness/performance, and host-stability
+  qualification remain required before any stable promotion.
 
 ### OrcaRouter hybrid — experimental/installable
 
@@ -98,23 +113,49 @@ CMA-aware monitor/protection repair also passed its then-defined 30/30 validatio
 gate; that historical PASS must not be treated as the current host-stability
 classification.
 
-Subsequent live profile-switch/restart acceptance and the R8/R9 investigation
+Subsequent profile-switch/restart acceptance and the R8–R32 investigation
 reproduced NVIDIA RM `NV_ERR_NO_MEMORY` while the runtime could still reach READY,
-so the current strict classification is **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
-R9 captured the proximate mechanism: the NVIDIA RM Linux-sysmem path failed an
-approximately 16 GiB non-contiguous request when fulfilling it as 64 KiB/order-4
-physical chunks, rolled back the already allocated order-4 pages, and then
-succeeded immediately for the same logical byte count and captured allocation
-policy at 4 KiB/order-0 granularity. This rules out global host-memory exhaustion,
-swap exhaustion, a fixed KV threshold, or total request bytes as sufficient
-causes. The lower-level Linux zone/migratetype/buddy reason for the unavailable
-order-4 chunk remains unresolved.
+so the strict classification remains **FUNCTIONAL PASS / HOST-STABILITY FAIL**.
 
-The repository documents a narrow optional
-`RECOVERABLE_RM_SYSMEM_FALLBACK` warning exception for this exact recoverable
-pattern, but it is not implicitly enabled. Unless that exception is explicitly
-adopted for an acceptance leg, any observed RM `NV_ERR_NO_MEMORY` keeps the
-Hybrid host classification at FAIL.
+The allocator investigation is no longer open at the R9 level. The current closure is:
+
+- R11 localized the failed host allocation to node0 Normal-zone Unmovable order-4
+  demand, Movable fallback/pageblock stealing, high-order acquisition failure,
+  rollback, and immediate order-0 retry;
+- R21/R22 isolated the common early physical-page burst to roughly 75 GiB in about
+  five seconds and separated it from later PLE/swap pressure;
+- R23 attributed the measured burst endpoint to direct NVIDIA RM system-memory
+  allocation through `nv_alloc_pages` / `nv_alloc_system_pages`, not the selected UVM
+  allocation boundaries;
+- R24 showed that the H6 W4A16/16 GiB candidate did **not** remove the structural burst;
+- R25–R32 localized the dominant userspace timing to first model construction and then
+  to the Qwen4Exp decoder construction cadence. The repeated 400 MiB family is closed
+  exactly to packed `w13_weight` construction, while the paired 800 MiB family occurs
+  before ModelOpt-MoE create-weights and spans mixed userspace placements, supporting a
+  lower/global backing-growth event rather than direct ownership by those model-prefix
+  markers.
+
+The observed chain is therefore:
+
+```text
+model construction
+  -> direct NVIDIA RM 64 KiB system-page demand
+  -> node0 Normal/Unmovable order-4 depletion/fallback pressure
+  -> failed high-order acquisition
+  -> rollback
+  -> immediate order-0 fallback
+  -> recoverable NV_ERR_NO_MEMORY
+```
+
+This is a localization/engineering closure, not a claim that every internal proprietary
+RM allocation policy is known. Marker overlap remains temporal localization, not causal
+ownership, and RM requested bytes remain allocation-activity volume rather than exact
+resident ownership.
+
+The repository documents a narrow optional `RECOVERABLE_RM_SYSMEM_FALLBACK`
+warning exception for the exact recoverable pattern, but it is not implicitly enabled.
+Unless that exception is explicitly adopted for an acceptance leg, any observed RM
+`NV_ERR_NO_MEMORY` keeps the Hybrid host classification at FAIL.
 
 These gates are still narrower than a clean-host qualification: the complete
 source-download + H3→H6 build + managed-service lifecycle on a genuinely clean
@@ -230,7 +271,6 @@ stable
 
 There is exactly one default stable model profile at a time. Currently that is
 `orcarouter`.
-
 
 ## OrcaRouter H38 runtime qualification track
 
