@@ -1,6 +1,14 @@
 # Draft upstream report: GB10 recoverable RM sysmem high-order allocation failure
 
-Status: internal draft; do not post upstream without an explicit project decision.
+Status: **HISTORICAL R9-ERA INTERNAL DRAFT — DO NOT POST UPSTREAM AS CURRENT WITHOUT REFRESHING FROM R23–R32 CLOSURE**.
+
+> This body intentionally preserves the R9-era evidence and then-known unknowns. The
+> statement below that the exact Linux buddy/zone/migratetype/pageblock state remained
+> unknown was superseded by later repository work: R11 localized node0 Normal-zone
+> Unmovable order-4 demand with Movable fallback/pageblock stealing, and R23–R32 closed
+> the driver/userspace localization chain further. For any new external report, start
+> from `orcarouter-r23-r32-allocation-localization-closure-20261006.md` and the current
+> evidence index rather than posting this draft verbatim.
 
 ## Environment
 
