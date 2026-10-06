@@ -221,6 +221,33 @@ The profile-manager work should keep or add coverage for:
 - ownership preservation and generated Hybrid reuse;
 - documentation current-state guards.
 
+## DGX acceptance — 2026-10-06
+
+Guarded acceptance was performed on the single DGX Spark before merging this slice.
+The installed manifest was initially at `PHASE=service_ready`, so the installer correctly
+remained on the interrupted-install resume path and did not expose profile selection.
+Before changing that phase, the existing runtime was proven against the strict state parsers,
+managed systemd ownership, immutable `current` release, runtime-commit attestation, live
+container ID/image, `/model` mount, served-model command line, and `/v1/models` identity.
+
+Only after those checks passed was `PHASE=service_ready` atomically recovered to
+`PHASE=complete`. That recovery was runtime-neutral: the service remained active, the
+container ID and `StartedAt` were unchanged, and `runtime-commit.env` was unchanged.
+
+The completed-install Wizard dry-run then passed with these observations:
+
+- current profile displayed as `orcarouter` and marked `Active`;
+- all four installable profiles were offered, while the current profile remained the default;
+- selecting NVIDIA produced `profile: nvidia` and `orcarouter -> nvidia` in the shared plan;
+- existing model root, monitor/protection, API/LAN, and managed-service settings were retained;
+- no fresh model-storage/runtime/API/service Wizard pages were re-entered;
+- `install.env` remained unchanged after the dry-run;
+- service state, container identity, and `StartedAt` remained unchanged;
+- no runtime/update/profile-switch transaction file was created.
+
+This validates the non-mutating completed-install selector and shared profile-switch planning
+boundary. It is not a live NVIDIA replacement or a new host-stability qualification result.
+
 ## Phase sequence
 
 1. **Inventory/parity foundation** — freeze actual flags and known debt in tests and this
