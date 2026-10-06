@@ -16,6 +16,9 @@ Model checkpoint and serving backend are intentionally separate axes:
 
 Use `./install.sh --list-models` and `./install.sh --list-backends` for the registry,
 and see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for promotion/qualification rules.
+For the current managed-profile, NVIDIA RM host-stability, H38, and monitor status, use
+[docs/CURRENT-STATUS.md](docs/CURRENT-STATUS.md). Dated experiment/evidence text below
+preserves what was true at the time of each run and is not the current-state source of truth.
 
 Managed profile switches preserve cumulative model/image ownership in a separate state registry, so `./uninstall.sh --purge-all --yes` can remove installer-created assets from earlier profiles without treating merely-present checkpoints or image tags as owned. See [OPERATIONS.md](OPERATIONS.md) for the destructive-operation rules.
 
@@ -528,25 +531,31 @@ managed runtime is replaced transactionally. Do not use `--purge-model`,
 Installer/qualification status:
 
 ```text
-orcarouter         qualified / installable / default
+orcarouter         qualified / installable / default / 16 GiB managed KV resilience default
 nvidia             experimental / installable
-mazinb             experimental / installable / clean managed DGX lifecycle pending
+mazinb             experimental / installable / live managed activation exercised
+                   16 GiB managed KV resilience value
+                   managed readiness can PASS while strict RM evidence is HOST-STABILITY FAIL
 orcarouter-hybrid  experimental / installable / generated H6
-                   warm/reuse managed E2E PASS
-                   Hybrid -> OrcaRouter -> Hybrid round-trip PASS
-                   2026-09-29 host-stability repair gate PASS
+                   warm/reuse managed E2E FUNCTIONAL PASS
+                   Hybrid -> OrcaRouter -> Hybrid round-trip FUNCTIONAL PASS
+                   current strict classification: FUNCTIONAL PASS / HOST-STABILITY FAIL
                    clean-host full-build managed E2E pending
 lychee888          planned / not installable yet
 ```
 
 Here, `installable` means the registry and installer have a defined preparation/runtime
 path. It does **not** by itself mean that the profile is fully qualified or stable.
-`mazinb` has only been checked through registry exposure and installer dry-run so far;
-its real download/image-build/systemd/API-ready lifecycle remains pending.
-`orcarouter-hybrid` has passed managed warm/reuse operation, restart/functional checks,
-the no-uninstall profile-switch round trip, and the specific CMA-aware host-stability
-repair gate recorded on 2026-09-29. Its genuinely clean-host source download + H3→H6
-build + managed-service lifecycle is still pending, so the profile remains experimental.
+`mazinb` has been exercised through live managed activation/readiness. Its current managed
+resilience value is 16 GiB KV, but a valid run that records NVIDIA RM
+`_memdescAllocInternal` / `NV_ERR_NO_MEMORY` remains HOST-STABILITY FAIL even when READY is
+reached. `orcarouter-hybrid` has passed managed warm/reuse operation, restart/functional
+checks, and the no-uninstall profile-switch round trip functionally. The 2026-09-29
+CMA-aware repair gate remains valid historical evidence for that then-defined gate, but
+later R9–R32 work reproduced the structural RM allocation burst and recoverable RM OOM.
+The current strict Hybrid classification is therefore **FUNCTIONAL PASS /
+HOST-STABILITY FAIL**. Its genuinely clean-host source download + H3→H6 build +
+managed-service lifecycle is still pending, so the profile remains experimental.
 
 `orcarouter-hybrid` does not duplicate its tensor payload into one monolithic
 directory. H6 keeps the validated parent-link layout, so the managed runtime
@@ -658,15 +667,16 @@ warning means the layout needs review but does not prove incompatibility. In par
 do not apply `patch-nv-mixed.py` merely because a checkpoint is named NVFP4: that patch is
 specific to NVIDIA's `MIXED_PRECISION` PLE and block-FP8 MTP layout.
 
-The OrcaRouter TP=1 default keeps the conservative runtime settings but now builds
+The OrcaRouter TP=1 managed default keeps the conservative runtime settings and builds
 `vllm-skinny-tp1:v1`: the published Qwen3.8 image plus only the GB10/TP=1 skinny-GEMM
 enablement patch. It does **not** include `patch-nv-mixed.py`; NVIDIA's mixed-precision
-PLE/MTP compatibility changes remain isolated to the NVIDIA profile. The OrcaRouter runtime
-keeps PLE CPU offload, the `mp` executor, native 262144 context, 24 GiB of pinned KV, MTP
-`k=2`, disabled prefix cache, disabled FlashInfer autotune, and disabled async scheduling.
-The same skinny-GEMM path improved step rate on the earlier compatible Flash-Next
-checkpoint, but the exact OrcaRouter checkpoint must still be benchmarked after install;
-do not treat the historical percentage as an OrcaRouter measurement.
+PLE/MTP compatibility changes remain isolated to the NVIDIA profile. The managed OrcaRouter
+profile keeps PLE CPU offload, the `mp` executor, native 262144 context, a 16 GiB pinned KV
+resilience default, MTP `k=2`, disabled prefix cache, disabled FlashInfer autotune, and
+disabled async scheduling. The same skinny-GEMM path improved step rate on the earlier
+compatible Flash-Next checkpoint, but the exact OrcaRouter checkpoint must still be
+benchmarked after install; do not treat the historical percentage as an OrcaRouter
+measurement.
 
 ### Manage the dedicated PLE swap
 
@@ -721,12 +731,13 @@ Warning-only state is logged once on entry and then at the heartbeat interval;
 protection-counter samples are logged individually and include the observed swap-growth
 value.
 
-The two-signal rule comes from the 2026-09-30 live Hybrid evidence. NVIDIA RM
-`NV_ERR_NO_MEMORY` occurred after low non-CMA free coincided with increasing swap
-consumption, while an earlier healthy checkpoint-loading transient reached the same
-low-free range with essentially unchanged swap-free. An intermediate repair that made
-low-free independently fatal stopped the candidate at 8/81 checkpoint shards and was
-therefore not promoted.
+The two-signal rule was introduced from 2026-09-30 live Hybrid evidence, but it is a
+**safety heuristic, not a proven RM-failure discriminator**. Later cold-load evidence
+showed that the 256 MiB swap-growth arm can also trigger a false-positive protected stop
+during otherwise normal startup. Strict host-stability classification therefore comes
+from the kernel RM evidence, not from whether the monitor fired. An intermediate repair
+that made low-free independently fatal stopped the candidate at 8/81 checkpoint shards
+and was not promoted.
 
 ```bash
 ./scripts/monitor-runtime.sh
@@ -748,11 +759,12 @@ Automation can set the same policy explicitly:
   --monitor-consecutive 5 --no-start
 ```
 
-The 2026-09-29 Hybrid host-stability repair gate passed 30/30 repeated runtime
-validations with the monitor staying at `protect=0/5`, no protected stop, and no
-matching NVIDIA RM allocation/OOM/hung-task symptoms in the privileged kernel-journal
-window. That closes the reproduced failure mode; it is not a claim of indefinite soak
-stability or safety at arbitrarily higher concurrency.
+The 2026-09-29 Hybrid 30/30 repair gate remains historical evidence for the then-defined
+monitor/protection criteria. It must not be used as the current Hybrid host-stability
+classification: later valid runs reproduced NVIDIA RM `_memdescAllocInternal` /
+`NV_ERR_NO_MEMORY`, including runs that still reached READY after fallback. Under the
+repository's strict rule those runs are HOST-STABILITY FAIL. See
+`docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` for the current closure.
 
 The manifest records the configured monitor/protection thresholds and heartbeat.
 Existing manifests are not silently rewritten; an older Hybrid install should first
@@ -869,6 +881,10 @@ Use `PUBLISH_HOST=0.0.0.0` only for an intentionally reviewed LAN deployment wit
 access controls. Prefix caching is explicitly disabled in the OrcaRouter compatibility
 baseline; set `PREFIX_CACHE=1` to enable it together with the required Mamba alignment mode.
 
+The following direct `scripts/serve.sh` block is the historical/manual NVIDIA path retained
+for upstream compatibility and experimentation. It is **not** the transactional managed
+OrcaRouter default selected by `install.sh`.
+
 ```bash
 # 1. weights, 123.6 GiB
 ./scripts/download-weights.sh
@@ -893,9 +909,9 @@ docker build -t vllm-nv-mixed:v2   -f scripts/Dockerfile.nv-mixed   scripts/
 ./scripts/serve.sh
 ```
 
-`serve.sh` defaults to `vllm-nv-mixed:v2` and the official checkpoint. To go back to the
-Inferact build this repo used to serve, pass both — the image and the weights travel
-together:
+`serve.sh` defaults to `vllm-nv-mixed:v2` and the official NVIDIA checkpoint for this
+direct/manual path. To go back to the Inferact build this repo used to serve, pass both —
+the image and the weights travel together:
 
 ```bash
 VLLM_IMAGE=vllm-skinny-tp1:v1 MODEL_DIR=$HOME/models/qwen3.8-flash-next-nvfp4 \
