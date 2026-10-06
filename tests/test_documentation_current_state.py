@@ -17,6 +17,21 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("NV_ERR_NO_MEMORY", text)
         self.assertIn("R9–R32 allocator/localization closure", text)
         self.assertIn("not a proven discriminator for RM failure", text)
+        self.assertIn("after squash merge of PR #248", text)
+        self.assertIn("af3119fdcdc75be9ea5a8403a127d825cf238bc6", text)
+
+    def test_root_readme_tracks_current_managed_status(self) -> None:
+        text = read("README.md")
+        self.assertIn("[docs/CURRENT-STATUS.md](docs/CURRENT-STATUS.md)", text)
+        self.assertIn("16 GiB managed KV resilience default", text)
+        self.assertIn("current strict classification: FUNCTIONAL PASS / HOST-STABILITY FAIL", text)
+        self.assertIn("safety heuristic, not a proven RM-failure discriminator", text)
+        self.assertIn("historical/manual NVIDIA path", text)
+        self.assertNotIn("mazinb             experimental / installable / clean managed DGX lifecycle pending", text)
+        self.assertNotIn("its real download/image-build/systemd/API-ready lifecycle remains pending", text)
+        self.assertNotIn("2026-09-29 host-stability repair gate PASS", text)
+        self.assertNotIn("That closes the reproduced failure mode", text)
+        self.assertNotIn("24 GiB of pinned KV", text)
 
     def test_runtime_readme_does_not_call_24gib_the_current_mazinb_default(self) -> None:
         text = read("scripts/runtime/README.md")
