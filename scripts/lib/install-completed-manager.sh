@@ -249,7 +249,9 @@ install_completed_execute_settings_transaction() {
   if ! bash "${settings_transition}" apply; then
     return 1
   fi
-  if ! bash "${settings_transition}" commit; then
+  if bash "${settings_transition}" commit; then
+    :
+  else
     rc=$?
     bash "${settings_transition}" recover || true
     return "${rc}"
