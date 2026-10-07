@@ -116,7 +116,21 @@ The migration gate must:
 9. preserve one upload-oriented evidence summary plus the full run log.
 
 Only after the atomic migration gate is FUNCTIONAL PASS and its measured migration
-window is free of strict RM failures may the remaining managed gates proceed:
+window is free of strict RM failures may the remaining managed gates proceed.
+
+Use the guarded follow-up runner and point it at the **same migration evidence
+directory** so the performance comparison is bound to the fresh predecessor baseline:
+
+```bash
+H38_MANAGED_TARGET_SHA=<exact-final-PR-head> \
+H38_MANAGED_MIGRATION_EVIDENCE=<passing-migration-evidence-dir> \
+  bash scripts/run-h38-managed-followup-gates.sh
+```
+
+The follow-up runner holds the lifecycle operation lock for the full measured window,
+reuses the canonical determinism benchmark, performs the supported managed-service
+replacement/restart, and records one upload-oriented evidence bundle. It automates the
+following acceptance requirements:
 
 1. Run the canonical managed H38 determinism matrix with
    `H38_GATE_MODEL=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`. Require 1K/128
