@@ -16,6 +16,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
         home: Path,
         phase: str = "complete",
         image: str = "vllm-skinny-tp1:v1",
+        model_dir: Path | None = None,
     ) -> Path:
         state = home / "state" / "qwen38-spark"
         state.mkdir(parents=True)
@@ -29,7 +30,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
                     "MODEL_PROFILE=orcarouter",
                     "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
                     "MODEL_REVISION=c1209bda15a6bbc4c68b585e93d40c0d85f50306",
-                    f"MODEL_DIR={home / 'models/qwen3.8-flash-next-orcarouter'}",
+                    f"MODEL_DIR={model_dir or home / 'models/qwen3.8-flash-next-orcarouter'}",
                     "MODEL_OWNED=0",
                     "SWAP_FILE=/swap-ple.img",
                     "SWAP_OWNED=0",
@@ -180,6 +181,37 @@ class InstalledProfileWizardTests(unittest.TestCase):
             )
             self.assertIn("OrcaRouter Hybrid H6", result.stdout)
             self.assertIn("lychee888 FP8-PLE", result.stdout)
+
+    def test_list_models_includes_active_custom_model_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_dir = home / "custom-store" / "qwen3.8-flash-next-orcarouter"
+            model_dir.mkdir(parents=True)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                "{}\n",
+                encoding="utf-8",
+            )
+            self.write_manifest(home, model_dir=model_dir)
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+yes\s+",
+            )
+            self.assertIn(f"checkpoint={model_dir}", result.stdout)
 
     def test_complete_install_wizard_defaults_to_current_profile(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
