@@ -118,6 +118,7 @@ class ServiceDeploymentTests(unittest.TestCase):
 
         self.assertIn("--adopt-existing", manager)
         self.assertIn("prepare_runtime_adoption()", manager)
+        self.assertIn("existing runtime adoption marker does not match restored runtime", manager)
         self.assertIn('"${candidate_container_id}" == "${previous_container_id}"', manager)
         self.assertIn("runtime-adopt.env", manager)
         self.assertIn("runtime-adopt", parser)
