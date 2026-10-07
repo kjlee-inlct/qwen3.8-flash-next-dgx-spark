@@ -247,6 +247,37 @@ class InstalledProfileWizardTests(unittest.TestCase):
             )
             self.assertIn(f"checkpoint={model_dir}", result.stdout)
 
+    def test_list_models_keeps_retained_custom_root_inventory_inactive_after_uninstall(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_dir = home / "retained-store" / "qwen3.8-flash-next-orcarouter"
+            model_dir.mkdir(parents=True)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                '{"status":"complete"}\n',
+                encoding="utf-8",
+            )
+            self.write_manifest(home, phase="uninstalled", model_dir=model_dir)
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+no\s+",
+            )
+            self.assertIn(f"checkpoint={model_dir}", result.stdout)
+
     def test_complete_install_wizard_defaults_to_current_profile(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
