@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 PLAN_HELPER = ROOT / "scripts" / "lib" / "install-plan.sh"
+OPTION_HELPER = ROOT / "scripts" / "lib" / "install-options.sh"
 
 
 class InstallerPlanParityTests(unittest.TestCase):
@@ -195,6 +196,67 @@ printf '%s\n' \
             self.assertEqual(lines[7], lines[1])
             self.assertEqual(lines[8], lines[2])
             self.assertEqual(lines[9], lines[3])
+
+    def test_equivalent_cli_preview_forces_dry_run_for_live_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            script = f"""
+set -euo pipefail
+validate_monitor_settings() {{ :; }}
+validate_api_access_settings() {{ PROXY_ENABLED=0; PROXY_PORT="${{API_DOCKER_PORT}}"; }}
+MODEL_PROFILE=nvidia
+REPO=nvidia/example
+REVISION=rev1
+MODEL_ROOT_SOURCE=custom
+MODEL_ROOT='{home / "models"}'
+MODEL_DIR='{home / "models/model-a"}'
+IMAGE=image:test
+SERVED_NAME=nvidia/example
+CONFIG_OVERRIDE=''
+PROFILE_CONFIG_OVERRIDE=0
+SWAP_FILE=/swap-ple.img
+MONITOR_ENABLED=1
+MONITOR_PROTECT=0
+MONITOR_MIN_AVAILABLE_GIB=6
+MONITOR_MIN_FREE_GIB=2
+MONITOR_FREE_GATE_GIB=10
+MONITOR_MIN_SWAP_FREE_GIB=8
+MONITOR_CONSECUTIVE=5
+MONITOR_HEARTBEAT=60
+API_ACCESS_MODE=local
+API_DOCKER_PORT=8000
+API_LAN_ADDRESS=''
+API_LAN_PORT=8001
+PROXY_ENABLED=0
+PROXY_PORT=8000
+SERVICE_ENABLED=1
+PROFILE_SWITCH=0
+SWITCH_FROM_PROFILE=''
+START=1
+DRY_RUN=0
+REFRESH_PROFILE_DEFAULTS=0
+PROFILE_LOCAL_BUILD=0
+UI_LANG=en
+source "{OPTION_HELPER}"
+source "{PLAN_HELPER}"
+install_plan_finalize
+install_plan_render_cli_preview
+"""
+            result = subprocess.run(
+                ["bash", "-lc", script],
+                cwd=ROOT,
+                env={**os.environ, "HOME": str(home)},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            argv = shlex.split(result.stdout.strip())
+            self.assertEqual(argv[0], "./install.sh")
+            self.assertIn("--yes", argv)
+            self.assertIn("--dry-run", argv)
+            self.assertNotIn("--no-start", argv)
 
     def test_fresh_cli_and_wizard_build_same_plan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
