@@ -205,12 +205,12 @@ ensure_qualified_release() {
 
 load_target_profile_defaults() {
   local target_root="$1" model_root
-  [[ -r "${target_root}/scripts/model/model-profiles.sh" ]] || die 'target release has no model profile registry'
+  [[ -r "${target_root}/scripts/model-profiles.sh" ]] || die 'target release has no model profile registry'
   model_root="$(dirname -- "${CURRENT_MODEL_DIR}")"
   export QWEN38_MODEL_ROOT="${model_root}"
   # The file is inside a manifest-bound qualified immutable release.
   # shellcheck disable=SC1090
-  source "${target_root}/scripts/model/model-profiles.sh"
+  source "${target_root}/scripts/model-profiles.sh"
   load_model_profile "${PROFILE}" || die "target release cannot load profile: ${PROFILE}"
   TARGET_REPO="${PROFILE_REPO}"
   TARGET_REVISION="${PROFILE_REVISION}"
