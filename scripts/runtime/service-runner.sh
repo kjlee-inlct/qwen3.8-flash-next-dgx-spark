@@ -13,7 +13,43 @@ PROFILE_SWITCH_TRANSITION="${RUNTIME_ROOT}/scripts/profile-switch-transition.sh"
 # manifest, so it must recover before any profile-only transaction or manifest
 # parsing. During an intentional cutover the outer operation lock is busy and
 # service-recover defers; after interruption it restores a deterministic pair.
+#
+# rc=75 is intentionally special: service-recover has restored a running previous
+# container and persisted runtime-adopt.env. Do not return 75 to systemd. The unit's
+# ExecStart commonly points through the dynamic current symlink, which now resolves
+# to the previous release; a blind restart could therefore enter an older runner
+# that does not understand the one-shot adoption marker and cold-replace the exact
+# restored container. Finish attachment in this already-running target process.
+set +e
 bash "${RELEASE_PROFILE_REFRESH_TRANSITION}" service-recover
+refresh_recovery_rc=$?
+set -e
+if [[ "${refresh_recovery_rc}" == 75 ]]; then
+  restored_root=""
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" install-service "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    printf 'FATAL: restored install manifest failed strict service parsing after refresh recovery\n' >&2
+    exit 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    [[ "${key}" != INSTALL_ROOT ]] || restored_root="${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ -n "${restored_root}" ]] || {
+    printf 'FATAL: restored runtime root is missing after refresh recovery\n' >&2
+    exit 1
+  }
+  adopt_runner="${RUNTIME_ROOT}/scripts/runtime/service-adopt-runner.sh"
+  [[ -r "${adopt_runner}" ]] || {
+    printf 'FATAL: refresh recovery adoption supervisor is unavailable: %s\n' "${adopt_runner}" >&2
+    exit 1
+  }
+  printf 'Refresh recovery restored a running predecessor; attaching it before systemd can restart through current.\n'
+  exec bash "${adopt_runner}" --runtime-root "${restored_root}"
+elif [[ "${refresh_recovery_rc}" != 0 ]]; then
+  exit "${refresh_recovery_rc}"
+fi
 # During an intentional switch the installer still owns operation.lock, so
 # service-recover defers. After a reboot/interruption the lock is free and the
 # persisted profile transaction is deterministically recovered before parsing
