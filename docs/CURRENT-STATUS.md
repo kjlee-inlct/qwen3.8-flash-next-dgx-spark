@@ -166,8 +166,13 @@ available increased through the counted window, with `rm_oom_count=0`. Historica
 PR #245 evidence also shows that real RM failures can occur while reclaimable available
 memory is still initially high, so high available alone cannot suppress protection.
 Treat the current state as a heuristic collision requiring a stronger discriminator,
-not as justification to disable or simply raise the swap-growth gate. Strict RM kernel
-evidence remains the classification source of truth.
+not as justification to disable or simply raise the swap-growth gate. The next isolated
+A/B keeps the protective monitor and H38 runtime identity unchanged but disables
+speculative MTP only (`SPEC=none`) to test whether the later MTP materialization is what
+crosses the protection boundary. The runner requires the recovered managed predecessor
+to remain stopped, so it does not cold-start the legacy runtime merely to establish an
+experiment baseline. This is a mechanism discriminator, not a production configuration.
+Strict RM kernel evidence remains the classification source of truth.
 
 ## Historical evidence semantics
 

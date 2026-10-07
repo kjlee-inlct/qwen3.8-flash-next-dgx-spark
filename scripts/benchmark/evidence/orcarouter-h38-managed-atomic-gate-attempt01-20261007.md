@@ -180,7 +180,13 @@ The useful candidate discriminator is whether reclaimable non-CMA available is
 materially collapsing while low-free + swap-growth persists, versus remaining stable or
 recovering during ordinary paging.
 
-Any proposed trend-aware rule must first be replayed against preserved evidence and
-regression-tested. The absolute low-available gate, absolute swap-free gate, strict RM
-classification, and protection behavior remain unchanged until that discriminator is
-proven.
+Do not alter the monitor first. Canonical R22 evidence shows that a v0.29 PLE-mmap
+16 GiB candidate can reach READY and still record strict RM OOM, so the current H38 stop
+may have prevented a real failure even though its instantaneous signal family also
+collides with known cold-load false positives.
+
+The next live discriminator changes one runtime variable while keeping protection
+unchanged: run the exact H38 candidate with `SPEC=none`. If that isolated candidate
+reaches clean READY under the same protective thresholds, MTP startup materialization
+becomes the supported next engineering target. If it protects or records RM OOM again,
+the MTP hypothesis is rejected or insufficient.
