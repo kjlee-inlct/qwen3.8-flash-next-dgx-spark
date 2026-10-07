@@ -580,7 +580,7 @@ case "${action}" in
 
     rollback_refresh() {
       local rc="${1:-1}"
-      trap - ERR INT TERM
+      trap - ERR INT TERM EXIT
       set +e
       if [[ -e "${STATE_FILE}" && ! -L "${STATE_FILE}" ]]; then
         printf 'Release-profile refresh failed; recovering transaction.\n' >&2
@@ -594,6 +594,7 @@ case "${action}" in
     trap 'rollback_refresh $?' ERR
     trap 'rollback_refresh 130' INT
     trap 'rollback_refresh 143' TERM
+    trap 'rollback_refresh $?' EXIT
 
     track_h38_assets "${target_root}"
     bash "${target_root}/scripts/runtime/prepare-h38-image.sh" build
@@ -616,7 +617,7 @@ case "${action}" in
     write_state committing "${TARGET_MANIFEST_SHA256}"
     target_runtime_committed || die 'target runtime proof changed during lifecycle commit'
     clear_transaction
-    trap - ERR INT TERM
+    trap - ERR INT TERM EXIT
     printf 'Atomic release-profile refresh committed: release=%s image=%s profile=%s\n'       "${TARGET_RELEASE}" "${TARGET_IMAGE}" "${PROFILE}"
     ;;
   recover)
