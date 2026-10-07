@@ -27,7 +27,7 @@ removes the invalid intermediate lifecycle requirement rather than weakening pro
 
 Canonical coordinator:
 
-`scripts/lifecycle/release-profile-refresh-transition.sh`
+`lifecycle/release-profile-refresh-transition.sh` (relative to `scripts/`)
 
 Stable entry point:
 
@@ -98,7 +98,7 @@ stale transaction artifacts fail closed.
 
 ## Operation lock and diagnostics
 
-`scripts/lib/operation-lock.sh` now blocks unrelated lifecycle mutation while a
+`lib/operation-lock.sh` (relative to `scripts/`) now blocks unrelated lifecycle mutation while a
 release-profile refresh state exists, except for the trusted inherited refresh context.
 
 `doctor.sh` reports incomplete/malformed refresh state or orphan refresh
