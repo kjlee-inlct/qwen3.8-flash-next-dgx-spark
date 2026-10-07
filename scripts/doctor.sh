@@ -239,9 +239,15 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then
     pass "vLLM image is present"
     if [[ "${MODEL_PROFILE:-}" == orcarouter ]]; then
-      [[ "${VLLM_IMAGE:-}" == "${EXPECTED_IMAGE}" ]] && pass "managed OrcaRouter image matches profile default" || fail "managed OrcaRouter image drift: manifest=${VLLM_IMAGE:-missing}, profile=${EXPECTED_IMAGE:-missing}"
-      h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
-      [[ "${h38_scope}" == decoder-v1 ]] && pass "H38 decoder-scope image label is valid" || fail "H38 decoder-scope image label mismatch: ${h38_scope:-missing}"
+      if [[ "${VLLM_IMAGE:-}" == "${EXPECTED_IMAGE}" ]]; then
+        pass "managed OrcaRouter image matches profile default"
+        h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
+        [[ "${h38_scope}" == decoder-v1 ]] && pass "H38 decoder-scope image label is valid" || fail "H38 decoder-scope image label mismatch: ${h38_scope:-missing}"
+      elif [[ "${VLLM_IMAGE:-}" == vllm-skinny-tp1:v1 ]]; then
+        warn "managed OrcaRouter still uses the legacy image; run --refresh-profile-defaults after the immutable release update"
+      else
+        fail "managed OrcaRouter image drift: manifest=${VLLM_IMAGE:-missing}, profile=${EXPECTED_IMAGE:-missing}"
+      fi
     fi
   else
     fail "vLLM image is missing"
@@ -252,7 +258,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     runtime_image="$(docker inspect --format '{{.Config.Image}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"; [[ "${runtime_image}" == "${VLLM_IMAGE:-}" ]] && pass "runtime container image matches installation manifest" || warn "runtime image drift: running=${runtime_image:-unknown}, manifest=${VLLM_IMAGE:-missing}"
     runtime_model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"; [[ "${runtime_model_mount}" == "${MODEL_DIR:-}" ]] && pass "runtime model mount matches installation manifest" || warn "runtime model mount drift: running=${runtime_model_mount:-missing}, manifest=${MODEL_DIR:-missing}"
     runtime_env="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
-    if [[ "${MODEL_PROFILE:-}" == orcarouter ]]; then
+    if [[ "${MODEL_PROFILE:-}" == orcarouter && "${VLLM_IMAGE:-}" == "${EXPECTED_IMAGE}" ]]; then
       grep -Fxq 'VLLM_PLE_MMAP=1' <<<"${runtime_env}" && pass "managed OrcaRouter runtime uses PLE mmap" || fail "managed OrcaRouter PLE mmap setting is missing"
       grep -Fxq 'VLLM_QSA_EXACT_TOPK=1' <<<"${runtime_env}" && pass "managed OrcaRouter runtime uses exact QSA" || fail "managed OrcaRouter exact-QSA setting is missing"
       grep -Fxq 'QWEN38_MARLIN_CANONICAL_ORDER=1' <<<"${runtime_env}" && pass "managed OrcaRouter H38 canonical order is enabled" || fail "managed OrcaRouter H38 canonical-order setting is missing"
