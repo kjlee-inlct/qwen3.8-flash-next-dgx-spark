@@ -45,6 +45,7 @@ parse_state_into_vars install-service-runtime "${STATE_FILE}" || {
 STATE_DIR="$(dirname -- "${STATE_FILE}")"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
 RUNTIME_TRANSITION="${RUNTIME_ROOT}/scripts/runtime/runtime-transition.sh"
 RUNTIME_PREFLIGHT="${RUNTIME_ROOT}/scripts/runtime/preflight-runtime.sh"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
@@ -82,6 +83,38 @@ write_runtime_commit_attestation() {
   } >"${temporary}"
   python3 "${STATE_PARSER}" runtime-commit "${temporary}" >/dev/null
   mv -- "${temporary}" "${RUNTIME_COMMIT_FILE}"
+}
+
+release_profile_refresh_owns_runtime_commit() {
+  local parsed key value refresh_state="" target_release="" target_image="" profile=""
+  local runtime_release
+  [[ -f "${RELEASE_PROFILE_REFRESH_STATE_FILE}" && ! -L "${RELEASE_PROFILE_REFRESH_STATE_FILE}" ]] || return 1
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" release-profile-refresh "${RELEASE_PROFILE_REFRESH_STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    printf 'FATAL: release-profile refresh state failed strict parsing during runtime validation\n' >&2
+    return 2
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      RELEASE_PROFILE_REFRESH_STATE) refresh_state="${value}" ;;
+      TARGET_RELEASE) target_release="${value}" ;;
+      TARGET_IMAGE) target_image="${value}" ;;
+      PROFILE) profile="${value}" ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  runtime_release="$(basename -- "${RUNTIME_ROOT}")"
+  [[ "${refresh_state}" == runtime_validating ]] || return 1
+  [[ "${target_release}" == "${runtime_release}" ]] || {
+    printf 'FATAL: refresh target release does not match runtime root\n' >&2
+    return 2
+  }
+  [[ "${target_image}" == "${VLLM_IMAGE}" && "${profile}" == "${MODEL_PROFILE}" ]] || {
+    printf 'FATAL: refresh target runtime identity does not match service manifest\n' >&2
+    return 2
+  }
+  return 0
 }
 
 [[ "${MODEL_PROFILE:-}" == orcarouter || "${MODEL_PROFILE:-}" == nvidia || "${MODEL_PROFILE:-}" == mazinb || "${MODEL_PROFILE:-}" == orcarouter-hybrid ]] || { printf 'FATAL: unsupported model profile\n' >&2; exit 1; }
@@ -167,17 +200,36 @@ python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); as
   "${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}" <<<"${models}"
 log_runtime_phase "model-list-validated"
 
-bash "${RUNTIME_TRANSITION}" commit
-log_runtime_phase "transition-committed"
-# The runtime transaction is now final. Any attestation failure must fail the
-# service/update path, not attempt to roll back an already-committed transaction.
-transition_active=0
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}")"
-write_runtime_commit_attestation "${container_id}"
-log_runtime_phase "runtime-attestation-written"
-trap - ERR INT TERM
+refresh_runtime_owner=0
+if release_profile_refresh_owns_runtime_commit; then
+  refresh_runtime_owner=1
+else
+  refresh_owner_rc=$?
+  [[ "${refresh_owner_rc}" != 2 ]] || false
+fi
 
-printf 'Qwen API is ready; runtime transition committed and attested; following container logs.\n'
+if [[ "${refresh_runtime_owner}" == 1 ]]; then
+  # Keep qwen38-flash-next.rollback until the outer release+manifest coordinator
+  # commits. The attestation lets manage-service report READY without destroying
+  # the only exact previous runtime that can make rollback symmetric.
+  write_runtime_commit_attestation "${container_id}"
+  log_runtime_phase "runtime-attestation-written"
+  log_runtime_phase "transition-commit-deferred"
+  printf 'Qwen API is ready and attested; outer release-profile refresh owns runtime commit.\n'
+else
+  bash "${RUNTIME_TRANSITION}" commit
+  log_runtime_phase "transition-committed"
+  # The standalone runtime transaction is now final. Any attestation failure
+  # must fail the service/update path, not roll back an already-committed change.
+  transition_active=0
+  write_runtime_commit_attestation "${container_id}"
+  log_runtime_phase "runtime-attestation-written"
+  trap - ERR INT TERM
+  printf 'Qwen API is ready; runtime transition committed and attested.\n'
+fi
+
+printf 'Following container logs.\n'
 docker logs --follow --since 0s "${CONTAINER_NAME}" &
 log_pid=$!
 trap 'kill "${log_pid}" 2>/dev/null || true' EXIT
