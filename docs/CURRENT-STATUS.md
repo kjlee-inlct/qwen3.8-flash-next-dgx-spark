@@ -171,7 +171,9 @@ A/B keeps the protective monitor and H38 runtime identity unchanged but disables
 speculative MTP only (`SPEC=none`) to test whether the later MTP materialization is what
 crosses the protection boundary. The runner requires the recovered managed predecessor
 to remain stopped, so it does not cold-start the legacy runtime merely to establish an
-experiment baseline. This is a mechanism discriminator, not a production configuration.
+experiment baseline. This is a mechanism discriminator, not a production configuration. The isolated runner
+passed static CI on `3d4eadcf2ce60c55b600d9e3ecd4143d061355de` in run
+`37633676272` with **587/587 tests**; no live SPEC=none result has been recorded yet.
 Strict RM kernel evidence remains the classification source of truth.
 
 ## Historical evidence semantics

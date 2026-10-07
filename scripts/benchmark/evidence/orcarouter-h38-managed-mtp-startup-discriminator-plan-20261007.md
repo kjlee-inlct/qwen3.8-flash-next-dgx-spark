@@ -1,6 +1,6 @@
 # H38 MTP startup discriminator plan — 2026-10-07
 
-Status: IMPLEMENTED / STATIC CI PENDING / LIVE NOT RUN
+Status: IMPLEMENTED / STATIC CI PASS / LIVE NOT RUN
 
 ## Purpose
 
@@ -65,6 +65,19 @@ discriminator:     SPEC=none
 The experiment uses a distinct container, removes it on completion, and leaves the
 managed predecessor in its original stopped state. It does not call `install.sh`,
 `update-release.sh`, or mutate managed manifest/release pointers.
+
+## Static validation
+
+- implementation head: `3d4eadcf2ce60c55b600d9e3ecd4143d061355de`;
+- GitHub Actions: `37633676272` — SUCCESS;
+- shell syntax: PASS;
+- ShellCheck: PASS;
+- Python compile: PASS;
+- unit tests: **587/587 PASS**;
+- whitespace: PASS.
+
+The static gate proves the isolated discriminator contract only. It does not advance
+managed-H38 FUNCTIONAL or HOST-STABILITY acceptance.
 
 ## Classification
 
