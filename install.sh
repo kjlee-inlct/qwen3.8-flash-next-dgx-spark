@@ -1113,7 +1113,9 @@ else
 fi
 write_state inspected
 printf '\nPreparing vLLM image...\n'
-if [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
+if [[ "${MODEL_PROFILE}" == orcarouter && "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]; then
+  bash "${ROOT_DIR}/scripts/runtime/prepare-h38-image.sh" build
+elif [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.skinny-gemm" "${ROOT_DIR}/scripts"
   fi
