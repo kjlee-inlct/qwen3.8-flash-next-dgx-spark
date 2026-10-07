@@ -110,54 +110,50 @@ Therefore the H38 determinism repair is closed for the validated
 does not include the transactional installer/systemd managed-service path,
 which remains a separate integration and lifecycle-qualification phase.
 
-## Managed-service integration gap
+## Managed-service integration — candidate implemented, live qualification pending
 
 > **Naming boundary:** installer profile `orcarouter-hybrid` is the generated
 > H6 ModelOpt W4A16 checkpoint from the earlier checkpoint-isolation track. It
-> is not the H38 decoder-only runtime repair and does not close the H38
-> managed-service integration gap described below.
+> is not the H38 decoder-only runtime repair.
 
-The H38 runtime qualification above is for
-`scripts/runtime/orcarouter-v029.sh`.
+The H38 runtime qualification above remains the historical qualification for
+`scripts/runtime/orcarouter-v029.sh`. The current feature branch now wires the
+same decoder-scope H38 image into the transactional `orcarouter` managed path,
+but that managed promotion is **not qualified or complete yet**.
 
-The transactional managed-service path is still separate:
+The candidate implementation covers:
 
-- `install.sh`
-- `scripts/model/model-profiles.sh`
-- installation manifest image defaults
-- `scripts/serve.sh`
-- `scripts/runtime/service-runner.sh`
-- systemd replacement / rollback / runtime attestation
+- `scripts/model/model-profiles.sh`: the OrcaRouter profile default selects
+  `vllm-orcarouter-v029-h38-decoder-scope:v1`;
+- `scripts/runtime/prepare-h38-image.sh`: clean-host/reuse construction of the
+  v0.29 -> H9 -> H10 -> H11 -> H12 -> H38 image chain with fail-closed label
+  verification;
+- `install.sh`: H38 image preparation and explicit
+  `--refresh-profile-defaults` migration;
+- `scripts/serve.sh`: H38 PLE-mmap, exact-QSA, decoder canonicalization and
+  isolated compile-cache controls while retaining the managed 16 GiB KV
+  resilience value;
+- `scripts/runtime/preflight-runtime.sh` and `scripts/doctor.sh`: H38 image
+  provenance/runtime-control checks;
+- `scripts/model-assets.sh`: H38 managed image inventory;
+- the existing service-runner/runtime-transition path remains the transactional
+  replacement and attestation mechanism.
 
-That path currently does not select the H38 decoder image as its OrcaRouter
-default. Do not describe the installer-managed service as H38 production until
-that integration is implemented and requalified through its lifecycle,
-rollback, doctor, determinism, and performance gates.
+Existing OrcaRouter installs use an explicit two-stage migration. Updating the
+immutable release first must still boot a legacy
+`vllm-skinny-tp1:v1` manifest with legacy controls. Only a subsequent
+`./install.sh --model orcarouter --refresh-profile-defaults ...` changes the
+manifest image and activates the H38 controls. This avoids coupling an immutable
+code cutover to an implicit runtime-default migration.
 
-This gap is intentionally documented rather than silently changing the managed
-runtime based only on the experimental-runtime qualification.
+Do not describe installer/systemd OrcaRouter as H38 production until the live
+acceptance in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+passes lifecycle/restart/doctor, managed-alias determinism, performance, and
+strict NVIDIA RM host-stability gates. FUNCTIONAL and HOST-STABILITY results
+must be recorded separately.
 
-
-Before managed-service H38 promotion is complete, the following must be updated
-and requalified together:
-
-- `scripts/model/model-profiles.sh`: OrcaRouter managed runtime image/defaults;
-- `install.sh`: clean-host image build path and profile-default migration;
-- `scripts/serve.sh`: H38 decoder patch/runtime environment and cache policy;
-- `scripts/runtime/service-runner.sh`: managed readiness/attestation behavior
-  against the H38 served runtime;
-- `scripts/model-assets.sh`: H38 image/container inventory and retirement
-  dependencies;
-- lifecycle/service/update tests covering installation, replacement, rollback,
-  restart, uninstall, and profile-default refresh;
-- doctor and qualification checks for the H38 image label, canonical scope, and
-  served-model identity;
-- a managed-service determinism/performance qualification run after the
-  integration.
-
-`scripts/model-assets.sh` is also commonly modified locally during asset
-cleanup work. Reconcile those local changes before changing its H38 inventory;
-do not overwrite operator-owned edits merely to make the registry look current.
+Historical H38 runtime evidence and failed/superseded attempts remain unchanged.
 
 ## Remaining limitations
 
