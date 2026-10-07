@@ -59,11 +59,12 @@ The canonical evidence is in `../benchmark/README.md`, with a concise summary
 in `../../docs/H38-DETERMINISM.md`.
 
 The dedicated H38 profiles above remain the historical qualification surface.
-The current H38 managed-integration feature branch also selects the decoder-scope
-image for the managed `orcarouter` profile after an explicit
-`--refresh-profile-defaults` migration. A pre-H38
-`vllm-skinny-tp1:v1` manifest remains bootable after immutable code update so
-the release cutover and runtime-default migration remain separate transactions.
+The current H38 managed-integration feature branch selects the decoder-scope image
+for the managed `orcarouter` profile through the atomic
+`update-release.sh TARGET --refresh-profile-defaults` path. The target immutable
+release and H38 candidate manifest are activated before the single managed-service
+replacement; the legacy CPU-offload image is not started as an intermediate READY
+gate.
 
 That managed integration is implemented but live qualification is still
 pending. Do not conflate the historical H38 runtime qualification with
