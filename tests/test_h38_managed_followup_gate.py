@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 import subprocess
 import unittest
 from pathlib import Path
@@ -11,6 +12,10 @@ GATE = ROOT / "scripts" / "run-h38-managed-followup-gates.sh"
 
 class H38ManagedFollowupGateTests(unittest.TestCase):
     def test_followup_gate_shell_syntax(self) -> None:
+        self.assertTrue(
+            GATE.stat().st_mode & stat.S_IXUSR,
+            "managed H38 follow-up gate must keep its Git executable bit for immutable releases",
+        )
         result = subprocess.run(
             ["bash", "-n", str(GATE)],
             cwd=ROOT,
