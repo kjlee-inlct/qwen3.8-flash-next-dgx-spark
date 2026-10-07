@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 import unittest
 from pathlib import Path
 
@@ -8,6 +9,14 @@ ROOT = Path(__file__).parents[1]
 
 
 class ServiceDeploymentTests(unittest.TestCase):
+    def test_serve_helper_is_executable_for_immutable_release_cutover(self) -> None:
+        serve = ROOT / "scripts" / "serve.sh"
+        self.assertTrue(
+            serve.stat().st_mode & stat.S_IXUSR,
+            "scripts/serve.sh must keep its Git executable bit because immutable "
+            "releases are produced with git archive and service-runner executes it directly",
+        )
+
     def test_service_has_bounded_restart_and_loopback_runner(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
