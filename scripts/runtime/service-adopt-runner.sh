@@ -8,6 +8,8 @@ STATE_DIR="$(dirname -- "${STATE_FILE}")"
 STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
 ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
+MONITOR_LOG="${STATE_DIR}/monitor.log"
 CONTAINER_NAME="qwen38-flash-next"
 RUNTIME_ROOT=""
 
@@ -41,6 +43,46 @@ parse_into_vars() {
     printf -v "${prefix}${key}" '%s' "${value}"
   done <"${parsed}"
   rm -f -- "${parsed}"
+}
+
+runtime_monitor_running() {
+  local pid cmdline
+  [[ -f "${MONITOR_PID_FILE}" && ! -L "${MONITOR_PID_FILE}" ]] || return 1
+  IFS= read -r pid <"${MONITOR_PID_FILE}" || return 1
+  [[ "${pid}" =~ ^[0-9]+$ && -r "/proc/${pid}/cmdline" ]] || return 1
+  cmdline="$(tr '\0' ' ' <"/proc/${pid}/cmdline")"
+  [[ "${cmdline}" == *monitor-runtime.sh* && "${cmdline}" == *"--container ${CONTAINER_NAME}"* ]]
+}
+
+ensure_runtime_monitor() {
+  local monitor_helper="${RUNTIME_ROOT}/scripts/monitor-runtime.sh" pid
+  local -a monitor_args
+  if [[ "${LIVE_MONITOR_ENABLED}" != 1 ]]; then
+    if runtime_monitor_running; then
+      die "runtime monitor is active although the restored manifest disables it"
+    fi
+    rm -f -- "${MONITOR_PID_FILE}"
+    return 0
+  fi
+  runtime_monitor_running && return 0
+  [[ -x "${monitor_helper}" ]] || die "restored runtime has no executable monitor helper: ${monitor_helper}"
+  rm -f -- "${MONITOR_PID_FILE}"
+  monitor_args=(
+    --container "${CONTAINER_NAME}"
+    --min-available-gib "${LIVE_MONITOR_MIN_AVAILABLE_GIB}"
+    --min-free-gib "${LIVE_MONITOR_MIN_FREE_GIB}"
+    --free-gate-gib "${LIVE_MONITOR_FREE_GATE_GIB}"
+    --min-swap-free-gib "${LIVE_MONITOR_MIN_SWAP_FREE_GIB}"
+    --consecutive "${LIVE_MONITOR_CONSECUTIVE}"
+    --heartbeat "${LIVE_MONITOR_HEARTBEAT}"
+  )
+  [[ "${LIVE_MONITOR_PROTECT}" != 1 ]] || monitor_args+=(--protect)
+  nohup "${monitor_helper}" "${monitor_args[@]}" >>"${MONITOR_LOG}" 2>&1 &
+  pid=$!
+  printf '%s\n' "${pid}" >"${MONITOR_PID_FILE}"
+  sleep 1
+  runtime_monitor_running || die "restored runtime monitor failed to attach"
+  printf 'Restored runtime monitor attached (protect=%s, pid=%s).\n' "${LIVE_MONITOR_PROTECT}" "${pid}"
 }
 
 parse_into_vars install-service-runtime "${STATE_FILE}" LIVE_ || die "install manifest failed strict parsing"
@@ -94,6 +136,8 @@ model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/
 curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null || die "runtime adoption health endpoint is not ready"
 models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)"
 python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected'   "${LIVE_SERVED_NAME}" <<<"${models}" || die "runtime adoption served model identity mismatch"
+
+ensure_runtime_monitor
 
 umask 077
 {
