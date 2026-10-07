@@ -20,6 +20,7 @@ describe_model_profile() {
   case "$1" in
     orcarouter)
       PROFILE_STATUS="stable"
+      PROFILE_DISPLAY_NAME="OrcaRouter Uncensored"
       PROFILE_DEFAULT=1
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
@@ -27,6 +28,7 @@ describe_model_profile() {
       ;;
     nvidia)
       PROFILE_STATUS="experimental"
+      PROFILE_DISPLAY_NAME="NVIDIA Official NVFP4"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="nvidia/Qwen3.8-Flash-Next-NVFP4"
@@ -34,6 +36,7 @@ describe_model_profile() {
       ;;
     mazinb)
       PROFILE_STATUS="experimental"
+      PROFILE_DISPLAY_NAME="mazinb NVFP4"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
@@ -41,6 +44,7 @@ describe_model_profile() {
       ;;
     orcarouter-hybrid)
       PROFILE_STATUS="experimental"
+      PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="local/orcarouter-mazinb-h6-w4a16"
@@ -48,6 +52,7 @@ describe_model_profile() {
       ;;
     lychee888)
       PROFILE_STATUS="planned"
+      PROFILE_DISPLAY_NAME="lychee888 FP8-PLE"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=0
       PROFILE_REPO="lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE"
