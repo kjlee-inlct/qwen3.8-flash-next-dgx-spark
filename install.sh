@@ -33,6 +33,7 @@ CURRENT_RELEASE_LINK="${DATA_HOME}/current"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 CONFIG_OVERRIDE_CLI=""
+CONFIG_OVERRIDE_CLI_SET=0
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
@@ -496,7 +497,8 @@ while [[ $# -gt 0 ]]; do
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
-    --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; CONFIG_OVERRIDE_CLI="$2"; shift ;;
+    --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; [[ -n "$2" ]] || die "--config-override requires a non-empty PATH"; CONFIG_OVERRIDE_CLI="$2"; CONFIG_OVERRIDE_CLI_SET=1; shift ;;
+    --no-config-override) CONFIG_OVERRIDE_CLI=""; CONFIG_OVERRIDE_CLI_SET=1 ;;
     --list-models) LIST_MODELS=1 ;;
     --list-backends) LIST_BACKENDS=1 ;;
     --monitor) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=0 ;;
@@ -613,7 +615,7 @@ MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
 [[ -z "${MONITOR_MIN_SWAP_FREE_CLI}" ]] || MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_CLI}"
 [[ -z "${MONITOR_CONSECUTIVE_CLI}" ]] || MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE_CLI}"
 [[ -z "${MONITOR_HEARTBEAT_CLI}" ]] || MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT_CLI}"
-if [[ -n "${CONFIG_OVERRIDE_CLI}" ]]; then
+if [[ "${CONFIG_OVERRIDE_CLI_SET}" == 1 ]]; then
   CONFIG_OVERRIDE="${CONFIG_OVERRIDE_CLI}"
   CONFIG_OWNED=0
 fi
@@ -958,7 +960,15 @@ printf '\n'
 [[ "${UI_LANG}" == ko ]] && printf '접근 / 서비스\n' || printf 'Access / service\n'
 printf '  API access  : %s\n' "${api_plan}"
 printf '  service     : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service via immutable current release' || printf 'Docker container via immutable current release')"
+
+equivalent_cli="$(install_plan_render_cli_preview)" || die 'failed to render equivalent CLI preview'
 printf '\n'
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '동등 CLI 미리보기 (항상 dry-run)\n'
+else
+  printf 'Equivalent CLI preview (always dry-run)\n'
+fi
+printf '  %s\n\n' "${equivalent_cli}"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
 ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
