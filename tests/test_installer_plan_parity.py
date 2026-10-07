@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -58,6 +59,19 @@ class InstallerPlanParityTests(unittest.TestCase):
             if key in self.PLAN_KEYS:
                 result[key] = value.strip()
         return result
+
+    def extract_equivalent_cli(self, output: str) -> list[str]:
+        lines = output.splitlines()
+        for index, line in enumerate(lines):
+            if line.strip() != "Equivalent CLI preview (always dry-run)":
+                continue
+            self.assertLess(index + 1, len(lines))
+            command = lines[index + 1].strip()
+            argv = shlex.split(command)
+            self.assertTrue(argv)
+            self.assertEqual(argv[0], "./install.sh")
+            return argv
+        self.fail("equivalent CLI preview was not rendered")
 
     def write_complete_manifest(self, home: Path) -> Path:
         state = home / "state" / "qwen38-spark"
@@ -253,6 +267,89 @@ printf '%s\n' \
             self.assertEqual(cli_plan["profile"], "nvidia")
             self.assertEqual(cli_plan["switch"], "orcarouter -> nvidia")
             self.assertIn("LAN: 192.0.2.10:8001", cli_plan["API access"])
+            self.assertEqual(manifest.read_bytes(), before)
+
+    def test_fresh_wizard_equivalent_cli_replays_same_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+
+            wizard = self.run_installer(
+                home,
+                ["--lang", "en", "--no-start", "--dry-run"],
+                answers="\n" * 10,
+            )
+
+            self.assertEqual(wizard.returncode, 0, wizard.stderr)
+            generated = self.extract_equivalent_cli(wizard.stdout)
+            self.assertIn("--yes", generated)
+            self.assertIn("--dry-run", generated)
+            self.assertIn("--no-config-override", generated)
+
+            replay = self.run_installer(home, generated[1:])
+            self.assertEqual(replay.returncode, 0, replay.stderr)
+            self.assertEqual(
+                self.extract_plan(replay.stdout),
+                self.extract_plan(wizard.stdout),
+            )
+
+    def test_completed_switch_equivalent_cli_replays_same_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_complete_manifest(home)
+            before = manifest.read_bytes()
+
+            wizard = self.run_installer(
+                home,
+                ["--lang", "en", "--no-start", "--dry-run"],
+                answers="1\n2\ny\n",
+            )
+
+            self.assertEqual(wizard.returncode, 0, wizard.stderr)
+            generated = self.extract_equivalent_cli(wizard.stdout)
+            self.assertIn("--model", generated)
+            self.assertIn("nvidia", generated)
+            self.assertIn("--no-config-override", generated)
+
+            replay = self.run_installer(home, generated[1:])
+            self.assertEqual(replay.returncode, 0, replay.stderr)
+            self.assertEqual(
+                self.extract_plan(replay.stdout),
+                self.extract_plan(wizard.stdout),
+            )
+            self.assertEqual(manifest.read_bytes(), before)
+
+    def test_no_config_override_clears_existing_custom_config_in_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_complete_manifest(home)
+            custom_config = home / "custom.json"
+            custom_config.write_text("{}\n", encoding="utf-8")
+            text = manifest.read_text(encoding="utf-8")
+            text = text.replace(
+                "CONFIG_OVERRIDE=\n",
+                f"CONFIG_OVERRIDE={custom_config}\n",
+            )
+            manifest.write_text(text, encoding="utf-8")
+            before = manifest.read_bytes()
+
+            result = self.run_installer(
+                home,
+                [
+                    "--lang",
+                    "en",
+                    "--yes",
+                    "--no-start",
+                    "--dry-run",
+                    "--no-config-override",
+                ],
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            plan = self.extract_plan(result.stdout)
+            self.assertEqual(
+                plan["config"],
+                "automatic vLLM compatibility override",
+            )
             self.assertEqual(manifest.read_bytes(), before)
 
 
