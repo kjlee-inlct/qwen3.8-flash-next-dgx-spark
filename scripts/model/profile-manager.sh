@@ -7,14 +7,6 @@
 
 PROFILE_MANAGER_REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
-profile_manager_root_has_managed() {
-  local root="$1"
-  [[ -d "${root}" ]] || return 1
-  find "${root}" -mindepth 1 -maxdepth 2 -type f \
-    \( -name .qwen38-model-manifest.json -o -name .qwen38-hybrid-manifest.json \) \
-    -print -quit 2>/dev/null | grep -q .
-}
-
 profile_manager_roots() {
   local -A seen=()
   local candidate canonical
