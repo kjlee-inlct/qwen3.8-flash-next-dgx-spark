@@ -72,6 +72,7 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
                         f"TARGET_MANIFEST={root / 'install.env.candidate'}",
                         "TARGET_MANIFEST_SHA256=" + "f" * 64,
                         "PROFILE=orcarouter",
+                        "OLD_CONTAINER_ID=" + "1" * 64,
                         "OLD_IMAGE=vllm-skinny-tp1:v1",
                         "TARGET_IMAGE=vllm-orcarouter-v029-h38-decoder-scope:v1",
                         "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
@@ -176,6 +177,8 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
         text = TRANSITION.read_text(encoding="utf-8")
         self.assertIn("verify_previous_runtime_baseline()", text)
         self.assertIn("previous runtime attestation is not bound to the current immutable release", text)
+        self.assertIn("previous runtime container changed during atomic refresh", text)
+        self.assertIn("restored previous runtime container ID mismatch", text)
         apply = text.index("    command -v docker")
         first = text.index("    verify_previous_runtime_baseline", apply)
         assets = text.index('track_h38_assets "${target_root}"', first)
@@ -456,6 +459,7 @@ fi
                     f"TARGET_MANIFEST={self.candidate}",
                     f"TARGET_MANIFEST_SHA256={target_sha}",
                     "PROFILE=orcarouter",
+                    "OLD_CONTAINER_ID=" + "b" * 64,
                     "OLD_IMAGE=vllm-skinny-tp1:v1",
                     "TARGET_IMAGE=vllm-orcarouter-v029-h38-decoder-scope:v1",
                     "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
