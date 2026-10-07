@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,13 @@ STATE_PARSER = ROOT / "scripts" / "lib" / "state_file.py"
 
 
 class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
+    def test_operator_entrypoint_is_executable(self) -> None:
+        entrypoint = ROOT / "scripts" / "release-profile-refresh-transition.sh"
+        self.assertTrue(
+            entrypoint.stat().st_mode & stat.S_IXUSR,
+            "release-profile refresh entrypoint must keep its Git executable bit for immutable releases",
+        )
+
     def test_shell_syntax(self) -> None:
         result = subprocess.run(
             ["bash", "-n", str(TRANSITION)],
