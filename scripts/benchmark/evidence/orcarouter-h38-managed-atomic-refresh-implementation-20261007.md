@@ -93,6 +93,7 @@ The strict `release-profile-refresh` state records:
 - transaction schema and phase;
 - exact target release;
 - old current and old previous release;
+- exact predecessor Docker container ID;
 - target release-manifest SHA-256;
 - backup and target install-manifest paths/digests;
 - same-profile identity;
@@ -112,8 +113,9 @@ Recovery behavior:
 
 - before activation: remove transaction artifacts without touching the live old tuple;
 - activation/runtime-validation before target proof: recover the runtime transition
-  first, prove the old container identity, then restore the exact old current/previous
-  release pointers and digest-verified old manifest;
+  first, require the restored Docker container ID to equal the predecessor ID persisted
+  before mutation, then restore the exact old current/previous release pointers and
+  digest-verified old manifest;
 - target is fully attested while outer state is still `activated` or
   `runtime_validating`: finish the target commit instead of destroying a proven
   successful candidate;
