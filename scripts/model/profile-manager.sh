@@ -44,7 +44,7 @@ profile_manager_manifest_state() {
 
 profile_manager_entry() (
   local profile="$1" active_profile="${2:-}"
-  local display status default installable repo description
+  local display status default installable repo description description_ko
   local root checkpoint="" first_checkpoint="" manifest_state="" local_state=absent image="" image_state=unavailable
 
   describe_model_profile "${profile}" || exit $?
@@ -54,6 +54,7 @@ profile_manager_entry() (
   installable="${PROFILE_INSTALLABLE}"
   repo="${PROFILE_REPO}"
   description="${PROFILE_DESCRIPTION}"
+  description_ko="${PROFILE_DESCRIPTION_KO:-${PROFILE_DESCRIPTION}}"
 
   if [[ "${installable}" == 1 ]]; then
     while IFS= read -r root; do
@@ -97,50 +98,96 @@ profile_manager_entry() (
   local active=no
   [[ "${profile}" != "${active_profile}" ]] || active=yes
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' \
     "${profile}" "${display}" "${status}" "${installable}" "${default}" \
-    "${local_state}" "${active}" "${image_state}" "${repo}" "${checkpoint}" "${description}"
+    "${local_state}" "${active}" "${image_state}" "${repo}" "${checkpoint}" "${description}" "${description_ko}"
 )
 
 profile_manager_load() {
   local profile="$1" active_profile="${2:-}"
-  IFS=$'\t' read -r \
+  IFS=$'\x1f' read -r \
     PM_PROFILE PM_DISPLAY_NAME PM_STATUS PM_INSTALLABLE PM_DEFAULT \
-    PM_LOCAL_STATE PM_ACTIVE PM_IMAGE_STATE PM_REPO PM_CHECKPOINT PM_DESCRIPTION \
+    PM_LOCAL_STATE PM_ACTIVE PM_IMAGE_STATE PM_REPO PM_CHECKPOINT \
+    PM_DESCRIPTION PM_DESCRIPTION_KO \
     < <(profile_manager_entry "${profile}" "${active_profile}")
   [[ -n "${PM_PROFILE:-}" ]]
 }
 
-profile_manager_loaded_detail() {
-  local -a labels=()
-  local joined="" label
+profile_manager_status_label() {
+  local status="$1" lang="${2:-en}"
+  if [[ "${lang}" != ko ]]; then
+    printf '%s\n' "${status}"
+    return
+  fi
+  case "${status}" in
+    stable) printf '안정\n' ;;
+    experimental) printf '실험\n' ;;
+    in-progress) printf '진행 중\n' ;;
+    planned) printf '계획\n' ;;
+    *) printf '%s\n' "${status}" ;;
+  esac
+}
 
-  labels+=("${PM_STATUS}")
-  [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("installable") || labels+=("not installable")
-  case "${PM_LOCAL_STATE}" in
-    installed) labels+=("installed") ;;
-    incomplete) labels+=("incomplete") ;;
-    unmanaged) labels+=("local path unmanaged") ;;
-    *) labels+=("not installed") ;;
-  esac
-  [[ "${PM_DEFAULT}" != 1 ]] || labels+=("default")
-  [[ "${PM_ACTIVE}" != yes ]] || labels+=("active")
-  case "${PM_IMAGE_STATE}" in
-    present) labels+=("image present") ;;
-    absent) labels+=("image absent") ;;
-  esac
+profile_manager_current_summary() {
+  local profile="$1" lang="${2:-en}" status_label
+  if ! profile_manager_load "${profile}" "${profile}"; then
+    printf '%s\n' "${profile}"
+    return
+  fi
+  status_label="$(profile_manager_status_label "${PM_STATUS}" "${lang}")"
+  printf '%s (%s, %s)\n' "${PM_DISPLAY_NAME}" "${PM_PROFILE}" "${status_label}"
+}
+
+profile_manager_loaded_detail() {
+  local lang="${1:-en}"
+  local -a labels=()
+  local joined="" label description
+
+  if [[ "${lang}" == ko ]]; then
+    labels+=("$(profile_manager_status_label "${PM_STATUS}" ko)")
+    [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("설치 가능") || labels+=("설치 불가")
+    case "${PM_LOCAL_STATE}" in
+      installed) labels+=("설치됨") ;;
+      incomplete) labels+=("불완전") ;;
+      unmanaged) labels+=("비관리 로컬 경로") ;;
+      *) labels+=("미설치") ;;
+    esac
+    [[ "${PM_DEFAULT}" != 1 ]] || labels+=("기본")
+    [[ "${PM_ACTIVE}" != yes ]] || labels+=("활성")
+    case "${PM_IMAGE_STATE}" in
+      present) labels+=("이미지 있음") ;;
+      absent) labels+=("이미지 없음") ;;
+    esac
+    description="${PM_DESCRIPTION_KO}"
+  else
+    labels+=("${PM_STATUS}")
+    [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("installable") || labels+=("not installable")
+    case "${PM_LOCAL_STATE}" in
+      installed) labels+=("installed") ;;
+      incomplete) labels+=("incomplete") ;;
+      unmanaged) labels+=("local path unmanaged") ;;
+      *) labels+=("not installed") ;;
+    esac
+    [[ "${PM_DEFAULT}" != 1 ]] || labels+=("default")
+    [[ "${PM_ACTIVE}" != yes ]] || labels+=("active")
+    case "${PM_IMAGE_STATE}" in
+      present) labels+=("image present") ;;
+      absent) labels+=("image absent") ;;
+    esac
+    description="${PM_DESCRIPTION}"
+  fi
 
   for label in "${labels[@]}"; do
     [[ -z "${joined}" ]] || joined+=" / "
     joined+="${label}"
   done
-  printf '%s — %s\n' "${joined}" "${PM_DESCRIPTION}"
+  printf '%s — %s\n' "${joined}" "${description}"
 }
 
 profile_manager_detail() {
-  local profile="$1" active_profile="${2:-}"
+  local profile="$1" active_profile="${2:-}" lang="${3:-en}"
   profile_manager_load "${profile}" "${active_profile}" || return
-  profile_manager_loaded_detail
+  profile_manager_loaded_detail "${lang}"
 }
 
 print_profile_manager() {

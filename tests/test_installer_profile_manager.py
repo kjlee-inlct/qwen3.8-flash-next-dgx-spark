@@ -108,7 +108,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[1/1] Installed setup management", result.stdout)
-            self.assertIn("Current profile: orcarouter", result.stdout)
+            self.assertIn("Current profile: OrcaRouter Uncensored (orcarouter, stable)", result.stdout)
             self.assertIn("[1/1] Model selection", result.stdout)
             self.assertIn("profile     : nvidia", result.stdout)
             self.assertIn("switch      : orcarouter -> nvidia", result.stdout)
@@ -143,7 +143,61 @@ class InstalledProfileWizardTests(unittest.TestCase):
                 "planned / not installable / not installed",
                 result.stdout,
             )
+            self.assertIn(
+                "Planned OrcaRouter-derived FP8-PLE profile",
+                result.stdout,
+            )
             self.assertIn("profile     : nvidia", result.stdout)
+
+    def test_korean_completed_profile_selector_localizes_registry_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+            self.mark_profile_installed(home, "qwen3.8-flash-next-orcarouter")
+
+            result = subprocess.run(
+                [
+                    str(ROOT / "install.sh"),
+                    "--lang",
+                    "ko",
+                    "--no-start",
+                    "--dry-run",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                input="1\n\ny\n",
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[1/1] 설치 관리", result.stdout)
+            self.assertIn(
+                "현재 프로필: OrcaRouter Uncensored (orcarouter, 안정)",
+                result.stdout,
+            )
+            self.assertIn("[1/1] 모델 선택 / 전환", result.stdout)
+            self.assertIn(
+                "안정 / 설치 가능 / 설치됨 / 기본 / 활성",
+                result.stdout,
+            )
+            self.assertIn(
+                "기본 검증 OrcaRouter 프로필; 관리형 KV 복원력 기본값 16 GiB",
+                result.stdout,
+            )
+            self.assertIn("선택 불가: lychee888 FP8-PLE", result.stdout)
+            self.assertIn(
+                "계획 / 설치 불가 / 미설치 — 계획 중인 OrcaRouter 파생 FP8-PLE 프로필",
+                result.stdout,
+            )
+            self.assertIn("DRY-RUN 완료", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
 
     def test_list_models_uses_same_registry_inventory_view(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -288,7 +342,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[1/1] Installed setup management", result.stdout)
-            self.assertIn("Current profile: orcarouter", result.stdout)
+            self.assertIn("Current profile: OrcaRouter Uncensored (orcarouter, stable)", result.stdout)
             self.assertIn("profile     : orcarouter", result.stdout)
             self.assertNotIn("switch      :", result.stdout)
             self.assertIn("DRY-RUN complete", result.stdout)

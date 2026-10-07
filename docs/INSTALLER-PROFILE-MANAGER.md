@@ -137,14 +137,15 @@ Profiles that require a compatibility override, currently `orcarouter`, do not e
 - **Implemented and DGX accepted:** centralize user-facing installer option metadata in one registry used by generated help and parity tests;
 - **Implemented and DGX accepted:** derive Wizard profile display/status/installability/default metadata from the profile registry;
 - **Implemented and DGX accepted:** one read-only profile-manager view combines registry availability with managed local checkpoint/image inventory and powers both the Wizard and `--list-models`;
-- resolve remaining contextual presentation differences for language/model-root/execution controls without creating duplicate state;
+- **Implemented and DGX accepted:** contextual language/model-root/execution presentation is carried by the normalized plan and equivalent CLI without duplicate state;
 - **Implemented and DGX accepted:** render a shell-safe equivalent CLI preview from the canonical normalized plan, with forced `--yes --dry-run` replay safety.
 
 ### P2 — operator polish
 
-- consolidate list/current/status presentation without replacing existing entry points;
-- improve localized profile labels/help text after metadata ownership is centralized;
-- keep planned backend work (`sglang`) independent from checkpoint-profile selection.
+- **Implemented and DGX accepted:** completed-install current/list/status presentation now uses registry-backed profile display/status metadata without replacing existing entry points;
+- **Implemented and DGX accepted:** Korean Wizard profile status/inventory labels and descriptions are localized from registry metadata;
+- **Preserved by design:** `install.sh --list-models` remains the stable English installable-profile inventory, while `manage-models.sh assets` remains the separate experiment retirement/dependency asset view;
+- **Preserved by design:** planned backend work (`sglang`) remains independent from checkpoint-profile selection.
 
 ## Safety rules
 
@@ -259,6 +260,20 @@ Guarded DGX acceptance on `f780f9bc25f9eae5a21e370aa56f7da8eb38ead6` passed afte
 
 The acceptance was non-mutating: `install.env`, `runtime-commit.env`, managed service/proxy unit digests and status, container ID, `StartedAt`, and lifecycle-idle state were unchanged, and no transaction artifacts were created. This feature is a read-only plan renderer; it does not alter lifecycle, transaction, or host-stability semantics.
 
+## Profile-manager presentation closure — 2026-10-07
+
+The final installer/profile-manager polish implementation code head is `be5f6bf9b51d80c3433a60e32c2de8d9a63987b6`, validated by CI #1294. This slice adds Korean registry descriptions, localized status/inventory labels, and one registry-backed current-profile summary used by both completed-install management and the profile selector.
+
+The polish also fixed an existing read-only presentation bug uncovered by the new Korean regression test. The profile-manager internal record previously used tab-delimited Bash `IFS`; for planned/non-installable profiles with an empty checkpoint field, adjacent tabs were collapsed as whitespace and later description fields shifted, so the `lychee888` description could disappear. The internal record now uses a non-whitespace unit separator, preserving empty fields without changing profile identity, lifecycle, or inventory semantics. Regression coverage requires both the English planned description and the Korean planned description to remain visible.
+
+Presentation boundaries remain intentional. `install.sh --list-models` is the stable English installable-profile/operator inventory backed by the profile registry and managed local checkpoint/image state. `scripts/manage-models.sh assets` is not merged into that view because it represents a different experiment-retirement/dependency asset registry, including historical hybrid experiment assets. Keeping those surfaces separate avoids conflating installable profile state with retirement/dependency semantics.
+
+Guarded DGX acceptance on `be5f6bf9b51d80c3433a60e32c2de8d9a63987b6` passed after CI #1294. The Korean completed-install flow showed `OrcaRouter Uncensored (orcarouter, 안정)`, localized install/inventory/status labels for all installable profiles, and a localized planned/non-selectable `lychee888` description. The English `--list-models` table remained stable and reported the live inventory as OrcaRouter installed/active, NVIDIA absent, mazinb installed, hybrid installed, and lychee888 planned/not-installable.
+
+The acceptance was strictly non-mutating: `install.env`, `runtime-commit.env`, managed service and proxy unit digests/status, container ID, and `StartedAt` were unchanged; lifecycle state remained idle and no transaction artifacts were created.
+
+With this acceptance, the installer/profile-manager workstream described by this document is complete. Future unrelated implementation branches should start as new work rather than extending this installer/profile-manager sequence.
+
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
@@ -266,6 +281,6 @@ The acceptance was non-mutating: `install.env`, `runtime-commit.env`, managed se
 3. **Common normalized plan** — implemented and DGX dry-run accepted.
 4. **Completed-install settings management** — implemented and accepted on DGX through preview, no-op live commit, and explicit deferred-runtime rollback; final implementation code head `33a7f16e282672b5aa256cc662c026637e5b7afb`, CI #1264.
 5. **Registry/profile-manager metadata** — registry-derived profile UI plus read-only local inventory implemented and DGX accepted on `46f929d74895699aff7b100ada9d844bcd9270ef`, CI #1278; canonical installer option metadata registry implemented and DGX accepted on `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6`, CI #1282; normalized equivalent CLI preview implemented and DGX accepted on `f780f9bc25f9eae5a21e370aa56f7da8eb38ead6`, CI #1287.
-6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when the phase explicitly requires it.
+6. **Acceptance/docs** — complete. Final profile-manager presentation polish was DGX accepted on `be5f6bf9b51d80c3433a60e32c2de8d9a63987b6`, CI #1294; the installer/profile-manager workstream is closed.
 
 Do not reopen R23–R32 allocator localization, merge the separate M1 mitigation line, or claim H38 as the current transactional managed OrcaRouter profile as part of this work.

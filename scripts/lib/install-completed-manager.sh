@@ -278,7 +278,7 @@ install_completed_execute_settings_transaction() {
 }
 
 install_completed_choose_action() {
-  local answer
+  local answer current_summary
 
   if [[ "${REFRESH_PROFILE_DEFAULTS:-0}" == 1 ]]; then
     INSTALL_COMPLETED_ACTION=refresh
@@ -286,18 +286,20 @@ install_completed_choose_action() {
     return 0
   fi
 
+  current_summary="$(profile_manager_current_summary "${MODEL_PROFILE}" "${UI_LANG}")"
+
   printf '\n%s%s[1/1] ' "${WIZARD_BLUE}" "${WIZARD_BOLD}"
   if [[ "${UI_LANG}" == ko ]]; then
     printf '설치 관리%s\n\n' "${WIZARD_RESET}"
-    wizard_info "현재 profile: ${MODEL_PROFILE}"
-    wizard_menu_option 1 '모델 profile 선택 / 전환'
+    wizard_info "현재 프로필: ${current_summary}"
+    wizard_menu_option 1 '모델 프로필 선택 / 전환'
     wizard_menu_option 2 '런타임 / API / 서비스 설정 편집'
-    wizard_menu_option 3 '현재 profile 기본값 새로고침'
+    wizard_menu_option 3 '현재 프로필 기본값 새로고침'
     wizard_menu_option 4 '취소'
     wizard_input answer '선택' 1
   else
     printf 'Installed setup management%s\n\n' "${WIZARD_RESET}"
-    wizard_info "Current profile: ${MODEL_PROFILE}"
+    wizard_info "Current profile: ${current_summary}"
     wizard_menu_option 1 'Select / switch model profile'
     wizard_menu_option 2 'Edit runtime / API / service settings'
     wizard_menu_option 3 'Refresh current profile defaults'
