@@ -71,6 +71,15 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertNotIn("PR #244 remains intentionally open", text)
         self.assertNotIn("must not be merged before mitigation", text)
 
+    def test_h38_operational_doc_uses_atomic_managed_migration(self) -> None:
+        text = read("docs/H38-DETERMINISM.md")
+        self.assertIn("atomic cross-release", text.lower())
+        self.assertIn("scripts/update-release.sh RELEASE_ID --refresh-profile-defaults", text)
+        self.assertIn("runtime rollback container remains", text)
+        self.assertIn("restored-release monitor policy", text)
+        self.assertNotIn("Existing OrcaRouter installs use an explicit two-stage migration", text)
+        self.assertNotIn("Only a subsequent", text)
+
     def test_operations_describes_monitor_as_heuristic_not_host_classifier(self) -> None:
         text = read("OPERATIONS.md")
         self.assertIn("implemented safety heuristic", text)
