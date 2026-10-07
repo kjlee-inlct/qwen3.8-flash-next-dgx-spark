@@ -10,8 +10,9 @@ experiment-runtime closure and from the R9-R32 RM allocator investigation.
 - plan: `orcarouter-h38-managed-integration-plan-20261007.md`
 - static result: `orcarouter-h38-managed-integration-static-result-20261007.md`
 - live Gate A attempt 01: `orcarouter-h38-managed-gate-a-attempt01-20261007.md`
+- live Gate A attempt 02: `orcarouter-h38-managed-gate-a-attempt02-20261007.md`
 - implementation branch: `feat/h38-managed-integration`
-- state: static/CI PASS on implementation head `398697be4a92b15e312d90101b706821075b7ae8`; first DGX Gate A attempt blocked during qualification by a host-isolation defect in `SettingsTransitionTests`; hermetic-fixture fix `d849c335593b8c87f4df7650e3a6d1b6301c24ad`; live retry pending
+- state: static/CI PASS on implementation head `398697be4a92b15e312d90101b706821075b7ae8`; DGX Gate A attempts 01 and 02 were blocked during release qualification by host-dependent `SettingsTransitionTests` fixtures; attempt 01 default-fixture fix `d849c335593b8c87f4df7650e3a6d1b6301c24ad`; remaining two owned-config fixture fix `59bc690043f769445ac300ad23c57a1cc415f81c`; live retry pending
 - promotion rule: do not merge the runtime-impacting default change until
   managed lifecycle/restart/doctor, determinism, performance, and strict RM
   host-stability gates are recorded.
