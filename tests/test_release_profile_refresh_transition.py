@@ -146,6 +146,7 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
         self.assertIn("release-profile-refresh-transition.env", lock)
         self.assertIn("QWEN38_RELEASE_PROFILE_REFRESH_CONTEXT", lock)
         self.assertIn("recover it before another lifecycle mutation", lock)
+        self.assertIn("QWEN38_RUNTIME_ADOPT_CONTEXT=1", TRANSITION.read_text(encoding="utf-8"))
 
     def test_service_runner_recovers_refresh_before_other_state(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
