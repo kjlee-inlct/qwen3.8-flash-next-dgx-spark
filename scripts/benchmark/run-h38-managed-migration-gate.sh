@@ -22,13 +22,23 @@ UPDATE_RELEASE="${ROOT}/scripts/update-release.sh"
 UPDATE_TRANSITION="${ROOT}/scripts/update-transition.sh"
 RUNTIME_TRANSITION="${ROOT}/scripts/runtime-transition.sh"
 PROFILE_TRANSITION="${ROOT}/scripts/profile-switch-transition.sh"
-SETTINGS_TRANSITION="${ROOT}/scripts/lifecycle/settings-transition.sh"
 REFRESH_TRANSITION="${ROOT}/scripts/release-profile-refresh-transition.sh"
-STATE_PARSER="${ROOT}/scripts/lib/state_file.py"
+STATE_PARSER="${ROOT}/scripts/state_file.py"
 BENCHMARK="${ROOT}/scripts/benchmark/run.py"
 DOCTOR="${ROOT}/scripts/doctor.sh"
+SETTINGS_PHASE_FILE="${STATE_HOME}/settings-transition.phase"
+SETTINGS_START_FILE="${STATE_HOME}/settings-transition.start"
+SETTINGS_NO_START_FILE="${STATE_HOME}/settings-transition.no-start"
+SETTINGS_PREV_SERVICE_FILE="${STATE_HOME}/settings-transition.previous-service-active"
+SETTINGS_PREV_CONTAINER_FILE="${STATE_HOME}/settings-transition.previous-container-running"
+SETTINGS_BACKUP="${STATE_FILE}.settings-backup"
+SETTINGS_TARGET="${STATE_FILE}.settings-candidate"
+SETTINGS_BACKUP_SHA="${SETTINGS_BACKUP}.sha256"
+SETTINGS_TARGET_SHA="${SETTINGS_TARGET}.sha256"
 
 MEASURE_STARTED=0
+WINDOW_CAPTURED=0
+OUT_READY=0
 FINALIZED=0
 MONITOR_LINES_BEFORE=0
 MIGRATION_RC=125
@@ -91,8 +101,12 @@ assert_idle() {
     fail 'runtime transition is not idle'
   grep -qx 'PROFILE_SWITCH_STATE=idle' < <(bash "${PROFILE_TRANSITION}" status) ||
     fail 'profile-switch transition is not idle'
-  grep -qx 'SETTINGS_TRANSITION_STATE=idle' < <(bash "${SETTINGS_TRANSITION}" status) ||
-    fail 'settings transition is not idle'
+  local settings_artifact
+  for settings_artifact in     "${SETTINGS_PHASE_FILE}" "${SETTINGS_START_FILE}" "${SETTINGS_NO_START_FILE}"     "${SETTINGS_PREV_SERVICE_FILE}" "${SETTINGS_PREV_CONTAINER_FILE}"     "${SETTINGS_BACKUP}" "${SETTINGS_TARGET}" "${SETTINGS_BACKUP_SHA}" "${SETTINGS_TARGET_SHA}"
+  do
+    [[ ! -e "${settings_artifact}" && ! -L "${settings_artifact}" ]] ||
+      fail "settings transaction is not idle or has stale artifact: ${settings_artifact}"
+  done
   grep -qx 'RELEASE_PROFILE_REFRESH_STATE=idle' < <(bash "${REFRESH_TRANSITION}" status) ||
     fail 'release-profile refresh transition is not idle'
 }
@@ -111,7 +125,12 @@ snapshot_lifecycle() {
   bash "${UPDATE_TRANSITION}" status >"${OUT}/update-transition-${suffix}.txt" 2>&1 || true
   bash "${RUNTIME_TRANSITION}" status >"${OUT}/runtime-transition-${suffix}.txt" 2>&1 || true
   bash "${PROFILE_TRANSITION}" status >"${OUT}/profile-transition-${suffix}.txt" 2>&1 || true
-  bash "${SETTINGS_TRANSITION}" status >"${OUT}/settings-transition-${suffix}.txt" 2>&1 || true
+  if [[ -f "${SETTINGS_PHASE_FILE}" && ! -L "${SETTINGS_PHASE_FILE}" ]]; then
+    printf 'SETTINGS_TRANSITION_STATE=' >"${OUT}/settings-transition-${suffix}.txt"
+    cat "${SETTINGS_PHASE_FILE}" >>"${OUT}/settings-transition-${suffix}.txt"
+  else
+    printf 'SETTINGS_TRANSITION_STATE=idle\n' >"${OUT}/settings-transition-${suffix}.txt"
+  fi
   bash "${REFRESH_TRANSITION}" status >"${OUT}/release-profile-refresh-${suffix}.txt" 2>&1 || true
 }
 
@@ -130,7 +149,10 @@ snapshot_runtime() {
 capture_measured_window() {
   local monitor_total=0 start_line=1
   [[ "${MEASURE_STARTED}" == 1 ]] || return 0
+  [[ "${WINDOW_CAPTURED}" == 0 ]] || return 0
+  sleep 2
   END_JOURNAL="$(date '+%Y-%m-%d %H:%M:%S')"
+  WINDOW_CAPTURED=1
   printf '%s\n' "${END_JOURNAL}" >"${OUT}/measured-window-end.txt"
 
   sudo -n journalctl -k     --since "${START_JOURNAL}"     --until "${END_JOURNAL}"     -o short-iso-precise --no-pager     >"${OUT}/kernel-window.txt" 2>"${OUT}/kernel-window.stderr" || true
@@ -174,6 +196,12 @@ finalize() {
   FINALIZED=1
   trap - EXIT INT TERM
   set +e
+  if [[ "${OUT_READY}" != 1 || ! -d "${OUT}" ]]; then
+    printf 'H38_MANAGED_FUNCTIONAL=%s\n' "${FUNCTIONAL}"
+    printf 'H38_MANAGED_HOST_STABILITY=%s\n' "${HOST_STABILITY}"
+    exit "${rc}"
+  fi
+
   capture_measured_window
   snapshot_lifecycle after
   snapshot_runtime after
@@ -188,11 +216,23 @@ finalize() {
   fi
   write_summary "${rc}"
 
+  {
+    printf '===== summary =====\n'
+    cat "${OUT}/summary.txt"
+    for evidence_file in       migration-command.log doctor-strict.txt h38-image-verify.txt kernel-errors.txt       release-before.txt release-after.txt runtime-transition-after.txt       release-profile-refresh-after.txt service-window.txt
+    do
+      [[ -f "${OUT}/${evidence_file}" ]] || continue
+      printf '\n===== %s =====\n' "${evidence_file}"
+      cat "${OUT}/${evidence_file}"
+    done
+  } >"${OUT}/upload-summary.txt"
+
   printf '\n===== H38 managed migration summary =====\n'
   cat "${OUT}/summary.txt"
   printf '%s\n' '--- kernel errors ---'
   cat "${OUT}/kernel-errors.txt" 2>/dev/null || true
   printf 'evidence=%s\n' "${OUT}"
+  printf 'upload_summary=%s\n' "${OUT}/upload-summary.txt"
   if (( RM_OOM_COUNT > 0 )); then
     printf 'H38_MANAGED_HOST_STABILITY=FAIL\n'
   else
@@ -208,7 +248,7 @@ trap finalize EXIT INT TERM
   fail 'H38_MANAGED_TARGET_SHA must be the exact 40-character target commit SHA'
 }
 
-for command in   bash git python3 docker systemctl curl journalctl date grep awk sed cp stat   sha256sum tee sudo swapon wc mktemp
+for command in   bash git python3 docker systemctl curl journalctl date grep awk sed cp stat   sha256sum tee sudo swapon wc mktemp sleep
 do
   require_command "${command}"
 done
@@ -220,6 +260,7 @@ ACTUAL_SHA="$(git -C "${ROOT}" rev-parse HEAD)"
   fail 'working tree is dirty; preserve local changes before live acceptance'
 [[ ! -e "${OUT}" && ! -L "${OUT}" ]] || fail "evidence path already exists: ${OUT}"
 mkdir -p -- "${OUT}"
+OUT_READY=1
 exec > >(tee -a "${OUT}/run.log") 2>&1
 
 printf '%s\n' "${TARGET_SHA}" >"${OUT}/target-sha.txt"
@@ -345,7 +386,7 @@ docker inspect "${CONTAINER}.rollback" >/dev/null 2>&1 &&
 
 H38_LABEL="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${H38_IMAGE}" 2>/dev/null || true)"
 [[ "${H38_LABEL}" == "${H38_SCOPE}" ]] || fail "H38 image label mismatch: ${H38_LABEL:-missing}"
-bash "${POST_ROOT}/scripts/runtime/prepare-h38-image.sh" verify   >"${OUT}/h38-image-verify.txt" 2>&1 || fail 'H38 image provenance verification failed'
+bash "${POST_ROOT}/scripts/prepare-h38-image.sh" verify   >"${OUT}/h38-image-verify.txt" 2>&1 || fail 'H38 image provenance verification failed'
 
 docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${CONTAINER}" >"${OUT}/h38-env.txt"
 for expected in   'VLLM_PLE_MMAP=1'   'VLLM_QSA_EXACT_TOPK=1'   'QWEN38_MARLIN_CANONICAL_ORDER=1'   'QWEN38_MARLIN_CANONICAL_SCOPE=decoder'   "VLLM_CACHE_ROOT=${H38_CACHE}"
