@@ -22,6 +22,50 @@ bash "${PROFILE_SWITCH_TRANSITION}" service-recover
 [[ -r "${STATE_FILE}" ]] || { printf 'FATAL: installation manifest is not readable: %s\n' "${STATE_FILE}" >&2; exit 1; }
 [[ -r "${STATE_PARSER}" ]] || { printf 'FATAL: state parser is unavailable: %s\n' "${STATE_PARSER}" >&2; exit 1; }
 
+delegate_restored_runtime_root() {
+  local parsed key value manifest_root="" canonical_root adopt_file adopt_runner previous_runner
+  parsed="$(mktemp)"
+  if ! python3 "${STATE_PARSER}" install-service "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    [[ "${key}" != INSTALL_ROOT ]] || manifest_root="${value}"
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ -n "${manifest_root}" ]] || return 1
+  canonical_root="$(realpath -e -- "${manifest_root}" 2>/dev/null || true)"
+  [[ -n "${canonical_root}" ]] || return 1
+  [[ "${canonical_root}" != "${RUNTIME_ROOT}" ]] || return 0
+
+  adopt_file="$(dirname -- "${STATE_FILE}")/runtime-adopt.env"
+  if [[ -e "${adopt_file}" || -L "${adopt_file}" ]]; then
+    [[ -f "${adopt_file}" && ! -L "${adopt_file}" ]] || {
+      printf 'FATAL: runtime adoption marker is unsafe: %s\n' "${adopt_file}" >&2
+      return 1
+    }
+    adopt_runner="${RUNTIME_ROOT}/scripts/runtime/service-adopt-runner.sh"
+    [[ -r "${adopt_runner}" ]] || {
+      printf 'FATAL: runtime adoption supervisor is unavailable: %s\n' "${adopt_runner}" >&2
+      return 1
+    }
+    exec bash "${adopt_runner}" --runtime-root "${canonical_root}"
+  fi
+
+  previous_runner="${canonical_root}/scripts/service-runner.sh"
+  [[ -x "${previous_runner}" ]] || {
+    printf 'FATAL: restored runtime root has no executable service runner: %s\n' "${previous_runner}" >&2
+    return 1
+  }
+  printf 'Delegating managed service to restored immutable runtime root: %s\n' "${canonical_root}"
+  exec bash "${previous_runner}"
+}
+
+delegate_restored_runtime_root || {
+  printf 'FATAL: failed to resolve managed runtime root before startup\n' >&2
+  exit 1
+}
+
 parse_state_into_vars() {
   local schema="$1" path="$2" parsed key value
   parsed="$(mktemp)"
