@@ -116,6 +116,47 @@ class InstallerOptionParityTests(unittest.TestCase):
     def test_parser_flags_match_canonical_registry(self) -> None:
         self.assertEqual(self.parser_flags(), self.registry_flags())
 
+    def test_registry_flag_lookup_handles_single_and_variant_groups(self) -> None:
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                (
+                    'source "$1"; '
+                    'install_option_flag profile; '
+                    'install_option_flag service_mode no-service; '
+                    'install_option_flag monitor_mode protect'
+                ),
+                "bash",
+                str(OPTION_REGISTRY),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            ["--model", "--no-service", "--protect"],
+        )
+
+        ambiguous = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'source "$1"; install_option_flag service_mode',
+                "bash",
+                str(OPTION_REGISTRY),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(ambiguous.returncode, 2)
+        self.assertEqual(ambiguous.stdout, "")
+
     def test_help_is_rendered_from_registry_and_mentions_every_option(self) -> None:
         self.assertIn("install_option_usage", self.installer)
         result = subprocess.run(
