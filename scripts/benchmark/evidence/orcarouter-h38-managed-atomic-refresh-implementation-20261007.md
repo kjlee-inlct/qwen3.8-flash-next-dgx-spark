@@ -33,6 +33,7 @@ rather than weakening host-safety protection.
 - cold-restart refusal / restored-root delegation: `91bf2d8f5eed323633e4fa94027a5130f4069906`
 - rollback service-ownership restoration: `283c73009f03f3c203b65658950710c086ba8439`
 - identity-safe rollback regression coverage: `40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`
+- in-process reboot/interruption adoption handoff: `c9d0a014a71403fb6280be0b8db7d08028702046`
 
 Later commits may advance the branch; the exact live acceptance target must always be the
 then-current PR head, not one of the intermediate SHAs above.
@@ -132,8 +133,11 @@ Recovery behavior:
   the failed candidate service's `ExecStop`;
 - when the predecessor container is still running, a strict one-shot
   `runtime-adopt.env` marker lets systemd attach to that exact container ID, image,
-  model mount and served identity without replacing it. The previous release's normal
-  unit definition is then restored with `--no-start`;
+  model mount and served identity without replacing it. For operator-driven recovery,
+  the previous release's normal unit definition is then restored with `--no-start`;
+  for service-startup recovery, the already-running target runner consumes the special
+  recovery return and `exec`s the adoption supervisor immediately, before systemd can
+  restart through the now-restored dynamic `current` symlink into an older runner;
 - when safety protection has left the predecessor container stopped, recovery preserves
   that stopped state instead of cold-starting the legacy runtime merely to make systemd
   active again;
@@ -225,6 +229,11 @@ Historical failures are retained because they found real design or test-harness 
   `40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`: **SUCCESS**. Shell syntax,
   ShellCheck, Python compilation, the full unit-test suite, and whitespace checks all
   passed.
+- dynamic-`current` recovery handoff hardening CI run `37619751679` on
+  `c9d0a014a71403fb6280be0b8db7d08028702046`: **SUCCESS**. Shell syntax,
+  ShellCheck, Python compilation, the full unit-test suite, and whitespace checks all
+  passed. Startup recovery now adopts the restored predecessor inside the current
+  target runner instead of exposing a restart window into an older runner.
 
 ## Acceptance boundary
 
@@ -233,8 +242,9 @@ No DGX H38 managed migration has been executed through this new transaction yet.
 Current classification:
 
 - atomic transaction implementation: IMPLEMENTED ON BRANCH
-- atomic implementation static/CI: PASS, including identity-safe rollback hardening
-  (`40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`, run `37616889537`)
+- atomic implementation static/CI: PASS, including identity-safe rollback and
+  dynamic-root interruption recovery hardening
+  (`c9d0a014a71403fb6280be0b8db7d08028702046`, run `37619751679`)
 - managed H38 migration FUNCTIONAL: NOT REACHED
 - managed H38 migration HOST-STABILITY: NOT REACHED
 - managed H38 DETERMINISM: NOT REACHED
