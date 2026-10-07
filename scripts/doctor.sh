@@ -12,6 +12,7 @@ PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
 RELEASE_PROFILE_REFRESH_BACKUP="${STATE_FILE}.release-profile-refresh-backup"
 RELEASE_PROFILE_REFRESH_CANDIDATE="${STATE_FILE}.release-profile-refresh-candidate"
+RUNTIME_ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
 ASSET_OWNERSHIP_TOOL="${SCRIPT_DIR}/lib/asset_ownership.py"
@@ -248,6 +249,17 @@ elif [[ -e "${RELEASE_PROFILE_REFRESH_BACKUP}" || -L "${RELEASE_PROFILE_REFRESH_
   fail "release-profile refresh candidate/backup artifacts exist without transaction state; automatic cleanup is intentionally disabled"
 else
   pass "no incomplete release-profile refresh exists"
+fi
+
+if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+  if [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] &&
+     runtime_adopt_id="$(parse_lifecycle_state_value runtime-adopt "${RUNTIME_ADOPT_FILE}" RUNTIME_CONTAINER_ID)"; then
+    fail "one-shot runtime adoption is still pending (container=${runtime_adopt_id}); let managed-service recovery finish before maintenance"
+  else
+    fail "runtime adoption marker is malformed or unsafe; inspect ${RUNTIME_ADOPT_FILE} before maintenance"
+  fi
+else
+  pass "no pending one-shot runtime adoption exists"
 fi
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
