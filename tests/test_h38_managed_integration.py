@@ -29,7 +29,7 @@ class H38ManagedIntegrationTests(unittest.TestCase):
         self.assertIn("QWEN38_MARLIN_CANONICAL_ORDER=1", block)
         self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", block)
         self.assertIn("h38-marlin-canonical-decoder-managed-v1", block)
-        self.assertIn('"\${RUNTIME_ENV[@]}"', text)
+        self.assertIn('"${RUNTIME_ENV[@]}"', text)
 
     def test_clean_host_builder_contains_complete_h38_parent_chain(self) -> None:
         text = (ROOT / "scripts" / "runtime" / "prepare-h38-image.sh").read_text(
@@ -51,10 +51,10 @@ class H38ManagedIntegrationTests(unittest.TestCase):
     def test_installer_uses_h38_builder_instead_of_pulling_local_image(self) -> None:
         text = (ROOT / "install.sh").read_text(encoding="utf-8")
         self.assertIn(
-            'if [[ "\${MODEL_PROFILE}" == orcarouter && "\${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]',
+            'if [[ "${MODEL_PROFILE}" == orcarouter && "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]',
             text,
         )
-        self.assertIn('bash "\${ROOT_DIR}/scripts/runtime/prepare-h38-image.sh" build', text)
+        self.assertIn('bash "${ROOT_DIR}/scripts/runtime/prepare-h38-image.sh" build', text)
 
     def test_preflight_and_doctor_fail_closed_on_h38_scope_drift(self) -> None:
         preflight = (ROOT / "scripts" / "runtime" / "preflight-runtime.sh").read_text(
