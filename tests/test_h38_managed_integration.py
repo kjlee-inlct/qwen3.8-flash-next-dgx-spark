@@ -69,6 +69,22 @@ class H38ManagedIntegrationTests(unittest.TestCase):
         self.assertIn("QWEN38_MARLIN_CANONICAL_ORDER=1", doctor)
         self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", doctor)
 
+    def test_production_gate_can_target_managed_served_alias(self) -> None:
+        text = (ROOT / "scripts" / "benchmark" / "run-h38-production-gate.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("H38_GATE_MODEL", text)
+        self.assertIn("H38_GATE_OUT", text)
+
+    def test_legacy_orcarouter_image_remains_bootable_until_explicit_refresh(self) -> None:
+        serve = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")
+        preflight = (ROOT / "scripts" / "runtime" / "preflight-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('if [[ "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]', serve)
+        self.assertIn('LEGACY_IMAGE="vllm-skinny-tp1:v1"', preflight)
+        self.assertIn("pending explicit --refresh-profile-defaults migration", preflight)
+
     def test_operator_asset_registry_tracks_promoted_orcarouter_image(self) -> None:
         text = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
         start = text.index("    orcarouter)\n")
