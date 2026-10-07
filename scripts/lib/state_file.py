@@ -76,6 +76,7 @@ SCHEMAS: dict[str, dict[str, Validator]] = {
         "TARGET_MANIFEST": absolute_path,
         "TARGET_MANIFEST_SHA256": optional(matches(SHA256)),
         "PROFILE": exact("orcarouter"),
+        "OLD_CONTAINER_ID": matches(HEX_CONTAINER),
         "OLD_IMAGE": nonempty_text,
         "TARGET_IMAGE": exact("vllm-orcarouter-v029-h38-decoder-scope:v1"),
         "SERVED_NAME": exact("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"),
