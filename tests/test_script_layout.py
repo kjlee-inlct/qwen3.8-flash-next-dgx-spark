@@ -206,6 +206,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "update-transition.sh",
             "release-profile-refresh-transition.sh",
             "prepare-h38-image.sh",
+            "run-h38-managed-followup-gates.sh",
         ):
             with self.subTest(name=name):
                 self.assertIn(f"`{name}`", readme)
