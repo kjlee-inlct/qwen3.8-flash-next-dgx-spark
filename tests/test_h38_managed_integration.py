@@ -82,7 +82,11 @@ class H38ManagedIntegrationTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn('if [[ "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]', serve)
-        self.assertIn('LEGACY_IMAGE="vllm-skinny-tp1:v1"', preflight)
+        self.assertIn('LEGACY_SKINNY_IMAGE="vllm-skinny-tp1:v1"', preflight)
+        self.assertIn(
+            'LEGACY_STOCK_IMAGE="vllm/vllm-openai:qwen38-flash-next-arm64-cu130"',
+            preflight,
+        )
         self.assertIn("pending explicit --refresh-profile-defaults migration", preflight)
 
     def test_installer_tracks_h38_parent_image_ownership(self) -> None:

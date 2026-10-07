@@ -3,10 +3,11 @@
 #
 # PLE handling is profile-specific:
 #   - nvidia keeps the legacy CPU-offload managed path;
-#   - orcarouter, mazinb and orcarouter-hybrid use the validated vLLM v0.29
-#     PLE mmap path and exact-QSA fallback.
-#   - orcarouter additionally enables the qualified H38 decoder-only Marlin
-#     canonical-order repair in its dedicated production image.
+#   - mazinb and orcarouter-hybrid use the validated vLLM v0.29 PLE mmap path
+#     and exact-QSA fallback;
+#   - orcarouter keeps legacy CPU-offload controls for a pre-H38 manifest, then
+#     selects the v0.29 PLE-mmap/exact-QSA path plus the qualified H38
+#     decoder-only Marlin canonical-order repair after explicit image migration.
 #
 # Keep profile defaults explicit below. Do not silently make experimental runtime flags
 # global because the published checkpoints differ in PLE representation and runtime image.

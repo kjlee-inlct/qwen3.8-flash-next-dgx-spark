@@ -16,8 +16,8 @@ selects the H38 image.
 For an existing OrcaRouter installation, migration is intentionally explicit:
 
 1. advance the immutable runtime release through the normal
-   stage -> qualify -> update-release lifecycle; the legacy
-   `vllm-skinny-tp1:v1` manifest remains bootable with legacy controls;
+   stage -> qualify -> update-release lifecycle; prior supported OrcaRouter
+   stock/skinny manifests remain bootable with legacy controls;
 2. after that code cutover is healthy, run
    `./install.sh --model orcarouter --refresh-profile-defaults --lang en --yes`
    to build/reuse H38 and transactionally replace the managed runtime.

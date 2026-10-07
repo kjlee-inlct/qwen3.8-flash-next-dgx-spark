@@ -575,8 +575,9 @@ exists yet.
 > in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. This feature
 > branch implements the corresponding candidate image/runtime controls for the transactional
 > `orcarouter` installer/systemd path, but managed-service qualification is still pending.
-> Existing installs first update the immutable release while retaining their legacy image,
-> then use `--refresh-profile-defaults` for the explicit H38 manifest/runtime migration.
+> Existing installs first update the immutable release while retaining a supported legacy
+> stock/skinny image, then use `--refresh-profile-defaults` for the explicit H38
+> manifest/runtime migration.
 > Do not call the managed H38 path production until the acceptance plan in
 > `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md` passes.
 
@@ -680,7 +681,7 @@ NVIDIA profile. When the installation manifest selects the H38 image, managed
 OrcaRouter uses PLE mmap, exact QSA, decoder-only Marlin canonical ordering, native
 262144 context, the retained 16 GiB KV resilience default, MTP `k=2`, disabled
 prefix cache, disabled FlashInfer autotune, and an isolated H38 compile-cache
-namespace. A legacy `vllm-skinny-tp1:v1` manifest still uses its pre-H38 controls
+namespace. Supported legacy stock/skinny manifests still use their pre-H38 controls
 until an explicit `--refresh-profile-defaults` migration. Performance on the managed
 H38 path remains an acceptance gate, not an assumed improvement.
 

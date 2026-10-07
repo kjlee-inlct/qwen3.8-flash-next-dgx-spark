@@ -25,7 +25,8 @@ fi
 docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1 || { printf 'FATAL: runtime image is missing: %s\n' "${VLLM_IMAGE:-unset}" >&2; exit 1; }
 if [[ "${MODEL_PROFILE:-}" == orcarouter ]]; then
   H38_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"
-  LEGACY_IMAGE="vllm-skinny-tp1:v1"
+  LEGACY_SKINNY_IMAGE="vllm-skinny-tp1:v1"
+  LEGACY_STOCK_IMAGE="vllm/vllm-openai:qwen38-flash-next-arm64-cu130"
   case "${VLLM_IMAGE:-}" in
     "${H38_IMAGE}")
       h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
@@ -34,11 +35,11 @@ if [[ "${MODEL_PROFILE:-}" == orcarouter ]]; then
         exit 1
       }
       ;;
-    "${LEGACY_IMAGE}")
+    "${LEGACY_SKINNY_IMAGE}"|"${LEGACY_STOCK_IMAGE}")
       printf 'Runtime preflight: legacy OrcaRouter image retained pending explicit --refresh-profile-defaults migration.\n'
       ;;
     *)
-      printf 'FATAL: managed OrcaRouter runtime image drift: manifest=%s allowed=%s,%s\n' "${VLLM_IMAGE:-unset}" "${LEGACY_IMAGE}" "${H38_IMAGE}" >&2
+      printf 'FATAL: managed OrcaRouter runtime image drift: manifest=%s allowed=%s,%s,%s\n' "${VLLM_IMAGE:-unset}" "${LEGACY_STOCK_IMAGE}" "${LEGACY_SKINNY_IMAGE}" "${H38_IMAGE}" >&2
       exit 1
       ;;
   esac

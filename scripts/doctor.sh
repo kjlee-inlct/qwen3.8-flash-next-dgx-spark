@@ -243,8 +243,9 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
         pass "managed OrcaRouter image matches profile default"
         h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
         [[ "${h38_scope}" == decoder-v1 ]] && pass "H38 decoder-scope image label is valid" || fail "H38 decoder-scope image label mismatch: ${h38_scope:-missing}"
-      elif [[ "${VLLM_IMAGE:-}" == vllm-skinny-tp1:v1 ]]; then
-        warn "managed OrcaRouter still uses the legacy image; run --refresh-profile-defaults after the immutable release update"
+      elif [[ "${VLLM_IMAGE:-}" == vllm-skinny-tp1:v1 ||
+              "${VLLM_IMAGE:-}" == vllm/vllm-openai:qwen38-flash-next-arm64-cu130 ]]; then
+        warn "managed OrcaRouter still uses a legacy image; run --refresh-profile-defaults after the immutable release update"
       else
         fail "managed OrcaRouter image drift: manifest=${VLLM_IMAGE:-missing}, profile=${EXPECTED_IMAGE:-missing}"
       fi

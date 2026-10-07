@@ -23,7 +23,7 @@ checkpoint profile and it does not change the `orcarouter-hybrid` H6 checkpoint.
 The implementation must keep these boundaries:
 
 - clean-host local image construction follows v0.29 -> H9 -> H10 -> H11 -> H12 -> H38;
-- an existing pre-H38 OrcaRouter manifest remains bootable after immutable code update;
+- existing supported pre-H38 OrcaRouter stock/skinny manifests remain bootable after immutable code update;
 - H38 runtime controls activate only after explicit `--refresh-profile-defaults`
   changes the manifest image to the H38 tag;
 - H38 uses PLE mmap, exact QSA, canonical Marlin order with decoder scope, isolated
@@ -54,8 +54,9 @@ The live sequence is deliberately two-stage for an existing installation:
 1. Capture current managed service, container/image, manifest, immutable release,
    runtime commit, and a decode-performance baseline.
 2. Stage, qualify, and transactionally update the immutable release to the PR head.
-   The old `vllm-skinny-tp1:v1` manifest must still reach READY using the legacy
-   OrcaRouter controls. This proves code-update compatibility before data migration.
+   The currently installed supported legacy stock/skinny manifest must still reach READY
+   using the legacy OrcaRouter controls. This proves code-update compatibility before
+   data migration.
 3. Run `./install.sh --model orcarouter --refresh-profile-defaults --lang en --yes`.
    The installer must build/reuse the complete H38 image chain, replace the runtime
    transactionally, and commit the H38 manifest only after READY and served-model
