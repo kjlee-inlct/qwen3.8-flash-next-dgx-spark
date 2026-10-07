@@ -1,6 +1,6 @@
 # OrcaRouter H38 atomic cross-release refresh implementation — 2026-10-07
 
-Status: IMPLEMENTED ON BRANCH — STATIC CI REVALIDATION PENDING — LIVE ACCEPTANCE NOT REACHED
+Status: IMPLEMENTED ON BRANCH — FINAL STATIC CI REVALIDATION IN PROGRESS — LIVE ACCEPTANCE NOT REACHED
 
 ## Purpose
 
@@ -9,8 +9,9 @@ The matched PR-base-main control proved that the previous acceptance sequence
 `new immutable code -> persisted legacy CPU-offload READY -> H38 image refresh`
 
 is not a valid discriminator. PR-base-equivalent code reproduced the same protected
-legacy restart with `rm_oom_count=0`. The safety monitor remains enabled; this change
-removes the invalid intermediate lifecycle requirement rather than weakening protection.
+legacy restart with `rm_oom_count=0`. The memory monitor and strict NVIDIA RM rules
+remain unchanged. This implementation removes the invalid intermediate lifecycle state
+rather than weakening host-safety protection.
 
 ## Repository provenance
 
@@ -20,16 +21,24 @@ removes the invalid intermediate lifecycle requirement rather than weakening pro
 - PR base: `a7c563705edba780747bf815278f6b77c8a41b08`
 - matched base-main control: `d75c24ca496286e0b62db5e8f1d88480ed30e137`
 - first coordinator commit: `e783bf2a62f998b500f7f54491be950f348d0cea`
-- executable entrypoint mode repair: `afa99afd655cc6ca928ac23774cc89ca7745e703`
-- latest implementation/test head before documentation-only follow-up: `dcb47cd8238b9658f311cdc962809a0da03c76d0`
+- runtime commit deferral: `950d0a6944d3d9b72fff8596816a25e07c033d0e`
+- symmetric runtime rollback preservation: `602fe8157a8d0cc7b9fc7a97e24ade0fee5ebd94`
+- negative Docker-guard return fix: `c42ec5e426e4a0ab6face3171f5d9dd42cad0090`
+- guarded live migration gate introduction: `948a3c4186254a1c285b7c5c79e379b4201ea991`
+- live gate executable-mode repair: `b3f91460612d46e79ca241f18156354978013049`
+- guarded gate contract test: `dd8f47b0690c24cda95dc0400096cf144102e79a`
+- atomic live-plan replacement: `76f2e83457933b38a002c4399b0dd0a70ea6d541`
+
+Later commits may advance the branch; the exact live acceptance target must always be the
+then-current PR head, not one of the intermediate SHAs above.
 
 ## Implemented transaction surface
 
 Canonical coordinator:
 
-`lifecycle/release-profile-refresh-transition.sh` (relative to `scripts/`)
+`scripts/lifecycle/release-profile-refresh-transition.sh`
 
-Stable entry point:
+Stable operator entry point:
 
 `scripts/release-profile-refresh-transition.sh`
 
@@ -37,94 +46,158 @@ Operator update route:
 
 `scripts/update-release.sh RELEASE_ID --refresh-profile-defaults`
 
-The coordinator is the sole owner of the combined cross-release boundary. It does not
-nest `update-transition.sh` and `profile-switch-transition.sh`, because two
-independent recovery owners could restore a mismatched release/manifest pair.
+The coordinator is the sole owner of the combined cross-release release-pointer +
+canonical-manifest boundary. It intentionally does not nest `update-transition.sh`
+and `profile-switch-transition.sh`, because independent recovery owners could restore
+a mismatched release/manifest pair.
 
-The serialized operation performs:
+The serialized operation now performs:
 
-1. validate current complete OrcaRouter managed installation;
+1. validate the complete existing OrcaRouter managed installation;
 2. reject active/stale update, runtime, profile-switch and settings transactions;
-3. stage/verify and manifest-bind qualification of the exact target immutable release;
-4. load the target OrcaRouter profile from that qualified release;
-5. require unchanged checkpoint repo, revision, model directory and served alias;
-6. build/reuse the v0.29 -> H9 -> H10 -> H11 -> H12 -> H38 image chain;
-7. preserve operator-owned image ownership while claiming only installer-created assets;
-8. verify H38 image provenance/label;
-9. persist the exact old current/previous release IDs and old install manifest digest;
-10. prepare a strict `service_ready` target manifest with the H38 image and target
-    immutable `INSTALL_ROOT`;
-11. activate the target release pointer and H38 manifest under one persisted transaction;
-12. start the managed service only after both target identities are visible;
-13. require health/model readiness, runtime-commit attestation, exact target runtime root,
-    exact H38 image, running container, `OOMKilled=false`, and H38 scope label;
-14. convert the target manifest to `PHASE=complete` only after runtime proof;
-15. clear transaction artifacts only after the target proof is rechecked.
+3. prove the exact previous immutable current release and runtime attestation;
+4. require the previous container to match the manifest image, be running, healthy,
+   exact-model READY, and `OOMKilled=false`;
+5. stage/verify and manifest-bind qualification of the exact target immutable release;
+6. load target OrcaRouter defaults from that qualified immutable release;
+7. require unchanged checkpoint repository, revision, model directory and served alias;
+8. build/reuse the v0.29 -> H9 -> H10 -> H11 -> H12 -> H38 image chain;
+9. preserve operator-owned image ownership and claim only installer-created stages;
+10. re-prove the exact previous runtime immediately before crossing the activation
+    boundary because image preparation may be long-running;
+11. persist the old current/previous release IDs, release-manifest digest, backup
+    install-manifest digest, target manifest digest, old/target image and served identity;
+12. activate the qualified target release pointer and H38 `service_ready` manifest
+    before the single managed-service replacement;
+13. start the target H38 runtime directly; no new-code + legacy-image runtime is started;
+14. require target health/model readiness and write target runtime attestation;
+15. **defer `runtime-transition commit`** so the previous
+    `qwen38-flash-next.rollback` container remains available while the outer
+    release-profile transaction is still reversible;
+16. prove exact target release/manifest/container/image/label/attestation and
+    `OOMKilled=false`;
+17. commit the deferred runtime transition, then convert the target manifest to
+    `PHASE=complete`, re-prove the target, and only then clear outer transaction state.
 
-There is no managed service start between target release activation and H38 candidate
-manifest activation. The invalid legacy CPU-offload intermediate READY state is no longer
-part of the path.
+The old invalid legacy CPU-offload intermediate READY state is not part of this path.
 
-## Recovery semantics
+## Recovery and interruption semantics
 
-The strict `release-profile-refresh` state schema records:
+The strict `release-profile-refresh` state records:
 
-- target release;
-- old current and old previous releases;
+- transaction schema and phase;
+- exact target release;
+- old current and old previous release;
 - target release-manifest SHA-256;
 - backup and target install-manifest paths/digests;
 - same-profile identity;
-- old and target images;
+- old and target image;
 - served model identity;
-- transaction phase;
 - update timestamp.
 
-Activation records `activating` before pointer/manifest mutation. Failure or
-interruption before runtime commit restores the exact previous current/previous release
-pair plus the digest-verified previous canonical install manifest.
+Important durability rule:
 
-If a runtime transition is active, its canonical recovery runs before the outer
-release/manifest restoration. A protected startup stop therefore remains a failed
-candidate and triggers rollback; it is not converted into PASS.
+> Target API READY is not enough to destroy the previous runtime.
 
-`service-runner.sh` performs release-profile refresh startup recovery before
-profile-switch recovery and before canonical manifest parsing. During an intentional
-cutover the outer operation lock is still held, so startup recovery defers. After a
-process/host interruption, recovery either proves the committed target or restores the
-previous pair and forces a systemd retry on the restored release.
+During `runtime_validating`, the target may be healthy and attested while the
+runtime transaction deliberately remains in `validating`. The rollback container is
+kept until the outer coordinator decides to commit.
 
-Ambiguous state, missing backup evidence, digest mismatch, unsafe release pointers, or
-stale transaction artifacts fail closed.
+Recovery behavior:
 
-## Operation lock and diagnostics
+- before activation: remove transaction artifacts without touching the live old tuple;
+- activation/runtime-validation before target proof: recover the runtime transition
+  first, prove the old container identity, then restore the exact old current/previous
+  release pointers and digest-verified old manifest;
+- target is fully attested while outer state is still `activated` or
+  `runtime_validating`: finish the target commit instead of destroying a proven
+  successful candidate;
+- crash after runtime-transition commit but before outer lifecycle commit: if the
+  target is still fully provable, finish the outer commit idempotently;
+- `runtime_committed`/`committing` with incomplete target proof: fail closed.
+  Previous runtime evidence may already have been intentionally destroyed, so recovery
+  must not pretend that rollback is still symmetric;
+- protected startup stop remains a failed candidate/safety intervention and is not
+  converted into PASS;
+- malformed/missing digest evidence, unsafe pointers, stale artifacts, image mismatch,
+  release-manifest drift, or ambiguous container state fail closed.
 
-`lib/operation-lock.sh` (relative to `scripts/`) now blocks unrelated lifecycle mutation while a
+`service-runner.sh` invokes release-profile refresh startup recovery before
+profile-switch recovery and before parsing the canonical install manifest. During an
+intentional cutover the outer lifecycle lock is active and startup recovery defers.
+After interruption with no outer lock, recovery either finishes a fully proven target
+or restores the previous tuple and lets systemd retry from the restored current release.
+
+## Operation lock, diagnostics, and entry points
+
+`scripts/lib/operation-lock.sh` blocks unrelated lifecycle mutation while a
 release-profile refresh state exists, except for the trusted inherited refresh context.
 
-`doctor.sh` reports incomplete/malformed refresh state or orphan refresh
-backup/candidate artifacts and requires the refresh lifecycle to be idle for a clean
-result.
+`scripts/doctor.sh` fails on incomplete/malformed refresh state or orphan refresh
+backup/candidate artifacts.
 
-The stable refresh entry point is stored as Git mode `100755`; this is explicitly
-regression-tested because immutable releases are produced from the Git tree.
+Stable entry points now include:
 
-## Test/CI history during implementation
+- `scripts/release-profile-refresh-transition.sh`
+- `scripts/prepare-h38-image.sh`
 
-An intermediate CI run `37597793527` reached:
+The guarded live migration gate is:
 
-- shell syntax: PASS;
-- ShellCheck: PASS;
-- Python compile: PASS;
-- unit tests: FAIL, 2 layout-policy assertions.
+`scripts/benchmark/run-h38-managed-migration-gate.sh`
 
-The failures were dependency-boundary regressions, not runtime-safety failures:
-the new lifecycle coordinator directly referenced `model/`, and the runtime runner
-directly referenced `lifecycle/`. They were fixed without changing the dependency
-policy: lifecycle now uses the stable top-level model-profile source entry point, and
-runtime uses the stable top-level refresh entry point.
+The operator shim and live gate are Git mode `100755`; regression tests protect these
+modes because immutable releases are produced with `git archive`.
 
-A fresh CI run is required on the final documentation-inclusive head before this
-implementation may be classified STATIC/CI PASS.
+## Guarded live migration gate
+
+The live gate is intentionally narrower than the entire final acceptance suite. It
+performs the dangerous migration boundary and records the evidence needed to decide
+whether later determinism/performance/restart gates may proceed.
+
+It requires:
+
+- exact 40-character target SHA equal to checkout HEAD;
+- clean worktree including untracked files;
+- legacy supported OrcaRouter image, complete manifest, owned/enabled service;
+- all lifecycle transactions idle, including stale settings artifacts;
+- exact predecessor immutable release and runtime commit attestation;
+- healthy running predecessor, `OOMKilled=false`, exact served model;
+- fresh 384-token x5 legacy decode baseline.
+
+It then executes only:
+
+`scripts/update-release.sh TARGET_SHA --refresh-profile-defaults`
+
+and verifies exact target release/install root, H38 image/label/env, 16 GiB KV flag,
+model ID, runtime attestation, lifecycle idle state, `doctor.sh --strict`, and
+`OOMKilled=false`.
+
+A measured kernel window begins immediately before mutation. Any
+`_memdescAllocInternal` or `NV_ERR_NO_MEMORY` is HOST-STABILITY FAIL. A monitor
+protected stop is a safety intervention and leaves functional acceptance incomplete;
+it is not RM OOM and not HOST-STABILITY PASS.
+
+The gate writes a full `run.log`, structured evidence files, and
+`upload-summary.txt` for return to the repository engineer.
+
+## CI history during implementation
+
+Historical failures are retained because they found real design or test-harness defects.
+
+- run `37597793527`: shell/ShellCheck/Python passed; unit tests found two category
+  dependency violations. The code was redirected through existing stable top-level
+  entry points instead of weakening the layout policy.
+- run `37602011565`: unit recovery tests exposed missing fake runtime-helper coverage
+  plus a stale assertion after stronger fail-closed recovery. Fixtures/assertions were
+  corrected; production safety was not relaxed.
+- run `37602275529`: unit tests exposed a real Bash `set -e` bug where negative
+  Docker existence guards returned nonzero on the normal path. Explicit successful
+  returns were added in commit `c42ec5e...`.
+- run `37603052374`: shell/ShellCheck/Python passed; one unit layout-policy failure
+  found the new benchmark gate directly referencing canonical `lib/`, `lifecycle/`
+  and `runtime/` categories. The gate now uses stable top-level entry points; no
+  dependency waiver was added.
+- final documentation-inclusive CI on the current head: **IN PROGRESS/PENDING**.
 
 ## Acceptance boundary
 
@@ -133,20 +206,18 @@ No DGX H38 managed migration has been executed through this new transaction yet.
 Current classification:
 
 - atomic transaction implementation: IMPLEMENTED ON BRANCH
-- shell/ShellCheck/Python compile on intermediate implementation: PASS
 - final full CI on current head: PENDING
-- managed H38 FUNCTIONAL: NOT REACHED
+- managed H38 migration FUNCTIONAL: NOT REACHED
+- managed H38 migration HOST-STABILITY: NOT REACHED
 - managed H38 DETERMINISM: NOT REACHED
 - managed H38 PERFORMANCE: NOT REACHED
 - managed restart/attestation: NOT REACHED
-- managed doctor strict: NOT REACHED
-- managed HOST-STABILITY: NOT REACHED
 
-Historical dedicated H38 success does not satisfy any of those managed gates.
+Historical dedicated H38 success does not satisfy any managed gate.
 
-Any confirmed `_memdescAllocInternal` or `NV_ERR_NO_MEMORY` in a valid future
-measured acceptance window remains HOST-STABILITY FAIL regardless of functional,
+Any confirmed `_memdescAllocInternal` or `NV_ERR_NO_MEMORY` in any valid future
+managed acceptance window remains HOST-STABILITY FAIL regardless of functional,
 determinism, performance, or restart success.
 
-PR #259 must remain Draft and must not be merged until the full live acceptance chain is
+PR #259 remains Draft and must not be merged until the full live acceptance chain is
 recorded.
