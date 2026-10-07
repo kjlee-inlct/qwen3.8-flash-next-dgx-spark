@@ -436,6 +436,33 @@ restore_pointer() {
   fi
 }
 
+prepare_runtime_rollback_safety() {
+  local current_id rollback_id running
+  current_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
+  rollback_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next.rollback 2>/dev/null || true)"
+
+  if [[ -e "${RUNTIME_TRANSITION_FILE}" || -L "${RUNTIME_TRANSITION_FILE}" ]]; then
+    [[ -f "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]] ||
+      die "runtime transition state is unsafe before rollback: ${RUNTIME_TRANSITION_FILE}"
+    python3 "${STATE_PARSER}" runtime-transition "${RUNTIME_TRANSITION_FILE}" >/dev/null ||
+      die 'runtime transition state is invalid before rollback'
+  elif [[ -n "${current_id}" && -n "${rollback_id}" ]]; then
+    die 'both current and rollback containers exist without runtime transition state; refusing pre-rollback mutation'
+  fi
+
+  [[ "${current_id}" == "${OLD_CONTAINER_ID}" || "${rollback_id}" == "${OLD_CONTAINER_ID}" ]] ||
+    die "previous runtime container is not provably available before rollback: expected=${OLD_CONTAINER_ID}"
+
+  if [[ -n "${current_id}" && "${current_id}" != "${OLD_CONTAINER_ID}" ]]; then
+    running="$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)"
+    if [[ "${running}" == true ]]; then
+      printf 'Stopping candidate runtime before rollback monitor quiesce (container=%s).\n' "${current_id}" >&2
+      docker stop --timeout 30 qwen38-flash-next >/dev/null ||
+        die 'failed to stop candidate runtime before rollback'
+    fi
+  fi
+}
+
 quiesce_runtime_monitor_for_rollback() {
   local pid cmdline attempt
   [[ ! -e "${MONITOR_PID_FILE}" && ! -L "${MONITOR_PID_FILE}" ]] && return 0
@@ -469,6 +496,7 @@ restore_previous_pair() {
   [[ -f "${BACKUP_MANIFEST}" && ! -L "${BACKUP_MANIFEST}" ]] || die 'refresh backup manifest is missing'
   [[ "$(sha256_file "${BACKUP_MANIFEST}")" == "${BACKUP_SHA256}" ]] || die 'refresh backup manifest digest mismatch'
   [[ -r "${runtime_helper}" ]] || die 'target runtime recovery helper is unavailable'
+  prepare_runtime_rollback_safety
   quiesce_runtime_monitor_for_rollback
   bash "${runtime_helper}" recover
   verify_previous_runtime_restored
