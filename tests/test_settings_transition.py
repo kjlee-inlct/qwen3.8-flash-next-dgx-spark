@@ -547,6 +547,7 @@ class SettingsTransitionTests(unittest.TestCase):
                 "XDG_STATE_HOME": str(home / "state"),
                 "XDG_DATA_HOME": str(home / "data"),
             }
+            env, _ = self.setup_fake_resources(home, env)
 
             self.assertEqual(self.run_transition(env, "prepare", str(candidate), "0").returncode, 0)
             applied = self.run_transition(env, "apply")
@@ -583,6 +584,7 @@ class SettingsTransitionTests(unittest.TestCase):
                 "XDG_STATE_HOME": str(home / "state"),
                 "XDG_DATA_HOME": str(home / "data"),
             }
+            env, _ = self.setup_fake_resources(home, env)
 
             self.assertEqual(self.run_transition(env, "prepare", str(candidate), "0").returncode, 0)
             applied = self.run_transition(env, "apply")
