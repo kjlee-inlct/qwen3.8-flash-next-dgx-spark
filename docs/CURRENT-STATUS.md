@@ -90,14 +90,21 @@ The H38 decoder-only runtime is separately qualified through
 That historical qualification is **not** the same as transactional
 installer/systemd managed-service qualification. The current H38 integration branch
 implements the candidate `orcarouter` managed image/defaults, clean-host H38 image
-construction, explicit legacy-image -> H38 profile-default migration, H38 runtime
-controls, preflight/doctor provenance checks, and asset inventory. Existing installs
-remain two-stage: immutable code update first with the legacy manifest still bootable,
-then `--refresh-profile-defaults` performs the H38 runtime migration.
+construction, H38 runtime controls, preflight/doctor provenance checks, asset
+inventory, and an atomic cross-release same-profile refresh transaction.
 
-This remains an implementation candidate, not a qualification result. H38 must not be
-described as promoted into the managed runtime until lifecycle/restart/doctor,
-managed-alias determinism, performance, and strict RM host-stability gates in
+The earlier two-stage assumption — update immutable code, require the persisted
+legacy CPU-offload runtime to become READY, then refresh the profile image — is
+superseded. The matched PR-base-main control reproduced the same memory-protection
+stop in that legacy intermediate state, so it is not a valid H38 discriminator.
+The new `release-profile-refresh-transition.sh` path binds the qualified target
+release and H38 candidate manifest before the single managed-service replacement,
+and owns symmetric release-pointer + manifest rollback/recovery.
+
+This is **implementation state only**. Static/CI validation of the transaction and
+the live managed H38 acceptance are separate gates. H38 must not be described as
+promoted into the managed runtime until lifecycle/restart/doctor, managed-alias
+determinism, performance, and strict RM host-stability gates in
 `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
 are recorded as passing.
 
