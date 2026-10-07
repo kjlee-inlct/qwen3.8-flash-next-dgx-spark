@@ -5,8 +5,15 @@ set -Eeuo pipefail
 RUNTIME_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env}"
 STATE_PARSER="${RUNTIME_ROOT}/scripts/lib/state_file.py"
+RELEASE_PROFILE_REFRESH_TRANSITION="${RUNTIME_ROOT}/scripts/lifecycle/release-profile-refresh-transition.sh"
 PROFILE_SWITCH_TRANSITION="${RUNTIME_ROOT}/scripts/profile-switch-transition.sh"
+[[ -r "${RELEASE_PROFILE_REFRESH_TRANSITION}" ]] || { printf 'FATAL: release-profile refresh transition helper is unavailable: %s\n' "${RELEASE_PROFILE_REFRESH_TRANSITION}" >&2; exit 1; }
 [[ -r "${PROFILE_SWITCH_TRANSITION}" ]] || { printf 'FATAL: profile-switch transition helper is unavailable: %s\n' "${PROFILE_SWITCH_TRANSITION}" >&2; exit 1; }
+# A cross-release refresh owns both the immutable release pointer and canonical
+# manifest, so it must recover before any profile-only transaction or manifest
+# parsing. During an intentional cutover the outer operation lock is busy and
+# service-recover defers; after interruption it restores a deterministic pair.
+bash "${RELEASE_PROFILE_REFRESH_TRANSITION}" service-recover
 # During an intentional switch the installer still owns operation.lock, so
 # service-recover defers. After a reboot/interruption the lock is free and the
 # persisted profile transaction is deterministically recovered before parsing
