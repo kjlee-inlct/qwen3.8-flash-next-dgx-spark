@@ -520,10 +520,13 @@ done
 if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
   if [[ "${LIST_MODELS}" == 1 ]]; then
     profile_manager_active=""
-    if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]]; then
-      profile_manager_phase="$(read_manifest_phase 2>/dev/null || true)"
-      if [[ "${profile_manager_phase}" == complete ]]; then
-        profile_manager_active="$(read_manifest_profile 2>/dev/null || true)"
+    if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]] && parse_install_manifest 2>/dev/null; then
+      if [[ "${PHASE:-}" == complete ]]; then
+        profile_manager_active="${MODEL_PROFILE}"
+        if [[ -n "${MODEL_DIR:-}" ]]; then
+          export QWEN38_MODEL_ROOT
+          QWEN38_MODEL_ROOT="$(realpath -m -- "$(dirname -- "${MODEL_DIR}")")"
+        fi
       fi
     fi
     print_profile_manager "${profile_manager_active}"
