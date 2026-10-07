@@ -1,6 +1,6 @@
 # H38 MTP startup discriminator plan — 2026-10-07
 
-Status: IMPLEMENTED / STATIC CI PASS / LIVE NOT RUN
+Status: COMPLETED / LIVE RESULT: PROTECTED_STOP
 
 ## Purpose
 
@@ -164,3 +164,40 @@ at protect 5/5 with about 35 GiB non-CMA available still reclaimable.
 This is materially different from the first atomic H38 run, where protection intervened
 with no strict RM event in the measured window. It weakens MTP-only causation but remains
 non-canonical until the corrected runner proves `identity_validated=1`.
+
+
+## 2026-10-08 valid attempt 04 — closure
+
+Attempt 04 on exact head
+`af0f098f9e36fe15bd64d7358f9449dcf1730f37` is the first valid live MTP
+discriminator result:
+
+```text
+spec=none
+identity_validated=1
+api_ready=0
+oom_killed=false
+kernel_window_rc=0
+rm_oom_count=0
+protected_stop=1
+result=PROTECTED_STOP
+```
+
+The candidate reached only the early main-checkpoint load before protection. non-CMA
+available stayed roughly 40-45 GiB, while non-CMA free dipped below 2 GiB and swap
+consumption rose beyond the 256 MiB arm. The final counted window ended near
+`42.1 GiB` non-CMA available, `1.49 GiB` non-CMA free, and `3.425 GiB`
+swap growth.
+
+This formally closes the original A/B question:
+
+**removing MTP is not sufficient to avoid the managed-H38 protection boundary.**
+
+HOST-STABILITY remains INCONCLUSIVE because protection intervened before READY and no
+strict RM event was observed in the valid measured window. This is not a clean SPEC=none
+qualification and does not authorize production use without MTP.
+
+The next step is not another identical live startup. Compare preserved false-positive
+protected-stop trajectories against strict-RM-failure trajectories offline/read-only
+before changing monitor policy. The objective is a stronger discriminator, not a
+weaker protection threshold.

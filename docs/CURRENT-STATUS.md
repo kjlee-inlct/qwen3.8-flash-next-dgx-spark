@@ -198,6 +198,16 @@ the sole cause and distinguishes this run from the earlier no-RM monitor-heurist
 collision. Because exact identity was not attested, one corrected rerun is still
 required before rejecting MTP causation formally.
 
+The corrected attempt 04 now provides the formal MTP-discriminator result. Exact
+candidate identity passed (`identity_validated=1`), `SPEC=none` was confirmed, but
+the unchanged monitor again stopped the candidate during early shard loading.
+`rm_oom_count=0`, `protected_stop=1`, and the result is
+`PROTECTED_STOP`: FUNCTIONAL NOT REACHED / HOST-STABILITY INCONCLUSIVE. non-CMA
+available stayed about 40-45 GiB while low non-CMA free plus several GiB of swap growth
+armed protection. Therefore MTP materialization is **not sufficient to explain the
+managed-H38 protected-stop boundary**. The next step is offline/read-only trajectory
+comparison against preserved strict-RM failures before any monitor-policy change.
+
 ## Historical evidence semantics
 
 Dated evidence files are intentionally historical. Preserve their measured facts and
