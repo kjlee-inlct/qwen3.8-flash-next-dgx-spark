@@ -139,12 +139,31 @@ The candidate implementation covers:
 - the existing service-runner/runtime-transition path remains the transactional
   replacement and attestation mechanism.
 
-Existing OrcaRouter installs use an explicit two-stage migration. Updating the
-immutable release first must still boot a legacy
-`vllm-skinny-tp1:v1` manifest with legacy controls. Only a subsequent
-`./install.sh --model orcarouter --refresh-profile-defaults ...` changes the
-manifest image and activates the H38 controls. This avoids coupling an immutable
-code cutover to an implicit runtime-default migration.
+Existing OrcaRouter installs now use one explicit **atomic cross-release
+same-profile refresh**. The retired sequence
+
+`new immutable code -> persisted legacy CPU-offload READY -> H38 refresh`
+
+must not be used: the matched PR-base-main control reproduced the same protected
+legacy restart, so that intermediate is not a valid H38 discriminator.
+
+The supported operator route is:
+
+```bash
+scripts/update-release.sh RELEASE_ID --refresh-profile-defaults
+```
+
+For live qualification, use the guarded exact-SHA wrapper documented in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`.
+
+The transaction first qualifies the exact immutable target release and prepares the
+H38 image, then activates the target release pointer plus H38 `service_ready`
+manifest before the single managed-service replacement. Target READY/attestation does
+not destroy the previous runtime immediately: the runtime rollback container remains
+available until the outer release/profile transaction commits. Failure recovery binds
+the exact predecessor container ID, release pointers, install manifest, service
+attachment, and restored-release monitor policy. It does not require a new-code +
+legacy-image READY state and does not unconditionally cold-start the legacy runtime.
 
 Do not describe installer/systemd OrcaRouter as H38 production until the live
 acceptance in
