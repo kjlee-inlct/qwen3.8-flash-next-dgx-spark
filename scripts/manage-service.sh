@@ -168,8 +168,33 @@ prepare_runtime_adoption() {
   [[ -n "${model_mount}" && "$(realpath -m -- "${model_mount}")" == "$(realpath -m -- "${RUNTIME_MODEL_DIR}")" ]] ||
     die "adopted runtime model mount mismatch"
 
-  [[ ! -e "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] ||
-    die "runtime adoption marker already exists: ${RUNTIME_ADOPT_FILE}"
+  if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+    local parsed key value adopt_root="" adopt_name="" adopt_id="" adopt_image="" adopt_served=""
+    [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] ||
+      die "runtime adoption marker is unsafe: ${RUNTIME_ADOPT_FILE}"
+    parsed="$(mktemp)"
+    if ! python3 "${INSTALL_STATE_PARSER}" runtime-adopt "${RUNTIME_ADOPT_FILE}" >"${parsed}"; then
+      rm -f -- "${parsed}"
+      die "runtime adoption marker failed strict parsing"
+    fi
+    while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+      case "${key}" in
+        RUNTIME_ROOT) adopt_root="${value}" ;;
+        RUNTIME_CONTAINER_NAME) adopt_name="${value}" ;;
+        RUNTIME_CONTAINER_ID) adopt_id="${value}" ;;
+        EXPECTED_IMAGE) adopt_image="${value}" ;;
+        SERVED_NAME) adopt_served="${value}" ;;
+      esac
+    done <"${parsed}"
+    rm -f -- "${parsed}"
+    [[ "${adopt_root}" == "${EXPECTED_RUNTIME_ROOT}" &&
+       "${adopt_name}" == "${CONTAINER_NAME}" &&
+       "${adopt_id}" == "${container_id}" &&
+       "${adopt_image}" == "${RUNTIME_IMAGE}" &&
+       "${adopt_served}" == "${SERVED_NAME}" ]] ||
+      die "existing runtime adoption marker does not match restored runtime"
+    return 0
+  fi
   temporary="$(mktemp "${STATE_DIR}/runtime-adopt.env.XXXXXX")"
   {
     printf 'RUNTIME_ADOPT_SCHEMA_VERSION=1\n'
