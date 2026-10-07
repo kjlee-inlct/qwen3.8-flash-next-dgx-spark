@@ -45,6 +45,7 @@ MIGRATION_RC=125
 DOCTOR_RC=125
 FUNCTIONAL="NOT_REACHED"
 HOST_STABILITY="INCONCLUSIVE"
+KERNEL_WINDOW_RC=125
 RM_OOM_COUNT=0
 PROTECTED_STOP=0
 FAIL_REASON=""
@@ -155,7 +156,13 @@ capture_measured_window() {
   WINDOW_CAPTURED=1
   printf '%s\n' "${END_JOURNAL}" >"${OUT}/measured-window-end.txt"
 
-  sudo -n journalctl -k     --since "${START_JOURNAL}"     --until "${END_JOURNAL}"     -o short-iso-precise --no-pager     >"${OUT}/kernel-window.txt" 2>"${OUT}/kernel-window.stderr" || true
+  if sudo -n journalctl -k     --since "${START_JOURNAL}"     --until "${END_JOURNAL}"     -o short-iso-precise --no-pager     >"${OUT}/kernel-window.txt" 2>"${OUT}/kernel-window.stderr"
+  then
+    KERNEL_WINDOW_RC=0
+  else
+    KERNEL_WINDOW_RC=$?
+  fi
+  printf '%s\n' "${KERNEL_WINDOW_RC}" >"${OUT}/kernel-window.rc"
 
   grep -Ei 'NV_ERR_NO_MEMORY|_memdescAllocInternal|NVRM:.*Xid|Xid \(PCI|GPU has fallen off the bus|oom-kill:|Out of memory:|Killed process '     "${OUT}/kernel-window.txt" >"${OUT}/kernel-errors.txt" || true
   RM_OOM_COUNT="$(grep -Ec 'NV_ERR_NO_MEMORY|_memdescAllocInternal' "${OUT}/kernel-errors.txt" 2>/dev/null || true)"
@@ -183,6 +190,7 @@ write_summary() {
     printf 'doctor_rc=%s\n' "${DOCTOR_RC}"
     printf 'functional=%s\n' "${FUNCTIONAL}"
     printf 'host_stability=%s\n' "${HOST_STABILITY}"
+    printf 'kernel_window_rc=%s\n' "${KERNEL_WINDOW_RC}"
     printf 'rm_oom_count=%s\n' "${RM_OOM_COUNT}"
     printf 'protected_stop=%s\n' "${PROTECTED_STOP}"
     printf 'fail_reason=%s\n' "${FAIL_REASON:-none}"
@@ -209,6 +217,8 @@ finalize() {
 
   if (( RM_OOM_COUNT > 0 )); then
     HOST_STABILITY="FAIL"
+  elif [[ "${KERNEL_WINDOW_RC}" != 0 ]]; then
+    HOST_STABILITY="INCONCLUSIVE"
   elif [[ "${FUNCTIONAL}" == PASS && "${PROTECTED_STOP}" == 0 ]]; then
     HOST_STABILITY="PASS"
   else
@@ -420,6 +430,12 @@ cat "${OUT}/doctor-strict.txt"
 
 FUNCTIONAL="PASS"
 capture_measured_window
+if [[ "${KERNEL_WINDOW_RC}" != 0 ]]; then
+  HOST_STABILITY="INCONCLUSIVE"
+  FAIL_REASON="kernel evidence window collection failed with rc=${KERNEL_WINDOW_RC}"
+  printf 'H38_MIGRATION_ERROR: %s\n' "${FAIL_REASON}" >&2
+  exit 1
+fi
 if (( RM_OOM_COUNT > 0 )); then
   HOST_STABILITY="FAIL"
   FAIL_REASON="strict NVIDIA RM no-memory evidence observed"
