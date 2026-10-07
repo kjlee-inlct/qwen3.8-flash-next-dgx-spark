@@ -52,6 +52,8 @@ class H38ManagedMigrationGateTests(unittest.TestCase):
         self.assertNotIn('bash "${UPDATE_TRANSITION}" prepare "${TARGET_SHA}"', text)
         self.assertIn("release-profile refresh transition is not idle", text)
         self.assertIn("settings transaction is not idle or has stale artifact", text)
+        self.assertIn("runtime adoption marker is still pending", text)
+        self.assertIn("runtime-adopt-${suffix}.env", text)
 
     def test_gate_records_matched_baseline_and_h38_identity(self) -> None:
         text = GATE.read_text(encoding="utf-8")
