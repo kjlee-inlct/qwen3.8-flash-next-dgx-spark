@@ -29,7 +29,6 @@ done
 RUNTIME_ROOT="$(realpath -e -- "${RUNTIME_ROOT}")"
 [[ -r "${STATE_PARSER}" ]] || die "state parser is unavailable: ${STATE_PARSER}"
 [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "install manifest is missing or unsafe"
-[[ -f "${ADOPT_FILE}" && ! -L "${ADOPT_FILE}" ]] || die "runtime adoption marker is missing or unsafe"
 
 parse_into_vars() {
   local schema="$1" path="$2" prefix="$3" parsed key value
@@ -45,23 +44,49 @@ parse_into_vars() {
 }
 
 parse_into_vars install-service-runtime "${STATE_FILE}" LIVE_ || die "install manifest failed strict parsing"
-parse_into_vars runtime-adopt "${ADOPT_FILE}" ADOPT_ || die "runtime adoption marker failed strict parsing"
-
 [[ "${LIVE_PHASE}" == complete ]] || die "runtime adoption requires a complete restored manifest"
-[[ "${ADOPT_RUNTIME_ROOT}" == "${RUNTIME_ROOT}" ]] || die "runtime adoption root mismatch"
-[[ "${ADOPT_RUNTIME_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || die "runtime adoption container-name mismatch"
-[[ "${ADOPT_EXPECTED_IMAGE}" == "${LIVE_VLLM_IMAGE}" ]] || die "runtime adoption image does not match manifest"
-[[ "${ADOPT_SERVED_NAME}" == "${LIVE_SERVED_NAME}" ]] || die "runtime adoption served identity does not match manifest"
 
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-image="$(docker inspect --format '{{.Config.Image}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+if [[ -z "${container_id}" ]]; then
+  rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
+  previous_runner="${RUNTIME_ROOT}/scripts/service-runner.sh"
+  [[ -x "${previous_runner}" ]] || die "restored runtime root has no executable service runner"
+  printf 'Adoption supervisor found no canonical container; delegating to restored runtime root.\n'
+  exec bash "${previous_runner}"
+fi
+
 running="$(docker inspect --format '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+if [[ "${running}" != true ]]; then
+  rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
+  printf 'Restored runtime container is stopped; preserving stopped state instead of cold-starting it.\n'
+  exit 0
+fi
+
+adoption_source=""
+if [[ -e "${ADOPT_FILE}" || -L "${ADOPT_FILE}" ]]; then
+  [[ -f "${ADOPT_FILE}" && ! -L "${ADOPT_FILE}" ]] || die "runtime adoption marker is unsafe"
+  parse_into_vars runtime-adopt "${ADOPT_FILE}" ADOPT_ || die "runtime adoption marker failed strict parsing"
+  [[ "${ADOPT_RUNTIME_ROOT}" == "${RUNTIME_ROOT}" ]] || die "runtime adoption root mismatch"
+  [[ "${ADOPT_RUNTIME_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || die "runtime adoption container-name mismatch"
+  [[ "${ADOPT_RUNTIME_CONTAINER_ID}" == "${container_id}" ]] || die "runtime adoption container ID mismatch"
+  [[ "${ADOPT_EXPECTED_IMAGE}" == "${LIVE_VLLM_IMAGE}" ]] || die "runtime adoption image does not match manifest"
+  [[ "${ADOPT_SERVED_NAME}" == "${LIVE_SERVED_NAME}" ]] || die "runtime adoption served identity does not match manifest"
+  adoption_source="marker"
+elif [[ -f "${RUNTIME_COMMIT_FILE}" && ! -L "${RUNTIME_COMMIT_FILE}" ]]; then
+  parse_into_vars runtime-commit "${RUNTIME_COMMIT_FILE}" ATTEST_ || die "runtime adoption attestation failed strict parsing"
+  [[ "${ATTEST_RUNTIME_ROOT}" == "${RUNTIME_ROOT}" ]] || die "runtime adoption attestation root mismatch"
+  [[ "${ATTEST_RUNTIME_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || die "runtime adoption attestation container-name mismatch"
+  [[ "${ATTEST_RUNTIME_CONTAINER_ID}" == "${container_id}" ]] || die "runtime adoption attestation container ID mismatch"
+  adoption_source="attestation"
+else
+  die "running restored runtime has neither a valid adoption marker nor matching attestation"
+fi
+
+image="$(docker inspect --format '{{.Config.Image}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
 oom="$(docker inspect --format '{{.State.OOMKilled}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
 model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
 
-[[ -n "${container_id}" && "${container_id}" == "${ADOPT_RUNTIME_CONTAINER_ID}" ]] || die "runtime adoption container ID mismatch"
 [[ "${image}" == "${LIVE_VLLM_IMAGE}" ]] || die "runtime adoption container image mismatch"
-[[ "${running}" == true ]] || die "runtime adoption container is not running"
 [[ "${oom}" == false ]] || die "runtime adoption container reports OOMKilled=true"
 [[ -n "${model_mount}" ]] || die "runtime adoption model mount is missing"
 [[ "$(realpath -m -- "${model_mount}")" == "$(realpath -m -- "${LIVE_MODEL_DIR}")" ]] || die "runtime adoption model mount mismatch"
@@ -81,14 +106,16 @@ umask 077
 python3 "${STATE_PARSER}" runtime-commit "${RUNTIME_COMMIT_FILE}.tmp" >/dev/null
 mv -- "${RUNTIME_COMMIT_FILE}.tmp" "${RUNTIME_COMMIT_FILE}"
 
-printf 'Existing runtime adopted without replacement (container=%s, root=%s).\n' "${container_id}" "${RUNTIME_ROOT}"
+printf 'Existing runtime supervised without replacement (source=%s, container=%s, root=%s).\n'   "${adoption_source}" "${container_id}" "${RUNTIME_ROOT}"
 docker logs --follow --since 0s "${CONTAINER_NAME}" &
 log_pid=$!
 trap 'kill "${log_pid}" 2>/dev/null || true' EXIT
 
-# The service now owns the restored container through the attestation above.
-# Remove the one-shot marker only after the supervisor is fully attached.
-rm -f -- "${ADOPT_FILE}" "${ADOPT_FILE}.tmp"
+if [[ "${adoption_source}" == marker ]]; then
+  # The service now owns the restored container through the attestation above.
+  # Remove the one-shot marker only after the supervisor is fully attached.
+  rm -f -- "${ADOPT_FILE}" "${ADOPT_FILE}.tmp"
+fi
 
 container_status="$(docker wait "${CONTAINER_NAME}")"
 rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
