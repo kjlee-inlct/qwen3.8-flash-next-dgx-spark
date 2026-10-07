@@ -73,7 +73,7 @@ A valid measured `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` event remains a st
 | language | `--lang` | yes | fresh selection; saved language reused on existing install |
 | profile | `--model` | yes | fresh and completed-install profile selection |
 | model root | `--model-root` | yes | fresh install; profile switch retains existing root by design |
-| config override | `--config-override` | yes | fresh path and completed-install settings editor; profile-required compatibility overrides cannot be cleared |
+| config override | `--config-override` / `--no-config-override` | yes | fresh path and completed-install settings editor; explicit CLI clearing is representable, while profile-required compatibility falls back to its automatic managed config |
 | list profiles | `--list-models` | no field | informational CLI command; now renders the same registry-backed profile/inventory view used by the Wizard |
 | list backends | `--list-backends` | no field | informational CLI command |
 | monitor enable/disable | `--monitor` / `--no-monitor` | yes | fresh and completed-install settings editor |
@@ -138,7 +138,7 @@ Profiles that require a compatibility override, currently `orcarouter`, do not e
 - **Implemented and DGX accepted:** derive Wizard profile display/status/installability/default metadata from the profile registry;
 - **Implemented and DGX accepted:** one read-only profile-manager view combines registry availability with managed local checkpoint/image inventory and powers both the Wizard and `--list-models`;
 - resolve remaining contextual presentation differences for language/model-root/execution controls without creating duplicate state;
-- show the equivalent CLI invocation in the final plan once normalized configuration is fully authoritative.
+- **Implemented and DGX accepted:** render a shell-safe equivalent CLI preview from the canonical normalized plan, with forced `--yes --dry-run` replay safety.
 
 ### P2 — operator polish
 
@@ -245,13 +245,27 @@ Guarded DGX acceptance on `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6` passed afte
 
 The acceptance was non-mutating: `install.env`, `runtime-commit.env`, managed service/proxy unit digests and status, container ID, `StartedAt`, and lifecycle-idle state were unchanged, and no lifecycle artifacts were created. This slice changes metadata/help/parity ownership only; it does not change CLI parser semantics or lifecycle/runtime behavior.
 
+## Equivalent CLI preview from normalized plan — 2026-10-07
+
+The accepted implementation code head is `f780f9bc25f9eae5a21e370aa56f7da8eb38ead6`, validated by CI #1287. The final `[6/6]` plan now renders an `Equivalent CLI preview (always dry-run)` directly from the already-finalized `PLAN_*` snapshot rather than rebuilding configuration from Wizard state.
+
+All CLI flag spellings come from `scripts/lib/install-options.sh` through `install_option_flag()`. Values are rendered from the normalized plan and shell-quoted with Bash `%q`. The preview always includes `--yes --dry-run`, even when the source plan represents a live execution request, so copying the displayed command cannot mutate the host by accident. Start policy, service mode, monitor/protection mode and thresholds, API access/ports/address, profile/model root, config policy, language, and refresh-defaults state are all represented from the normalized plan.
+
+This slice also adds `--no-config-override`. The prior CLI could supply a custom config path but could not explicitly represent the Wizard action that clears an existing custom override. The new flag closes that representation gap. For a profile such as `orcarouter` that requires an automatic compatibility override, clearing a custom override yields the automatic compatibility config in the normalized plan rather than disabling the required compatibility behavior.
+
+Regression coverage treats the rendered command as executable evidence rather than presentation text. A fresh Wizard plan and a completed-install profile-switch plan are rendered, replayed through `install.sh`, and required to produce an identical normalized plan. Additional coverage verifies shell-safe replay for paths containing spaces, explicit config-clear semantics, canonical flag lookup, and the safety invariant that a source plan with `PLAN_DRY_RUN=0` still renders a command containing `--dry-run`.
+
+Guarded DGX acceptance on `f780f9bc25f9eae5a21e370aa56f7da8eb38ead6` passed after CI #1287. The current managed `orcarouter` Wizard plan rendered a full CLI preview, replaying that command reproduced the same normalized plan field-for-field, and replay rendered the same CLI again (stable fixed point). Explicit `--no-config-override` selected `automatic vLLM compatibility override` as intended.
+
+The acceptance was non-mutating: `install.env`, `runtime-commit.env`, managed service/proxy unit digests and status, container ID, `StartedAt`, and lifecycle-idle state were unchanged, and no transaction artifacts were created. This feature is a read-only plan renderer; it does not alter lifecycle, transaction, or host-stability semantics.
+
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
 3. **Common normalized plan** — implemented and DGX dry-run accepted.
 4. **Completed-install settings management** — implemented and accepted on DGX through preview, no-op live commit, and explicit deferred-runtime rollback; final implementation code head `33a7f16e282672b5aa256cc662c026637e5b7afb`, CI #1264.
-5. **Registry/profile-manager metadata** — registry-derived profile UI plus read-only local inventory implemented and DGX accepted on `46f929d74895699aff7b100ada9d844bcd9270ef`, CI #1278; canonical installer option metadata registry implemented and DGX accepted on `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6`, CI #1282. Equivalent CLI rendering remains.
+5. **Registry/profile-manager metadata** — registry-derived profile UI plus read-only local inventory implemented and DGX accepted on `46f929d74895699aff7b100ada9d844bcd9270ef`, CI #1278; canonical installer option metadata registry implemented and DGX accepted on `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6`, CI #1282; normalized equivalent CLI preview implemented and DGX accepted on `f780f9bc25f9eae5a21e370aa56f7da8eb38ead6`, CI #1287.
 6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when the phase explicitly requires it.
 
 Do not reopen R23–R32 allocator localization, merge the separate M1 mitigation line, or claim H38 as the current transactional managed OrcaRouter profile as part of this work.
