@@ -318,6 +318,46 @@ printf '%s\n' \
             )
             self.assertEqual(manifest.read_bytes(), before)
 
+    def test_equivalent_cli_shell_quotes_paths_with_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_root = home / "model store"
+            custom_config = home / "custom config.json"
+            custom_config.write_text("{}\n", encoding="utf-8")
+
+            result = self.run_installer(
+                home,
+                [
+                    "--lang",
+                    "en",
+                    "--yes",
+                    "--no-start",
+                    "--dry-run",
+                    "--model",
+                    "orcarouter",
+                    "--model-root",
+                    str(model_root),
+                    "--config-override",
+                    str(custom_config),
+                    "--monitor",
+                    "--api-access",
+                    "local",
+                    "--service",
+                ],
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            generated = self.extract_equivalent_cli(result.stdout)
+            self.assertIn(str(model_root), generated)
+            self.assertIn(str(custom_config), generated)
+
+            replay = self.run_installer(home, generated[1:])
+            self.assertEqual(replay.returncode, 0, replay.stderr)
+            self.assertEqual(
+                self.extract_plan(replay.stdout),
+                self.extract_plan(result.stdout),
+            )
+
     def test_no_config_override_clears_existing_custom_config_in_plan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
