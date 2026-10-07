@@ -431,14 +431,14 @@ wizard_choose_model_profile() {
   for index in "${!profiles[@]}"; do
     profile="${profiles[${index}]}"
     profile_manager_load "${profile}" "${current_profile}" || die "cannot load profile manager entry: ${profile}"
-    detail="$(profile_manager_loaded_detail)"
+    detail="$(profile_manager_loaded_detail "${UI_LANG}")"
     wizard_menu_option "$((index + 1))" "${PM_DISPLAY_NAME}" "${detail}"
   done
 
   while IFS= read -r candidate; do
     [[ -n "${candidate}" ]] || continue
     profile_manager_load "${candidate}" "${current_profile}" || die "cannot load profile candidate: ${candidate}"
-    detail="$(profile_manager_loaded_detail)"
+    detail="$(profile_manager_loaded_detail "${UI_LANG}")"
     if [[ "${UI_LANG}" == ko ]]; then
       wizard_info "선택 불가: ${PM_DISPLAY_NAME} — ${detail}"
     else
