@@ -36,7 +36,7 @@ then-current PR head, not one of the intermediate SHAs above.
 
 Canonical coordinator:
 
-`scripts/lifecycle/release-profile-refresh-transition.sh`
+`lifecycle/release-profile-refresh-transition.sh` (under `scripts/`)
 
 Stable operator entry point:
 
@@ -130,7 +130,7 @@ or restores the previous tuple and lets systemd retry from the restored current 
 
 ## Operation lock, diagnostics, and entry points
 
-`scripts/lib/operation-lock.sh` blocks unrelated lifecycle mutation while a
+`lib/operation-lock.sh` (under `scripts/`) blocks unrelated lifecycle mutation while a
 release-profile refresh state exists, except for the trusted inherited refresh context.
 
 `scripts/doctor.sh` fails on incomplete/malformed refresh state or orphan refresh
