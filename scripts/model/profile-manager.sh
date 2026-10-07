@@ -101,16 +101,15 @@ profile_manager_load() {
   [[ -n "${PM_PROFILE:-}" ]]
 }
 
-profile_manager_detail() {
-  local profile="$1" active_profile="${2:-}" -a labels=()
-  profile_manager_load "${profile}" "${active_profile}" || return
+profile_manager_loaded_detail() {
+  local -a labels=()
+  local joined="" label
 
   labels+=("${PM_STATUS}")
   [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("installable") || labels+=("not installable")
   case "${PM_LOCAL_STATE}" in
     installed) labels+=("installed") ;;
     unmanaged) labels+=("local path unmanaged") ;;
-    not-installable) labels+=("not installed") ;;
     *) labels+=("not installed") ;;
   esac
   [[ "${PM_DEFAULT}" != 1 ]] || labels+=("default")
@@ -120,12 +119,17 @@ profile_manager_detail() {
     absent) labels+=("image absent") ;;
   esac
 
-  local joined="" label
   for label in "${labels[@]}"; do
     [[ -z "${joined}" ]] || joined+=" / "
     joined+="${label}"
   done
   printf '%s — %s\n' "${joined}" "${PM_DESCRIPTION}"
+}
+
+profile_manager_detail() {
+  local profile="$1" active_profile="${2:-}"
+  profile_manager_load "${profile}" "${active_profile}" || return
+  profile_manager_loaded_detail
 }
 
 print_profile_manager() {
