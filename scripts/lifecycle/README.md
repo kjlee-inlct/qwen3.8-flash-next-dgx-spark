@@ -6,7 +6,8 @@ This directory contains canonical immutable-release qualification, bootstrap, up
 
 - Bootstrap and qualify immutable releases.
 - Manage update-transition state and cutover transaction boundaries.
-- Manage persisted managed-profile replacement/recovery boundaries.
+- Manage persisted managed-profile replacement/recovery boundaries; this remains the
+  canonical profile-switch transaction logic.
 - Atomically bind a qualified immutable release to a same-profile runtime-image manifest refresh without booting an intermediate legacy runtime.
 - Enforce fail-closed qualification and lifecycle serialization rules.
 
