@@ -430,13 +430,12 @@ restore_pointer() {
 }
 
 restore_previous_pair() {
+  local runtime_helper="${RELEASES_DIR}/${TARGET_RELEASE}/scripts/runtime/runtime-transition.sh"
   [[ -f "${BACKUP_MANIFEST}" && ! -L "${BACKUP_MANIFEST}" ]] || die 'refresh backup manifest is missing'
   [[ "$(sha256_file "${BACKUP_MANIFEST}")" == "${BACKUP_SHA256}" ]] || die 'refresh backup manifest digest mismatch'
-  if [[ -e "${RUNTIME_TRANSITION_FILE}" || -L "${RUNTIME_TRANSITION_FILE}" ]]; then
-    local runtime_helper="${RELEASES_DIR}/${TARGET_RELEASE}/scripts/runtime/runtime-transition.sh"
-    [[ -r "${runtime_helper}" ]] || die 'target runtime recovery helper is unavailable'
-    bash "${runtime_helper}" recover
-  fi
+  [[ -r "${runtime_helper}" ]] || die 'target runtime recovery helper is unavailable'
+  bash "${runtime_helper}" recover
+  verify_previous_runtime_restored
   restore_pointer "${CURRENT_LINK}" "${OLD_CURRENT_RELEASE}"
   restore_pointer "${PREVIOUS_LINK}" "${OLD_PREVIOUS_RELEASE:-}"
   atomic_copy "${BACKUP_MANIFEST}" "${INSTALL_STATE_FILE}"
@@ -468,6 +467,73 @@ target_runtime_committed() {
   [[ "${scope}" == "${TARGET_H38_SCOPE}" ]]
 }
 
+verify_previous_runtime_baseline() {
+  local old_root="${RELEASES_DIR}/${OLD_CURRENT_RELEASE}" container_id image running oom models
+  [[ -f "${RUNTIME_COMMIT_FILE}" && ! -L "${RUNTIME_COMMIT_FILE}" ]] || die 'previous runtime attestation is missing'
+  parse_state_into_vars runtime-commit "${RUNTIME_COMMIT_FILE}" PREVIOUS_ATTEST_ || die 'previous runtime attestation is invalid'
+  container_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ -n "${container_id}" && "${container_id}" == "${PREVIOUS_ATTEST_RUNTIME_CONTAINER_ID}" ]] || die 'previous runtime container does not match its attestation'
+  [[ "${PREVIOUS_ATTEST_RUNTIME_ROOT}" == "${old_root}" ]] || die 'previous runtime attestation is not bound to the current immutable release'
+  image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ "${image}" == "${OLD_IMAGE}" ]] || die "previous runtime image drift: expected=${OLD_IMAGE} observed=${image:-missing}"
+  running="$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)"
+  oom="$(docker inspect --format '{{.State.OOMKilled}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ "${running}" == true ]] || die 'previous runtime is not running before atomic refresh'
+  [[ "${oom}" == false ]] || die 'previous runtime is OOMKilled before atomic refresh'
+  curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null || die 'previous runtime health endpoint is not ready'
+  models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)" || die 'previous runtime model list is unavailable'
+  python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected'     "${CURRENT_SERVED_NAME}" <<<"${models}" || die 'previous runtime served model identity mismatch'
+}
+
+verify_previous_runtime_restored() {
+  local image oom
+  image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ "${image}" == "${OLD_IMAGE}" ]] || die "previous runtime cannot be proven after rollback: expected=${OLD_IMAGE} observed=${image:-missing}"
+  oom="$(docker inspect --format '{{.State.OOMKilled}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ "${oom}" == false ]] || die 'restored previous runtime is OOMKilled'
+  docker inspect qwen38-flash-next.rollback >/dev/null 2>&1 && die 'rollback container remains after previous runtime restoration'
+}
+
+commit_deferred_runtime_transition() {
+  local runtime_helper="${RELEASES_DIR}/${TARGET_RELEASE}/scripts/runtime/runtime-transition.sh"
+  local parsed key value state="" current="" rollback="" had_previous=""
+  [[ -r "${runtime_helper}" ]] || die 'target runtime transition helper is unavailable'
+  if [[ -f "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]]; then
+    parsed="$(mktemp)"
+    if ! python3 "${STATE_PARSER}" runtime-transition "${RUNTIME_TRANSITION_FILE}" >"${parsed}"; then
+      rm -f -- "${parsed}"
+      die 'deferred runtime transition state is invalid'
+    fi
+    while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+      case "${key}" in
+        TRANSACTION_STATE) state="${value}" ;;
+        CURRENT_CONTAINER) current="${value}" ;;
+        ROLLBACK_CONTAINER) rollback="${value}" ;;
+        HAD_PREVIOUS) had_previous="${value}" ;;
+      esac
+    done <"${parsed}"
+    rm -f -- "${parsed}"
+    [[ "${state}" == validating && "${current}" == qwen38-flash-next &&
+       "${rollback}" == qwen38-flash-next.rollback && "${had_previous}" == 1 ]] ||       die 'deferred runtime transition is not the expected validating replacement'
+    docker inspect qwen38-flash-next.rollback >/dev/null 2>&1 || die 'deferred runtime rollback container is missing'
+    bash "${runtime_helper}" commit
+  elif docker inspect qwen38-flash-next.rollback >/dev/null 2>&1; then
+    die 'orphan rollback container exists without deferred runtime transaction state'
+  fi
+  [[ ! -e "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]] || die 'runtime transition did not commit'
+  docker inspect qwen38-flash-next.rollback >/dev/null 2>&1 && die 'runtime rollback container survived commit'
+}
+
+finish_proven_target() {
+  target_runtime_committed || return 1
+  commit_deferred_runtime_transition
+  write_state runtime_committed "${TARGET_MANIFEST_SHA256}"
+  set_live_manifest_complete
+  write_state committing "${TARGET_MANIFEST_SHA256}"
+  target_runtime_committed || die 'target runtime proof changed during lifecycle commit'
+  clear_transaction
+}
+
 restart_previous_service() {
   local manager="${CURRENT_LINK}/scripts/manage-service.sh"
   [[ -r "${manager}" ]] || die 'restored release has no service manager'
@@ -484,24 +550,21 @@ rollback_active_transaction() {
       printf 'Release-profile refresh rolled back before activation.\n'
       ;;
     activating|activated|runtime_validating)
-      write_state rolling_back "${TARGET_MANIFEST_SHA256}"
-      restore_previous_pair
-      clear_transaction
-      if [[ "${restart}" == 1 ]]; then restart_previous_service; fi
-      printf 'Release-profile refresh restored previous release + manifest pair.\n'
-      ;;
-    runtime_committed|committing)
       if target_runtime_committed; then
-        set_live_manifest_complete
-        clear_transaction
-        printf 'Release-profile refresh recovered committed target.\n'
+        finish_proven_target
+        printf 'Release-profile refresh recovered fully attested target before rollback.\n'
       else
         write_state rolling_back "${TARGET_MANIFEST_SHA256}"
         restore_previous_pair
         clear_transaction
         if [[ "${restart}" == 1 ]]; then restart_previous_service; fi
-        printf 'Release-profile refresh could not prove target commit; previous pair restored.\n'
+        printf 'Release-profile refresh restored previous release + manifest + runtime pair.\n'
       fi
+      ;;
+    runtime_committed|committing)
+      target_runtime_committed || die 'runtime was already committed but target proof is incomplete; refusing ambiguous rollback'
+      finish_proven_target
+      printf 'Release-profile refresh recovered committed target.\n'
       ;;
     rolling_back)
       restore_previous_pair
@@ -573,6 +636,8 @@ case "${action}" in
 
     command -v docker >/dev/null 2>&1 || die 'docker is required'
     command -v sudo >/dev/null 2>&1 || die 'sudo is required'
+    command -v curl >/dev/null 2>&1 || die 'curl is required'
+    verify_previous_runtime_baseline
     atomic_copy "${INSTALL_STATE_FILE}" "${BACKUP_MANIFEST}"
     BACKUP_SHA256="$(sha256_file "${BACKUP_MANIFEST}")"
     TARGET_MANIFEST_SHA256=""
@@ -608,15 +673,14 @@ case "${action}" in
     TARGET_MANIFEST_SHA256="$(sha256_file "${TARGET_MANIFEST}")"
     write_state candidate_prepared "${TARGET_MANIFEST_SHA256}"
 
+    # Building the image can take long enough for an unrelated runtime failure.
+    # Re-prove the exact previous runtime immediately before crossing the pair boundary.
+    verify_previous_runtime_baseline
     activate_pair
     write_state runtime_validating "${TARGET_MANIFEST_SHA256}"
     sudo_with_operation_lock bash "${target_root}/scripts/manage-service.sh" create --runtime-root "${CURRENT_LINK}" --start --yes
     target_runtime_committed || die 'target runtime readiness/identity/attestation proof failed'
-    write_state runtime_committed "${TARGET_MANIFEST_SHA256}"
-    set_live_manifest_complete
-    write_state committing "${TARGET_MANIFEST_SHA256}"
-    target_runtime_committed || die 'target runtime proof changed during lifecycle commit'
-    clear_transaction
+    finish_proven_target
     trap - ERR INT TERM EXIT
     printf 'Atomic release-profile refresh committed: release=%s image=%s profile=%s\n'       "${TARGET_RELEASE}" "${TARGET_IMAGE}" "${PROFILE}"
     ;;
@@ -640,18 +704,24 @@ case "${action}" in
     acquire_transition_lock "release-profile refresh service startup recovery"
     load_state
     case "${RELEASE_PROFILE_REFRESH_STATE}" in
-      runtime_committed|committing)
+      activating|activated|runtime_validating)
         if target_runtime_committed; then
-          set_live_manifest_complete
-          clear_transaction
-          printf 'Release-profile refresh startup recovery completed committed target.\n'
+          finish_proven_target
+          printf 'Release-profile refresh startup recovery completed fully attested target.\n'
           exit 0
         fi
         ;;
+      runtime_committed|committing)
+        target_runtime_committed || die 'committed refresh target cannot be proven during service recovery'
+        finish_proven_target
+        printf 'Release-profile refresh startup recovery completed committed target.\n'
+        exit 0
+        ;;
     esac
+    write_state rolling_back "${TARGET_MANIFEST_SHA256}"
     restore_previous_pair
     clear_transaction
-    printf 'Interrupted release-profile refresh restored previous pair; forcing service retry on restored release.\n' >&2
+    printf 'Interrupted release-profile refresh restored previous release + manifest + runtime pair; forcing service retry.\n' >&2
     exit 75
     ;;
   status)
