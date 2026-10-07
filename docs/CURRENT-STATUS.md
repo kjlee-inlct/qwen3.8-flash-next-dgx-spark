@@ -135,6 +135,16 @@ summary did not retain the exact monitor threshold samples, so the gate now also
 the monitor start/warning/protection lines into a compact evidence file without changing
 any protection threshold or strict RM classification rule.
 
+The preserved trigger lines were subsequently recovered. Across the counted protection
+window, non-CMA available rose from `27111 MiB` to `29909 MiB`, non-CMA free stayed
+around `0.9-1.15 GiB`, swap growth increased from `654 MiB` to about `3.46 GiB`,
+and swap-free remained above 139 GiB. The 10 GiB absolute available gate therefore did
+not trigger; the stop came from the swap-growth arm while reclaimable available memory
+was increasing. This matches the monitor condition family already known to create a
+normal-cold-load false positive, but historical RM failures can also begin with high
+available + low free. The current evidence is therefore classified as a **monitor
+heuristic collision**, not a proof that the H38 candidate was safe to continue.
+
 H38 must not be described as promoted into the managed runtime until
 lifecycle/restart/doctor, managed-alias determinism, performance, and strict RM
 host-stability gates in
@@ -150,9 +160,14 @@ start increases by the configured gate (currently 256 MiB in the helper defaults
 
 This heuristic is **not a proven discriminator for RM failure**. Live Hybrid cold-load
 evidence has shown that the 256 MiB swap-growth arm can produce a false-positive
-protected stop during otherwise normal startup. Treat the monitor as a safety heuristic,
-not as the canonical host-stability classifier. Strict RM kernel evidence remains the
-classification source of truth.
+protected stop during otherwise normal startup. The first atomic H38 managed attempt
+reproduced the same signal family: low non-CMA free plus swap growth while non-CMA
+available increased through the counted window, with `rm_oom_count=0`. Historical
+PR #245 evidence also shows that real RM failures can occur while reclaimable available
+memory is still initially high, so high available alone cannot suppress protection.
+Treat the current state as a heuristic collision requiring a stronger discriminator,
+not as justification to disable or simply raise the swap-growth gate. Strict RM kernel
+evidence remains the classification source of truth.
 
 ## Historical evidence semantics
 

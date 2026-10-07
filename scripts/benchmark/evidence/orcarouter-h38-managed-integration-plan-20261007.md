@@ -123,10 +123,18 @@ The first atomic migration execution on
 It reached the H38 candidate directly but memory protection stopped startup before
 READY. The gate recorded `FUNCTIONAL=NOT_REACHED`,
 `HOST_STABILITY=INCONCLUSIVE`, `kernel_window_rc=0`, `rm_oom_count=0`, and
-`protected_stop=1`. The exact monitor trigger samples must be recovered from the
-preserved evidence before deciding whether the stop matches the already-known
-swap-growth heuristic false-positive shape. Protection thresholds and strict RM
-classification remain unchanged.
+`protected_stop=1`. The exact monitor trigger samples were recovered from the preserved evidence. During the
+counted 1/5 -> 5/5 window, non-CMA available increased from `27111 MiB` to
+`29909 MiB`, non-CMA free stayed below 2 GiB, swap growth rose from `654 MiB` to
+about `3.46 GiB`, and swap-free remained above 139 GiB. Thus the stop was driven by
+the high-available low-free swap-growth arm, not by the 10 GiB available gate or the
+8 GiB swap-free gate.
+
+That shape collides with the already-known normal-cold-load false-positive family, while
+PR #245 history also shows that actual RM failures can begin with high available and low
+free. The next step is therefore an evidence-replay discriminator using memory
+**trajectory**, not a blind threshold relaxation. Protection thresholds and strict RM
+classification remain unchanged until that discriminator is proven.
 
 Only after the atomic migration gate is FUNCTIONAL PASS and its measured migration
 window is free of strict RM failures may the remaining managed gates proceed.
