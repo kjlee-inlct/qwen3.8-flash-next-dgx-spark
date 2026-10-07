@@ -26,6 +26,7 @@ PROFILE_SWITCH_STATE_FILE="${STATE_HOME}/profile-switch-transition.env"
 SETTINGS_PHASE_FILE="${STATE_HOME}/settings-transition.phase"
 ASSET_OWNERSHIP_FILE="${STATE_HOME}/asset-ownership.json"
 RELEASE_MANAGER="${SCRIPT_ROOT}/scripts/release-manager.sh"
+MANAGE_SERVICE="${SCRIPT_ROOT}/scripts/manage-service.sh"
 QUALIFY_RELEASE="${SCRIPT_ROOT}/scripts/lifecycle/qualify-release.sh"
 STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
 QUALIFICATION_PARSER="${SCRIPT_ROOT}/scripts/lib/qualification_marker.py"
@@ -577,11 +578,28 @@ finish_proven_target() {
   clear_transaction
 }
 
-adopt_previous_service() {
-  local manager="${CURRENT_LINK}/scripts/manage-service.sh"
-  [[ -r "${manager}" ]] || die 'restored release has no service manager'
-  command -v sudo >/dev/null 2>&1 || die 'sudo is required to reattach the managed service'
-  sudo_with_operation_lock bash "${manager}" create --runtime-root "${CURRENT_LINK}" --start --adopt-existing --yes
+restore_previous_service_management() {
+  local previous_manager="${CURRENT_LINK}/scripts/manage-service.sh" running
+  [[ -r "${MANAGE_SERVICE}" ]] || die 'target release service manager is unavailable for rollback attachment'
+  [[ -r "${previous_manager}" ]] || die 'restored release has no service manager'
+  command -v sudo >/dev/null 2>&1 || die 'sudo is required to restore managed service ownership'
+
+  running="$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)"
+  if [[ "${running}" == true ]]; then
+    # Use the target release only as a one-shot supervisor so systemd can attach
+    # to the exact restored container ID. No Docker replacement is performed.
+    sudo_with_operation_lock bash "${MANAGE_SERVICE}" create       --runtime-root "${CURRENT_LINK}" --start --adopt-existing --yes
+    [[ ! -e "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] ||
+      die 'runtime adoption marker remained after managed-service attachment'
+  else
+    rm -f -- "${RUNTIME_ADOPT_FILE}" "${RUNTIME_ADOPT_FILE}.tmp"
+    printf 'Restored previous runtime is stopped; preserving safety stop instead of cold-starting legacy runtime.\n' >&2
+  fi
+
+  # Restore the previous release's normal unit definition without restarting the
+  # currently running/restored container. A later intentional restart therefore
+  # uses the exact previous release implementation again.
+  sudo_with_operation_lock bash "${previous_manager}" create     --runtime-root "${CURRENT_LINK}" --no-start --yes
 }
 
 rollback_active_transaction() {
@@ -601,7 +619,7 @@ rollback_active_transaction() {
         restore_previous_pair
         if [[ "${restart}" == 1 ]]; then
           prepare_previous_runtime_adoption
-          adopt_previous_service
+          restore_previous_service_management
         fi
         clear_transaction
         printf 'Release-profile refresh restored previous release + manifest + runtime pair without a cold runtime replacement.\n'
@@ -616,7 +634,7 @@ rollback_active_transaction() {
       restore_previous_pair
       if [[ "${restart}" == 1 ]]; then
         prepare_previous_runtime_adoption
-        adopt_previous_service
+        restore_previous_service_management
       fi
       clear_transaction
       printf 'Interrupted release-profile rollback completed without a cold runtime replacement.\n'
@@ -769,10 +787,16 @@ case "${action}" in
     esac
     write_state rolling_back "${TARGET_MANIFEST_SHA256}"
     restore_previous_pair
-    prepare_previous_runtime_adoption
+    if [[ "$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)" == true ]]; then
+      prepare_previous_runtime_adoption
+      clear_transaction
+      printf 'Interrupted release-profile refresh restored the running previous tuple; the next service attempt will adopt the exact container ID.\n' >&2
+      exit 75
+    fi
+    rm -f -- "${RUNTIME_ADOPT_FILE}" "${RUNTIME_ADOPT_FILE}.tmp"
     clear_transaction
-    printf 'Interrupted release-profile refresh restored the previous tuple; the next service attempt will adopt the exact restored container.\n' >&2
-    exit 75
+    printf 'Interrupted release-profile refresh restored a stopped previous tuple; preserving stopped state instead of cold-starting legacy runtime.\n' >&2
+    exit 0
     ;;
   status)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
