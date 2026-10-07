@@ -3,18 +3,31 @@
 
 ## H38 runtime vs managed-service status
 
-The qualified OrcaRouter H38 decoder-only runtime is currently exposed through
+The qualified OrcaRouter H38 decoder-only runtime remains exposed through
 `scripts/runtime/orcarouter-v029.sh --profile hybrid-h38-deterministic`.
 
-It is **not yet the transactional installer/systemd-managed runtime**. The
-managed path still derives its image and served-model state from
-`install.sh`, `scripts/model/model-profiles.sh`, the installation manifest,
-`scripts/serve.sh`, and `scripts/runtime/service-runner.sh`.
+This feature branch also implements the candidate transactional
+installer/systemd integration for the existing `orcarouter` profile. It is
+**not yet live-qualified or promoted**. The managed 16 GiB KV resilience
+setting is retained; H38-specific PLE mmap, exact-QSA, decoder canonicalization,
+and compile-cache controls are selected only when the installation manifest
+selects the H38 image.
 
-Do not migrate those managed defaults implicitly. H38 managed-service promotion
-requires its own lifecycle qualification: image preparation from a clean host,
-manifest migration, service replacement, rollback, doctor/attestation,
-production-alias determinism, and performance regression checks.
+For an existing OrcaRouter installation, migration is intentionally explicit:
+
+1. advance the immutable runtime release through the normal
+   stage -> qualify -> update-release lifecycle; the legacy
+   `vllm-skinny-tp1:v1` manifest remains bootable with legacy controls;
+2. after that code cutover is healthy, run
+   `./install.sh --model orcarouter --refresh-profile-defaults --lang en --yes`
+   to build/reuse H38 and transactionally replace the managed runtime.
+
+Do not skip directly from a mutable checkout to a manifest rewrite, and do not
+call the managed H38 path production until the lifecycle/restart/doctor,
+managed-alias determinism, performance, and strict RM host-stability acceptance
+in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+has passed.
 
 Current H38 evidence and runtime roles are summarized in
 `docs/H38-DETERMINISM.md`.
