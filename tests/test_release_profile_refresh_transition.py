@@ -66,7 +66,7 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
                         "TARGET_RELEASE=" + "a" * 40,
                         "OLD_CURRENT_RELEASE=" + "b" * 40,
                         "OLD_PREVIOUS_RELEASE=" + "c" * 40,
-                        "RELEASE_MANIFEST_SHA256=" + "d" * 64,
+                        f"RELEASE_MANIFEST_SHA256={self.target_release_digest}",
                         f"BACKUP_MANIFEST={root / 'install.env.backup'}",
                         "BACKUP_SHA256=" + "e" * 64,
                         f"TARGET_MANIFEST={root / 'install.env.candidate'}",
@@ -231,6 +231,22 @@ class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
 
         self.run_release_manager("stage", self.old_release)
         self.run_release_manager("stage", self.target_release)
+        target_manifest = self.releases / self.target_release / ".release-manifest.json"
+        self.target_release_digest = hashlib.sha256(target_manifest.read_bytes()).hexdigest()
+        qualified = self.app_data / "qualified"
+        qualified.mkdir(parents=True, exist_ok=True)
+        (qualified / f"{self.target_release}.env").write_text(
+            "\n".join(
+                [
+                    "QUALIFICATION_SCHEMA_VERSION=2",
+                    f"QUALIFIED_RELEASE={self.target_release}",
+                    f"RELEASE_MANIFEST_SHA256={self.target_release_digest}",
+                    "QUALIFIED_AT=2026-10-07T00:00:00Z",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
         self.current.symlink_to(self.releases / self.target_release)
         self.previous.symlink_to(self.releases / self.old_release)
         self.state_dir.mkdir(parents=True, exist_ok=True)
