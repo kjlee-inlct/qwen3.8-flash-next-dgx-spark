@@ -155,6 +155,36 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
         self.assertLess(runner.index(refresh), runner.index(profile))
         self.assertLess(runner.index(refresh), runner.index(manifest))
 
+    def test_outer_refresh_preserves_runtime_rollback_until_lifecycle_commit(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        transition = TRANSITION.read_text(encoding="utf-8")
+        self.assertIn("release_profile_refresh_owns_runtime_commit", runner)
+        self.assertIn('refresh_state}" == runtime_validating', runner)
+        self.assertIn("outer release-profile refresh owns runtime commit", runner)
+        deferred = runner.index('if [[ "${refresh_runtime_owner}" == 1 ]]')
+        attested = runner.index('write_runtime_commit_attestation "${container_id}"', deferred)
+        standalone = runner.index('bash "${RUNTIME_TRANSITION}" commit', deferred)
+        self.assertLess(attested, standalone)
+        self.assertIn("commit_deferred_runtime_transition()", transition)
+        finish = transition.index("finish_proven_target()")
+        runtime_commit = transition.index('bash "${runtime_helper}" commit', finish - 3000)
+        manifest_complete = transition.index("set_live_manifest_complete", finish)
+        self.assertLess(runtime_commit, manifest_complete)
+        self.assertIn("deferred runtime rollback container is missing", transition)
+
+    def test_refresh_reproves_previous_runtime_before_and_after_asset_build(self) -> None:
+        text = TRANSITION.read_text(encoding="utf-8")
+        self.assertIn("verify_previous_runtime_baseline()", text)
+        self.assertIn("previous runtime attestation is not bound to the current immutable release", text)
+        apply = text.index("    command -v docker")
+        first = text.index("    verify_previous_runtime_baseline", apply)
+        assets = text.index('track_h38_assets "${target_root}"', first)
+        second = text.index("    verify_previous_runtime_baseline", assets)
+        activation = text.index("    activate_pair", second)
+        self.assertLess(first, assets)
+        self.assertLess(assets, second)
+        self.assertLess(second, activation)
+
     def test_doctor_requires_refresh_transaction_idle(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
         self.assertIn("release-profile-refresh-transition.env", doctor)
@@ -263,6 +293,30 @@ class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
         fake_sudo = self.bin_dir / "sudo"
         fake_sudo.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
         fake_sudo.chmod(fake_sudo.stat().st_mode | stat.S_IXUSR)
+
+        previous_id = "b" * 64
+        fake_docker = self.bin_dir / "docker"
+        fake_docker.write_text(
+            f"""#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == inspect && "$2" == --format ]]; then
+  case "$3" in
+    '{{{{.Id}}}}') printf '%s\\n' '{previous_id}' ;;
+    '{{{{.Config.Image}}}}') printf '%s\\n' 'vllm-skinny-tp1:v1' ;;
+    '{{{{.State.Running}}}}') printf '%s\\n' true ;;
+    '{{{{.State.OOMKilled}}}}') printf '%s\\n' false ;;
+    *) exit 2 ;;
+  esac
+elif [[ "$1" == inspect ]]; then
+  [[ "$2" == qwen38-flash-next ]] && exit 0
+  exit 1
+else
+  exit 2
+fi
+""",
+            encoding="utf-8",
+        )
+        fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -489,12 +543,16 @@ fi
 
         result = self.run_helper("recover")
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0)
         self.assertIn("target refresh manifest digest drift", result.stderr)
-        self.assertEqual(self.current.resolve(), self.releases / self.old_release)
-        self.assertFalse(self.previous.exists())
-        self.assertEqual(self.install.read_bytes(), expected_previous_manifest)
-        self.assertFalse(self.transition.exists())
+        self.assertIn("refusing ambiguous rollback", result.stderr)
+        self.assertEqual(self.current.resolve(), self.releases / self.target_release)
+        self.assertEqual(self.install.read_bytes(), self.candidate.read_bytes())
+        self.assertTrue(self.transition.exists())
+        self.assertIn(
+            "RELEASE_PROFILE_REFRESH_STATE=runtime_committed",
+            self.transition.read_text(encoding="utf-8"),
+        )
 
     def test_recover_runtime_committed_rejects_release_manifest_drift(self) -> None:
         expected_previous_manifest = self.prepare_runtime_committed_state()
@@ -506,12 +564,16 @@ fi
 
         result = self.run_helper("recover")
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0)
         self.assertIn("target release manifest drift", result.stderr)
-        self.assertEqual(self.current.resolve(), self.releases / self.old_release)
-        self.assertFalse(self.previous.exists())
-        self.assertEqual(self.install.read_bytes(), expected_previous_manifest)
-        self.assertFalse(self.transition.exists())
+        self.assertIn("refusing ambiguous rollback", result.stderr)
+        self.assertEqual(self.current.resolve(), self.releases / self.target_release)
+        self.assertEqual(self.install.read_bytes(), self.candidate.read_bytes())
+        self.assertTrue(self.transition.exists())
+        self.assertIn(
+            "RELEASE_PROFILE_REFRESH_STATE=runtime_committed",
+            self.transition.read_text(encoding="utf-8"),
+        )
 
     def test_service_recovery_defers_while_outer_lock_is_held(self) -> None:
         self.prepare_activated_state()
