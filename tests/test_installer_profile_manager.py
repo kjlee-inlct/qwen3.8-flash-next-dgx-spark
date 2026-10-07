@@ -143,6 +143,10 @@ class InstalledProfileWizardTests(unittest.TestCase):
                 "planned / not installable / not installed",
                 result.stdout,
             )
+            self.assertIn(
+                "Planned OrcaRouter-derived FP8-PLE profile",
+                result.stdout,
+            )
             self.assertIn("profile     : nvidia", result.stdout)
 
     def test_korean_completed_profile_selector_localizes_registry_status(self) -> None:
