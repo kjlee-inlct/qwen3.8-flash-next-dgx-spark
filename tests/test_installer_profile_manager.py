@@ -129,7 +129,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
 
             answers = "\n".join(
                 [
-                    "2",  # settings preview
+                    "2",  # edit settings
                     "1",  # keep config
                     "y",  # enable monitor
                     "y",  # enable protection
@@ -145,6 +145,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
                     "192.0.2.55",
                     "8011",
                     "n",  # disable service in preview
+                    "n",  # keep settings preview-only
                     "y",  # final plan confirmation
                     "",
                 ]
@@ -153,7 +154,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[1/1] Installed setup management", result.stdout)
-            self.assertIn("Preview runtime / API / service settings", result.stdout)
+            self.assertIn("Edit runtime / API / service settings", result.stdout)
             self.assertNotIn("[1/1] Model selection", result.stdout)
             self.assertIn("profile     : orcarouter", result.stdout)
             self.assertNotIn("switch      :", result.stdout)

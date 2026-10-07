@@ -53,12 +53,10 @@ class InstallerOptionParityTests(unittest.TestCase):
         "--yes",
     }
 
-    # Known product debt is kept explicit so CI prevents the gap from growing.
-    # These execution choices still need a normal Wizard control.
-    KNOWN_WIZARD_PARITY_DEBT = {
-        "--dry-run",
-        "--no-start",
-    }
+    # Completed-install management now exposes preview/live apply and immediate/
+    # deferred runtime restart, so no user-facing installer setting remains known
+    # CLI-only debt.
+    KNOWN_WIZARD_PARITY_DEBT: set[str] = set()
 
     WIZARD_MARKERS = {
         "--lang": "wizard_step 1 6 '언어 선택 / Language'",
@@ -80,6 +78,8 @@ class InstallerOptionParityTests(unittest.TestCase):
         "--api-lan-port": "wizard_input API_LAN_PORT",
         "--service": "Install a systemd service that starts at boot?",
         "--no-service": "Install a systemd service that starts at boot?",
+        "--dry-run": "Apply these settings after the final plan review?",
+        "--no-start": "Restart the runtime now to apply runtime settings?",
         "--refresh-profile-defaults": "REFRESH_PROFILE_DEFAULTS=1",
     }
 

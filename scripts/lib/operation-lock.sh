@@ -19,6 +19,16 @@ operation_lock_owner_is_ancestor() {
   [[ "${cursor}" == "${owner_pid}" ]]
 }
 
+operation_lock_settings_guard() {
+  local state_dir="$1" phase_file="${state_dir}/settings-transition.phase" phase
+  [[ -e "${phase_file}" || -L "${phase_file}" ]] || return 0
+  [[ "${QWEN38_SETTINGS_TRANSACTION_CONTEXT:-0}" == 1 ]] && return 0
+  [[ -f "${phase_file}" && ! -L "${phase_file}" ]] || \
+    operation_lock_die "settings transaction marker is unsafe: ${phase_file}" || return 1
+  IFS= read -r phase <"${phase_file}" || phase=unknown
+  operation_lock_die "an interrupted settings transaction is active (${phase}); recover it before another lifecycle mutation" || return 1
+}
+
 acquire_operation_lock() {
   local state_dir="$1" label="${2:-lifecycle operation}" owner_uid="${3:-$(id -u)}" owner_gid="${4:-$(id -g)}"
   local lock_file probe_fd current_uid current_gid
@@ -35,6 +45,7 @@ acquire_operation_lock() {
     fi
   fi
   [[ -d "${state_dir}" && ! -L "${state_dir}" ]] || operation_lock_die "operation state directory is unsafe: ${state_dir}" || return 1
+  operation_lock_settings_guard "${state_dir}" || return 1
 
   lock_file="${QWEN38_OPERATION_LOCK_FILE:-${state_dir}/operation.lock}"
   [[ "${lock_file}" == /* ]] || operation_lock_die "operation lock path must be absolute: ${lock_file}" || return 1

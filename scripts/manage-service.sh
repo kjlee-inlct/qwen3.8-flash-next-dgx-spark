@@ -9,12 +9,13 @@ MARKER="Managed qwen38-spark runtime service"
 ACTION="${1:-status}"
 [[ $# -eq 0 ]] || shift
 START=1
+ENABLE=1
 YES=0
 RUNTIME_ROOT_OVERRIDE=""
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 
 usage() {
-  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--runtime-root PATH] [--yes]\n'
+  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--enable|--no-enable] [--runtime-root PATH] [--yes]\n'
   printf '       sudo ./scripts/manage-service.sh remove [--yes]\n'
   printf '       ./scripts/manage-service.sh status\n'
 }
@@ -25,6 +26,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --start) START=1 ;;
     --no-start) START=0 ;;
+    --enable) ENABLE=1 ;;
+    --no-enable) ENABLE=0 ;;
     --runtime-root)
       [[ $# -ge 2 ]] || die "--runtime-root requires a path"
       RUNTIME_ROOT_OVERRIDE="$2"
@@ -285,7 +288,11 @@ EOF
 
 install -o root -g root -m 0644 "${tmp_dir}/${UNIT}" "${UNIT_FILE}"
 systemctl daemon-reload
-systemctl enable "${UNIT}"
+if [[ "${ENABLE}" == 1 ]]; then
+  systemctl enable "${UNIT}"
+else
+  systemctl disable "${UNIT}" 2>/dev/null || true
+fi
 if [[ "${START}" == 1 ]]; then
   previous_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
   rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
@@ -322,7 +329,15 @@ if [[ "${START}" == 1 ]]; then
     "${SERVED_NAME}" <<<"${models}" || die "served model ID validation failed"
   runtime_commit_matches "${candidate_container_id}" || die "runtime commit attestation changed after model validation"
   systemctl is-active --quiet "${UNIT}" || die "service became inactive after committed readiness"
-  printf 'Runtime service is enabled, committed, and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
+  if [[ "${ENABLE}" == 1 ]]; then
+    printf 'Runtime service is enabled, committed, and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
+  else
+    printf 'Runtime service is committed and healthy; boot enable is deferred. Logs:\n  journalctl -fu %s\n' "${UNIT}"
+  fi
 else
-  printf 'Runtime service installed and enabled; current runtime was not restarted.\n'
+  if [[ "${ENABLE}" == 1 ]]; then
+    printf 'Runtime service installed and enabled; current runtime was not restarted.\n'
+  else
+    printf 'Runtime service installed with boot enable deferred; current runtime was not restarted.\n'
+  fi
 fi
