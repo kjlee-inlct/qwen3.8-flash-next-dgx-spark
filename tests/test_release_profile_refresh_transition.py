@@ -515,6 +515,26 @@ fi
         )
         self.assertEqual(self.current.resolve(), self.releases / self.target_release)
 
+    def test_recover_rejects_predecessor_container_id_drift(self) -> None:
+        self.prepare_activated_state()
+        text = self.transition.read_text(encoding="utf-8")
+        self.transition.write_text(
+            text.replace("OLD_CONTAINER_ID=" + "b" * 64, "OLD_CONTAINER_ID=" + "c" * 64),
+            encoding="utf-8",
+        )
+
+        result = self.run_helper("recover")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("restored previous runtime container ID mismatch", result.stderr)
+        self.assertTrue(self.transition.exists())
+        self.assertIn(
+            "RELEASE_PROFILE_REFRESH_STATE=rolling_back",
+            self.transition.read_text(encoding="utf-8"),
+        )
+        self.assertEqual(self.current.resolve(), self.releases / self.target_release)
+
+
     def test_recover_rejects_orphan_candidate_without_state(self) -> None:
         self.candidate.write_text("orphan\n", encoding="utf-8")
 
