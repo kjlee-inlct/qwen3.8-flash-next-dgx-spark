@@ -10,6 +10,7 @@ The following files are parsed by the strict state parser (`scripts/lib/state_fi
 - `~/.local/state/qwen38-spark/runtime-transition.env`
 - `~/.local/state/qwen38-spark/runtime-stop.env`
 - `~/.local/state/qwen38-spark/runtime-commit.env`
+- `~/.local/state/qwen38-spark/runtime-adopt.env`
 - `~/.local/state/qwen38-spark/profile-switch-transition.env`
 - `~/.local/state/qwen38-spark/release-profile-refresh-transition.env`
 - `~/.local/share/qwen38-spark/qualified/<release>.env`
@@ -20,11 +21,13 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 
 `profile-switch-transition.env` is parsed with the dedicated `profile-switch` schema. It binds the source/target profiles, phase, backup/candidate manifest paths, their recorded digests, and update timestamp. The profile-switch helper never sources this file; malformed or ambiguous state fails closed.
 
-`release-profile-refresh-transition.env` is parsed with the dedicated `release-profile-refresh` schema. It binds the exact target/previous immutable release IDs, qualified release-manifest digest, backup/candidate install-manifest paths and digests, same-profile marker, old/target image identity, served-model identity, transaction phase, and update timestamp. It is the sole recovery owner for the atomic cross-release OrcaRouter H38 refresh.
+`release-profile-refresh-transition.env` is parsed with the dedicated `release-profile-refresh` schema. It binds the exact target/previous immutable release IDs, qualified release-manifest digest, backup/candidate install-manifest paths and digests, same-profile marker, exact predecessor Docker container ID, old/target image identity, served-model identity, transaction phase, and update timestamp. It is the sole recovery owner for the atomic cross-release OrcaRouter H38 refresh.
 
-## Runtime commit attestation
+## Runtime commit attestation and one-shot adoption
 
 `runtime-commit.env` proves that the managed service runner finished the runtime transition commit for the running replacement container. It binds the physical immutable runtime root, container name, exact Docker container ID, and UTC commit timestamp. `manage-service.sh create --start` requires a matching attestation in addition to health before it reports readiness.
+
+`runtime-adopt.env` is a one-shot recovery marker used only when the atomic cross-release refresh has restored the exact predecessor container and must reattach systemd without replacing or cold-starting it. The strict `runtime-adopt` schema binds the restored immutable runtime root, canonical container name, exact predecessor container ID, expected image, served-model identity, and UTC creation time. The adoption supervisor re-proves container ID, image, model mount, health, served-model identity, and `OOMKilled=false` before writing a fresh runtime commit attestation. A safety-stopped predecessor is left stopped rather than started merely to recover service state.
 
 ## Lifecycle operation lock
 
@@ -40,6 +43,7 @@ The locking scope covers:
 - `scripts/release-manager.sh` actions `stage`, `activate`, `discard`, and `rollback`;
 - `scripts/lifecycle/bootstrap-release.sh`;
 - `scripts/manage-service.sh` actions `create` and `remove`;
+- pending one-shot runtime adoption is itself a lifecycle guard: unrelated mutations are blocked until `runtime-adopt.env` is consumed or explicitly recovered;
 - non-dry-run `uninstall.sh`.
 
 Nested lifecycle helpers reuse an inherited lock only when the advertised lock file is actually locked and the recorded outer owner PID is an ancestor of the current process. The user-owned lock context is passed explicitly across the `sudo` boundary for managed-service calls; root validates the service-user UID/GID before reusing the same lock. A forged inherited marker therefore does not bypass serialization.
@@ -77,7 +81,7 @@ All install-manifest views:
 
 `install-maintenance` supports schema 2, 3, and 4. It validates every field that is present, requires the fields expected for the declared schema generation, and leaves newer fields absent on older schemas so the installer's existing migration defaults remain authoritative. `--migrate-manifest --dry-run` validates and previews migration without rewriting the manifest.
 
-`manage-service.sh` uses the parser from the invoking source checkout to validate the installer manifest, then uses the parser from the resolved immutable runtime release for runtime-commit attestation validation. This keeps source/maintenance policy separate from the release being attested.
+`manage-service.sh` uses the strict parser from the invoking maintenance release for install-manifest, runtime-commit, and runtime-adoption validation. The attestation/adoption records themselves bind the exact physical immutable runtime root and container ID, so recovery does not depend on an older restored release understanding newer one-shot recovery state.
 
 ## Operator rule
 
