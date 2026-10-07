@@ -76,6 +76,7 @@ FUNCTIONAL="NOT_REACHED"
 HOST_STABILITY="INCONCLUSIVE"
 RESULT="INVALID"
 FAIL_REASON=""
+IDENTITY_VALIDATED=0
 
 usage() {
   cat <<'EOF'
@@ -293,7 +294,8 @@ classify() {
     RESULT="PROTECTED_STOP"
   elif [[ "${KERNEL_WINDOW_RC}" == 0 &&
           "${API_READY}" == 1 &&
-          "${OOM_KILLED}" == false ]]; then
+          "${OOM_KILLED}" == false &&
+          "${IDENTITY_VALIDATED}" == 1 ]]; then
     FUNCTIONAL="PASS"
     HOST_STABILITY="PASS"
     RESULT="VALID_CLEAN"
@@ -322,6 +324,7 @@ write_summary() {
     printf 'kernel_window_rc=%s\n' "${KERNEL_WINDOW_RC}"
     printf 'rm_oom_count=%s\n' "${RM_OOM_COUNT}"
     printf 'protected_stop=%s\n' "${PROTECTED_STOP}"
+    printf 'identity_validated=%s\n' "${IDENTITY_VALIDATED}"
     printf 'result=%s\n' "${RESULT}"
     printf 'fail_reason=%s\n' "${FAIL_REASON:-none}"
     printf 'script_rc=%s\n' "${rc}"
@@ -494,10 +497,9 @@ docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
 docker inspect --format '{{json .Config.Cmd}}' \
   "${EXPERIMENT_CONTAINER}" >"${OUT}/candidate-cmd.json"
 
-python3 - \
+if ! python3 - \
   "${OUT}/candidate-inspect.json" \
-  "${H38_IMAGE}" "${MODEL_DIR}" "${MODEL}" "${KV_BYTES}" <<'PY' ||
-  fail 'H38 SPEC=none candidate identity validation failed'
+  "${H38_IMAGE}" "${MODEL_DIR}" "${MODEL}" "${KV_BYTES}" <<'PY'
 import json
 import os
 import sys
@@ -559,6 +561,11 @@ mounts = {
 if mounts.get("/model") != os.path.realpath(model_dir):
     raise SystemExit("model mount mismatch")
 PY
+then
+  fail 'H38 SPEC=none candidate identity validation failed'
+fi
+IDENTITY_VALIDATED=1
+printf '%s\n' "${IDENTITY_VALIDATED}" >"${OUT}/identity-validated.txt"
 
 XDG_STATE_HOME="${OUT}/monitor-state" \
 bash "${MONITOR}" \

@@ -19,6 +19,7 @@ experiment-runtime closure and from the R9-R32 RM allocator investigation.
 - MTP startup discriminator plan: `orcarouter-h38-managed-mtp-startup-discriminator-plan-20261007.md`
 - MTP startup discriminator attempt 01 (setup invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt01-20261008.md`
 - MTP startup discriminator attempt 02 (setup invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt02-20261008.md`
+- MTP startup discriminator attempt 03 (harness invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt03-20261008.md`
 - MTP startup discriminator runner: `scripts/benchmark/run-h38-mtp-startup-discriminator.sh` (repository-relative); static CI PASS on `3d4eadcf2ce60c55b600d9e3ecd4143d061355de`, run `37633676272`, 587/587 tests
 - guarded atomic migration runner: `scripts/benchmark/run-h38-managed-migration-gate.sh` (repository-relative)
 - implementation branch: `feat/h38-managed-integration`

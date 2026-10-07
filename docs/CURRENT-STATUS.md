@@ -181,7 +181,12 @@ The harness was corrected without changing runtime or protection policy. No live
 also setup-invalid before candidate start: the final negative Docker-existence guard
 in the baseline function returned 1 in the required "container absent" state, and
 top-level `set -e` exited silently. The harness now uses explicit conditional guards
-and an explicit successful return. Strict RM kernel evidence remains the classification
+and an explicit successful return. Attempt 03 then reached candidate creation but exposed a here-document control-flow
+bug in the post-start identity validator: the intended shell `fail` line was consumed
+as Python stdin, so exact candidate identity was not proven. That attempt is harness
+invalid regardless of any later runtime outcome. The validator is now explicit
+`if ! python3 ...; then fail; fi`, and `VALID_CLEAN` additionally requires a
+persisted successful identity proof. Strict RM kernel evidence remains the classification
 source of truth.
 
 ## Historical evidence semantics

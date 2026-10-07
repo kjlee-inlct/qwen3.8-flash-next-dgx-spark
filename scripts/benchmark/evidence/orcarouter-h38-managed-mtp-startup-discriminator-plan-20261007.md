@@ -125,3 +125,27 @@ This is **SETUP INVALID / NO CANDIDATE START / NO CAUSAL CLAIM**. The fix conver
 negative container-existence guards to explicit `if ...; then fail; fi` checks and
 ends the baseline function with explicit `return 0`. No runtime, monitor threshold,
 or RM-classification behavior changes.
+
+
+## 2026-10-08 harness-invalid attempt 03
+
+Attempt 03 reached isolated H38 candidate creation, but the post-start identity validator
+was malformed as `python3 ... <<'PY' || fail ...`. Bash here-document parsing consumed
+the intended `fail` shell line as Python stdin, producing:
+
+```text
+File "<stdin>", line 1
+  fail 'H38 SPEC=none candidate identity validation failed'
+IndentationError: unexpected indent
+```
+
+This construct is especially unsafe for experiment classification because the pending
+`||` can bind to the command following the here-document terminator; therefore a
+candidate may continue under the monitor while its exact identity proof was skipped.
+Attempt 03 is consequently **HARNESS INVALID / NO CAUSAL CLAIM**, even if a later
+runtime summary was produced.
+
+The validator is now an explicit `if ! python3 ... <<'PY' ... PY; then fail; fi`
+structure. The runner also tracks `IDENTITY_VALIDATED=1` only after the proof
+succeeds, records it in evidence, and requires it for `VALID_CLEAN`. Static tests
+reject the malformed `<<'PY' ||` pattern.
