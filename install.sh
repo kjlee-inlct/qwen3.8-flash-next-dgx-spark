@@ -960,7 +960,15 @@ printf '\n'
 [[ "${UI_LANG}" == ko ]] && printf '접근 / 서비스\n' || printf 'Access / service\n'
 printf '  API access  : %s\n' "${api_plan}"
 printf '  service     : %s\n' "$([[ "${SERVICE_ENABLED}" == 1 ]] && printf 'systemd boot service via immutable current release' || printf 'Docker container via immutable current release')"
+
+equivalent_cli="$(install_plan_render_cli_preview)" || die 'failed to render equivalent CLI preview'
 printf '\n'
+if [[ "${UI_LANG}" == ko ]]; then
+  printf '동등 CLI 미리보기 (항상 dry-run)\n'
+else
+  printf 'Equivalent CLI preview (always dry-run)\n'
+fi
+printf '  %s\n\n' "${equivalent_cli}"
 [[ -z "${CONFIG_OVERRIDE}" || -f "${CONFIG_OVERRIDE}" ]] || die "config override does not exist: ${CONFIG_OVERRIDE}"
 [[ "${UI_LANG}" == ko ]] && continue_prompt='계속 진행합니까?' || continue_prompt='Continue?'
 ask_yes_no "${continue_prompt}" || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
