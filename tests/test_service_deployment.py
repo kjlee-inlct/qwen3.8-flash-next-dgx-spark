@@ -150,6 +150,23 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("operation_lock_runtime_adopt_guard", lock)
         self.assertIn("QWEN38_RUNTIME_ADOPT_CONTEXT", lock)
 
+    def test_refresh_recovery_adopts_before_dynamic_current_retry(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        refresh = 'bash "${RELEASE_PROFILE_REFRESH_TRANSITION}" service-recover'
+        special = 'if [[ "${refresh_recovery_rc}" == 75 ]]'
+        adopter = 'exec bash "${adopt_runner}" --runtime-root "${restored_root}"'
+        profile = 'bash "${PROFILE_SWITCH_TRANSITION}" service-recover'
+
+        self.assertIn("dynamic current symlink", runner)
+        self.assertIn("cold-replace the exact", runner)
+        self.assertIn(refresh, runner)
+        self.assertIn(special, runner)
+        self.assertIn(adopter, runner)
+        self.assertLess(runner.index(refresh), runner.index(special))
+        self.assertLess(runner.index(special), runner.index(adopter))
+        self.assertLess(runner.index(adopter), runner.index(profile))
+        self.assertIn('python3 "${STATE_PARSER}" install-service "${STATE_FILE}"', runner)
+
     def test_service_runner_recovers_profile_switch_before_manifest_parse(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
 
