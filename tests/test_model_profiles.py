@@ -160,6 +160,13 @@ class ModelProfileTests(unittest.TestCase):
                 self.assertIn(model_dir, result.stdout)
                 self.assertIn("DRY-RUN complete", result.stdout)
 
+    def test_clean_host_wizard_parses_leading_zero_choice_as_decimal(self) -> None:
+        result = self.run_wizard("02")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
     def test_clean_host_defaults_to_repository_local_model_root(self) -> None:
         result = self.run_install("nvidia")
         self.assertEqual(result.returncode, 0, result.stderr)
