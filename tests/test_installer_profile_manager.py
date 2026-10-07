@@ -85,6 +85,18 @@ class InstalledProfileWizardTests(unittest.TestCase):
             check=False,
         )
 
+    def mark_profile_installed(self, home: Path, directory_name: str, *, hybrid: bool = False) -> Path:
+        model_dir = home / "models" / directory_name
+        model_dir.mkdir(parents=True, exist_ok=True)
+        manifest = (
+            model_dir / ".qwen38-hybrid-manifest.json"
+            if hybrid
+            else model_dir / ".qwen38-model-manifest.json"
+        )
+        manifest.write_text("{}\n", encoding="utf-8")
+        return model_dir
+
+
     def test_complete_install_wizard_can_preview_profile_switch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -104,6 +116,70 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertNotIn("[5/6] API and service", result.stdout)
             self.assertIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)
+
+    def test_profile_selector_uses_registry_metadata_and_local_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.write_manifest(home)
+            self.mark_profile_installed(home, "qwen3.8-flash-next-orcarouter")
+            self.mark_profile_installed(home, "qwen3.8-flash-next-nvidia")
+
+            result = self.run_installer(home, "1\n2\ny\n")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("OrcaRouter Uncensored", result.stdout)
+            self.assertIn(
+                "stable / installable / installed / default / active",
+                result.stdout,
+            )
+            self.assertIn("NVIDIA Official NVFP4", result.stdout)
+            self.assertIn(
+                "experimental / installable / installed",
+                result.stdout,
+            )
+            self.assertIn("Not selectable: lychee888 FP8-PLE", result.stdout)
+            self.assertIn(
+                "planned / not installable / not installed",
+                result.stdout,
+            )
+            self.assertIn("profile     : nvidia", result.stdout)
+
+    def test_list_models_uses_same_registry_inventory_view(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.write_manifest(home)
+            self.mark_profile_installed(home, "qwen3.8-flash-next-orcarouter")
+            self.mark_profile_installed(home, "qwen3.8-flash-next-nvidia")
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Qwen3.8 profile manager", result.stdout)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+yes\s+",
+            )
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^nvidia\s+experimental\s+yes\s+installed\s+no\s+",
+            )
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^lychee888\s+planned\s+no\s+not-installable\s+no\s+",
+            )
+            self.assertIn("OrcaRouter Hybrid H6", result.stdout)
+            self.assertIn("lychee888 FP8-PLE", result.stdout)
 
     def test_complete_install_wizard_defaults_to_current_profile(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
