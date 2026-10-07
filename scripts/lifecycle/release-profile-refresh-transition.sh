@@ -110,6 +110,7 @@ write_state() {
     printf 'TARGET_MANIFEST=%s\n' "${TARGET_MANIFEST}"
     printf 'TARGET_MANIFEST_SHA256=%s\n' "${target_sha}"
     printf 'PROFILE=%s\n' "${PROFILE}"
+    printf 'OLD_CONTAINER_ID=%s\n' "${OLD_CONTAINER_ID}"
     printf 'OLD_IMAGE=%s\n' "${OLD_IMAGE}"
     printf 'TARGET_IMAGE=%s\n' "${TARGET_IMAGE}"
     printf 'SERVED_NAME=%s\n' "${TARGET_SERVED_NAME}"
@@ -123,7 +124,7 @@ load_state() {
   [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die 'no release-profile refresh transaction is active'
   unset RELEASE_PROFILE_REFRESH_SCHEMA_VERSION RELEASE_PROFILE_REFRESH_STATE
   unset TARGET_RELEASE OLD_CURRENT_RELEASE OLD_PREVIOUS_RELEASE RELEASE_MANIFEST_SHA256
-  unset BACKUP_SHA256 TARGET_MANIFEST_SHA256 PROFILE OLD_IMAGE TARGET_IMAGE SERVED_NAME UPDATED_AT
+  unset BACKUP_SHA256 TARGET_MANIFEST_SHA256 PROFILE OLD_CONTAINER_ID OLD_IMAGE TARGET_IMAGE SERVED_NAME UPDATED_AT
   parse_state_into_vars release-profile-refresh "${STATE_FILE}" || die "invalid release-profile refresh state: ${STATE_FILE}"
   [[ "${BACKUP_MANIFEST}" == "${INSTALL_STATE_FILE}.release-profile-refresh-backup" ]] || die 'refresh backup path mismatch'
   [[ "${TARGET_MANIFEST}" == "${INSTALL_STATE_FILE}.release-profile-refresh-candidate" ]] || die 'refresh candidate path mismatch'
@@ -475,6 +476,10 @@ verify_previous_runtime_baseline() {
   parse_state_into_vars runtime-commit "${RUNTIME_COMMIT_FILE}" PREVIOUS_ATTEST_ || die 'previous runtime attestation is invalid'
   container_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
   [[ -n "${container_id}" && "${container_id}" == "${PREVIOUS_ATTEST_RUNTIME_CONTAINER_ID}" ]] || die 'previous runtime container does not match its attestation'
+  if [[ -n "${OLD_CONTAINER_ID:-}" && "${OLD_CONTAINER_ID}" != "${container_id}" ]]; then
+    die "previous runtime container changed during atomic refresh: expected=${OLD_CONTAINER_ID} observed=${container_id}"
+  fi
+  OLD_CONTAINER_ID="${container_id}"
   [[ "${PREVIOUS_ATTEST_RUNTIME_ROOT}" == "${old_root}" ]] || die 'previous runtime attestation is not bound to the current immutable release'
   image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)"
   [[ "${image}" == "${OLD_IMAGE}" ]] || die "previous runtime image drift: expected=${OLD_IMAGE} observed=${image:-missing}"
@@ -488,8 +493,11 @@ verify_previous_runtime_baseline() {
 }
 
 verify_previous_runtime_restored() {
-  local image oom
-  image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)"
+  local container_id image oom
+  container_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ -n "${container_id}" && "${container_id}" == "${OLD_CONTAINER_ID}" ]] ||
+    die "restored previous runtime container ID mismatch: expected=${OLD_CONTAINER_ID} observed=${container_id:-missing}"
+  image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)
   [[ "${image}" == "${OLD_IMAGE}" ]] || die "previous runtime cannot be proven after rollback: expected=${OLD_IMAGE} observed=${image:-missing}"
   oom="$(docker inspect --format '{{.State.OOMKilled}}' qwen38-flash-next 2>/dev/null || true)"
   [[ "${oom}" == false ]] || die 'restored previous runtime is OOMKilled'
@@ -506,7 +514,9 @@ prepare_previous_runtime_adoption() {
     die 'restored install manifest root does not match the previous immutable release'
   container_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
   running="$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)"
-  [[ -n "${container_id}" && "${running}" == true ]] || die 'restored previous runtime is not running for service adoption'
+  [[ -n "${container_id}" && "${container_id}" == "${OLD_CONTAINER_ID}" ]] ||
+    die 'restored previous runtime ID changed before service adoption'
+  [[ "${running}" == true ]] || die 'restored previous runtime is not running for service adoption'
 
   if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
     [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] || die "runtime adoption marker is unsafe: ${RUNTIME_ADOPT_FILE}"
@@ -681,6 +691,7 @@ case "${action}" in
       OLD_PREVIOUS_RELEASE="$(read_link_id "${PREVIOUS_LINK}")" || die 'previous release pointer is unsafe'
     fi
     OLD_IMAGE="${CURRENT_VLLM_IMAGE}"
+    OLD_CONTAINER_ID=""
 
     if [[ "${DRY_RUN}" == 1 ]]; then
       verify_bound_qualification "${TARGET_RELEASE}"
