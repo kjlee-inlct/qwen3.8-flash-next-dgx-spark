@@ -73,7 +73,7 @@ class ModelProfileTests(unittest.TestCase):
             with self.subTest(profile=profile):
                 self.assertRegex(
                     result.stdout,
-                    rf"(?m)^{profile}\\s+{status}\\s+{installable}\\s+",
+                    rf"(?m)^{profile}\s+{status}\s+{installable}\s+",
                 )
 
     def test_mazinb_installable_profile_has_pinned_metadata(self) -> None:
