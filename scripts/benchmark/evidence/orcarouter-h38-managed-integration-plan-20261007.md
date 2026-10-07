@@ -38,6 +38,10 @@ The implementation must keep these boundaries:
 - runtime replacement keeps the previous rollback container until the outer
   release-profile transaction commits, so interruption recovery can restore an exact
   release + manifest + runtime tuple;
+- failed-candidate service teardown must not stop a newly restored predecessor
+  container: service stop is bound to the attested container ID;
+- a running restored predecessor is reattached by one-shot exact-identity adoption
+  rather than replaced, while a safety-stopped predecessor remains stopped;
 - monitor protection and strict NVIDIA RM classification are not weakened.
 
 ## Static acceptance — passed on implementation head `398697be4a92b15e312d90101b706821075b7ae8`
@@ -62,6 +66,11 @@ Atomic cross-release redesign revalidation:
 - Python compile: PASS
 - unit tests: **567/567 PASS**
 - whitespace: PASS
+
+Rollback/service-ownership hardening was revalidated again on
+`40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`, GitHub Actions run
+`37616889537`: shell syntax, ShellCheck, Python compilation, full unit tests and
+whitespace all passed.
 
 This closes the static/CI gate for the atomic transaction implementation. It does not
 advance any live DGX acceptance classification.
@@ -95,6 +104,8 @@ The migration gate must:
 5. activate the target release and H38 `service_ready` manifest under one persisted
    transaction, preserve the previous runtime rollback container through target
    readiness/attestation, and commit it only when the outer transaction commits;
+   on failure, require identity-safe predecessor restoration without an unconditional
+   legacy cold restart;
 6. require exact target release, exact target install root, H38 image/label, model ID,
    H38 env, 16 GiB KV flag, running container, `OOMKilled=false`, runtime attestation,
    lifecycle idle state, and `doctor.sh --strict`;
