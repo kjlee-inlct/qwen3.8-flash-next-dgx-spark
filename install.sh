@@ -395,7 +395,7 @@ restore_profile_switch_manifest_on_exit() {
 
 wizard_choose_model_profile() {
   local current_profile="${1:-}" mode="${2:-fresh}" default_choice=1 answer
-  local profile detail selected="" candidate cancel_choice index selection_index
+  local profile detail selected="" candidate cancel_choice index selection_index current_summary=""
   local -a profiles=()
 
   mapfile -t profiles < <(list_model_profiles)
@@ -412,17 +412,21 @@ wizard_choose_model_profile() {
     fi
   done
 
+  if [[ "${mode}" == existing ]]; then
+    current_summary="$(profile_manager_current_summary "${current_profile}" "${UI_LANG}")"
+  fi
+
   if [[ "${UI_LANG}" == ko ]]; then
     if [[ "${mode}" == existing ]]; then
       wizard_step 1 1 '모델 선택 / 전환'
-      wizard_info "현재 profile: ${current_profile}"
+      wizard_info "현재 프로필: ${current_summary}"
     else
       wizard_step 2 6 '모델 선택'
     fi
   else
     if [[ "${mode}" == existing ]]; then
       wizard_step 1 1 'Model selection'
-      wizard_info "Current profile: ${current_profile}"
+      wizard_info "Current profile: ${current_summary}"
     else
       wizard_step 2 6 'Model selection'
     fi
