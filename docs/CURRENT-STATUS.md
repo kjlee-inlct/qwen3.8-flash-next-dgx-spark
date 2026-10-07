@@ -105,13 +105,17 @@ Recovery therefore owns the release-pointer + manifest + runtime tuple rather th
 release and manifest state. Rollback is also identity-safe at the service boundary:
 `ExecStop` stops only the attested container ID, a still-running restored predecessor
 is reattached without replacement, and a safety-stopped predecessor is left stopped
-instead of being cold-started merely to recover service state.
+instead of being cold-started merely to recover service state. Startup interruption
+recovery also consumes the restored-runtime handoff inside the already-running target
+runner, so changing `current` back to the previous release cannot cause a blind
+systemd retry into an older runner before adoption completes.
 
 This is **implementation state only**. The hardened atomic transaction, including the
-identity-safe rollback/service-adoption path, passed static/CI revalidation on
-`40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b` (GitHub Actions
-`37616889537`). Shell syntax, ShellCheck, Python compilation, the full unit-test suite,
-and whitespace checks passed, while live managed H38 acceptance remains a separate gate. The guarded migration entry is
+identity-safe rollback/service-adoption and dynamic-`current` recovery handoff, passed
+static/CI revalidation on `c9d0a014a71403fb6280be0b8db7d08028702046`
+(GitHub Actions `37619751679`). Shell syntax, ShellCheck, Python compilation, the full
+unit-test suite, and whitespace checks passed, while live managed H38 acceptance remains
+a separate gate. The guarded migration entry is
 `scripts/benchmark/run-h38-managed-migration-gate.sh`; it requires an exact clean
 target SHA and does not use the retired legacy-READY intermediate. H38 must not be described as
 promoted into the managed runtime until lifecycle/restart/doctor, managed-alias
