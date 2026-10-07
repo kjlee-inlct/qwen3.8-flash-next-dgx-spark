@@ -113,19 +113,38 @@ profile_manager_load() {
   [[ -n "${PM_PROFILE:-}" ]]
 }
 
+profile_manager_status_label() {
+  local status="$1" lang="${2:-en}"
+  if [[ "${lang}" != ko ]]; then
+    printf '%s\n' "${status}"
+    return
+  fi
+  case "${status}" in
+    stable) printf '안정\n' ;;
+    experimental) printf '실험\n' ;;
+    in-progress) printf '진행 중\n' ;;
+    planned) printf '계획\n' ;;
+    *) printf '%s\n' "${status}" ;;
+  esac
+}
+
+profile_manager_current_summary() {
+  local profile="$1" lang="${2:-en}" status_label
+  if ! profile_manager_load "${profile}" "${profile}"; then
+    printf '%s\n' "${profile}"
+    return
+  fi
+  status_label="$(profile_manager_status_label "${PM_STATUS}" "${lang}")"
+  printf '%s (%s, %s)\n' "${PM_DISPLAY_NAME}" "${PM_PROFILE}" "${status_label}"
+}
+
 profile_manager_loaded_detail() {
   local lang="${1:-en}"
   local -a labels=()
   local joined="" label description
 
   if [[ "${lang}" == ko ]]; then
-    case "${PM_STATUS}" in
-      stable) labels+=("안정") ;;
-      experimental) labels+=("실험") ;;
-      in-progress) labels+=("진행 중") ;;
-      planned) labels+=("계획") ;;
-      *) labels+=("${PM_STATUS}") ;;
-    esac
+    labels+=("$(profile_manager_status_label "${PM_STATUS}" ko)")
     [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("설치 가능") || labels+=("설치 불가")
     case "${PM_LOCAL_STATE}" in
       installed) labels+=("설치됨") ;;
