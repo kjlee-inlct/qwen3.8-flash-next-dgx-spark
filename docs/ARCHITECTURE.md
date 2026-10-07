@@ -290,12 +290,23 @@ determinism matrices plus one isolated fresh-compile matrix. No determinism
 advantage was observed for all-call, so decoder-only is the preferred H38
 runtime under the minimum-change principle.
 
-This qualification currently applies to the dedicated v0.29 runtime helper
-(`scripts/runtime/orcarouter-v029.sh`). It is **not yet the same thing as the
-transactional installer/systemd-managed service path**. `install.sh`,
-`scripts/serve.sh`, the installation manifest, rollback flow, and managed
-service qualification still need an explicit H38 integration/requalification
-before the managed service can be said to use the H38 production runtime.
+This historical qualification applies to the dedicated v0.29 runtime helper
+(`scripts/runtime/orcarouter-v029.sh`). The H38 managed-integration feature
+branch now implements the corresponding candidate runtime for the stable
+`orcarouter` installer profile, selecting the same decoder-scope image while
+retaining the 16 GiB managed KV resilience value.
+
+Existing installations migrate in two explicit transactions: the immutable code
+release is updated first while the legacy `vllm-skinny-tp1:v1` manifest remains
+bootable, then `--refresh-profile-defaults` changes the manifest image and
+transactionally replaces the runtime. H38-specific PLE mmap, exact-QSA and
+decoder-canonicalization controls are keyed to the H38 image, so the first
+transaction cannot silently reinterpret an old manifest.
+
+This is an implementation state, not a qualification result. The
+installer/systemd path must still pass the managed lifecycle/restart/doctor,
+determinism, performance and strict RM host-stability acceptance before the
+candidate is promoted.
 
 The canonical experiment evidence remains in `scripts/benchmark/README.md`;
 `docs/H38-DETERMINISM.md` is the concise operational summary.
