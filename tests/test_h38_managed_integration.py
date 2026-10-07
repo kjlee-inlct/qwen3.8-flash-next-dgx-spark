@@ -85,6 +85,20 @@ class H38ManagedIntegrationTests(unittest.TestCase):
         self.assertIn('LEGACY_IMAGE="vllm-skinny-tp1:v1"', preflight)
         self.assertIn("pending explicit --refresh-profile-defaults migration", preflight)
 
+    def test_installer_tracks_h38_parent_image_ownership(self) -> None:
+        text = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("asset_track_h38_image_chain()", text)
+        for image in (
+            "vllm-orcarouter-v029:v1",
+            "vllm-orcarouter-v029-h9-ct-modelweight:v1",
+            "vllm-orcarouter-v029-h10-ct-global-scale:v1",
+            "vllm-orcarouter-v029-h11-ct-packed-modelweight:v1",
+            "vllm-orcarouter-v029-h12-ct-postload-preserve:v1",
+            "vllm-orcarouter-v029-h38-decoder-scope:v1",
+        ):
+            self.assertIn(image, text)
+        self.assertGreaterEqual(text.count("asset_track_h38_image_chain"), 3)
+
     def test_operator_asset_registry_tracks_promoted_orcarouter_image(self) -> None:
         text = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
         start = text.index("    orcarouter)\n")
@@ -92,6 +106,10 @@ class H38ManagedIntegrationTests(unittest.TestCase):
         block = text[start:end]
         self.assertIn(
             'MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"',
+            block,
+        )
+        self.assertIn(
+            'MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h12-ct-postload-preserve"',
             block,
         )
 
