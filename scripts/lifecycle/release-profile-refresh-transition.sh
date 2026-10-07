@@ -578,6 +578,23 @@ case "${action}" in
     TARGET_MANIFEST_SHA256=""
     write_state preparing ""
 
+    rollback_refresh() {
+      local rc="${1:-1}"
+      trap - ERR INT TERM
+      set +e
+      if [[ -e "${STATE_FILE}" && ! -L "${STATE_FILE}" ]]; then
+        printf 'Release-profile refresh failed; recovering transaction.\n' >&2
+        if ! rollback_active_transaction 1; then
+          printf 'FATAL: automatic cross-release recovery failed; transaction state was retained when possible.\n' >&2
+          exit 70
+        fi
+      fi
+      exit "${rc}"
+    }
+    trap 'rollback_refresh $?' ERR
+    trap 'rollback_refresh 130' INT
+    trap 'rollback_refresh 143' TERM
+
     track_h38_assets "${target_root}"
     bash "${target_root}/scripts/runtime/prepare-h38-image.sh" build
     bash "${target_root}/scripts/runtime/prepare-h38-image.sh" verify
@@ -590,26 +607,7 @@ case "${action}" in
     TARGET_MANIFEST_SHA256="$(sha256_file "${TARGET_MANIFEST}")"
     write_state candidate_prepared "${TARGET_MANIFEST_SHA256}"
 
-    cutover_active=0
-    rollback_cutover() {
-      local rc="${1:-1}"
-      trap - ERR INT TERM
-      set +e
-      if [[ -e "${STATE_FILE}" && ! -L "${STATE_FILE}" ]]; then
-        printf 'Release-profile refresh failed; restoring exact previous pair.\n' >&2
-        if ! rollback_active_transaction 1; then
-          printf 'FATAL: automatic cross-release rollback failed; transaction state was retained when possible.\n' >&2
-          exit 70
-        fi
-      fi
-      exit "${rc}"
-    }
-    trap 'rollback_cutover $?' ERR
-    trap 'rollback_cutover 130' INT
-    trap 'rollback_cutover 143' TERM
-
     activate_pair
-    cutover_active=1
     write_state runtime_validating "${TARGET_MANIFEST_SHA256}"
     sudo_with_operation_lock bash "${target_root}/scripts/manage-service.sh" create --runtime-root "${CURRENT_LINK}" --start --yes
     target_runtime_committed || die 'target runtime readiness/identity/attestation proof failed'
@@ -618,7 +616,6 @@ case "${action}" in
     write_state committing "${TARGET_MANIFEST_SHA256}"
     target_runtime_committed || die 'target runtime proof changed during lifecycle commit'
     clear_transaction
-    cutover_active=0
     trap - ERR INT TERM
     printf 'Atomic release-profile refresh committed: release=%s image=%s profile=%s\n'       "${TARGET_RELEASE}" "${TARGET_IMAGE}" "${PROFILE}"
     ;;
