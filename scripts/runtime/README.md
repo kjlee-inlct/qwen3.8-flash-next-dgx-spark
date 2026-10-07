@@ -28,6 +28,8 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `preflight-runtime.sh`
 - `runtime-transition.sh`
 - `service-runner.sh`
+- `service-adopt-runner.sh`: one-shot exact-container supervisor used only to reattach a restored predecessor without replacement.
+- `service-stop.sh`: identity-aware systemd stop helper; it stops only the container ID covered by the current runtime attestation.
 - `monitor-runtime.sh`
 - `wait-ready.sh`
 - `validate_runtime.py`
@@ -64,7 +66,10 @@ for the managed `orcarouter` profile through the atomic
 `update-release.sh TARGET --refresh-profile-defaults` path. The target immutable
 release and H38 candidate manifest are activated before the single managed-service
 replacement; the legacy CPU-offload image is not started as an intermediate READY
-gate.
+gate. If the candidate fails, service teardown is bound to the attested candidate
+container ID. A still-running restored predecessor is reattached by exact identity
+without replacement, while a predecessor stopped by safety protection remains stopped
+instead of being cold-started as part of rollback.
 
 That managed integration is implemented but live qualification is still
 pending. Do not conflate the historical H38 runtime qualification with
