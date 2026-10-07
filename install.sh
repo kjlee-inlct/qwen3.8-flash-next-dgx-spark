@@ -12,6 +12,10 @@ source "${PROFILE_MANAGER}"
 BACKEND_REGISTRY="${ROOT_DIR}/scripts/backend/backends.sh"
 # shellcheck source=scripts/backend/backends.sh
 source "${BACKEND_REGISTRY}"
+OPTION_REGISTRY="${ROOT_DIR}/scripts/lib/install-options.sh"
+[[ -r "${OPTION_REGISTRY}" ]] || { printf 'ERROR: installer option registry missing: %s\n' "${OPTION_REGISTRY}" >&2; exit 1; }
+# shellcheck source=scripts/lib/install-options.sh
+source "${OPTION_REGISTRY}"
 WIZARD_UI="${ROOT_DIR}/scripts/lib/wizard-ui.sh"
 [[ -r "${WIZARD_UI}" ]] || { printf 'ERROR: wizard UI helper missing: %s\n' "${WIZARD_UI}" >&2; exit 1; }
 # shellcheck source=scripts/lib/wizard-ui.sh
@@ -467,8 +471,7 @@ wizard_choose_model_profile() {
 }
 
 usage() {
-  printf 'Usage: ./install.sh [--model PROFILE] [--model-root PATH] [--config-override PATH] [--list-models] [--list-backends] [--lang en|ko] [--yes] [--no-start] [--service|--no-service] [--monitor|--no-monitor] [--protect] [--monitor-min-available-gib N] [--monitor-min-free-gib N] [--monitor-free-gate-gib N] [--monitor-min-swap-free-gib N] [--monitor-consecutive N] [--monitor-heartbeat N] [--api-access local|docker|lan] [--api-docker-port N] [--api-lan-address IPv4] [--api-lan-port N] [--migrate-manifest] [--refresh-profile-defaults] [--dry-run]\n'
-  printf '       ./install.sh  # interactive English/Korean wizard (default)\n'
+  install_option_usage
 }
 ask_yes_no() {
   local prompt="$1"
