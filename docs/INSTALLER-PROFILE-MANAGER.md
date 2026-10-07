@@ -134,7 +134,7 @@ Profiles that require a compatibility override, currently `orcarouter`, do not e
 
 ### P1 — architecture / drift prevention
 
-- centralize user-facing option metadata;
+- **Implemented and DGX accepted:** centralize user-facing installer option metadata in one registry used by generated help and parity tests;
 - **Implemented and DGX accepted:** derive Wizard profile display/status/installability/default metadata from the profile registry;
 - **Implemented and DGX accepted:** one read-only profile-manager view combines registry availability with managed local checkpoint/image inventory and powers both the Wizard and `--list-models`;
 - resolve remaining contextual presentation differences for language/model-root/execution controls without creating duplicate state;
@@ -233,13 +233,25 @@ The completed-install chooser rendered the same registry/inventory view, default
 
 This acceptance validates profile-manager presentation/inventory behavior only. It does not change functional or host-stability qualification for any model profile.
 
+## Canonical installer option registry — 2026-10-07
+
+The accepted implementation code head is `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6`, validated by CI #1282. `scripts/lib/install-options.sh` is now the canonical user-facing installer option inventory for logical option identity, classification, Wizard applicability, generated usage fragments, and long-flag membership.
+
+The registry classifies each logical option as `setting`, `informational`, `maintenance`, or `control`. Logical groups such as service mode and monitor mode own all of their flag variants together. `install.sh --help` is generated from this registry rather than a second hardcoded usage string, while the parser implementation itself remains unchanged.
+
+`tests/test_installer_option_parity.py` now sources the same registry instead of maintaining a duplicate expected flag set. The test verifies that parser flags exactly match registry flags, that IDs and long flags are unique, that every setting claims Wizard support and has UI evidence, that non-setting commands do not claim Wizard fields, and that canonical flag lookup is deterministic. Ambiguous grouped lookup intentionally fails unless a variant is named.
+
+Guarded DGX acceptance on `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6` passed after CI #1282. The live registry exposed 27 unique long flags; generated `--help` contained every registry usage fragment; single and grouped flag lookup returned the expected canonical spellings; and the existing completed-install current-profile dry-run still produced the same normalized plan without creating a profile switch.
+
+The acceptance was non-mutating: `install.env`, `runtime-commit.env`, managed service/proxy unit digests and status, container ID, `StartedAt`, and lifecycle-idle state were unchanged, and no lifecycle artifacts were created. This slice changes metadata/help/parity ownership only; it does not change CLI parser semantics or lifecycle/runtime behavior.
+
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
 3. **Common normalized plan** — implemented and DGX dry-run accepted.
 4. **Completed-install settings management** — implemented and accepted on DGX through preview, no-op live commit, and explicit deferred-runtime rollback; final implementation code head `33a7f16e282672b5aa256cc662c026637e5b7afb`, CI #1264.
-5. **Registry/profile-manager metadata** — registry-derived profile UI plus read-only local inventory implemented and DGX accepted on `46f929d74895699aff7b100ada9d844bcd9270ef`, CI #1278; user-facing option metadata centralization remains.
+5. **Registry/profile-manager metadata** — registry-derived profile UI plus read-only local inventory implemented and DGX accepted on `46f929d74895699aff7b100ada9d844bcd9270ef`, CI #1278; canonical installer option metadata registry implemented and DGX accepted on `e6fa3c67601ceddfa5714f9d8e854c6a2639a2c6`, CI #1282. Equivalent CLI rendering remains.
 6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when the phase explicitly requires it.
 
 Do not reopen R23–R32 allocator localization, merge the separate M1 mitigation line, or claim H38 as the current transactional managed OrcaRouter profile as part of this work.
