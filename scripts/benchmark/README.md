@@ -58,8 +58,14 @@ entries:
   integration remains a separate open qualification phase;
 - on 2026-10-07 the managed integration branch replaced the invalid two-stage
   legacy-READY assumption with an atomic release + same-profile H38 manifest
-  refresh transaction; this is an implementation change, not live acceptance,
-  and the managed determinism/performance/restart/RM gates remain pending.
+  refresh transaction; the target runtime attests before the runtime rollback
+  container is destroyed, so the outer transaction retains symmetric recovery until
+  lifecycle commit;
+- `run-h38-managed-migration-gate.sh` is the guarded exact-SHA live migration gate;
+  it records a fresh 384-token x5 legacy baseline, validates the atomic H38 cutover,
+  doctor strict, OOM state, and a strict NVIDIA RM kernel window. This remains an
+  implementation path, not live acceptance, until an actual DGX run is recorded;
+- managed determinism/performance/restart/RM follow-up gates remain pending.
 
 See `../../docs/H38-DETERMINISM.md` for the concise operational status.
 Historical entries below remain authoritative for what was observed at their
