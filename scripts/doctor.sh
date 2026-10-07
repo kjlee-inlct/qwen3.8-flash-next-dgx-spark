@@ -9,6 +9,9 @@ TRANSITION_STATE_FILE="${STATE_DIR}/runtime-transition.env"
 PROFILE_SWITCH_STATE_FILE="${STATE_DIR}/profile-switch-transition.env"
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
+RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
+RELEASE_PROFILE_REFRESH_BACKUP="${STATE_FILE}.release-profile-refresh-backup"
+RELEASE_PROFILE_REFRESH_CANDIDATE="${STATE_FILE}.release-profile-refresh-candidate"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
 ASSET_OWNERSHIP_TOOL="${SCRIPT_DIR}/lib/asset_ownership.py"
@@ -232,6 +235,19 @@ elif [[ -e "${PROFILE_SWITCH_BACKUP}" || -L "${PROFILE_SWITCH_BACKUP}" ||
   fail "profile-switch candidate/backup artifacts exist without transaction state; automatic cleanup is intentionally disabled"
 else
   pass "no incomplete profile-switch transition exists"
+fi
+
+if [[ -r "${RELEASE_PROFILE_REFRESH_STATE_FILE}" ]]; then
+  if release_profile_refresh_state="$(parse_lifecycle_state_value release-profile-refresh "${RELEASE_PROFILE_REFRESH_STATE_FILE}" RELEASE_PROFILE_REFRESH_STATE)"; then
+    fail "release-profile refresh is incomplete (${release_profile_refresh_state}); run scripts/lifecycle/release-profile-refresh-transition.sh recover before maintenance"
+  else
+    fail "release-profile refresh state is malformed; inspect ${RELEASE_PROFILE_REFRESH_STATE_FILE} before maintenance"
+  fi
+elif [[ -e "${RELEASE_PROFILE_REFRESH_BACKUP}" || -L "${RELEASE_PROFILE_REFRESH_BACKUP}" ||
+        -e "${RELEASE_PROFILE_REFRESH_CANDIDATE}" || -L "${RELEASE_PROFILE_REFRESH_CANDIDATE}" ]]; then
+  fail "release-profile refresh candidate/backup artifacts exist without transaction state; automatic cleanup is intentionally disabled"
+else
+  pass "no incomplete release-profile refresh exists"
 fi
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
