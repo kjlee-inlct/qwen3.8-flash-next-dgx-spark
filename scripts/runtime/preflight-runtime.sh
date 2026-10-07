@@ -25,15 +25,23 @@ fi
 docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1 || { printf 'FATAL: runtime image is missing: %s\n' "${VLLM_IMAGE:-unset}" >&2; exit 1; }
 if [[ "${MODEL_PROFILE:-}" == orcarouter ]]; then
   H38_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"
-  [[ "${VLLM_IMAGE:-}" == "${H38_IMAGE}" ]] || {
-    printf 'FATAL: managed OrcaRouter runtime image drift: manifest=%s expected=%s; run ./install.sh --model orcarouter --refresh-profile-defaults --yes\n' "${VLLM_IMAGE:-unset}" "${H38_IMAGE}" >&2
-    exit 1
-  }
-  h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
-  [[ "${h38_scope}" == decoder-v1 ]] || {
-    printf 'FATAL: managed OrcaRouter H38 image label mismatch: qwen38.h38scope=%s expected=decoder-v1\n' "${h38_scope:-missing}" >&2
-    exit 1
-  }
+  LEGACY_IMAGE="vllm-skinny-tp1:v1"
+  case "${VLLM_IMAGE:-}" in
+    "${H38_IMAGE}")
+      h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
+      [[ "${h38_scope}" == decoder-v1 ]] || {
+        printf 'FATAL: managed OrcaRouter H38 image label mismatch: qwen38.h38scope=%s expected=decoder-v1\n' "${h38_scope:-missing}" >&2
+        exit 1
+      }
+      ;;
+    "${LEGACY_IMAGE}")
+      printf 'Runtime preflight: legacy OrcaRouter image retained pending explicit --refresh-profile-defaults migration.\n'
+      ;;
+    *)
+      printf 'FATAL: managed OrcaRouter runtime image drift: manifest=%s allowed=%s,%s\n' "${VLLM_IMAGE:-unset}" "${LEGACY_IMAGE}" "${H38_IMAGE}" >&2
+      exit 1
+      ;;
+  esac
 fi
 swapon --show=NAME --noheadings | awk '{$1=$1};1' | grep -Fxq "${SWAP_FILE:-}" || { printf 'FATAL: dedicated PLE swap is inactive\n' >&2; exit 1; }
 
