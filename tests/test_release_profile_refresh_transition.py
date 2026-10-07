@@ -355,6 +355,7 @@ class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
             f"""#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == inspect && "$2" == --format ]]; then
+  [[ "$4" == qwen38-flash-next ]] || exit 1
   case "$3" in
     '{{{{.Id}}}}') printf '%s\\n' '{previous_id}' ;;
     '{{{{.Config.Image}}}}') printf '%s\\n' 'vllm-skinny-tp1:v1' ;;
@@ -539,7 +540,7 @@ fi
         result = self.run_helper("recover")
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("restored previous runtime container ID mismatch", result.stderr)
+        self.assertIn("previous runtime container is not provably available before rollback", result.stderr)
         self.assertTrue(self.transition.exists())
         self.assertIn(
             "RELEASE_PROFILE_REFRESH_STATE=rolling_back",
