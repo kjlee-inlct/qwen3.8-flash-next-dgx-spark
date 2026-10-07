@@ -45,28 +45,71 @@ parse_into_vars() {
   rm -f -- "${parsed}"
 }
 
-runtime_monitor_running() {
-  local pid cmdline
+runtime_monitor_process() {
+  MONITOR_PID=""
+  MONITOR_CMDLINE=""
   [[ -f "${MONITOR_PID_FILE}" && ! -L "${MONITOR_PID_FILE}" ]] || return 1
-  IFS= read -r pid <"${MONITOR_PID_FILE}" || return 1
-  [[ "${pid}" =~ ^[0-9]+$ && -r "/proc/${pid}/cmdline" ]] || return 1
-  cmdline="$(tr '\0' ' ' <"/proc/${pid}/cmdline")"
-  [[ "${cmdline}" == *monitor-runtime.sh* && "${cmdline}" == *"--container ${CONTAINER_NAME}"* ]]
+  IFS= read -r MONITOR_PID <"${MONITOR_PID_FILE}" || return 1
+  [[ "${MONITOR_PID}" =~ ^[0-9]+$ && -r "/proc/${MONITOR_PID}/cmdline" ]] || return 1
+  MONITOR_CMDLINE="$(tr '\0' ' ' <"/proc/${MONITOR_PID}/cmdline")"
+  [[ "${MONITOR_CMDLINE}" == *monitor-runtime.sh* &&
+     "${MONITOR_CMDLINE}" == *"--container ${CONTAINER_NAME}"* ]]
+}
+
+runtime_monitor_matches_restored() {
+  local monitor_helper="${RUNTIME_ROOT}/scripts/monitor-runtime.sh"
+  runtime_monitor_process || return 1
+  [[ "${MONITOR_CMDLINE}" == *"${monitor_helper}"* ]] || return 1
+  [[ "${MONITOR_CMDLINE}" == *"--min-available-gib ${LIVE_MONITOR_MIN_AVAILABLE_GIB}"* ]] || return 1
+  [[ "${MONITOR_CMDLINE}" == *"--min-free-gib ${LIVE_MONITOR_MIN_FREE_GIB}"* ]] || return 1
+  [[ "${MONITOR_CMDLINE}" == *"--free-gate-gib ${LIVE_MONITOR_FREE_GATE_GIB}"* ]] || return 1
+  [[ "${MONITOR_CMDLINE}" == *"--min-swap-free-gib ${LIVE_MONITOR_MIN_SWAP_FREE_GIB}"* ]] || return 1
+  [[ "${MONITOR_CMDLINE}" == *"--consecutive ${LIVE_MONITOR_CONSECUTIVE}"* ]] || return 1
+  [[ "${MONITOR_CMDLINE}" == *"--heartbeat ${LIVE_MONITOR_HEARTBEAT}"* ]] || return 1
+  if [[ "${LIVE_MONITOR_PROTECT}" == 1 ]]; then
+    [[ "${MONITOR_CMDLINE}" == *"--protect"* ]] || return 1
+  else
+    [[ "${MONITOR_CMDLINE}" != *"--protect"* ]] || return 1
+  fi
+}
+
+stop_mismatched_runtime_monitor() {
+  local attempt
+  runtime_monitor_process || {
+    rm -f -- "${MONITOR_PID_FILE}"
+    return 0
+  }
+  printf 'Replacing mismatched runtime monitor before restored-runtime adoption (pid=%s).\n' "${MONITOR_PID}" >&2
+  kill "${MONITOR_PID}" 2>/dev/null || true
+  for attempt in $(seq 1 20); do
+    [[ ! -r "/proc/${MONITOR_PID}/cmdline" ]] && break
+    sleep 0.1
+  done
+  [[ ! -r "/proc/${MONITOR_PID}/cmdline" ]] ||
+    die "mismatched runtime monitor did not exit: pid=${MONITOR_PID}"
+  rm -f -- "${MONITOR_PID_FILE}"
 }
 
 ensure_runtime_monitor() {
   local monitor_helper="${RUNTIME_ROOT}/scripts/monitor-runtime.sh" pid
   local -a monitor_args
   if [[ "${LIVE_MONITOR_ENABLED}" != 1 ]]; then
-    if runtime_monitor_running; then
-      die "runtime monitor is active although the restored manifest disables it"
+    if runtime_monitor_process; then
+      stop_mismatched_runtime_monitor
+      printf 'Removed stale runtime monitor because the restored manifest disables monitoring.\n'
+    else
+      rm -f -- "${MONITOR_PID_FILE}"
     fi
-    rm -f -- "${MONITOR_PID_FILE}"
     return 0
   fi
-  runtime_monitor_running && return 0
+
   [[ -x "${monitor_helper}" ]] || die "restored runtime has no executable monitor helper: ${monitor_helper}"
-  rm -f -- "${MONITOR_PID_FILE}"
+  if runtime_monitor_matches_restored; then
+    printf 'Existing runtime monitor already matches restored release policy (pid=%s).\n' "${MONITOR_PID}"
+    return 0
+  fi
+  stop_mismatched_runtime_monitor
+
   monitor_args=(
     --container "${CONTAINER_NAME}"
     --min-available-gib "${LIVE_MONITOR_MIN_AVAILABLE_GIB}"
@@ -81,7 +124,7 @@ ensure_runtime_monitor() {
   pid=$!
   printf '%s\n' "${pid}" >"${MONITOR_PID_FILE}"
   sleep 1
-  runtime_monitor_running || die "restored runtime monitor failed to attach"
+  runtime_monitor_matches_restored || die "restored runtime monitor failed exact-policy attachment"
   printf 'Restored runtime monitor attached (protect=%s, pid=%s).\n' "${LIVE_MONITOR_PROTECT}" "${pid}"
 }
 
