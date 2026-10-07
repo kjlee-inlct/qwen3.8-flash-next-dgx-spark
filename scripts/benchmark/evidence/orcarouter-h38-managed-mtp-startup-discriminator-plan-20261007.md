@@ -109,3 +109,19 @@ mutation occurred in this invalid attempt.
 Managed H38 promotion remains blocked until the original MTP k=2 managed target passes
 migration FUNCTIONAL/HOST-STABILITY, determinism, performance, and managed
 restart/attestation gates.
+
+
+## 2026-10-08 setup-invalid attempt 02
+
+The corrected-root invocation reached the baseline function but still exited before
+the experiment lock, evidence directory, or candidate start. The cause was shell return
+semantics in the harness: the final command in `assert_post_protection_baseline` was
+`docker inspect EXPERIMENT && fail`. The experiment container being absent is the
+required baseline, so `docker inspect` correctly returned non-zero; because that AND
+list was the function's final command, the function itself returned non-zero and the
+top-level `set -e` exited silently.
+
+This is **SETUP INVALID / NO CANDIDATE START / NO CAUSAL CLAIM**. The fix converts both
+negative container-existence guards to explicit `if ...; then fail; fi` checks and
+ends the baseline function with explicit `return 0`. No runtime, monitor threshold,
+or RM-classification behavior changes.

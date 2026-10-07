@@ -91,6 +91,19 @@ class H38MtpStartupDiscriminatorTests(unittest.TestCase):
             "install root does not match restored current release",
             text,
         )
+        self.assertIn(
+            'if docker inspect "${ROLLBACK_CONTAINER}" >/dev/null 2>&1; then',
+            text,
+        )
+        self.assertIn(
+            'if docker inspect "${EXPERIMENT_CONTAINER}" >/dev/null 2>&1; then',
+            text,
+        )
+        baseline = text.split("assert_post_protection_baseline() {", 1)[1].split(
+            "\n}\n\ncapture_kernel_window()",
+            1,
+        )[0]
+        self.assertTrue(baseline.rstrip().endswith("return 0"))
 
 
 if __name__ == "__main__":

@@ -215,10 +215,13 @@ assert_post_protection_baseline() {
   [[ "$(docker inspect --format '{{.Config.Image}}' "${MANAGED_CONTAINER}")" == "${MANAGED_IMAGE}" ]] ||
     fail 'restored managed predecessor image does not match install manifest'
 
-  docker inspect "${ROLLBACK_CONTAINER}" >/dev/null 2>&1 &&
+  if docker inspect "${ROLLBACK_CONTAINER}" >/dev/null 2>&1; then
     fail "stale rollback container exists: ${ROLLBACK_CONTAINER}"
-  docker inspect "${EXPERIMENT_CONTAINER}" >/dev/null 2>&1 &&
+  fi
+  if docker inspect "${EXPERIMENT_CONTAINER}" >/dev/null 2>&1; then
     fail "experiment container already exists: ${EXPERIMENT_CONTAINER}"
+  fi
+  return 0
 }
 
 capture_kernel_window() {

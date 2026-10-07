@@ -177,9 +177,12 @@ experiment baseline. This is a mechanism discriminator, not a production configu
 candidate start because the harness incorrectly equated manifest `INSTALL_ROOT` with
 the immutable current-release root. The installer records the source repository root in
 `INSTALL_ROOT`; immutable runtime identity is the separate verified release pointer.
-The harness was corrected without changing runtime or protection policy. No live
-SPEC=none result has yet been recorded. Strict RM kernel evidence remains the
-classification source of truth.
+The harness was corrected without changing runtime or protection policy. No live SPEC=none result has yet been recorded. A second 2026-10-08 invocation was
+also setup-invalid before candidate start: the final negative Docker-existence guard
+in the baseline function returned 1 in the required "container absent" state, and
+top-level `set -e` exited silently. The harness now uses explicit conditional guards
+and an explicit successful return. Strict RM kernel evidence remains the classification
+source of truth.
 
 ## Historical evidence semantics
 
