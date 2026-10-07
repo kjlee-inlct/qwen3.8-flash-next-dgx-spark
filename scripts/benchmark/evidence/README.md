@@ -12,8 +12,9 @@ experiment-runtime closure and from the R9-R32 RM allocator investigation.
 - live Gate A attempt 01: `orcarouter-h38-managed-gate-a-attempt01-20261007.md`
 - live Gate A attempt 02: `orcarouter-h38-managed-gate-a-attempt02-20261007.md`
 - live Gate A attempt 03: `orcarouter-h38-managed-gate-a-attempt03-20261007.md`
+- live Gate A attempt 04: `orcarouter-h38-managed-gate-a-attempt04-20261007.md`
 - implementation branch: `feat/h38-managed-integration`
-- state: static/CI PASS on implementation head `398697be4a92b15e312d90101b706821075b7ae8`; attempts 01/02 exposed and fixed host-dependent settings-test fixtures; attempt 03 passed all 536 DGX qualification tests but immutable cutover exposed `scripts/serve.sh` committed without its executable bit; executable-mode fix `5d5120ebc765db80aa2306f16432dca0c550abee` plus regression test `cf59eee698925eafdf4b7275fa985c28d64062e4`; live retry pending
+- state: static/CI PASS on implementation head `398697be4a92b15e312d90101b706821075b7ae8`; attempts 01/02 exposed and fixed host-dependent settings-test fixtures; attempt 03 passed qualification but exposed the immutable-release executable-bit defect; attempt 04 passed 537/537 qualification and reached legacy runtime replacement, but the already-base-main swap-growth memory-protection policy stopped the legacy CPU-offload restart before READY and rolled back; matched PR-base-main control pending before any Gate B migration
 - promotion rule: do not merge the runtime-impacting default change until
   managed lifecycle/restart/doctor, determinism, performance, and strict RM
   host-stability gates are recorded.
