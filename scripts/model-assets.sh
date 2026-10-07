@@ -63,7 +63,7 @@ describe_model_asset() {
     orcarouter)
       MODEL_ASSET_CHECKPOINT="${model_root}/qwen3.8-flash-next-orcarouter"
       MODEL_ASSET_CONTAINER="qwen38-flash-next"
-      MODEL_ASSET_IMAGE="vllm-skinny-tp1:v1"
+      MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"
       MODEL_ASSET_RETIRE_IMAGE=1
       ;;
     mazinb)
