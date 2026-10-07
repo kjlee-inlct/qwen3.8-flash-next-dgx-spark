@@ -81,6 +81,8 @@ class H38ManagedMigrationGateTests(unittest.TestCase):
         self.assertIn('elif [[ "${KERNEL_WINDOW_RC}" != 0 ]]', text)
         self.assertIn("strict NVIDIA RM no-memory evidence observed", text)
         self.assertIn("memory protection intervened during measured migration window", text)
+        self.assertIn("monitor-protection-window.txt", text)
+        self.assertIn("WARNING memory margin low protect=", text)
         self.assertIn("H38_MANAGED_FUNCTIONAL=", text)
         self.assertIn("H38_MANAGED_HOST_STABILITY=", text)
         self.assertIn("upload-summary.txt", text)

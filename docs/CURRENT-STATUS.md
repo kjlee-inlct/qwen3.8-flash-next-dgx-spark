@@ -122,9 +122,22 @@ target SHA and does not use the retired legacy-READY intermediate. After that ga
 passes, `scripts/run-h38-managed-followup-gates.sh` binds the same migration evidence
 baseline to managed-alias determinism, the >=90% decode-performance gate, a supported
 managed-service replacement/restart, doctor/attestation checks, and one strict RM
-follow-up window. H38 must not be described as
-promoted into the managed runtime until lifecycle/restart/doctor, managed-alias
-determinism, performance, and strict RM host-stability gates in
+follow-up window. The first live run through the new atomic transaction was executed on exact branch head
+`05748a9c9a2b206a536b454dc5d662d7750913db`. It reached the H38 managed
+candidate directly (PLE mmap, exact QSA, decoder-scope image) but memory protection
+stopped the candidate during startup before READY. The guarded gate therefore recorded
+`FUNCTIONAL=NOT_REACHED`, `HOST_STABILITY=INCONCLUSIVE`,
+`kernel_window_rc=0`, `rm_oom_count=0`, and `protected_stop=1`. Recovery restored
+the previous release + manifest + runtime tuple while preserving the safety-stopped
+runtime instead of forcing a legacy cold restart. This is not a managed-H38 pass and
+does not authorize the follow-up determinism/performance/restart gate. The terminal
+summary did not retain the exact monitor threshold samples, so the gate now also extracts
+the monitor start/warning/protection lines into a compact evidence file without changing
+any protection threshold or strict RM classification rule.
+
+H38 must not be described as promoted into the managed runtime until
+lifecycle/restart/doctor, managed-alias determinism, performance, and strict RM
+host-stability gates in
 `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
 are recorded as passing.
 

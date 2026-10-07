@@ -189,6 +189,8 @@ capture_measured_window() {
   else
     : >"${OUT}/monitor-window.log"
   fi
+  grep -E 'monitor started:|WARNING memory margin low protect=|PROTECT stopping |memory margin recovered:|HEARTBEAT healthy:' \
+    "${OUT}/monitor-window.log" >"${OUT}/monitor-protection-window.txt" || true
   grep -q 'PROTECT stopping' "${OUT}/monitor-window.log" 2>/dev/null && PROTECTED_STOP=1 || PROTECTED_STOP=0
 }
 
@@ -239,7 +241,7 @@ finalize() {
   {
     printf '===== summary =====\n'
     cat "${OUT}/summary.txt"
-    for evidence_file in       migration-command.log doctor-strict.txt h38-image-verify.txt kernel-errors.txt       release-before.txt release-after.txt runtime-transition-after.txt       release-profile-refresh-after.txt service-window.txt
+    for evidence_file in       migration-command.log doctor-strict.txt h38-image-verify.txt kernel-errors.txt       monitor-protection-window.txt release-before.txt release-after.txt runtime-transition-after.txt       release-profile-refresh-after.txt service-window.txt
     do
       [[ -f "${OUT}/${evidence_file}" ]] || continue
       printf '\n===== %s =====\n' "${evidence_file}"

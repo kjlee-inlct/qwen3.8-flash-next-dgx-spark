@@ -247,7 +247,12 @@ Historical failures are retained because they found real design or test-harness 
 
 ## Acceptance boundary
 
-No DGX H38 managed migration has been executed through this new transaction yet.
+The first DGX H38 managed migration through this transaction was executed on exact head
+`05748a9c9a2b206a536b454dc5d662d7750913db`. The atomic path itself reached the
+H38 candidate directly, but the runtime monitor protected the host during candidate
+startup before API readiness. The guarded gate recorded `kernel_window_rc=0`,
+`rm_oom_count=0`, and `protected_stop=1`. Recovery restored the previous
+release/manifest/runtime tuple and preserved the stopped safety state.
 
 Current classification:
 
@@ -257,8 +262,9 @@ Current classification:
   follow-up acceptance
   (`acb69b83e28b593e434d2e5e51b7f9b4584b6aad`, run `37622310894`,
   **581/581 unit tests**)
+- first atomic live migration attempt: PROTECTED STOP BEFORE READY
 - managed H38 migration FUNCTIONAL: NOT REACHED
-- managed H38 migration HOST-STABILITY: NOT REACHED
+- managed H38 migration HOST-STABILITY: INCONCLUSIVE
 - managed H38 DETERMINISM: NOT REACHED
 - managed H38 PERFORMANCE: NOT REACHED
 - managed restart/attestation: NOT REACHED

@@ -1,6 +1,6 @@
 # OrcaRouter H38 managed-service integration plan — 2026-10-07
 
-Status: ATOMIC TRANSACTION STATIC/CI PASS / DGX LIVE QUALIFICATION PENDING
+Status: ATOMIC TRANSACTION STATIC/CI PASS / ATOMIC LIVE ATTEMPT 01 PROTECTED STOP / FOLLOW-UP NOT AUTHORIZED
 
 ## Provenance
 
@@ -117,6 +117,16 @@ The migration gate must:
 8. classify a memory-protection stop as a safety intervention / incomplete functional
    gate, not as HOST-STABILITY PASS and not as confirmed RM OOM;
 9. preserve one upload-oriented evidence summary plus the full run log.
+
+The first atomic migration execution on
+`05748a9c9a2b206a536b454dc5d662d7750913db` did not satisfy that prerequisite.
+It reached the H38 candidate directly but memory protection stopped startup before
+READY. The gate recorded `FUNCTIONAL=NOT_REACHED`,
+`HOST_STABILITY=INCONCLUSIVE`, `kernel_window_rc=0`, `rm_oom_count=0`, and
+`protected_stop=1`. The exact monitor trigger samples must be recovered from the
+preserved evidence before deciding whether the stop matches the already-known
+swap-growth heuristic false-positive shape. Protection thresholds and strict RM
+classification remain unchanged.
 
 Only after the atomic migration gate is FUNCTIONAL PASS and its measured migration
 window is free of strict RM failures may the remaining managed gates proceed.
