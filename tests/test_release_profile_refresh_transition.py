@@ -366,14 +366,16 @@ class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
 
     def test_recover_activated_restores_exact_previous_pair_and_manifest(self) -> None:
         self.prepare_activated_state()
+        expected_manifest = self.backup.read_bytes()
 
         result = self.run_helper("recover")
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.current.resolve(), self.releases / self.old_release)
         self.assertFalse(self.previous.exists())
-        self.assertEqual(self.install.read_bytes(), self.backup.read_bytes() if self.backup.exists() else self.install.read_bytes())
+        self.assertEqual(self.install.read_bytes(), expected_manifest)
         self.assertFalse(self.transition.exists())
+        self.assertFalse(self.backup.exists())
         self.assertFalse(self.candidate.exists())
 
     def test_recover_digest_mismatch_fails_closed_with_state_preserved(self) -> None:
