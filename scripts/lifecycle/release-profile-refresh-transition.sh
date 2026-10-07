@@ -20,6 +20,7 @@ BACKUP_MANIFEST="${INSTALL_STATE_FILE}.release-profile-refresh-backup"
 TARGET_MANIFEST="${INSTALL_STATE_FILE}.release-profile-refresh-candidate"
 RUNTIME_COMMIT_FILE="${STATE_HOME}/runtime-commit.env"
 RUNTIME_ADOPT_FILE="${STATE_HOME}/runtime-adopt.env"
+MONITOR_PID_FILE="${STATE_HOME}/monitor.pid"
 RUNTIME_TRANSITION_FILE="${STATE_HOME}/runtime-transition.env"
 UPDATE_STATE_FILE="${STATE_HOME}/update-transition.env"
 PROFILE_SWITCH_STATE_FILE="${STATE_HOME}/profile-switch-transition.env"
@@ -435,11 +436,40 @@ restore_pointer() {
   fi
 }
 
+quiesce_runtime_monitor_for_rollback() {
+  local pid cmdline attempt
+  [[ ! -e "${MONITOR_PID_FILE}" && ! -L "${MONITOR_PID_FILE}" ]] && return 0
+  [[ -f "${MONITOR_PID_FILE}" && ! -L "${MONITOR_PID_FILE}" ]] ||
+    die "runtime monitor PID marker is unsafe during rollback: ${MONITOR_PID_FILE}"
+  IFS= read -r pid <"${MONITOR_PID_FILE}" || pid=""
+  if [[ ! "${pid}" =~ ^[0-9]+$ || ! -r "/proc/${pid}/cmdline" ]]; then
+    rm -f -- "${MONITOR_PID_FILE}"
+    return 0
+  fi
+  cmdline="$(tr '\0' ' ' <"/proc/${pid}/cmdline")"
+  if [[ "${cmdline}" != *monitor-runtime.sh* || "${cmdline}" != *"--container qwen38-flash-next"* ]]; then
+    # A stale/reused PID must never authorize killing an unrelated process.
+    rm -f -- "${MONITOR_PID_FILE}"
+    return 0
+  fi
+
+  printf 'Quiescing candidate runtime monitor before restoring previous container (pid=%s).\n' "${pid}" >&2
+  kill "${pid}" 2>/dev/null || true
+  for attempt in $(seq 1 20); do
+    [[ ! -r "/proc/${pid}/cmdline" ]] && break
+    sleep 0.1
+  done
+  [[ ! -r "/proc/${pid}/cmdline" ]] ||
+    die "runtime monitor did not exit before rollback container restoration: pid=${pid}"
+  rm -f -- "${MONITOR_PID_FILE}"
+}
+
 restore_previous_pair() {
   local runtime_helper="${RELEASES_DIR}/${TARGET_RELEASE}/scripts/runtime/runtime-transition.sh"
   [[ -f "${BACKUP_MANIFEST}" && ! -L "${BACKUP_MANIFEST}" ]] || die 'refresh backup manifest is missing'
   [[ "$(sha256_file "${BACKUP_MANIFEST}")" == "${BACKUP_SHA256}" ]] || die 'refresh backup manifest digest mismatch'
   [[ -r "${runtime_helper}" ]] || die 'target runtime recovery helper is unavailable'
+  quiesce_runtime_monitor_for_rollback
   bash "${runtime_helper}" recover
   verify_previous_runtime_restored
   restore_pointer "${CURRENT_LINK}" "${OLD_CURRENT_RELEASE}"
