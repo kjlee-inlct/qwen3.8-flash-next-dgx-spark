@@ -58,9 +58,18 @@ The production profile uses
 The canonical evidence is in `../benchmark/README.md`, with a concise summary
 in `../../docs/H38-DETERMINISM.md`.
 
-These H38 profiles are dedicated v0.29 runtime helpers and are not yet wired
-into the transactional `install.sh` / systemd-managed `serve.sh` lifecycle.
-Do not conflate H38 runtime qualification with managed-service qualification.
+The dedicated H38 profiles above remain the historical qualification surface.
+The current H38 managed-integration feature branch also selects the decoder-scope
+image for the managed `orcarouter` profile after an explicit
+`--refresh-profile-defaults` migration. A pre-H38
+`vllm-skinny-tp1:v1` manifest remains bootable after immutable code update so
+the release cutover and runtime-default migration remain separate transactions.
+
+That managed integration is implemented but live qualification is still
+pending. Do not conflate the historical H38 runtime qualification with
+installer/systemd managed-service qualification. See
+`../benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+for the acceptance gate.
 
 ## Temporary NVIDIA tuning runtimes
 
