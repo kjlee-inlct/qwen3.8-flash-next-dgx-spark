@@ -55,7 +55,11 @@ entries:
   deterministic;
 - the H38 runtime determinism repair is closed for the validated
   `scripts/runtime/orcarouter-v029.sh` production track; managed-service
-  integration remains a separate open qualification phase.
+  integration remains a separate open qualification phase;
+- on 2026-10-07 the managed integration branch replaced the invalid two-stage
+  legacy-READY assumption with an atomic release + same-profile H38 manifest
+  refresh transaction; this is an implementation change, not live acceptance,
+  and the managed determinism/performance/restart/RM gates remain pending.
 
 See `../../docs/H38-DETERMINISM.md` for the concise operational status.
 Historical entries below remain authoritative for what was observed at their
