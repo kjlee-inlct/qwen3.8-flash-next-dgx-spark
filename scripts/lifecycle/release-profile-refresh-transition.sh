@@ -492,6 +492,7 @@ verify_previous_runtime_restored() {
   oom="$(docker inspect --format '{{.State.OOMKilled}}' qwen38-flash-next 2>/dev/null || true)"
   [[ "${oom}" == false ]] || die 'restored previous runtime is OOMKilled'
   docker inspect qwen38-flash-next.rollback >/dev/null 2>&1 && die 'rollback container remains after previous runtime restoration'
+  return 0
 }
 
 commit_deferred_runtime_transition() {
@@ -522,6 +523,7 @@ commit_deferred_runtime_transition() {
   fi
   [[ ! -e "${RUNTIME_TRANSITION_FILE}" && ! -L "${RUNTIME_TRANSITION_FILE}" ]] || die 'runtime transition did not commit'
   docker inspect qwen38-flash-next.rollback >/dev/null 2>&1 && die 'runtime rollback container survived commit'
+  return 0
 }
 
 finish_proven_target() {
