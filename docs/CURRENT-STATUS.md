@@ -102,12 +102,16 @@ release and H38 candidate manifest before the single managed-service replacement
 The service runner writes target attestation while deferring runtime-transition commit,
 so the previous rollback container remains available until the outer lifecycle commit.
 Recovery therefore owns the release-pointer + manifest + runtime tuple rather than only
-release and manifest state.
+release and manifest state. Rollback is also identity-safe at the service boundary:
+`ExecStop` stops only the attested container ID, a still-running restored predecessor
+is reattached without replacement, and a safety-stopped predecessor is left stopped
+instead of being cold-started merely to recover service state.
 
-This is **implementation state only**. The hardened atomic transaction passed static/CI
-revalidation on `d44e3ddd53896c7d87b533f5db315a168e65dd59` (GitHub Actions
-`37604211474`, 567/567 unit tests), while live managed H38 acceptance remains a
-separate gate. The guarded migration entry is
+This is **implementation state only**. The hardened atomic transaction, including the
+identity-safe rollback/service-adoption path, passed static/CI revalidation on
+`40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b` (GitHub Actions
+`37616889537`). Shell syntax, ShellCheck, Python compilation, the full unit-test suite,
+and whitespace checks passed, while live managed H38 acceptance remains a separate gate. The guarded migration entry is
 `scripts/benchmark/run-h38-managed-migration-gate.sh`; it requires an exact clean
 target SHA and does not use the retired legacy-READY intermediate. H38 must not be described as
 promoted into the managed runtime until lifecycle/restart/doctor, managed-alias
