@@ -296,12 +296,13 @@ branch now implements the corresponding candidate runtime for the stable
 `orcarouter` installer profile, selecting the same decoder-scope image while
 retaining the 16 GiB managed KV resilience value.
 
-Existing installations migrate in two explicit transactions: the immutable code
-release is updated first while the legacy `vllm-skinny-tp1:v1` manifest remains
-bootable, then `--refresh-profile-defaults` changes the manifest image and
-transactionally replaces the runtime. H38-specific PLE mmap, exact-QSA and
-decoder-canonicalization controls are keyed to the H38 image, so the first
-transaction cannot silently reinterpret an old manifest.
+Existing installations use one atomic cross-release refresh transaction. The
+qualified target immutable release and H38 candidate install manifest are activated
+under a single recovery owner before the managed service is replaced. The transaction
+therefore does not boot the legacy `vllm-skinny-tp1:v1` CPU-offload runtime as an
+intermediate acceptance state. H38-specific PLE mmap, exact-QSA and
+decoder-canonicalization controls remain keyed to the H38 image, while rollback restores
+the previous release-pointer pair and canonical manifest together.
 
 This is an implementation state, not a qualification result. The
 installer/systemd path must still pass the managed lifecycle/restart/doctor,
