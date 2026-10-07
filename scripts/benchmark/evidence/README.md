@@ -2,6 +2,21 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## H38 managed-service integration
+
+The managed H38 candidate is tracked separately from the historical H38
+experiment-runtime closure and from the R9-R32 RM allocator investigation.
+
+- plan: `orcarouter-h38-managed-integration-plan-20261007.md`
+- implementation branch: `feat/h38-managed-integration`
+- state: implementation present; static/CI and DGX live qualification pending
+- promotion rule: do not merge the runtime-impacting default change until
+  managed lifecycle/restart/doctor, determinism, performance, and strict RM
+  host-stability gates are recorded.
+
+The existing H38 experimental/runtime results remain historical evidence; this
+work does not rewrite those measured results.
+
 ## Current host-stability / RM allocator chain
 
 Read the current closure in this order:
