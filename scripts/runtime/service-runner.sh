@@ -5,7 +5,7 @@ set -Eeuo pipefail
 RUNTIME_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 STATE_FILE="${QWEN38_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/install.env}"
 STATE_PARSER="${RUNTIME_ROOT}/scripts/lib/state_file.py"
-RELEASE_PROFILE_REFRESH_TRANSITION="${RUNTIME_ROOT}/scripts/lifecycle/release-profile-refresh-transition.sh"
+RELEASE_PROFILE_REFRESH_TRANSITION="${RUNTIME_ROOT}/scripts/release-profile-refresh-transition.sh"
 PROFILE_SWITCH_TRANSITION="${RUNTIME_ROOT}/scripts/profile-switch-transition.sh"
 [[ -r "${RELEASE_PROFILE_REFRESH_TRANSITION}" ]] || { printf 'FATAL: release-profile refresh transition helper is unavailable: %s\n' "${RELEASE_PROFILE_REFRESH_TRANSITION}" >&2; exit 1; }
 [[ -r "${PROFILE_SWITCH_TRANSITION}" ]] || { printf 'FATAL: profile-switch transition helper is unavailable: %s\n' "${PROFILE_SWITCH_TRANSITION}" >&2; exit 1; }
