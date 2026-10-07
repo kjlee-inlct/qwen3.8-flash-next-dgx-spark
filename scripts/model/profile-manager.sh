@@ -105,7 +105,12 @@ profile_manager_entry() (
 
 profile_manager_load() {
   local profile="$1" active_profile="${2:-}"
-  IFS=  [[ -n "${PM_PROFILE:-}" ]]
+  IFS=$'\t' read -r \
+    PM_PROFILE PM_DISPLAY_NAME PM_STATUS PM_INSTALLABLE PM_DEFAULT \
+    PM_LOCAL_STATE PM_ACTIVE PM_IMAGE_STATE PM_REPO PM_CHECKPOINT \
+    PM_DESCRIPTION PM_DESCRIPTION_KO \
+    < <(profile_manager_entry "${profile}" "${active_profile}")
+  [[ -n "${PM_PROFILE:-}" ]]
 }
 
 profile_manager_loaded_detail() {
