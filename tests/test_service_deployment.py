@@ -132,7 +132,9 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime adoption container ID mismatch", adopter)
         self.assertIn("runtime adoption model mount mismatch", adopter)
         self.assertIn("runtime adoption served model identity mismatch", adopter)
-        self.assertIn("Existing runtime adopted without replacement", adopter)
+        self.assertIn("Existing runtime supervised without replacement", adopter)
+        self.assertIn("runtime adoption attestation container ID mismatch", adopter)
+        self.assertIn("preserving stopped state instead of cold-starting it", adopter)
         self.assertIn('rm -f -- "${ADOPT_FILE}"', adopter)
 
         self.assertIn("no runtime attestation; preserving any canonical container", stopper)
