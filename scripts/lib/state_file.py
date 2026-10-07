@@ -134,6 +134,15 @@ SCHEMAS: dict[str, dict[str, Validator]] = {
         "RUNTIME_CONTAINER_ID": matches(HEX_CONTAINER),
         "COMMITTED_AT": matches(TIMESTAMP),
     },
+    "runtime-adopt": {
+        "RUNTIME_ADOPT_SCHEMA_VERSION": exact("1"),
+        "RUNTIME_ROOT": absolute_path,
+        "RUNTIME_CONTAINER_NAME": exact("qwen38-flash-next"),
+        "RUNTIME_CONTAINER_ID": matches(HEX_CONTAINER),
+        "EXPECTED_IMAGE": nonempty_text,
+        "SERVED_NAME": nonempty_text,
+        "CREATED_AT": matches(TIMESTAMP),
+    },
 }
 
 INSTALL_KEYS = {
