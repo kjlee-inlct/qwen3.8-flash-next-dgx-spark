@@ -62,6 +62,68 @@ install_plan_apply_snapshot() {
   export QWEN38_MODEL_ROOT="${MODEL_ROOT}"
 }
 
+install_plan_render_cli_preview() {
+  [[ "${INSTALL_PLAN_READY:-0}" == 1 ]] || return 1
+  [[ "${PLAN_SCHEMA_VERSION:-}" == 1 ]] || return 1
+  declare -F install_option_flag >/dev/null 2>&1 || {
+    printf 'ERROR: normalized CLI rendering requires the installer option registry\n' >&2
+    return 1
+  }
+
+  local monitor_variant service_variant arg quoted rendered=""
+  local -a args=("./install.sh")
+
+  args+=(
+    "$(install_option_flag language)" "${PLAN_UI_LANG}"
+    "$(install_option_flag confirmation)"
+    "$(install_option_flag dry_run)"
+    "$(install_option_flag profile)" "${PLAN_MODEL_PROFILE}"
+    "$(install_option_flag model_root)" "${PLAN_MODEL_ROOT}"
+  )
+
+  if [[ -n "${PLAN_CONFIG_OVERRIDE}" ]]; then
+    args+=("$(install_option_flag config_override config-override)" "${PLAN_CONFIG_OVERRIDE}")
+  else
+    args+=("$(install_option_flag config_override no-config-override)")
+  fi
+
+  if [[ "${PLAN_MONITOR_ENABLED}" == 0 ]]; then
+    monitor_variant=no-monitor
+  elif [[ "${PLAN_MONITOR_PROTECT}" == 1 ]]; then
+    monitor_variant=protect
+  else
+    monitor_variant=monitor
+  fi
+  args+=("$(install_option_flag monitor_mode "${monitor_variant}")")
+  args+=(
+    "$(install_option_flag monitor_min_available)" "${PLAN_MONITOR_MIN_AVAILABLE_GIB}"
+    "$(install_option_flag monitor_min_free)" "${PLAN_MONITOR_MIN_FREE_GIB}"
+    "$(install_option_flag monitor_free_gate)" "${PLAN_MONITOR_FREE_GATE_GIB}"
+    "$(install_option_flag monitor_min_swap_free)" "${PLAN_MONITOR_MIN_SWAP_FREE_GIB}"
+    "$(install_option_flag monitor_consecutive)" "${PLAN_MONITOR_CONSECUTIVE}"
+    "$(install_option_flag monitor_heartbeat)" "${PLAN_MONITOR_HEARTBEAT}"
+    "$(install_option_flag api_access)" "${PLAN_API_ACCESS_MODE}"
+    "$(install_option_flag api_docker_port)" "${PLAN_API_DOCKER_PORT}"
+    "$(install_option_flag api_lan_port)" "${PLAN_API_LAN_PORT}"
+  )
+  if [[ -n "${PLAN_API_LAN_ADDRESS}" ]]; then
+    args+=("$(install_option_flag api_lan_address)" "${PLAN_API_LAN_ADDRESS}")
+  fi
+
+  [[ "${PLAN_SERVICE_ENABLED}" == 1 ]] && service_variant=service || service_variant=no-service
+  args+=("$(install_option_flag service_mode "${service_variant}")")
+
+  [[ "${PLAN_START}" != 0 ]] || args+=("$(install_option_flag start_policy)")
+  [[ "${PLAN_REFRESH_PROFILE_DEFAULTS}" != 1 ]] || args+=("$(install_option_flag refresh_profile_defaults)")
+
+  for arg in "${args[@]}"; do
+    printf -v quoted '%q' "${arg}"
+    [[ -z "${rendered}" ]] || rendered+=" "
+    rendered+="${quoted}"
+  done
+  printf '%s\n' "${rendered}"
+}
+
 install_plan_finalize() {
   declare -F validate_monitor_settings >/dev/null 2>&1 || {
     printf 'ERROR: normalized install plan requires monitor validation\n' >&2
