@@ -128,7 +128,7 @@ Profiles that require a compatibility override, currently `orcarouter`, do not e
 - **Implemented:** current-profile default refresh is reachable from the Wizard through the existing `REFRESH_PROFILE_DEFAULTS` path.
 - **Implemented:** live settings apply has transactional/recoverable cleanup and creation of owned proxy and managed service resources.
 - **Implemented:** completed-install Wizard exposes preview/live choice and immediate/deferred runtime restart; the option-parity test has no remaining user-facing setting debt.
-- **Pending acceptance:** guarded DGX preview on the final implementation head, followed by a deliberately scoped live transaction validation only after preview invariants pass.
+- **Accepted on DGX:** final implementation was exercised through guarded dry-run, real no-op live commit, and explicit deferred-runtime rollback with byte/runtime invariants.
 
 ### P1 — architecture / drift prevention
 
@@ -164,7 +164,7 @@ The persisted transaction keeps fixed backup/target manifests, their digests, st
 4. `resources-applied` — target resources are verified, with service boot-enable still deferred;
 5. `committing` — the target service is boot-enabled when requested, final resources are verified, released installer-owned config is cleaned safely, and transaction artifacts are removed.
 
-Rollback/recovery restores the backup manifest and symmetrically recreates/removes owned proxy and service resources. Recovery trusts only resource ownership proven by the backup or target manifest, preventing an interruption immediately after activation from misclassifying the previous owned resources as unmanaged. If the previous runtime was not running, rollback also prevents an accidentally started target runtime from being left behind.
+Rollback/recovery restores the backup manifest and symmetrically recreates/removes owned proxy and service resources. Recovery trusts only resource ownership proven by the backup or target manifest, preventing an interruption immediately after activation from misclassifying the previous owned resources as unmanaged. If restart was explicitly deferred and service enablement did not change, rollback preserves the existing runtime and verifies the pre-transaction service/container activity markers instead of recreating the service. If the previous runtime was not running, rollback also prevents an accidentally started target runtime from being left behind.
 
 An interrupted settings transaction intentionally blocks other lifecycle mutation until explicit recovery. The operator recovery entry point is:
 
@@ -194,20 +194,28 @@ Post-run checks proved the preview was non-mutating: `install.env` and `runtime-
 
 That preview acceptance remains valid evidence for the editor and normalized plan, but it is not evidence for the live transaction or host stability.
 
-## Completed-install settings management — transactional apply slice — 2026-10-06
+## Completed-install settings management — transactional apply slice — 2026-10-07
 
-Live apply is implemented on branch head `933a3dc0b01f68f0c3986913ff8cccef8a2a4317`, validated by CI #1257. The branch adds the recoverable settings transaction, service boot-enable deferral, symmetric proxy/service rollback, config-ownership cleanup, commit-failure propagation, and rootless resource integration coverage.
+The accepted implementation code head is `33a7f16e282672b5aa256cc662c026637e5b7afb`, validated by CI #1264. The branch adds the recoverable settings transaction, service boot-enable deferral, symmetric proxy/service rollback, config-ownership cleanup, commit-failure propagation, and rootless resource integration coverage.
 
-The rootless transaction tests cover both directions of the destructive resource boundary: local/no-service → Docker proxy + managed service proves the service is installed but boot-disabled until commit and enabled only at commit; Docker/service → local/no-service proves removal during apply and restoration of proxy/service ownership during rollback. Additional tests cover activation interruption, activation-guard recovery, immutable identity rejection, operation-lock exclusion, config ownership claims, committed cleanup, rollback preservation, and manager commit failure followed by recovery.
+The rootless transaction tests cover both directions of the destructive resource boundary: local/no-service → Docker proxy + managed service proves the service is installed but boot-disabled until commit and enabled only at commit; Docker/service → local/no-service proves removal during apply and restoration of proxy/service ownership during rollback. Additional tests cover activation interruption, activation-guard recovery, immutable identity rejection, operation-lock exclusion, config ownership claims, committed cleanup, rollback preservation, manager commit failure followed by recovery, no-op preservation of existing service/proxy units, and deferred rollback that preserves an already-running runtime.
 
-No DGX live settings mutation has been accepted by this section yet. The next acceptance step is a guarded final-head dry-run proving non-mutation, followed only then by a narrowly scoped live settings transaction with before/after/recovery invariants. Neither step is runtime host-stability qualification.
+Final-head dry-run acceptance first passed on `56088213776c70546f96266c626c006644f3f019`: current `orcarouter` / LAN / managed-service settings were rendered through completed-install management with CLI `--dry-run`, while `install.env`, `runtime-commit.env`, service/proxy state, container ID, `StartedAt`, lifecycle artifacts, and worktree state remained unchanged.
+
+The first live no-op transaction then exposed an implementation defect: a retained managed service was unnecessarily recreated when restart was deferred. The host remained safe—the regenerated unit's `WorkingDirectory` and `ExecStart` matched both the attested runtime root and the current immutable release—but the unit SHA changed, so acceptance correctly failed. A subsequent review found the same no-op churn pattern in managed proxy recreation. Both were fixed so semantically unchanged retained resources remain byte-identical.
+
+DGX no-op live acceptance passed on `7a7f3457b9f94e72acb0c84c6aadbdc427006902` after CI #1262. A real `prepare -> apply -> commit` executed with restart deferred; `install.env`, `runtime-commit.env`, the managed service unit, proxy socket unit, proxy service unit, container ID, and `StartedAt` were all unchanged, while the service and LAN proxy remained active/boot-enabled and transaction state returned to idle.
+
+Before exercising rollback, review found that deferred rollback could unnecessarily recreate/start an already-running managed service. That path was fixed on `33a7f16e282672b5aa256cc662c026637e5b7afb`, with CI #1264 green. Real DGX rollback acceptance then temporarily changed only `MONITOR_HEARTBEAT=60 -> 61`, prepared/applied with `START=0`, reached `resources-applied` with service boot enable guarded, and invoked explicit rollback instead of commit. Rollback restored `install.env` byte-for-byte and heartbeat 60, kept service/proxy unit SHAs unchanged, preserved runtime attestation/container ID/`StartedAt`, returned the service to active + boot-enabled, and left no lifecycle artifacts.
+
+These acceptances validate installer/settings transaction behavior only. They are not runtime host-stability qualification and do not alter the strict `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` rule.
 
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
 3. **Common normalized plan** — implemented and DGX dry-run accepted.
-4. **Completed-install settings management** — preview/action UI accepted on DGX; transactional live apply and Wizard execution-policy parity implemented in code and CI #1257 green; final-head guarded DGX acceptance remains.
+4. **Completed-install settings management** — implemented and accepted on DGX through preview, no-op live commit, and explicit deferred-runtime rollback; final implementation code head `33a7f16e282672b5aa256cc662c026637e5b7afb`, CI #1264.
 5. **Registry/profile-manager metadata** — derive profile UI from registry and combine it with `manage-models.sh` inventory; centralize option metadata.
 6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when the phase explicitly requires it.
 
