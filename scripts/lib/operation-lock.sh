@@ -40,6 +40,15 @@ operation_lock_release_profile_refresh_guard() {
   operation_lock_die "an interrupted release-profile refresh is active (${phase}); recover it before another lifecycle mutation" || return 1
 }
 
+operation_lock_runtime_adopt_guard() {
+  local state_dir="$1" state_file="${state_dir}/runtime-adopt.env"
+  [[ -e "${state_file}" || -L "${state_file}" ]] || return 0
+  [[ "${QWEN38_RUNTIME_ADOPT_CONTEXT:-0}" == 1 ]] && return 0
+  [[ -f "${state_file}" && ! -L "${state_file}" ]] || \
+    operation_lock_die "runtime adoption marker is unsafe: ${state_file}" || return 1
+  operation_lock_die "a one-shot runtime adoption is pending; let the managed service finish recovery before another lifecycle mutation" || return 1
+}
+
 acquire_operation_lock() {
   local state_dir="$1" label="${2:-lifecycle operation}" owner_uid="${3:-$(id -u)}" owner_gid="${4:-$(id -g)}"
   local lock_file probe_fd current_uid current_gid
@@ -58,6 +67,7 @@ acquire_operation_lock() {
   [[ -d "${state_dir}" && ! -L "${state_dir}" ]] || operation_lock_die "operation state directory is unsafe: ${state_dir}" || return 1
   operation_lock_settings_guard "${state_dir}" || return 1
   operation_lock_release_profile_refresh_guard "${state_dir}" || return 1
+  operation_lock_runtime_adopt_guard "${state_dir}" || return 1
 
   lock_file="${QWEN38_OPERATION_LOCK_FILE:-${state_dir}/operation.lock}"
   [[ "${lock_file}" == /* ]] || operation_lock_die "operation lock path must be absolute: ${lock_file}" || return 1
