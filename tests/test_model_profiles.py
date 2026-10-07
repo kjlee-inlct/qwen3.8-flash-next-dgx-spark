@@ -355,7 +355,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
         self.assertIn("profile     : orcarouter", result.stdout)
-        self.assertIn("vllm-skinny-tp1:v1", result.stdout)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
 
     def test_nvidia_profile(self) -> None:
         result = self.run_install("nvidia")
