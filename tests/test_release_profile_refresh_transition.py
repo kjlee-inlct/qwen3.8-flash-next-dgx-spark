@@ -145,6 +145,13 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
         self.assertLess(runner.index(refresh), runner.index(profile))
         self.assertLess(runner.index(refresh), runner.index(manifest))
 
+    def test_doctor_requires_refresh_transaction_idle(self) -> None:
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        self.assertIn("release-profile-refresh-transition.env", doctor)
+        self.assertIn("release-profile-refresh-backup", doctor)
+        self.assertIn("release-profile-refresh-candidate", doctor)
+        self.assertIn("no incomplete release-profile refresh exists", doctor)
+
     def test_update_release_has_explicit_atomic_refresh_route(self) -> None:
         update = (ROOT / "scripts" / "update-release.sh").read_text(encoding="utf-8")
         self.assertIn("--refresh-profile-defaults", update)
