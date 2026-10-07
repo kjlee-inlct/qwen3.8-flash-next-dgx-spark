@@ -9,6 +9,7 @@ This directory contains canonical immutable-release qualification, bootstrap, up
 - Manage persisted managed-profile replacement/recovery boundaries; this remains the
   canonical profile-switch transaction logic.
 - Atomically bind a qualified immutable release to a same-profile runtime-image manifest refresh without booting an intermediate legacy runtime.
+- Bind rollback to the exact predecessor container identity and coordinate one-shot service reattachment without forcing a legacy cold restart.
 - Enforce fail-closed qualification and lifecycle serialization rules.
 
 ## Dependencies
