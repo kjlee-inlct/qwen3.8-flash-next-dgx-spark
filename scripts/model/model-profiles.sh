@@ -25,6 +25,7 @@ describe_model_profile() {
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       PROFILE_DESCRIPTION="Primary qualified OrcaRouter profile; 16 GiB managed KV resilience default"
+      PROFILE_DESCRIPTION_KO="기본 검증 OrcaRouter 프로필; 관리형 KV 복원력 기본값 16 GiB"
       ;;
     nvidia)
       PROFILE_STATUS="experimental"
@@ -33,6 +34,7 @@ describe_model_profile() {
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="nvidia/Qwen3.8-Flash-Next-NVFP4"
       PROFILE_DESCRIPTION="Optional NVIDIA comparison profile"
+      PROFILE_DESCRIPTION_KO="선택형 NVIDIA 비교 프로필"
       ;;
     mazinb)
       PROFILE_STATUS="experimental"
@@ -41,6 +43,7 @@ describe_model_profile() {
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
       PROFILE_DESCRIPTION="Optional mazinb profile; 16 GiB managed KV resilience mitigation validated"
+      PROFILE_DESCRIPTION_KO="선택형 mazinb 프로필; 관리형 KV 복원력 완화 설정 16 GiB 검증"
       ;;
     orcarouter-hybrid)
       PROFILE_STATUS="experimental"
@@ -49,6 +52,7 @@ describe_model_profile() {
       PROFILE_INSTALLABLE=1
       PROFILE_REPO="local/orcarouter-mazinb-h6-w4a16"
       PROFILE_DESCRIPTION="Generated H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"
+      PROFILE_DESCRIPTION_KO="생성형 H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"
       ;;
     lychee888)
       PROFILE_STATUS="planned"
@@ -57,6 +61,7 @@ describe_model_profile() {
       PROFILE_INSTALLABLE=0
       PROFILE_REPO="lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE"
       PROFILE_DESCRIPTION="Planned OrcaRouter-derived FP8-PLE profile"
+      PROFILE_DESCRIPTION_KO="계획 중인 OrcaRouter 파생 FP8-PLE 프로필"
       ;;
     *)
       printf 'ERROR: unknown model profile: %s\n' "$1" >&2
