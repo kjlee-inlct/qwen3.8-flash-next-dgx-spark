@@ -618,7 +618,6 @@ rollback_active_transaction() {
         write_state rolling_back "${TARGET_MANIFEST_SHA256}"
         restore_previous_pair
         if [[ "${restart}" == 1 ]]; then
-          prepare_previous_runtime_adoption
           restore_previous_service_management
         fi
         clear_transaction
@@ -633,7 +632,6 @@ rollback_active_transaction() {
     rolling_back)
       restore_previous_pair
       if [[ "${restart}" == 1 ]]; then
-        prepare_previous_runtime_adoption
         restore_previous_service_management
       fi
       clear_transaction
