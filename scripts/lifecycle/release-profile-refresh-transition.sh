@@ -323,7 +323,8 @@ assert spec.loader is not None
 spec.loader.exec_module(module)
 source = pathlib.Path(source_path)
 target = pathlib.Path(target_path)
-values = module.parse_install(source, "install-service-runtime")
+module.parse_install(source, "install-service-runtime")
+values = module.parse_install(source, "install-maintenance")
 values["PHASE"] = "complete"
 ordered_keys = [key for _, key, _ in module.read_assignments(source)]
 target.write_text(
@@ -370,7 +371,9 @@ restore_previous_pair() {
 
 target_runtime_committed() {
   local target_root="${RELEASES_DIR}/${TARGET_RELEASE}" current_root container_id image scope
-  parse_state_into_vars install-service-runtime "${INSTALL_STATE_FILE}" LIVE_ || return 1
+  python3 "${STATE_PARSER}" install-service-runtime "${INSTALL_STATE_FILE}" >/dev/null || return 1
+  parse_manifest "${INSTALL_STATE_FILE}" LIVE || return 1
+  [[ "${LIVE_PHASE}" == service_ready || "${LIVE_PHASE}" == complete ]] || return 1
   [[ "${LIVE_MODEL_PROFILE}" == "${PROFILE}" ]] || return 1
   [[ "${LIVE_VLLM_IMAGE}" == "${TARGET_IMAGE}" ]] || return 1
   [[ "${LIVE_SERVED_NAME}" == "${TARGET_SERVED_NAME}" ]] || return 1
@@ -471,7 +474,7 @@ case "${action}" in
     OLD_IMAGE="${CURRENT_VLLM_IMAGE}"
 
     ensure_qualified_release "${TARGET_RELEASE}"
-    target_root="${RELEASES_DIR}/${TARGET_RELEASE"
+    target_root="${RELEASES_DIR}/${TARGET_RELEASE}"
     [[ "$(readlink -f -- "${target_root}" 2>/dev/null || realpath -m -- "${target_root}")" == "${target_root}" ]] || die 'target release path is unsafe'
     load_target_profile_defaults "${target_root}"
 
