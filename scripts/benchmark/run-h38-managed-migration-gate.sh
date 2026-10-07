@@ -35,6 +35,7 @@ SETTINGS_BACKUP="${STATE_FILE}.settings-backup"
 SETTINGS_TARGET="${STATE_FILE}.settings-candidate"
 SETTINGS_BACKUP_SHA="${SETTINGS_BACKUP}.sha256"
 SETTINGS_TARGET_SHA="${SETTINGS_TARGET}.sha256"
+RUNTIME_ADOPT_FILE="${STATE_HOME}/runtime-adopt.env"
 
 MEASURE_STARTED=0
 WINDOW_CAPTURED=0
@@ -110,6 +111,8 @@ assert_idle() {
   done
   grep -qx 'RELEASE_PROFILE_REFRESH_STATE=idle' < <(bash "${REFRESH_TRANSITION}" status) ||
     fail 'release-profile refresh transition is not idle'
+  [[ ! -e "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] ||
+    fail "runtime adoption marker is still pending: ${RUNTIME_ADOPT_FILE}"
 }
 
 assert_model_id() {
@@ -133,6 +136,13 @@ snapshot_lifecycle() {
     printf 'SETTINGS_TRANSITION_STATE=idle\n' >"${OUT}/settings-transition-${suffix}.txt"
   fi
   bash "${REFRESH_TRANSITION}" status >"${OUT}/release-profile-refresh-${suffix}.txt" 2>&1 || true
+  if [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]]; then
+    cp -p -- "${RUNTIME_ADOPT_FILE}" "${OUT}/runtime-adopt-${suffix}.env" 2>/dev/null || true
+  elif [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+    printf 'UNSAFE_RUNTIME_ADOPT_MARKER=%s\n' "${RUNTIME_ADOPT_FILE}" >"${OUT}/runtime-adopt-${suffix}.env"
+  else
+    printf 'RUNTIME_ADOPT_STATE=idle\n' >"${OUT}/runtime-adopt-${suffix}.env"
+  fi
 }
 
 snapshot_runtime() {
