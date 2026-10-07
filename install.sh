@@ -390,7 +390,7 @@ restore_profile_switch_manifest_on_exit() {
 
 wizard_choose_model_profile() {
   local current_profile="${1:-}" mode="${2:-fresh}" default_choice=1 answer
-  local profile detail selected="" candidate cancel_choice index
+  local profile detail selected="" candidate cancel_choice index selection_index
   local -a profiles=()
 
   mapfile -t profiles < <(list_model_profiles)
@@ -448,12 +448,13 @@ wizard_choose_model_profile() {
   [[ "${UI_LANG}" == ko ]] && wizard_input answer '선택' "${default_choice}" || wizard_input answer 'Select' "${default_choice}"
 
   if [[ "${answer}" =~ ^[0-9]+$ ]]; then
-    if [[ "${mode}" == existing && "${answer}" -eq "${cancel_choice}" ]]; then
+    selection_index=$((10#${answer}))
+    if [[ "${mode}" == existing && "${selection_index}" -eq "${cancel_choice}" ]]; then
       [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
       exit 0
     fi
-    if (( answer >= 1 && answer <= ${#profiles[@]} )); then
-      selected="${profiles[answer - 1]}"
+    if (( selection_index >= 1 && selection_index <= ${#profiles[@]} )); then
+      selected="${profiles[selection_index - 1]}"
     fi
   else
     for profile in "${profiles[@]}"; do
