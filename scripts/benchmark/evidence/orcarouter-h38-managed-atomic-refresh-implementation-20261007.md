@@ -34,6 +34,9 @@ rather than weakening host-safety protection.
 - rollback service-ownership restoration: `283c73009f03f3c203b65658950710c086ba8439`
 - identity-safe rollback regression coverage: `40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`
 - in-process reboot/interruption adoption handoff: `c9d0a014a71403fb6280be0b8db7d08028702046`
+- rollback topology + monitor quiesce hardening: `ef55c7d2b46023a4e0a7e3a5d7a54f022a604d98`
+- restored monitor exact-policy attachment: `4f817d99587cdbe93eba75234786af66d66d19c9`
+- managed follow-up acceptance runner + executable-mode guard: `acb69b83e28b593e434d2e5e51b7f9b4584b6aad`
 
 Later commits may advance the branch; the exact live acceptance target must always be the
 then-current PR head, not one of the intermediate SHAs above.
@@ -234,6 +237,13 @@ Historical failures are retained because they found real design or test-harness 
   ShellCheck, Python compilation, the full unit-test suite, and whitespace checks all
   passed. Startup recovery now adopts the restored predecessor inside the current
   target runner instead of exposing a restart window into an older runner.
+- final static implementation/test revalidation run `37622310894` on
+  `acb69b83e28b593e434d2e5e51b7f9b4584b6aad`: **SUCCESS**. Shell syntax,
+  ShellCheck, Python compilation, **581/581 unit tests**, and whitespace passed.
+  This includes rollback-topology proof before mutation, candidate-monitor quiesce,
+  restored-release monitor-policy attachment, exact predecessor-container identity,
+  executable-mode protection for the guarded follow-up runner, and the full
+  post-migration determinism/performance/restart/RM acceptance contract.
 
 ## Acceptance boundary
 
@@ -242,9 +252,11 @@ No DGX H38 managed migration has been executed through this new transaction yet.
 Current classification:
 
 - atomic transaction implementation: IMPLEMENTED ON BRANCH
-- atomic implementation static/CI: PASS, including identity-safe rollback and
-  dynamic-root interruption recovery hardening
-  (`c9d0a014a71403fb6280be0b8db7d08028702046`, run `37619751679`)
+- atomic implementation static/CI: PASS, including identity-safe rollback,
+  dynamic-root interruption recovery, exact monitor-policy restoration, and guarded
+  follow-up acceptance
+  (`acb69b83e28b593e434d2e5e51b7f9b4584b6aad`, run `37622310894`,
+  **581/581 unit tests**)
 - managed H38 migration FUNCTIONAL: NOT REACHED
 - managed H38 migration HOST-STABILITY: NOT REACHED
 - managed H38 DETERMINISM: NOT REACHED

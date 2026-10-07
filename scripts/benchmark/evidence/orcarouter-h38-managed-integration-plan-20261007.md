@@ -67,13 +67,16 @@ Atomic cross-release redesign revalidation:
 - unit tests: **567/567 PASS**
 - whitespace: PASS
 
-Rollback/service-ownership hardening was revalidated again on
+Rollback/service-ownership hardening was revalidated on
 `40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`, GitHub Actions run
-`37616889537`: shell syntax, ShellCheck, Python compilation, full unit tests and
-whitespace all passed.
+`37616889537`. The complete atomic-refresh + rollback-monitor + guarded-follow-up
+surface was then revalidated on
+`acb69b83e28b593e434d2e5e51b7f9b4584b6aad`, GitHub Actions run
+`37622310894`: shell syntax, ShellCheck, Python compilation, **581/581 unit tests**,
+and whitespace all passed.
 
-This closes the static/CI gate for the atomic transaction implementation. It does not
-advance any live DGX acceptance classification.
+This closes the static/CI gate for the implementation surface. It does not advance any
+live DGX acceptance classification.
 
 ## Live DGX acceptance
 

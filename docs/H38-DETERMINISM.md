@@ -153,8 +153,12 @@ The supported operator route is:
 scripts/update-release.sh RELEASE_ID --refresh-profile-defaults
 ```
 
-For live qualification, use the guarded exact-SHA wrapper documented in
+For live qualification, use the guarded exact-SHA migration wrapper documented in
 `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`.
+Only after that migration gate passes should
+`scripts/run-h38-managed-followup-gates.sh` run the managed-alias determinism,
+matched >=90% decode-performance, managed restart/attestation, and strict RM follow-up
+window against the same migration evidence baseline.
 
 The transaction first qualifies the exact immutable target release and prepares the
 H38 image, then activates the target release pointer plus H38 `service_ready`

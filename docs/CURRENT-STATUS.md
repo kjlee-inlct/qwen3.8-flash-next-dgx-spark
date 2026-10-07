@@ -110,12 +110,13 @@ recovery also consumes the restored-runtime handoff inside the already-running t
 runner, so changing `current` back to the previous release cannot cause a blind
 systemd retry into an older runner before adoption completes.
 
-This is **implementation state only**. The hardened atomic transaction, including the
-identity-safe rollback/service-adoption and dynamic-`current` recovery handoff, passed
-static/CI revalidation on `c9d0a014a71403fb6280be0b8db7d08028702046`
-(GitHub Actions `37619751679`). Shell syntax, ShellCheck, Python compilation, the full
-unit-test suite, and whitespace checks passed, while live managed H38 acceptance remains
-a separate gate. The guarded migration entry is
+This is **implementation state only**. The hardened atomic transaction now also
+quiesces the candidate monitor before predecessor restoration, proves rollback topology
+before mutation, restores the predecessor monitor from the restored release policy, and
+uses a guarded post-migration follow-up runner. The latest implementation/test head
+`acb69b83e28b593e434d2e5e51b7f9b4584b6aad` passed GitHub Actions
+`37622310894`: shell syntax, ShellCheck, Python compilation, **581/581 unit tests**,
+and whitespace all passed. Live managed H38 acceptance remains a separate gate. The guarded migration entry is
 `scripts/benchmark/run-h38-managed-migration-gate.sh`; it requires an exact clean
 target SHA and does not use the retired legacy-READY intermediate. After that gate
 passes, `scripts/run-h38-managed-followup-gates.sh` binds the same migration evidence

@@ -65,7 +65,11 @@ entries:
   it records a fresh 384-token x5 legacy baseline, validates the atomic H38 cutover,
   doctor strict, OOM state, and a strict NVIDIA RM kernel window. This remains an
   implementation path, not live acceptance, until an actual DGX run is recorded;
-- managed determinism/performance/restart/RM follow-up gates remain pending.
+- managed determinism/performance/restart/RM live results remain pending. After a
+  passing migration gate, `scripts/run-h38-managed-followup-gates.sh` binds the same
+  migration evidence baseline to the canonical determinism matrix, the >=90% matched
+  decode-performance gate, a supported managed-service replacement/restart, and one
+  strict NVIDIA RM/monitor evidence window.
 
 See `../../docs/H38-DETERMINISM.md` for the concise operational status.
 Historical entries below remain authoritative for what was observed at their
