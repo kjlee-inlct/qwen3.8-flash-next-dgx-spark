@@ -181,6 +181,15 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
         self.assertNotIn("track_h38_assets", dry_block)
         self.assertNotIn("activate_pair", dry_block)
 
+    def test_automatic_recovery_is_armed_before_asset_preparation(self) -> None:
+        text = TRANSITION.read_text(encoding="utf-8")
+        preparing = text.index('write_state preparing ""')
+        trap = text.index("trap 'rollback_refresh $?' ERR", preparing)
+        assets = text.index('track_h38_assets "${target_root}"', preparing)
+        self.assertLess(preparing, trap)
+        self.assertLess(trap, assets)
+        self.assertIn("rollback_active_transaction 1", text[preparing:assets])
+
 
 
 class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
@@ -418,8 +427,9 @@ class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
         self.assertIn("artifacts exist without transaction state", result.stderr)
         self.assertTrue(self.candidate.exists())
 
-    def test_recover_runtime_committed_finishes_proven_target(self) -> None:
+    def prepare_runtime_committed_state(self) -> bytes:
         self.prepare_activated_state()
+        expected_previous_manifest = self.backup.read_bytes()
         self.write_state("runtime_committed")
         container_id = "a" * 64
         self.runtime_commit.write_text(
@@ -456,6 +466,10 @@ fi
             encoding="utf-8",
         )
         fake_docker.chmod(fake_docker.stat().st_mode | stat.S_IXUSR)
+        return expected_previous_manifest
+
+    def test_recover_runtime_committed_finishes_proven_target(self) -> None:
+        self.prepare_runtime_committed_state()
 
         result = self.run_helper("recover")
 
@@ -465,6 +479,39 @@ fi
         text = self.install.read_text(encoding="utf-8")
         self.assertIn("PHASE=complete", text)
         self.assertIn("VLLM_IMAGE=vllm-orcarouter-v029-h38-decoder-scope:v1", text)
+
+    def test_recover_runtime_committed_rejects_candidate_manifest_drift(self) -> None:
+        expected_previous_manifest = self.prepare_runtime_committed_state()
+        self.candidate.write_text(
+            self.candidate.read_text(encoding="utf-8") + "# drift\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_helper("recover")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("target refresh manifest digest drift", result.stderr)
+        self.assertEqual(self.current.resolve(), self.releases / self.old_release)
+        self.assertFalse(self.previous.exists())
+        self.assertEqual(self.install.read_bytes(), expected_previous_manifest)
+        self.assertFalse(self.transition.exists())
+
+    def test_recover_runtime_committed_rejects_release_manifest_drift(self) -> None:
+        expected_previous_manifest = self.prepare_runtime_committed_state()
+        release_manifest = self.releases / self.target_release / ".release-manifest.json"
+        release_manifest.write_text(
+            release_manifest.read_text(encoding="utf-8") + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_helper("recover")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("target release manifest drift", result.stderr)
+        self.assertEqual(self.current.resolve(), self.releases / self.old_release)
+        self.assertFalse(self.previous.exists())
+        self.assertEqual(self.install.read_bytes(), expected_previous_manifest)
+        self.assertFalse(self.transition.exists())
 
     def test_service_recovery_defers_while_outer_lock_is_held(self) -> None:
         self.prepare_activated_state()
