@@ -81,6 +81,12 @@ class SettingsTransitionTests(unittest.TestCase):
             "XDG_STATE_HOME": str(home / "state"),
             "XDG_DATA_HOME": str(home / "data"),
         }
+        # Qualification runs on the installed DGX host, where the real managed
+        # proxy/service/container can exist. Unit tests must never discover or
+        # mutate those host resources merely because a test uses a temporary
+        # manifest. Install the fake lifecycle dependencies by default so the
+        # fixture is hermetic on both clean CI runners and live managed hosts.
+        env, _ = self.setup_fake_resources(home, env)
         return manifest, candidate, env
 
     def write_executable(self, path: Path, text: str) -> None:
@@ -92,11 +98,12 @@ class SettingsTransitionTests(unittest.TestCase):
         resources = home / "fake-resources"
         release = home / "release"
         current = home / "data/qwen38-spark/current"
-        fake_bin.mkdir()
-        resources.mkdir()
-        release.mkdir()
+        fake_bin.mkdir(exist_ok=True)
+        resources.mkdir(exist_ok=True)
+        release.mkdir(exist_ok=True)
         current.parent.mkdir(parents=True, exist_ok=True)
-        current.symlink_to(release, target_is_directory=True)
+        if not current.exists():
+            current.symlink_to(release, target_is_directory=True)
 
         self.write_executable(fake_bin / "sudo", "#!/usr/bin/env bash\nexec \"$@\"\n")
         self.write_executable(
