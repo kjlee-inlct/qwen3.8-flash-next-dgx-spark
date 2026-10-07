@@ -173,10 +173,17 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn('checkpoint) deps="$MODEL_ASSET_CHECKPOINT_DEPENDS_ON"', registry)
         self.assertIn('image) deps="$MODEL_ASSET_IMAGE_DEPENDS_ON"', registry)
 
-    def test_model_manager_keeps_skinny_image_independent_from_checkpoint_dependencies(self) -> None:
+    def test_model_manager_tracks_h38_image_chain_separately_from_checkpoint_dependencies(self) -> None:
         registry = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
         script = MODEL_MANAGER.read_text(encoding="utf-8")
-        self.assertIn('MODEL_ASSET_IMAGE="vllm-skinny-tp1:v1"', registry)
+        self.assertIn(
+            'MODEL_ASSET_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"',
+            registry,
+        )
+        self.assertIn(
+            'MODEL_ASSET_IMAGE_DEPENDS_ON="hybrid-h12-ct-postload-preserve"',
+            registry,
+        )
         self.assertIn('MODEL_ASSET_RETIRE_IMAGE=1', registry)
         self.assertIn('asset_required_by_present_profile "$profile" checkpoint', script)
         self.assertIn('asset_required_by_present_profile "$profile" image', script)

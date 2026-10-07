@@ -17,7 +17,7 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("NV_ERR_NO_MEMORY", text)
         self.assertIn("R9–R32 allocator/localization closure", text)
         self.assertIn("not a proven discriminator for RM failure", text)
-        self.assertIn("Last synchronized: 2026-10-06", text)
+        self.assertIn("Last synchronized: 2026-10-07", text)
         self.assertIn("The version on `main` is authoritative", text)
         self.assertIn("would make that marker stale as soon as it is merged", text)
 

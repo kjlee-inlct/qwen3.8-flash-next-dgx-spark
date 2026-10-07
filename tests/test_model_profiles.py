@@ -712,9 +712,9 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("vllm-skinny-tp1:v1", result.stdout)
+            self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
             self.assertIn(
-                "image change: vllm/vllm-openai:qwen38-flash-next-arm64-cu130 -> vllm-skinny-tp1:v1",
+                "image change: vllm/vllm-openai:qwen38-flash-next-arm64-cu130 -> vllm-orcarouter-v029-h38-decoder-scope:v1",
                 result.stdout,
             )
             self.assertEqual((state / "install.env").read_bytes(), before)
