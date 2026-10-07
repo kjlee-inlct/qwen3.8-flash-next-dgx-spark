@@ -187,20 +187,27 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
 
     def test_rollback_reattaches_restored_runtime_without_cold_replacement(self) -> None:
         text = TRANSITION.read_text(encoding="utf-8")
-        self.assertIn("prepare_previous_runtime_adoption()", text)
-        self.assertIn("adopt_previous_service()", text)
+        manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+
+        self.assertIn("restore_previous_service_management()", text)
         self.assertIn("--adopt-existing", text)
         self.assertIn("runtime-adopt.env", text)
         self.assertNotIn("restart_previous_service()", text)
+        self.assertIn("--no-start --yes", text)
+        self.assertIn("preserving safety stop instead of cold-starting legacy runtime", text)
 
         rollback = text.index('write_state rolling_back "${TARGET_MANIFEST_SHA256}"')
         restore = text.index("restore_previous_pair", rollback)
-        prepare_adopt = text.index("prepare_previous_runtime_adoption", restore)
-        adopt = text.index("adopt_previous_service", prepare_adopt)
-        clear = text.index("clear_transaction", adopt)
-        self.assertLess(restore, prepare_adopt)
-        self.assertLess(prepare_adopt, adopt)
-        self.assertLess(adopt, clear)
+        service_restore = text.index("restore_previous_service_management", restore)
+        clear = text.index("clear_transaction", service_restore)
+        self.assertLess(restore, service_restore)
+        self.assertLess(service_restore, clear)
+
+        self.assertIn("SERVICE_EXEC_STOP", manager)
+        self.assertIn("service-stop.sh", manager)
+        self.assertIn("delegate_restored_runtime_root()", runner)
+        self.assertIn("refusing a cold replacement", runner)
 
         service_recover = text.index("  service-recover)")
         restore = text.index("restore_previous_pair", service_recover)
@@ -210,6 +217,7 @@ class ReleaseProfileRefreshTransitionTests(unittest.TestCase):
         self.assertLess(restore, prepare_adopt)
         self.assertLess(prepare_adopt, clear)
         self.assertLess(clear, exit_retry)
+        self.assertIn("exit 0", text[service_recover:])
 
     def test_doctor_requires_refresh_transaction_idle(self) -> None:
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
