@@ -26,6 +26,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "runtime/wait-ready.sh",
             "runtime/validate_runtime.py",
             "lifecycle/update-transition.sh",
+            "lifecycle/release-profile-refresh-transition.sh",
             "lifecycle/bootstrap-release.sh",
             "lifecycle/qualify-release.sh",
             "model/model-profiles.sh",
@@ -46,6 +47,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "preflight-runtime.sh": "runtime/preflight-runtime.sh",
             "service-runner.sh": "runtime/service-runner.sh",
             "update-transition.sh": "lifecycle/update-transition.sh",
+            "release-profile-refresh-transition.sh": "lifecycle/release-profile-refresh-transition.sh",
             "bootstrap-release.sh": "lifecycle/bootstrap-release.sh",
             "qualify-release.sh": "lifecycle/qualify-release.sh",
             "collect-diagnostics.sh": "diagnostics/collect-diagnostics.sh",
@@ -202,6 +204,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "update-release.sh",
             "runtime-transition.sh",
             "update-transition.sh",
+            "release-profile-refresh-transition.sh",
         ):
             with self.subTest(name=name):
                 self.assertIn(f"`{name}`", readme)
