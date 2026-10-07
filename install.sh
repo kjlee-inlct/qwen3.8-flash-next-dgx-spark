@@ -521,13 +521,11 @@ if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
   if [[ "${LIST_MODELS}" == 1 ]]; then
     profile_manager_active=""
     if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]] && parse_install_manifest 2>/dev/null; then
-      if [[ "${PHASE:-}" == complete ]]; then
-        profile_manager_active="${MODEL_PROFILE}"
-        if [[ -n "${MODEL_DIR:-}" ]]; then
-          export QWEN38_MODEL_ROOT
-          QWEN38_MODEL_ROOT="$(realpath -m -- "$(dirname -- "${MODEL_DIR}")")"
-        fi
+      if [[ -n "${MODEL_DIR:-}" ]]; then
+        export QWEN38_MODEL_ROOT
+        QWEN38_MODEL_ROOT="$(realpath -m -- "$(dirname -- "${MODEL_DIR}")")"
       fi
+      [[ "${PHASE:-}" != complete ]] || profile_manager_active="${MODEL_PROFILE}"
     fi
     print_profile_manager "${profile_manager_active}"
   fi
