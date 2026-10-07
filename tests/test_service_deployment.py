@@ -137,6 +137,20 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn("runtime adoption attestation container ID mismatch", adopter)
         self.assertIn("preserving stopped state instead of cold-starting it", adopter)
         self.assertIn('rm -f -- "${ADOPT_FILE}"', adopter)
+        self.assertIn("runtime_monitor_matches_restored()", adopter)
+        self.assertIn('"${MONITOR_CMDLINE}" == *"${monitor_helper}"*', adopter)
+        self.assertIn("Replacing mismatched runtime monitor before restored-runtime adoption", adopter)
+        self.assertIn("restored runtime monitor failed exact-policy attachment", adopter)
+        for option in (
+            "--min-available-gib",
+            "--min-free-gib",
+            "--free-gate-gib",
+            "--min-swap-free-gib",
+            "--consecutive",
+            "--heartbeat",
+            "--protect",
+        ):
+            self.assertIn(option, adopter)
 
         self.assertIn("no runtime attestation; preserving any canonical container", stopper)
         self.assertIn("canonical container changed", stopper)
