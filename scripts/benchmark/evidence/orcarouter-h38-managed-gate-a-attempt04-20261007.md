@@ -135,10 +135,18 @@ Gate A remains blocked. This is not a managed-H38 functional or host-stability r
 
 Do not weaken or disable memory protection.
 
-Run a matched immutable-update control using the exact PR base-main release
-`a7c563705edba780747bf815278f6b77c8a41b08` with the same persisted legacy manifest and
-the same monitor policy. The purpose is to determine whether the old-installed-release ->
-base-main cutover reproduces the same protected stop.
+Run a matched immutable-update control using runtime-equivalent PR base main plus only the
+already-proven hermetic qualification-fixture repair. The control commit is
+`d75c24ca496286e0b62db5e8f1d88480ed30e137` on
+`exp/h38-gate-a-base-control`.
+
+Its parent is exact PR base main `a7c563705edba780747bf815278f6b77c8a41b08`;
+the only content delta is `tests/test_settings_transition.py`, so runtime/service/monitor
+payload remains exact base main. This avoids reintroducing the known live-host
+qualification-fixture defect while keeping the runtime comparison clean.
+
+The purpose is to determine whether the old-installed-release -> base-main-runtime cutover
+reproduces the same protected stop.
 
 - if base main reproduces it, the Gate A legacy restart criterion is baseline-blocked by a
   pre-existing lifecycle/monitor compatibility boundary and must be redesigned rather than
