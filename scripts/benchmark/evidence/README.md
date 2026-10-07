@@ -8,8 +8,9 @@ The managed H38 candidate is tracked separately from the historical H38
 experiment-runtime closure and from the R9-R32 RM allocator investigation.
 
 - plan: `orcarouter-h38-managed-integration-plan-20261007.md`
+- static result: `orcarouter-h38-managed-integration-static-result-20261007.md`
 - implementation branch: `feat/h38-managed-integration`
-- state: implementation present; static/CI and DGX live qualification pending
+- state: static/CI PASS on implementation head `398697be4a92b15e312d90101b706821075b7ae8`; DGX live qualification pending
 - promotion rule: do not merge the runtime-impacting default change until
   managed lifecycle/restart/doctor, determinism, performance, and strict RM
   host-stability gates are recorded.

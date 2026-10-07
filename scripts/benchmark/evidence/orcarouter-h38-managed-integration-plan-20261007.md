@@ -1,6 +1,6 @@
 # OrcaRouter H38 managed-service integration plan — 2026-10-07
 
-Status: IMPLEMENTED ON FEATURE BRANCH / STATIC AND LIVE QUALIFICATION PENDING
+Status: STATIC/CI PASS / DGX LIVE QUALIFICATION PENDING
 
 ## Provenance
 
@@ -32,9 +32,10 @@ The implementation must keep these boundaries:
 - preflight and doctor verify H38 image provenance once the H38 image is selected;
 - runtime/profile/update transaction semantics remain unchanged.
 
-## Static acceptance
+## Static acceptance — passed on implementation head `398697be4a92b15e312d90101b706821075b7ae8`
 
-Required before live DGX work:
+Recorded in `orcarouter-h38-managed-integration-static-result-20261007.md`.
+The required static gates were:
 
 1. shell syntax and ShellCheck pass;
 2. Python compilation and the full unit-test suite pass;
