@@ -241,6 +241,11 @@ class ReleaseProfileRefreshRecoveryTests(unittest.TestCase):
         manager = scripts / "manage-service.sh"
         manager.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
         manager.chmod(manager.stat().st_mode | stat.S_IXUSR)
+        runtime_dir = scripts / "runtime"
+        runtime_dir.mkdir()
+        runtime_transition = runtime_dir / "runtime-transition.sh"
+        runtime_transition.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        runtime_transition.chmod(runtime_transition.stat().st_mode | stat.S_IXUSR)
         (self.source / "payload.txt").write_text("old\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(self.source), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.source), "commit", "-q", "-m", "old"], check=True)
@@ -535,7 +540,8 @@ fi
         self.assertIn("VLLM_IMAGE=vllm-orcarouter-v029-h38-decoder-scope:v1", text)
 
     def test_recover_runtime_committed_rejects_candidate_manifest_drift(self) -> None:
-        expected_previous_manifest = self.prepare_runtime_committed_state()
+        self.prepare_runtime_committed_state()
+        live_before = self.install.read_bytes()
         self.candidate.write_text(
             self.candidate.read_text(encoding="utf-8") + "# drift\n",
             encoding="utf-8",
@@ -547,7 +553,7 @@ fi
         self.assertIn("target refresh manifest digest drift", result.stderr)
         self.assertIn("refusing ambiguous rollback", result.stderr)
         self.assertEqual(self.current.resolve(), self.releases / self.target_release)
-        self.assertEqual(self.install.read_bytes(), self.candidate.read_bytes())
+        self.assertEqual(self.install.read_bytes(), live_before)
         self.assertTrue(self.transition.exists())
         self.assertIn(
             "RELEASE_PROFILE_REFRESH_STATE=runtime_committed",
@@ -555,7 +561,7 @@ fi
         )
 
     def test_recover_runtime_committed_rejects_release_manifest_drift(self) -> None:
-        expected_previous_manifest = self.prepare_runtime_committed_state()
+        self.prepare_runtime_committed_state()
         release_manifest = self.releases / self.target_release / ".release-manifest.json"
         release_manifest.write_text(
             release_manifest.read_text(encoding="utf-8") + "\n",
