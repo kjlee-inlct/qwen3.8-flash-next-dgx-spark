@@ -14,8 +14,21 @@ UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
 PROFILE_SWITCH_TRANSITION_FILE="${STATE_DIR}/profile-switch-transition.env"
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
+RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
+RELEASE_PROFILE_REFRESH_BACKUP="${STATE_FILE}.release-profile-refresh-backup"
+RELEASE_PROFILE_REFRESH_CANDIDATE="${STATE_FILE}.release-profile-refresh-candidate"
+SETTINGS_PHASE_FILE="${STATE_DIR}/settings-transition.phase"
+SETTINGS_START_FILE="${STATE_DIR}/settings-transition.start"
+SETTINGS_NO_START_FILE="${STATE_DIR}/settings-transition.no-start"
+SETTINGS_PREV_SERVICE_FILE="${STATE_DIR}/settings-transition.previous-service-active"
+SETTINGS_PREV_CONTAINER_FILE="${STATE_DIR}/settings-transition.previous-container-running"
+SETTINGS_BACKUP="${STATE_FILE}.settings-backup"
+SETTINGS_CANDIDATE="${STATE_FILE}.settings-candidate"
+SETTINGS_BACKUP_SHA="${SETTINGS_BACKUP}.sha256"
+SETTINGS_CANDIDATE_SHA="${SETTINGS_CANDIDATE}.sha256"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+RUNTIME_ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; PURGE_ALL=0; YES=0; DRY_RUN=0
 CLI_LANG=""
@@ -214,6 +227,21 @@ acquire_operation_lock "${STATE_DIR}" "uninstall" || exit $?
 [[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" &&
    ! -e "${PROFILE_SWITCH_CANDIDATE}" && ! -L "${PROFILE_SWITCH_CANDIDATE}" ]] || \
   die "profile-switch artifacts exist without an active transaction; run doctor before uninstalling"
+[[ ! -e "${RELEASE_PROFILE_REFRESH_STATE_FILE}" && ! -L "${RELEASE_PROFILE_REFRESH_STATE_FILE}" ]] || \
+  die "a release-profile refresh is active; run scripts/release-profile-refresh-transition.sh recover before uninstalling"
+[[ ! -e "${RELEASE_PROFILE_REFRESH_BACKUP}" && ! -L "${RELEASE_PROFILE_REFRESH_BACKUP}" &&
+   ! -e "${RELEASE_PROFILE_REFRESH_CANDIDATE}" && ! -L "${RELEASE_PROFILE_REFRESH_CANDIDATE}" ]] || \
+  die "release-profile refresh artifacts exist without an active transaction; run doctor before uninstalling"
+[[ ! -e "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] || \
+  die "a one-shot runtime adoption is pending; finish release-profile recovery before uninstalling"
+for settings_artifact in \
+  "${SETTINGS_PHASE_FILE}" "${SETTINGS_START_FILE}" "${SETTINGS_NO_START_FILE}" \
+  "${SETTINGS_PREV_SERVICE_FILE}" "${SETTINGS_PREV_CONTAINER_FILE}" \
+  "${SETTINGS_BACKUP}" "${SETTINGS_CANDIDATE}" "${SETTINGS_BACKUP_SHA}" "${SETTINGS_CANDIDATE_SHA}"
+do
+  [[ ! -e "${settings_artifact}" && ! -L "${settings_artifact}" ]] || \
+    die "settings transaction or stale settings artifact exists; recover settings before uninstalling: ${settings_artifact}"
+done
 
 # Migrate the current manifest's legacy single-asset ownership into the cumulative
 # registry before any destructive decision. This cannot infer assets whose
@@ -292,10 +320,19 @@ if [[ "${PURGE_ALL}" == 1 ]]; then
   rm -f -- "${STATE_DIR}/monitor.log" "${STATE_DIR}/monitor.pid" \
     "${STATE_DIR}/runtime-stop.env" "${STATE_DIR}/runtime-stop.env.tmp" \
     "${STATE_DIR}/runtime-commit.env" "${STATE_DIR}/runtime-commit.env.tmp" \
+    "${STATE_DIR}/runtime-adopt.env" "${STATE_DIR}/runtime-adopt.env.tmp" \
     "${STATE_DIR}/runtime-transition.env" "${STATE_DIR}/runtime-transition.env.tmp" \
     "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp" \
     "${STATE_DIR}/profile-switch-transition.env" "${STATE_DIR}/profile-switch-transition.env.tmp" \
     "${STATE_FILE}.profile-switch-backup" "${STATE_FILE}.profile-switch-candidate" "${STATE_FILE}.profile-switch-candidate.tmp" \
+    "${STATE_DIR}/release-profile-refresh-transition.env" "${STATE_DIR}/release-profile-refresh-transition.env.tmp" \
+    "${STATE_FILE}.release-profile-refresh-backup" "${STATE_FILE}.release-profile-refresh-backup.tmp" \
+    "${STATE_FILE}.release-profile-refresh-candidate" "${STATE_FILE}.release-profile-refresh-candidate.tmp" \
+    "${STATE_DIR}/settings-transition.phase" "${STATE_DIR}/settings-transition.phase.tmp" \
+    "${STATE_DIR}/settings-transition.start" "${STATE_DIR}/settings-transition.no-start" \
+    "${STATE_DIR}/settings-transition.previous-service-active" "${STATE_DIR}/settings-transition.previous-container-running" \
+    "${STATE_FILE}.settings-backup" "${STATE_FILE}.settings-candidate" \
+    "${STATE_FILE}.settings-backup.sha256" "${STATE_FILE}.settings-candidate.sha256" \
     "${ASSET_OWNERSHIP_FILE}"
   rm -f -- "${STATE_FILE}"
   rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true
