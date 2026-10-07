@@ -52,6 +52,15 @@ delegate_restored_runtime_root() {
     exec bash "${adopt_runner}" --runtime-root "${canonical_root}"
   fi
 
+  if docker inspect qwen38-flash-next >/dev/null 2>&1; then
+    if [[ "$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)" == true ]]; then
+      printf 'FATAL: restored runtime is already running without an adoption marker; refusing a cold replacement\n' >&2
+      return 1
+    fi
+    printf 'Restored runtime container is intentionally stopped; preserving stopped state instead of cold-starting legacy runtime.\n'
+    exit 0
+  fi
+
   previous_runner="${canonical_root}/scripts/service-runner.sh"
   [[ -x "${previous_runner}" ]] || {
     printf 'FATAL: restored runtime root has no executable service runner: %s\n' "${previous_runner}" >&2
