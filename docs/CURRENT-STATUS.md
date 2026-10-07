@@ -5,7 +5,7 @@ Dated benchmark/evidence documents preserve what was known at the time of each r
 use this file plus `scripts/benchmark/evidence/README.md` when deciding what is true
 **now**.
 
-Last synchronized: 2026-10-06. The version on `main` is authoritative; do not encode a
+Last synchronized: 2026-10-07. The version on `main` is authoritative; do not encode a
 specific "last documentation PR" or commit SHA here because the synchronization change
 itself would make that marker stale as soon as it is merged.
 
@@ -87,11 +87,19 @@ Do not restart model-prefix/Linear/attention/hyper-connection marker expansion f
 The H38 decoder-only runtime is separately qualified through
 `scripts/runtime/orcarouter-v029.sh` and summarized in `docs/H38-DETERMINISM.md`.
 
-That qualification is **not** the same as transactional installer/systemd managed-service
-qualification. H38 must not be described as already promoted into the managed runtime
-until image preparation, manifest migration, rollback, doctor/attestation,
-production-alias determinism, and performance regression gates are completed on that
-managed path.
+That historical qualification is **not** the same as transactional
+installer/systemd managed-service qualification. The current H38 integration branch
+implements the candidate `orcarouter` managed image/defaults, clean-host H38 image
+construction, explicit legacy-image -> H38 profile-default migration, H38 runtime
+controls, preflight/doctor provenance checks, and asset inventory. Existing installs
+remain two-stage: immutable code update first with the legacy manifest still bootable,
+then `--refresh-profile-defaults` performs the H38 runtime migration.
+
+This remains an implementation candidate, not a qualification result. H38 must not be
+described as promoted into the managed runtime until lifecycle/restart/doctor,
+managed-alias determinism, performance, and strict RM host-stability gates in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+are recorded as passing.
 
 ## Memory monitor caveat
 
