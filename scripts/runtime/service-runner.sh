@@ -45,7 +45,6 @@ parse_state_into_vars install-service-runtime "${STATE_FILE}" || {
 STATE_DIR="$(dirname -- "${STATE_FILE}")"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
-RUNTIME_ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
 RUNTIME_TRANSITION="${RUNTIME_ROOT}/scripts/runtime/runtime-transition.sh"
 RUNTIME_PREFLIGHT="${RUNTIME_ROOT}/scripts/runtime/preflight-runtime.sh"
@@ -84,85 +83,6 @@ write_runtime_commit_attestation() {
   } >"${temporary}"
   python3 "${STATE_PARSER}" runtime-commit "${temporary}" >/dev/null
   mv -- "${temporary}" "${RUNTIME_COMMIT_FILE}"
-}
-
-load_runtime_adopt() {
-  local parsed key value
-  [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] || return 1
-  parsed="$(mktemp)"
-  if ! python3 "${STATE_PARSER}" runtime-adopt "${RUNTIME_ADOPT_FILE}" >"${parsed}"; then
-    rm -f -- "${parsed}"
-    return 2
-  fi
-  ADOPT_RUNTIME_ROOT=""; ADOPT_CONTAINER_NAME=""; ADOPT_CONTAINER_ID=""
-  ADOPT_EXPECTED_IMAGE=""; ADOPT_SERVED_NAME=""; ADOPT_CREATED_AT=""
-  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
-    case "${key}" in
-      RUNTIME_ROOT) ADOPT_RUNTIME_ROOT="${value}" ;;
-      RUNTIME_CONTAINER_NAME) ADOPT_CONTAINER_NAME="${value}" ;;
-      RUNTIME_CONTAINER_ID) ADOPT_CONTAINER_ID="${value}" ;;
-      EXPECTED_IMAGE) ADOPT_EXPECTED_IMAGE="${value}" ;;
-      SERVED_NAME) ADOPT_SERVED_NAME="${value}" ;;
-      CREATED_AT) ADOPT_CREATED_AT="${value}" ;;
-    esac
-  done <"${parsed}"
-  rm -f -- "${parsed}"
-  return 0
-}
-
-adopt_existing_runtime() {
-  local container_id image running oom model_mount expected_model actual_model models
-  load_runtime_adopt || {
-    rc=$?
-    [[ "${rc}" != 2 ]] || printf 'FATAL: runtime adoption marker failed strict parsing: %s\n' "${RUNTIME_ADOPT_FILE}" >&2
-    return 1
-  }
-  [[ "${ADOPT_RUNTIME_ROOT}" == "${RUNTIME_ROOT}" ]] || {
-    printf 'FATAL: runtime adoption root mismatch\n' >&2
-    return 1
-  }
-  [[ "${ADOPT_CONTAINER_NAME}" == "${CONTAINER_NAME}" ]] || {
-    printf 'FATAL: runtime adoption container-name mismatch\n' >&2
-    return 1
-  }
-  [[ "${ADOPT_EXPECTED_IMAGE}" == "${VLLM_IMAGE}" && "${ADOPT_SERVED_NAME}" == "${SERVED_NAME}" ]] || {
-    printf 'FATAL: runtime adoption identity does not match installation manifest\n' >&2
-    return 1
-  }
-
-  container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  image="$(docker inspect --format '{{.Config.Image}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  running="$(docker inspect --format '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  oom="$(docker inspect --format '{{.State.OOMKilled}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  [[ -n "${container_id}" && "${container_id}" == "${ADOPT_CONTAINER_ID}" ]] || {
-    printf 'FATAL: runtime adoption container ID mismatch\n' >&2
-    return 1
-  }
-  [[ "${image}" == "${VLLM_IMAGE}" && "${running}" == true && "${oom}" == false ]] || {
-    printf 'FATAL: runtime adoption container state/image is not safe\n' >&2
-    return 1
-  }
-  model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
-  expected_model="$(realpath -m -- "${MODEL_DIR}")"
-  actual_model=""
-  [[ -z "${model_mount}" ]] || actual_model="$(realpath -m -- "${model_mount}")"
-  [[ -n "${actual_model}" && "${actual_model}" == "${expected_model}" ]] || {
-    printf 'FATAL: runtime adoption model mount mismatch\n' >&2
-    return 1
-  }
-  curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null || {
-    printf 'FATAL: runtime adoption health endpoint is not ready\n' >&2
-    return 1
-  }
-  models="$(curl -fsS --max-time 15 http://127.0.0.1:8888/v1/models)" || return 1
-  python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(item.get("id") == expected for item in data.get("data", [])), expected'     "${SERVED_NAME}" <<<"${models}" || {
-      printf 'FATAL: runtime adoption served model identity mismatch\n' >&2
-      return 1
-    }
-  write_runtime_commit_attestation "${container_id}" || return 1
-  log_runtime_phase "runtime-adopted"
-  printf 'Existing managed runtime adopted without replacement (container=%s).\n' "${container_id}"
-  return 0
 }
 
 release_profile_refresh_owns_runtime_commit() {
@@ -219,17 +139,6 @@ log_runtime_phase "preflight-complete"
 bash "${RUNTIME_TRANSITION}" recover
 log_runtime_phase "transition-recovery-complete"
 
-runtime_adopt_active=0
-if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
-  [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] || {
-    printf 'FATAL: runtime adoption marker is unsafe: %s\n' "${RUNTIME_ADOPT_FILE}" >&2
-    exit 1
-  }
-  adopt_existing_runtime
-  runtime_adopt_active=1
-fi
-
-if [[ "${runtime_adopt_active}" != 1 ]]; then
 transition_active=0
 rollback_transition() {
   local rc="${1:-1}"
@@ -319,17 +228,10 @@ else
   trap - ERR INT TERM
   printf 'Qwen API is ready; runtime transition committed and attested.\n'
 fi
-fi
 
 printf 'Following container logs.\n'
 docker logs --follow --since 0s "${CONTAINER_NAME}" &
 log_pid=$!
-if [[ "${runtime_adopt_active}" == 1 ]]; then
-  # The service process is now attached to the exact restored container.
-  # Consume the one-shot marker only after the log follower is established so
-  # an early startup failure remains safely retryable as adoption.
-  rm -f -- "${RUNTIME_ADOPT_FILE}" "${RUNTIME_ADOPT_FILE}.tmp"
-fi
 trap 'kill "${log_pid}" 2>/dev/null || true' EXIT
 container_status="$(docker wait "${CONTAINER_NAME}")"
 container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
