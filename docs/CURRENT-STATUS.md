@@ -104,10 +104,12 @@ so the previous rollback container remains available until the outer lifecycle c
 Recovery therefore owns the release-pointer + manifest + runtime tuple rather than only
 release and manifest state.
 
-This is **implementation state only**. Final static/CI revalidation of the hardened
-transaction and the live managed H38 acceptance are separate gates. The guarded
-migration entry is `scripts/benchmark/run-h38-managed-migration-gate.sh`; it requires
-an exact clean target SHA and does not use the retired legacy-READY intermediate. H38 must not be described as
+This is **implementation state only**. The hardened atomic transaction passed static/CI
+revalidation on `d44e3ddd53896c7d87b533f5db315a168e65dd59` (GitHub Actions
+`37604211474`, 567/567 unit tests), while live managed H38 acceptance remains a
+separate gate. The guarded migration entry is
+`scripts/benchmark/run-h38-managed-migration-gate.sh`; it requires an exact clean
+target SHA and does not use the retired legacy-READY intermediate. H38 must not be described as
 promoted into the managed runtime until lifecycle/restart/doctor, managed-alias
 determinism, performance, and strict RM host-stability gates in
 `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`

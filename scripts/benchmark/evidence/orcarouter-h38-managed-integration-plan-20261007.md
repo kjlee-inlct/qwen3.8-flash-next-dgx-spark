@@ -1,6 +1,6 @@
 # OrcaRouter H38 managed-service integration plan — 2026-10-07
 
-Status: ATOMIC TRANSACTION STATIC/CI REVALIDATION PENDING / DGX LIVE QUALIFICATION PENDING
+Status: ATOMIC TRANSACTION STATIC/CI PASS / DGX LIVE QUALIFICATION PENDING
 
 ## Provenance
 
@@ -52,6 +52,19 @@ The required static gates were:
    preparation, legacy-image migration compatibility, H38 runtime env, doctor/preflight
    provenance, asset inventory, and managed benchmark aliasing;
 5. documentation states that managed promotion is not complete until live qualification.
+
+Atomic cross-release redesign revalidation:
+
+- implementation/docs head: `d44e3ddd53896c7d87b533f5db315a168e65dd59`
+- GitHub Actions CI run: `37604211474`
+- shell syntax: PASS
+- ShellCheck: PASS
+- Python compile: PASS
+- unit tests: **567/567 PASS**
+- whitespace: PASS
+
+This closes the static/CI gate for the atomic transaction implementation. It does not
+advance any live DGX acceptance classification.
 
 ## Live DGX acceptance
 

@@ -1,6 +1,6 @@
 # OrcaRouter H38 atomic cross-release refresh implementation — 2026-10-07
 
-Status: IMPLEMENTED ON BRANCH — FINAL STATIC CI REVALIDATION IN PROGRESS — LIVE ACCEPTANCE NOT REACHED
+Status: STATIC/CI PASS — LIVE ACCEPTANCE NOT REACHED
 
 ## Purpose
 
@@ -197,7 +197,7 @@ Historical failures are retained because they found real design or test-harness 
   found the new benchmark gate directly referencing canonical `lib/`, `lifecycle/`
   and `runtime/` categories. The gate now uses stable top-level entry points; no
   dependency waiver was added.
-- final documentation-inclusive CI on the current head: **IN PROGRESS/PENDING**.
+- atomic implementation/docs CI run `37604211474` on `d44e3ddd53896c7d87b533f5db315a168e65dd59`: **SUCCESS**, including **567/567 unit tests PASS** and whitespace PASS.
 
 ## Acceptance boundary
 
@@ -206,7 +206,7 @@ No DGX H38 managed migration has been executed through this new transaction yet.
 Current classification:
 
 - atomic transaction implementation: IMPLEMENTED ON BRANCH
-- final full CI on current head: PENDING
+- atomic implementation static/CI: PASS (`d44e3ddd53896c7d87b533f5db315a168e65dd59`, run `37604211474`)
 - managed H38 migration FUNCTIONAL: NOT REACHED
 - managed H38 migration HOST-STABILITY: NOT REACHED
 - managed H38 DETERMINISM: NOT REACHED
