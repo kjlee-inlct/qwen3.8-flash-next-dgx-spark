@@ -161,8 +161,8 @@ sudo_with_operation_lock() {
 
 verify_no_conflicting_transactions() {
   local path
-  for path in "${UPDATE_STATE_FILE}" "${PROFILE_SWITCH_STATE_FILE}" "${RUNTIME_TRANSITION_FILE}" "${SETTINGS_PHASE_FILE}"; do
-    [[ ! -e "${path}" && ! -L "${path}" ]] || die "conflicting lifecycle transaction exists: ${path}"
+  for path in     "${UPDATE_STATE_FILE}"     "${PROFILE_SWITCH_STATE_FILE}"     "${RUNTIME_TRANSITION_FILE}"     "${SETTINGS_PHASE_FILE}"     "${INSTALL_STATE_FILE}.profile-switch-backup"     "${INSTALL_STATE_FILE}.profile-switch-candidate"     "${INSTALL_STATE_FILE}.settings-backup"     "${INSTALL_STATE_FILE}.settings-candidate"; do
+    [[ ! -e "${path}" && ! -L "${path}" ]] || die "conflicting or stale lifecycle artifact exists: ${path}"
   done
 }
 
@@ -192,11 +192,12 @@ verify_bound_qualification() {
 }
 
 ensure_qualified_release() {
-  local release_id="$1"
+  local release_id="$1" marker="${QUALIFIED_DIR}/$1.env"
   if [[ ! -d "${RELEASES_DIR}/${release_id}" ]]; then
     bash "${RELEASE_MANAGER}" stage "${release_id}"
   fi
-  if ! verify_bound_qualification "${release_id}" 2>/dev/null; then
+  if [[ ! -f "${marker}" || -L "${marker}" ]]; then
+    [[ ! -L "${marker}" ]] || die "qualification marker is unsafe: ${marker}"
     bash "${QUALIFY_RELEASE}" "${release_id}"
   fi
   verify_bound_qualification "${release_id}"
@@ -459,7 +460,9 @@ case "${action}" in
     done
     [[ "${TARGET_RELEASE}" =~ ^[0-9a-f]{12,40}$ ]] || die "invalid release id: ${TARGET_RELEASE}"
     [[ "${PROFILE}" == "${TARGET_PROFILE}" ]] || die 'cross-release refresh currently supports only the orcarouter H38 target'
-    acquire_transition_lock "release-profile refresh to ${TARGET_RELEASE}"
+    if [[ "${DRY_RUN}" != 1 ]]; then
+      acquire_transition_lock "release-profile refresh to ${TARGET_RELEASE}"
+    fi
     [[ ! -e "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die 'a release-profile refresh is already active; recover it first'
     [[ ! -e "${BACKUP_MANIFEST}" && ! -L "${BACKUP_MANIFEST}" ]] || die "stale refresh backup exists: ${BACKUP_MANIFEST}"
     [[ ! -e "${TARGET_MANIFEST}" && ! -L "${TARGET_MANIFEST}" ]] || die "stale refresh candidate exists: ${TARGET_MANIFEST}"
@@ -470,10 +473,17 @@ case "${action}" in
     [[ "${CURRENT_MODEL_PROFILE}" == "${PROFILE}" ]] || die "refresh profile does not match live manifest: ${CURRENT_MODEL_PROFILE}"
     [[ "${CURRENT_SERVICE_ENABLED}" == 1 && "${CURRENT_SERVICE_OWNED}" == 1 ]] || die 'refresh requires the owned managed systemd service'
     OLD_CURRENT_RELEASE="$(read_link_id "${CURRENT_LINK}")" || die 'no safe immutable current release is registered'
-    OLD_PREVIOUS_RELEASE="$(read_link_id "${PREVIOUS_LINK}" 2>/dev/null || true)"
+    OLD_PREVIOUS_RELEASE=""
+    if [[ -e "${PREVIOUS_LINK}" || -L "${PREVIOUS_LINK}" ]]; then
+      OLD_PREVIOUS_RELEASE="$(read_link_id "${PREVIOUS_LINK}")" || die 'previous release pointer is unsafe'
+    fi
     OLD_IMAGE="${CURRENT_VLLM_IMAGE}"
 
-    ensure_qualified_release "${TARGET_RELEASE}"
+    if [[ "${DRY_RUN}" == 1 ]]; then
+      verify_bound_qualification "${TARGET_RELEASE}"
+    else
+      ensure_qualified_release "${TARGET_RELEASE}"
+    fi
     target_root="${RELEASES_DIR}/${TARGET_RELEASE}"
     [[ "$(readlink -f -- "${target_root}" 2>/dev/null || realpath -m -- "${target_root}")" == "${target_root}" ]] || die 'target release path is unsafe'
     load_target_profile_defaults "${target_root}"
