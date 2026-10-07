@@ -16,6 +16,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
         home: Path,
         phase: str = "complete",
         image: str = "vllm-skinny-tp1:v1",
+        model_dir: Path | None = None,
     ) -> Path:
         state = home / "state" / "qwen38-spark"
         state.mkdir(parents=True)
@@ -29,7 +30,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
                     "MODEL_PROFILE=orcarouter",
                     "MODEL_REPO=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
                     "MODEL_REVISION=c1209bda15a6bbc4c68b585e93d40c0d85f50306",
-                    f"MODEL_DIR={home / 'models/qwen3.8-flash-next-orcarouter'}",
+                    f"MODEL_DIR={model_dir or home / 'models/qwen3.8-flash-next-orcarouter'}",
                     "MODEL_OWNED=0",
                     "SWAP_FILE=/swap-ple.img",
                     "SWAP_OWNED=0",
@@ -85,6 +86,18 @@ class InstalledProfileWizardTests(unittest.TestCase):
             check=False,
         )
 
+    def mark_profile_installed(self, home: Path, directory_name: str, *, hybrid: bool = False) -> Path:
+        model_dir = home / "models" / directory_name
+        model_dir.mkdir(parents=True, exist_ok=True)
+        manifest = (
+            model_dir / ".qwen38-hybrid-manifest.json"
+            if hybrid
+            else model_dir / ".qwen38-model-manifest.json"
+        )
+        manifest.write_text('{"status":"complete"}\n', encoding="utf-8")
+        return model_dir
+
+
     def test_complete_install_wizard_can_preview_profile_switch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -104,6 +117,166 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertNotIn("[5/6] API and service", result.stdout)
             self.assertIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)
+
+    def test_profile_selector_uses_registry_metadata_and_local_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.write_manifest(home)
+            self.mark_profile_installed(home, "qwen3.8-flash-next-orcarouter")
+            self.mark_profile_installed(home, "qwen3.8-flash-next-nvidia")
+
+            result = self.run_installer(home, "1\n2\ny\n")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("OrcaRouter Uncensored", result.stdout)
+            self.assertIn(
+                "stable / installable / installed / default / active",
+                result.stdout,
+            )
+            self.assertIn("NVIDIA Official NVFP4", result.stdout)
+            self.assertIn(
+                "experimental / installable / installed",
+                result.stdout,
+            )
+            self.assertIn("Not selectable: lychee888 FP8-PLE", result.stdout)
+            self.assertIn(
+                "planned / not installable / not installed",
+                result.stdout,
+            )
+            self.assertIn("profile     : nvidia", result.stdout)
+
+    def test_list_models_uses_same_registry_inventory_view(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.write_manifest(home)
+            self.mark_profile_installed(home, "qwen3.8-flash-next-orcarouter")
+            self.mark_profile_installed(home, "qwen3.8-flash-next-nvidia")
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Qwen3.8 profile manager", result.stdout)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+yes\s+",
+            )
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^nvidia\s+experimental\s+yes\s+installed\s+no\s+",
+            )
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^lychee888\s+planned\s+no\s+not-installable\s+no\s+",
+            )
+            self.assertIn("OrcaRouter Hybrid H6", result.stdout)
+            self.assertIn("lychee888 FP8-PLE", result.stdout)
+
+    def test_list_models_distinguishes_incomplete_managed_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_dir = home / "models" / "qwen3.8-flash-next-orcarouter"
+            model_dir.mkdir(parents=True)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                '{"status":"downloading"}\n',
+                encoding="utf-8",
+            )
+            self.write_manifest(home)
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+incomplete\s+yes\s+",
+            )
+            self.assertNotRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+yes\s+",
+            )
+
+    def test_list_models_includes_active_custom_model_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_dir = home / "custom-store" / "qwen3.8-flash-next-orcarouter"
+            model_dir.mkdir(parents=True)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                '{"status":"complete"}\n',
+                encoding="utf-8",
+            )
+            self.write_manifest(home, model_dir=model_dir)
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+yes\s+",
+            )
+            self.assertIn(f"checkpoint={model_dir}", result.stdout)
+
+    def test_list_models_keeps_retained_custom_root_inventory_inactive_after_uninstall(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_dir = home / "retained-store" / "qwen3.8-flash-next-orcarouter"
+            model_dir.mkdir(parents=True)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                '{"status":"complete"}\n',
+                encoding="utf-8",
+            )
+            self.write_manifest(home, phase="uninstalled", model_dir=model_dir)
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+no\s+",
+            )
+            self.assertIn(f"checkpoint={model_dir}", result.stdout)
 
     def test_complete_install_wizard_defaults_to_current_profile(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

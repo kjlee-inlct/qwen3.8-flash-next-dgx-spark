@@ -44,7 +44,9 @@ The UI and documentation must keep these meanings distinct:
 | --- | --- |
 | available | known by the registry |
 | installable | installer can prepare it |
-| installed | local checkpoint/generated asset exists |
+| installed | managed checkpoint/generated asset has a managed manifest with `status=complete` |
+| incomplete | managed checkpoint path has a managed manifest that is not complete |
+| unmanaged | expected local checkpoint path exists without a managed manifest |
 | active | current managed runtime profile |
 | functional | functional validation passed |
 | host-stable | strict RM host-stability rule passed |
@@ -72,7 +74,7 @@ A valid measured `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` event remains a st
 | profile | `--model` | yes | fresh and completed-install profile selection |
 | model root | `--model-root` | yes | fresh install; profile switch retains existing root by design |
 | config override | `--config-override` | yes | fresh path and completed-install settings editor; profile-required compatibility overrides cannot be cleared |
-| list profiles | `--list-models` | no field | informational CLI command; profile-manager inventory view is P1 |
+| list profiles | `--list-models` | no field | informational CLI command; now renders the same registry-backed profile/inventory view used by the Wizard |
 | list backends | `--list-backends` | no field | informational CLI command |
 | monitor enable/disable | `--monitor` / `--no-monitor` | yes | fresh and completed-install settings editor |
 | protection | `--protect` | yes | fresh and completed-install settings editor |
@@ -110,7 +112,7 @@ An incomplete manifest continues the existing resume path. It must **not** expos
 
 A complete managed install enters an installed-setup management menu before the existing profile selector. The menu offers profile selection/switch, runtime/API/service settings edit, current-profile default refresh, or cancel.
 
-Profile selection still shows the four installable profiles, marks the active profile, defaults to the current profile, and enters the existing transactional profile-switch core only when the target changes. `lychee888` remains non-selectable.
+Profile selection is derived from `list_model_profiles` rather than hardcoded profile cases. It marks the active profile, derives the default from registry metadata/current state, computes the cancel index from the registry length, and enters the existing transactional profile-switch core only when the target changes. Registry candidates such as `lychee888` are visible as planned/not-installable but remain non-selectable.
 
 The settings editor stages config override, monitor/protection thresholds, API access/ports, and service enablement in memory. Staged values are applied immediately before the shared `[6/6]` normalized-plan boundary, after manifest parsing and CLI override resolution. This keeps the existing parser/validation/plan path authoritative rather than duplicating it in the UI.
 
@@ -133,8 +135,8 @@ Profiles that require a compatibility override, currently `orcarouter`, do not e
 ### P1 — architecture / drift prevention
 
 - centralize user-facing option metadata;
-- derive Wizard profile display/status metadata from the profile registry;
-- add a profile-manager view combining registry availability with local asset inventory;
+- **Implemented and DGX accepted:** derive Wizard profile display/status/installability/default metadata from the profile registry;
+- **Implemented and DGX accepted:** one read-only profile-manager view combines registry availability with managed local checkpoint/image inventory and powers both the Wizard and `--list-models`;
 - resolve remaining contextual presentation differences for language/model-root/execution controls without creating duplicate state;
 - show the equivalent CLI invocation in the final plan once normalized configuration is fully authoritative.
 
@@ -210,13 +212,34 @@ Before exercising rollback, review found that deferred rollback could unnecessar
 
 These acceptances validate installer/settings transaction behavior only. They are not runtime host-stability qualification and do not alter the strict `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` rule.
 
+## Registry-backed profile manager — 2026-10-07
+
+The accepted implementation code head is `46f929d74895699aff7b100ada9d844bcd9270ef`, validated by CI #1278. The slice removes hardcoded profile names/order/case mapping from the Wizard and adds `scripts/model/profile-manager.sh` as a read-only presentation/inventory layer over the existing `scripts/model/model-profiles.sh` registry. No second profile database, state parser, lifecycle engine, or asset-retirement registry was introduced.
+
+User-facing profile display names now live with registry status/installability/default/repository metadata. Wizard ordering and numeric selection come from `list_model_profiles`; the current profile/default choice and cancel index are derived dynamically. Planned registry candidates are presented separately and cannot be selected. Numeric menu input is normalized as decimal so leading-zero values cannot accidentally enter Bash octal arithmetic.
+
+Local inventory is deliberately stricter than path existence. A profile is `installed` only when its managed model/hybrid manifest reports `status=complete`; a managed but unfinished checkpoint is `incomplete`, a path without a managed manifest is `unmanaged`, and a missing checkpoint is `absent`. Docker image presence is read-only inventory. The strict install manifest supplies the active profile and model root, so custom roots are visible; after uninstall, a retained custom-root checkpoint remains visible as installed but is no longer marked active.
+
+The same presentation/inventory helper now powers both completed-install profile selection and `install.sh --list-models`. Existing `manage-models.sh` retirement/migration/dependency semantics remain unchanged; this slice does not replace that operator tool or its asset definitions.
+
+Guarded DGX acceptance on `46f929d74895699aff7b100ada9d844bcd9270ef` passed after CI #1278. The live inventory reported:
+- `orcarouter`: stable, installable, installed, active, image present;
+- `nvidia`: experimental, installable, absent, image absent;
+- `mazinb`: experimental, installable, installed, inactive, image present;
+- `orcarouter-hybrid`: experimental, installable, installed, inactive, image present;
+- `lychee888`: planned, not installable, not applicable locally, non-selectable.
+
+The completed-install chooser rendered the same registry/inventory view, defaulted to the active `orcarouter`, and retained it without creating a profile switch. The acceptance was non-mutating: `install.env` and `runtime-commit.env` digests, managed service/proxy unit digests and status, container ID, `StartedAt`, and lifecycle-idle state were unchanged, and no transaction artifacts were created.
+
+This acceptance validates profile-manager presentation/inventory behavior only. It does not change functional or host-stability qualification for any model profile.
+
 ## Phase sequence
 
 1. **Inventory/parity foundation** — implemented.
 2. **Completed-install selector** — implemented and DGX dry-run accepted.
 3. **Common normalized plan** — implemented and DGX dry-run accepted.
 4. **Completed-install settings management** — implemented and accepted on DGX through preview, no-op live commit, and explicit deferred-runtime rollback; final implementation code head `33a7f16e282672b5aa256cc662c026637e5b7afb`, CI #1264.
-5. **Registry/profile-manager metadata** — derive profile UI from registry and combine it with `manage-models.sh` inventory; centralize option metadata.
+5. **Registry/profile-manager metadata** — registry-derived profile UI plus read-only local inventory implemented and DGX accepted on `46f929d74895699aff7b100ada9d844bcd9270ef`, CI #1278; user-facing option metadata centralization remains.
 6. **Acceptance/docs** — all CI green, guarded DGX preview for material UI changes, then live transaction validation only when the phase explicitly requires it.
 
 Do not reopen R23–R32 allocator localization, merge the separate M1 mitigation line, or claim H38 as the current transactional managed OrcaRouter profile as part of this work.

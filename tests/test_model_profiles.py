@@ -61,11 +61,20 @@ class ModelProfileTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("orcarouter   stable", result.stdout)
-        self.assertIn("nvidia       experimental", result.stdout)
-        self.assertIn("mazinb       experimental", result.stdout)
-        self.assertIn("orcarouter-hybrid experimental", result.stdout)
-        self.assertIn("lychee888    planned", result.stdout)
+        self.assertIn("Qwen3.8 profile manager", result.stdout)
+        expected_status = {
+            "orcarouter": ("stable", "yes"),
+            "nvidia": ("experimental", "yes"),
+            "mazinb": ("experimental", "yes"),
+            "orcarouter-hybrid": ("experimental", "yes"),
+            "lychee888": ("planned", "no"),
+        }
+        for profile, (status, installable) in expected_status.items():
+            with self.subTest(profile=profile):
+                self.assertRegex(
+                    result.stdout,
+                    rf"(?m)^{profile}\s+{status}\s+{installable}\s+",
+                )
 
     def test_mazinb_installable_profile_has_pinned_metadata(self) -> None:
         result = subprocess.run(
@@ -150,6 +159,13 @@ class ModelProfileTests(unittest.TestCase):
                 self.assertIn(f"profile     : {profile}", result.stdout)
                 self.assertIn(model_dir, result.stdout)
                 self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_clean_host_wizard_parses_leading_zero_choice_as_decimal(self) -> None:
+        result = self.run_wizard("02")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
 
     def test_clean_host_defaults_to_repository_local_model_root(self) -> None:
         result = self.run_install("nvidia")
@@ -300,10 +316,21 @@ class ModelProfileTests(unittest.TestCase):
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
         wizard = (ROOT / "scripts" / "lib" / "wizard-ui.sh").read_text(encoding="utf-8")
 
+        profiles = (ROOT / "scripts" / "model" / "model-profiles.sh").read_text(
+            encoding="utf-8"
+        )
+
         self.assertIn("wizard_step 2 6 '모델 선택'", installer)
-        self.assertIn("wizard_menu_option 1 'OrcaRouter Uncensored'", installer)
-        self.assertIn("wizard_menu_option 4 'OrcaRouter Hybrid H6'", installer)
-        self.assertIn("OrcaRouter + mazinb experts / W4A16 NVFP4", installer)
+        self.assertIn("mapfile -t profiles < <(list_model_profiles)", installer)
+        self.assertIn("profile_manager_load", installer)
+        self.assertIn('wizard_menu_option "$((index + 1))" "${PM_DISPLAY_NAME}"', installer)
+        self.assertNotIn("wizard_menu_option 1 'OrcaRouter Uncensored'", installer)
+        self.assertIn('PROFILE_DISPLAY_NAME="OrcaRouter Uncensored"', profiles)
+        self.assertIn('PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6"', profiles)
+        self.assertIn(
+            'PROFILE_DESCRIPTION="Generated H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"',
+            profiles,
+        )
         self.assertIn("wizard_step 5 6 'API 및 서비스'", installer)
         self.assertIn("wizard_menu_option 1 '이 PC에서만 사용'", installer)
         self.assertIn("wizard_menu_option()", wizard)
