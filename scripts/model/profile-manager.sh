@@ -25,15 +25,27 @@ profile_manager_roots() {
   done
 }
 
-profile_manager_manifest_present() {
-  local path="$1"
-  [[ -f "${path}/.qwen38-model-manifest.json" || -f "${path}/.qwen38-hybrid-manifest.json" ]]
+profile_manager_manifest_state() {
+  local path="$1" manifest found=0
+  for manifest in \
+    "${path}/.qwen38-model-manifest.json" \
+    "${path}/.qwen38-hybrid-manifest.json"
+  do
+    [[ -f "${manifest}" && ! -L "${manifest}" ]] || continue
+    found=1
+    if grep -Eq '"status"[[:space:]]*:[[:space:]]*"complete"' "${manifest}"; then
+      printf 'installed\n'
+      return 0
+    fi
+  done
+  [[ "${found}" == 0 ]] || { printf 'incomplete\n'; return 0; }
+  return 1
 }
 
 profile_manager_entry() (
   local profile="$1" active_profile="${2:-}"
   local display status default installable repo description
-  local root checkpoint="" first_checkpoint="" local_state=absent image="" image_state=unavailable
+  local root checkpoint="" first_checkpoint="" manifest_state="" local_state=absent image="" image_state=unavailable
 
   describe_model_profile "${profile}" || exit $?
   display="${PROFILE_DISPLAY_NAME}"
@@ -51,12 +63,18 @@ profile_manager_entry() (
       [[ -n "${first_checkpoint}" ]] || first_checkpoint="${PROFILE_MODEL_DIR}"
       image="${PROFILE_IMAGE}"
 
-      if profile_manager_manifest_present "${PROFILE_MODEL_DIR}"; then
+      manifest_state="$(profile_manager_manifest_state "${PROFILE_MODEL_DIR}" 2>/dev/null || true)"
+      if [[ "${manifest_state}" == installed ]]; then
         checkpoint="${PROFILE_MODEL_DIR}"
         local_state=installed
         break
       fi
-      if [[ "${local_state}" == absent && ( -e "${PROFILE_MODEL_DIR}" || -L "${PROFILE_MODEL_DIR}" ) ]]; then
+      if [[ "${manifest_state}" == incomplete ]]; then
+        [[ "${local_state}" == installed ]] || {
+          checkpoint="${PROFILE_MODEL_DIR}"
+          local_state=incomplete
+        }
+      elif [[ "${local_state}" == absent && ( -e "${PROFILE_MODEL_DIR}" || -L "${PROFILE_MODEL_DIR}" ) ]]; then
         checkpoint="${PROFILE_MODEL_DIR}"
         local_state=unmanaged
       fi
@@ -101,6 +119,7 @@ profile_manager_loaded_detail() {
   [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("installable") || labels+=("not installable")
   case "${PM_LOCAL_STATE}" in
     installed) labels+=("installed") ;;
+    incomplete) labels+=("incomplete") ;;
     unmanaged) labels+=("local path unmanaged") ;;
     *) labels+=("not installed") ;;
   esac
