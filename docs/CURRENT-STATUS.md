@@ -117,7 +117,11 @@ static/CI revalidation on `c9d0a014a71403fb6280be0b8db7d08028702046`
 unit-test suite, and whitespace checks passed, while live managed H38 acceptance remains
 a separate gate. The guarded migration entry is
 `scripts/benchmark/run-h38-managed-migration-gate.sh`; it requires an exact clean
-target SHA and does not use the retired legacy-READY intermediate. H38 must not be described as
+target SHA and does not use the retired legacy-READY intermediate. After that gate
+passes, `scripts/run-h38-managed-followup-gates.sh` binds the same migration evidence
+baseline to managed-alias determinism, the >=90% decode-performance gate, a supported
+managed-service replacement/restart, doctor/attestation checks, and one strict RM
+follow-up window. H38 must not be described as
 promoted into the managed runtime until lifecycle/restart/doctor, managed-alias
 determinism, performance, and strict RM host-stability gates in
 `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
