@@ -118,6 +118,8 @@ Canonical implementations include:
 - `runtime/runtime-transition.sh`
 - `runtime/preflight-runtime.sh`
 - `runtime/service-runner.sh`
+- `runtime/service-adopt-runner.sh`
+- `runtime/service-stop.sh`
 - `runtime/monitor-runtime.sh`
 - `runtime/wait-ready.sh`
 - `runtime/validate_runtime.py`
