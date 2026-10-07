@@ -105,113 +105,7 @@ profile_manager_entry() (
 
 profile_manager_load() {
   local profile="$1" active_profile="${2:-}"
-  IFS=    PM_LOCAL_STATE PM_ACTIVE PM_IMAGE_STATE PM_REPO PM_CHECKPOINT \
-    PM_DESCRIPTION PM_DESCRIPTION_KO \
-    < <(profile_manager_entry "${profile}" "${active_profile}")
-  [[ -n "${PM_PROFILE:-}" ]]
-}
-
-profile_manager_status_label() {
-  local status="$1" lang="${2:-en}"
-  if [[ "${lang}" != ko ]]; then
-    printf '%s\n' "${status}"
-    return
-  fi
-  case "${status}" in
-    stable) printf '안정\n' ;;
-    experimental) printf '실험\n' ;;
-    in-progress) printf '진행 중\n' ;;
-    planned) printf '계획\n' ;;
-    *) printf '%s\n' "${status}" ;;
-  esac
-}
-
-profile_manager_current_summary() {
-  local profile="$1" lang="${2:-en}" status_label
-  if ! profile_manager_load "${profile}" "${profile}"; then
-    printf '%s\n' "${profile}"
-    return
-  fi
-  status_label="$(profile_manager_status_label "${PM_STATUS}" "${lang}")"
-  printf '%s (%s, %s)\n' "${PM_DISPLAY_NAME}" "${PM_PROFILE}" "${status_label}"
-}
-
-profile_manager_loaded_detail() {
-  local lang="${1:-en}"
-  local -a labels=()
-  local joined="" label description
-
-  if [[ "${lang}" == ko ]]; then
-    labels+=("$(profile_manager_status_label "${PM_STATUS}" ko)")
-    [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("설치 가능") || labels+=("설치 불가")
-    case "${PM_LOCAL_STATE}" in
-      installed) labels+=("설치됨") ;;
-      incomplete) labels+=("불완전") ;;
-      unmanaged) labels+=("비관리 로컬 경로") ;;
-      *) labels+=("미설치") ;;
-    esac
-    [[ "${PM_DEFAULT}" != 1 ]] || labels+=("기본")
-    [[ "${PM_ACTIVE}" != yes ]] || labels+=("활성")
-    case "${PM_IMAGE_STATE}" in
-      present) labels+=("이미지 있음") ;;
-      absent) labels+=("이미지 없음") ;;
-    esac
-    description="${PM_DESCRIPTION_KO}"
-  else
-    labels+=("${PM_STATUS}")
-    [[ "${PM_INSTALLABLE}" == 1 ]] && labels+=("installable") || labels+=("not installable")
-    case "${PM_LOCAL_STATE}" in
-      installed) labels+=("installed") ;;
-      incomplete) labels+=("incomplete") ;;
-      unmanaged) labels+=("local path unmanaged") ;;
-      *) labels+=("not installed") ;;
-    esac
-    [[ "${PM_DEFAULT}" != 1 ]] || labels+=("default")
-    [[ "${PM_ACTIVE}" != yes ]] || labels+=("active")
-    case "${PM_IMAGE_STATE}" in
-      present) labels+=("image present") ;;
-      absent) labels+=("image absent") ;;
-    esac
-    description="${PM_DESCRIPTION}"
-  fi
-
-  for label in "${labels[@]}"; do
-    [[ -z "${joined}" ]] || joined+=" / "
-    joined+="${label}"
-  done
-  printf '%s — %s\n' "${joined}" "${description}"
-}
-
-profile_manager_detail() {
-  local profile="$1" active_profile="${2:-}"
-  profile_manager_load "${profile}" "${active_profile}" || return
-  profile_manager_loaded_detail "${3:-en}"
-}
-
-print_profile_manager() {
-  local active_profile="${1:-}" profile
-  printf 'Qwen3.8 profile manager\n'
-  printf '%-20s %-13s %-11s %-11s %-7s %-11s %s\n' \
-    PROFILE STATUS INSTALLABLE LOCAL ACTIVE IMAGE NAME
-
-  while IFS= read -r profile; do
-    [[ -n "${profile}" ]] || continue
-    profile_manager_load "${profile}" "${active_profile}" || return
-    printf '%-20s %-13s %-11s %-11s %-7s %-11s %s\n' \
-      "${PM_PROFILE}" "${PM_STATUS}" yes "${PM_LOCAL_STATE}" "${PM_ACTIVE}" "${PM_IMAGE_STATE}" "${PM_DISPLAY_NAME}"
-    printf '  repo=%s%s\n' "${PM_REPO}" "${PM_CHECKPOINT:+ checkpoint=${PM_CHECKPOINT}}"
-  done < <(list_model_profiles)
-
-  while IFS= read -r profile; do
-    [[ -n "${profile}" ]] || continue
-    profile_manager_load "${profile}" "${active_profile}" || return
-    printf '%-20s %-13s %-11s %-11s %-7s %-11s %s\n' \
-      "${PM_PROFILE}" "${PM_STATUS}" no "${PM_LOCAL_STATE}" "${PM_ACTIVE}" "${PM_IMAGE_STATE}" "${PM_DISPLAY_NAME}"
-    printf '  repo=%s\n' "${PM_REPO}"
-  done < <(list_model_candidates)
-}
-
-\x1f' read -r \
+  IFS=$'\x1f' read -r \
     PM_PROFILE PM_DISPLAY_NAME PM_STATUS PM_INSTALLABLE PM_DEFAULT \
     PM_LOCAL_STATE PM_ACTIVE PM_IMAGE_STATE PM_REPO PM_CHECKPOINT \
     PM_DESCRIPTION PM_DESCRIPTION_KO \
@@ -291,9 +185,9 @@ profile_manager_loaded_detail() {
 }
 
 profile_manager_detail() {
-  local profile="$1" active_profile="${2:-}"
+  local profile="$1" active_profile="${2:-}" lang="${3:-en}"
   profile_manager_load "${profile}" "${active_profile}" || return
-  profile_manager_loaded_detail "${3:-en}"
+  profile_manager_loaded_detail "${lang}"
 }
 
 print_profile_manager() {
@@ -318,4 +212,3 @@ print_profile_manager() {
     printf '  repo=%s\n' "${PM_REPO}"
   done < <(list_model_candidates)
 }
-
