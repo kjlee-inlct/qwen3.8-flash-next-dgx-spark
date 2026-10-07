@@ -124,6 +124,7 @@ class InstallerOptionParityTests(unittest.TestCase):
                 (
                     'source "$1"; '
                     'install_option_flag profile; '
+                    'install_option_flag config_override no-config-override; '
                     'install_option_flag service_mode no-service; '
                     'install_option_flag monitor_mode protect'
                 ),
@@ -138,7 +139,7 @@ class InstallerOptionParityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.splitlines(),
-            ["--model", "--no-service", "--protect"],
+            ["--model", "--no-config-override", "--no-service", "--protect"],
         )
 
         ambiguous = subprocess.run(
