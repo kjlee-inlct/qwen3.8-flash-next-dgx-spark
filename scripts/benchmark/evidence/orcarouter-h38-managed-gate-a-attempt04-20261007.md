@@ -103,8 +103,8 @@ Repository comparison materially changes the interpretation of this failure.
 
 Between PR base main `a7c563705edba780747bf815278f6b77c8a41b08` and attempt-04 head:
 
-- `scripts/runtime/monitor-runtime.sh`: identical
-- `scripts/runtime/service-runner.sh`: identical
+- `monitor-runtime.sh`: identical
+- `service-runner.sh`: identical
 - `scripts/manage-service.sh`: identical
 - only `scripts/serve.sh` changes in this lifecycle surface
 
