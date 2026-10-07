@@ -1,6 +1,6 @@
 # OrcaRouter H38 managed-service integration plan — 2026-10-07
 
-Status: STATIC/CI PASS / DGX LIVE QUALIFICATION PENDING
+Status: ATOMIC TRANSACTION STATIC/CI REVALIDATION PENDING / DGX LIVE QUALIFICATION PENDING
 
 ## Provenance
 
@@ -23,14 +23,22 @@ checkpoint profile and it does not change the `orcarouter-hybrid` H6 checkpoint.
 The implementation must keep these boundaries:
 
 - clean-host local image construction follows v0.29 -> H9 -> H10 -> H11 -> H12 -> H38;
-- existing supported pre-H38 OrcaRouter stock/skinny manifests remain bootable after immutable code update;
-- H38 runtime controls activate only after explicit `--refresh-profile-defaults`
-  changes the manifest image to the H38 tag;
+- existing supported pre-H38 OrcaRouter stock/skinny manifests remain valid as the
+  source state for a one-step atomic cross-release migration;
+- a new immutable release must not start the persisted legacy CPU-offload runtime as
+  an intermediate acceptance state;
+- H38 runtime controls activate only when the atomic refresh activates the qualified
+  target release and H38 target manifest together;
 - H38 uses PLE mmap, exact QSA, canonical Marlin order with decoder scope, isolated
   compile cache, MTP k=2, max model length 262144, max sequences 3, prefix cache off,
   and the retained 16 GiB managed KV setting;
 - preflight and doctor verify H38 image provenance once the H38 image is selected;
-- runtime/profile/update transaction semantics remain unchanged.
+- the outer release-profile refresh transaction is the sole recovery owner for the
+  release pointer + canonical manifest boundary;
+- runtime replacement keeps the previous rollback container until the outer
+  release-profile transaction commits, so interruption recovery can restore an exact
+  release + manifest + runtime tuple;
+- monitor protection and strict NVIDIA RM classification are not weakened.
 
 ## Static acceptance — passed on implementation head `398697be4a92b15e312d90101b706821075b7ae8`
 
@@ -48,39 +56,60 @@ The required static gates were:
 ## Live DGX acceptance
 
 Pin the exact PR head and require a clean checkout before mutation. Preserve any local
-operator edits, especially `scripts/model-assets.sh`; do not overwrite a dirty host.
+operator edits; do not reset or overwrite a dirty host.
 
-The live sequence is deliberately two-stage for an existing installation:
+The old two-stage sequence is retired. Do **not** first update the code release and wait
+for a legacy CPU-offload READY state. The matched base-main control proved that
+intermediate is not a valid H38 discriminator.
 
-1. Capture current managed service, container/image, manifest, immutable release,
-   runtime commit, and a decode-performance baseline.
-2. Stage, qualify, and transactionally update the immutable release to the PR head.
-   The currently installed supported legacy stock/skinny manifest must still reach READY
-   using the legacy OrcaRouter controls. This proves code-update compatibility before
-   data migration.
-3. Run `./install.sh --model orcarouter --refresh-profile-defaults --lang en --yes`.
-   The installer must build/reuse the complete H38 image chain, replace the runtime
-   transactionally, and commit the H38 manifest only after READY and served-model
-   identity validation.
-4. Run `scripts/doctor.sh --strict` and verify the runtime-commit attestation,
-   H38 image label, decoder scope, exact QSA, PLE mmap, H38 cache namespace, model
-   identity, service state, and container image.
-5. Run the canonical H38 determinism matrix against the managed served alias by setting
-   `H38_GATE_MODEL=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`. Require:
-   1K/128 x20 `unique_hashes=1`; 32K/128 x10 `unique_hashes=1`; forward and
-   reverse QSA sweeps all `unique_hashes=1` with `first_failure_tokens=null`.
-6. Run the same 384-token, five-repeat decode benchmark as the baseline. Record median
-   decode tokens/s. A candidate below 90% of the baseline blocks promotion pending
-   explicit performance review; do not silently waive the regression.
-7. Restart the managed service through the supported service path, wait for READY,
-   rerun doctor strict, and verify the H38 image/env/attestation remain stable.
-8. Inspect kernel evidence for the full measured window. Any confirmed
-   `_memdescAllocInternal` / `NV_ERR_NO_MEMORY` makes HOST-STABILITY FAIL even
-   if READY, inference, determinism, and soak all pass.
-9. Confirm Docker did not report OOMKilled and that runtime/update/profile-switch
-   transactions are idle.
+Use the guarded migration gate:
 
-Record FUNCTIONAL and HOST-STABILITY separately.
+```bash
+H38_MANAGED_TARGET_SHA=<exact-final-PR-head> \
+  bash scripts/benchmark/run-h38-managed-migration-gate.sh
+```
+
+The migration gate must:
+
+1. prove exact checkout SHA, clean worktree, complete legacy OrcaRouter manifest,
+   exact immutable current release, healthy non-OOM predecessor container, matching
+   runtime attestation, and all lifecycle transactions idle;
+2. collect a fresh matched 384-token x5 legacy decode baseline before mutation;
+3. stage/qualify the exact target release and execute only
+   `scripts/update-release.sh RELEASE_ID --refresh-profile-defaults`;
+4. build/reuse and verify the v0.29 -> H9 -> H10 -> H11 -> H12 -> H38 chain without
+   starting a new-code + legacy-image intermediate runtime;
+5. activate the target release and H38 `service_ready` manifest under one persisted
+   transaction, preserve the previous runtime rollback container through target
+   readiness/attestation, and commit it only when the outer transaction commits;
+6. require exact target release, exact target install root, H38 image/label, model ID,
+   H38 env, 16 GiB KV flag, running container, `OOMKilled=false`, runtime attestation,
+   lifecycle idle state, and `doctor.sh --strict`;
+7. capture the measured migration kernel window and classify any
+   `_memdescAllocInternal` or `NV_ERR_NO_MEMORY` as **HOST-STABILITY FAIL**;
+8. classify a memory-protection stop as a safety intervention / incomplete functional
+   gate, not as HOST-STABILITY PASS and not as confirmed RM OOM;
+9. preserve one upload-oriented evidence summary plus the full run log.
+
+Only after the atomic migration gate is FUNCTIONAL PASS and its measured migration
+window is free of strict RM failures may the remaining managed gates proceed:
+
+1. Run the canonical managed H38 determinism matrix with
+   `H38_GATE_MODEL=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`. Require 1K/128
+   x20 and 32K/128 x10 `unique_hashes=1`, plus forward/reverse QSA sweeps with
+   `unique_hashes=1` and `first_failure_tokens=null`.
+2. Run a candidate 384-token x5 decode benchmark and compare its median against the
+   fresh baseline recorded by the migration gate. Candidate median must be at least
+   90% of that baseline; below 90% blocks promotion.
+3. Restart `qwen38-flash-next.service` through the supported managed path. Require
+   exact model READY, `doctor.sh --strict`, matching runtime attestation, exact H38
+   image/env, `OOMKilled=false`, and all lifecycle transactions idle.
+4. Preserve explicit kernel evidence for the follow-up measured windows. Any confirmed
+   `_memdescAllocInternal` or `NV_ERR_NO_MEMORY` in any valid acceptance window is
+   HOST-STABILITY FAIL regardless of functional/determinism/performance/restart success.
+
+Record FUNCTIONAL, DETERMINISM, PERFORMANCE, RESTART/ATTESTATION, and HOST-STABILITY
+independently. Historical dedicated-H38 success does not satisfy these managed gates.
 
 ## Promotion rule
 
