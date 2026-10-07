@@ -19,6 +19,7 @@ STATE_FILE="${QWEN38_RELEASE_PROFILE_REFRESH_STATE_FILE:-${STATE_HOME}/release-p
 BACKUP_MANIFEST="${INSTALL_STATE_FILE}.release-profile-refresh-backup"
 TARGET_MANIFEST="${INSTALL_STATE_FILE}.release-profile-refresh-candidate"
 RUNTIME_COMMIT_FILE="${STATE_HOME}/runtime-commit.env"
+RUNTIME_ADOPT_FILE="${STATE_HOME}/runtime-adopt.env"
 RUNTIME_TRANSITION_FILE="${STATE_HOME}/runtime-transition.env"
 UPDATE_STATE_FILE="${STATE_HOME}/update-transition.env"
 PROFILE_SWITCH_STATE_FILE="${STATE_HOME}/profile-switch-transition.env"
@@ -495,6 +496,46 @@ verify_previous_runtime_restored() {
   return 0
 }
 
+prepare_previous_runtime_adoption() {
+  local old_root="${RELEASES_DIR}/${OLD_CURRENT_RELEASE}" container_id running temporary
+  parse_manifest "${INSTALL_STATE_FILE}" RESTORED || die 'restored install manifest failed strict parsing'
+  [[ "${RESTORED_PHASE}" == complete && "${RESTORED_VLLM_IMAGE}" == "${OLD_IMAGE}" ]] ||
+    die 'restored install manifest no longer matches the previous runtime identity'
+  [[ "$(realpath -m -- "${RESTORED_INSTALL_ROOT}")" == "$(realpath -m -- "${old_root}")" ]] ||
+    die 'restored install manifest root does not match the previous immutable release'
+  container_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
+  running="$(docker inspect --format '{{.State.Running}}' qwen38-flash-next 2>/dev/null || true)"
+  [[ -n "${container_id}" && "${running}" == true ]] || die 'restored previous runtime is not running for service adoption'
+
+  if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+    [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] || die "runtime adoption marker is unsafe: ${RUNTIME_ADOPT_FILE}"
+    unset ADOPT_RUNTIME_ROOT ADOPT_RUNTIME_CONTAINER_NAME ADOPT_RUNTIME_CONTAINER_ID ADOPT_EXPECTED_IMAGE ADOPT_SERVED_NAME ADOPT_CREATED_AT
+    parse_state_into_vars runtime-adopt "${RUNTIME_ADOPT_FILE}" ADOPT_ || die 'existing runtime adoption marker failed strict parsing'
+    [[ "${ADOPT_RUNTIME_ROOT}" == "${old_root}" &&
+       "${ADOPT_RUNTIME_CONTAINER_NAME}" == qwen38-flash-next &&
+       "${ADOPT_RUNTIME_CONTAINER_ID}" == "${container_id}" &&
+       "${ADOPT_EXPECTED_IMAGE}" == "${OLD_IMAGE}" &&
+       "${ADOPT_SERVED_NAME}" == "${RESTORED_SERVED_NAME}" ]] ||
+      die 'existing runtime adoption marker does not match the restored previous runtime'
+    return 0
+  fi
+
+  temporary="${RUNTIME_ADOPT_FILE}.tmp"
+  umask 077
+  {
+    printf 'RUNTIME_ADOPT_SCHEMA_VERSION=1\n'
+    printf 'RUNTIME_ROOT=%s\n' "${old_root}"
+    printf 'RUNTIME_CONTAINER_NAME=qwen38-flash-next\n'
+    printf 'RUNTIME_CONTAINER_ID=%s\n' "${container_id}"
+    printf 'EXPECTED_IMAGE=%s\n' "${OLD_IMAGE}"
+    printf 'SERVED_NAME=%s\n' "${RESTORED_SERVED_NAME}"
+    printf 'CREATED_AT=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } >"${temporary}"
+  python3 "${STATE_PARSER}" runtime-adopt "${temporary}" >/dev/null ||
+    { rm -f -- "${temporary}"; die 'failed to validate runtime adoption marker'; }
+  mv -- "${temporary}" "${RUNTIME_ADOPT_FILE}"
+}
+
 commit_deferred_runtime_transition() {
   local runtime_helper="${RELEASES_DIR}/${TARGET_RELEASE}/scripts/runtime/runtime-transition.sh"
   local parsed key value state="" current="" rollback="" had_previous=""
@@ -536,11 +577,11 @@ finish_proven_target() {
   clear_transaction
 }
 
-restart_previous_service() {
+adopt_previous_service() {
   local manager="${CURRENT_LINK}/scripts/manage-service.sh"
   [[ -r "${manager}" ]] || die 'restored release has no service manager'
-  command -v sudo >/dev/null 2>&1 || die 'sudo is required to restore the managed service'
-  sudo_with_operation_lock bash "${manager}" create --runtime-root "${CURRENT_LINK}" --start --yes
+  command -v sudo >/dev/null 2>&1 || die 'sudo is required to reattach the managed service'
+  sudo_with_operation_lock bash "${manager}" create --runtime-root "${CURRENT_LINK}" --start --adopt-existing --yes
 }
 
 rollback_active_transaction() {
@@ -558,9 +599,12 @@ rollback_active_transaction() {
       else
         write_state rolling_back "${TARGET_MANIFEST_SHA256}"
         restore_previous_pair
+        if [[ "${restart}" == 1 ]]; then
+          prepare_previous_runtime_adoption
+          adopt_previous_service
+        fi
         clear_transaction
-        if [[ "${restart}" == 1 ]]; then restart_previous_service; fi
-        printf 'Release-profile refresh restored previous release + manifest + runtime pair.\n'
+        printf 'Release-profile refresh restored previous release + manifest + runtime pair without a cold runtime replacement.\n'
       fi
       ;;
     runtime_committed|committing)
@@ -570,9 +614,12 @@ rollback_active_transaction() {
       ;;
     rolling_back)
       restore_previous_pair
+      if [[ "${restart}" == 1 ]]; then
+        prepare_previous_runtime_adoption
+        adopt_previous_service
+      fi
       clear_transaction
-      if [[ "${restart}" == 1 ]]; then restart_previous_service; fi
-      printf 'Interrupted release-profile rollback completed.\n'
+      printf 'Interrupted release-profile rollback completed without a cold runtime replacement.\n'
       ;;
     *) die "unsupported release-profile refresh state: ${RELEASE_PROFILE_REFRESH_STATE}" ;;
   esac
@@ -722,8 +769,9 @@ case "${action}" in
     esac
     write_state rolling_back "${TARGET_MANIFEST_SHA256}"
     restore_previous_pair
+    prepare_previous_runtime_adoption
     clear_transaction
-    printf 'Interrupted release-profile refresh restored previous release + manifest + runtime pair; forcing service retry.\n' >&2
+    printf 'Interrupted release-profile refresh restored the previous tuple; the next service attempt will adopt the exact restored container.\n' >&2
     exit 75
     ;;
   status)
