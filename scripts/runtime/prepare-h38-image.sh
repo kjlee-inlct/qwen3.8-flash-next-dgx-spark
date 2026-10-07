@@ -2,11 +2,11 @@
 # Build or verify the managed OrcaRouter H38 decoder-scope runtime image.
 set -Eeuo pipefail
 
-ROOT="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")/../.." && pwd -P)"
-SCRIPTS_DIR="\${ROOT}/scripts"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+SCRIPTS_DIR="${ROOT}/scripts"
 TARGET_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"
 EXPECTED_SCOPE="decoder-v1"
-ACTION="\${1:-build}"
+ACTION="${1:-build}"
 
 usage() {
   cat <<'EOF'
@@ -25,16 +25,16 @@ image_exists() {
 
 verify_target() {
   local scope
-  image_exists "\${TARGET_IMAGE}" || {
-    printf 'ERROR: H38 managed image is missing: %s\n' "\${TARGET_IMAGE}" >&2
+  image_exists "${TARGET_IMAGE}" || {
+    printf 'ERROR: H38 managed image is missing: %s\n' "${TARGET_IMAGE}" >&2
     return 1
   }
-  scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "\${TARGET_IMAGE}" 2>/dev/null || true)"
-  [[ "\${scope}" == "\${EXPECTED_SCOPE}" ]] || {
-    printf 'ERROR: H38 image label mismatch: image=%s qwen38.h38scope=%s expected=%s\n' "\${TARGET_IMAGE}" "\${scope:-missing}" "\${EXPECTED_SCOPE}" >&2
+  scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${TARGET_IMAGE}" 2>/dev/null || true)"
+  [[ "${scope}" == "${EXPECTED_SCOPE}" ]] || {
+    printf 'ERROR: H38 image label mismatch: image=%s qwen38.h38scope=%s expected=%s\n' "${TARGET_IMAGE}" "${scope:-missing}" "${EXPECTED_SCOPE}" >&2
     return 1
   }
-  printf 'H38 managed image verified: %s (qwen38.h38scope=%s)\n' "\${TARGET_IMAGE}" "\${scope}"
+  printf 'H38 managed image verified: %s (qwen38.h38scope=%s)\n' "${TARGET_IMAGE}" "${scope}"
 }
 
 print_plan() {
@@ -50,19 +50,19 @@ EOF
 
 build_stage() {
   local image="$1" dockerfile="$2"
-  if image_exists "\${image}"; then
-    printf 'Reusing image: %s\n' "\${image}"
+  if image_exists "${image}"; then
+    printf 'Reusing image: %s\n' "${image}"
     return 0
   fi
-  [[ -r "\${SCRIPTS_DIR}/\${dockerfile}" ]] || {
-    printf 'ERROR: Dockerfile is missing: %s\n' "\${SCRIPTS_DIR}/\${dockerfile}" >&2
+  [[ -r "${SCRIPTS_DIR}/${dockerfile}" ]] || {
+    printf 'ERROR: Dockerfile is missing: %s\n' "${SCRIPTS_DIR}/${dockerfile}" >&2
     return 1
   }
-  printf 'Building image: %s (%s)\n' "\${image}" "\${dockerfile}"
-  docker build -t "\${image}" -f "\${SCRIPTS_DIR}/\${dockerfile}" "\${SCRIPTS_DIR}"
+  printf 'Building image: %s (%s)\n' "${image}" "${dockerfile}"
+  docker build -t "${image}" -f "${SCRIPTS_DIR}/${dockerfile}" "${SCRIPTS_DIR}"
 }
 
-case "\${ACTION}" in
+case "${ACTION}" in
   plan)
     print_plan
     ;;
@@ -72,7 +72,7 @@ case "\${ACTION}" in
     ;;
   build)
     command -v docker >/dev/null 2>&1 || { printf 'ERROR: docker is required\n' >&2; exit 1; }
-    if image_exists "\${TARGET_IMAGE}"; then
+    if image_exists "${TARGET_IMAGE}"; then
       verify_target
       exit 0
     fi
@@ -81,7 +81,7 @@ case "\${ACTION}" in
     build_stage "vllm-orcarouter-v029-h10-ct-global-scale:v1" "Dockerfile.v029-h10-ct-global-scale"
     build_stage "vllm-orcarouter-v029-h11-ct-packed-modelweight:v1" "Dockerfile.v029-h11-ct-packed-modelweight"
     build_stage "vllm-orcarouter-v029-h12-ct-postload-preserve:v1" "Dockerfile.v029-h12-ct-postload-preserve"
-    build_stage "\${TARGET_IMAGE}" "Dockerfile.v029-h38-decoder-scope"
+    build_stage "${TARGET_IMAGE}" "Dockerfile.v029-h38-decoder-scope"
     verify_target
     ;;
   -h|--help|help)
