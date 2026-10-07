@@ -106,6 +106,37 @@ class ServiceDeploymentTests(unittest.TestCase):
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         self.assertIn('"${value}" == service_ready || "${value}" == complete', manager)
 
+    def test_service_can_adopt_exact_restored_runtime_without_replacement(self) -> None:
+        manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        parser = (ROOT / "scripts" / "lib" / "state_file.py").read_text(encoding="utf-8")
+
+        self.assertIn("--adopt-existing", manager)
+        self.assertIn("prepare_runtime_adoption()", manager)
+        self.assertIn('"${candidate_container_id}" == "${previous_container_id}"', manager)
+        self.assertIn("runtime-adopt.env", manager)
+        self.assertIn("runtime-adopt", parser)
+
+        self.assertIn("adopt_existing_runtime()", runner)
+        self.assertIn("runtime adoption container ID mismatch", runner)
+        self.assertIn("runtime adoption model mount mismatch", runner)
+        self.assertIn("runtime adoption served model identity mismatch", runner)
+        adoption_probe = runner.index('if [[ -e "${RUNTIME_ADOPT_FILE}"')
+        normal_transition = runner.index('if [[ "${runtime_adopt_active}" != 1 ]]')
+        transition_prepare = runner.index('bash "${RUNTIME_TRANSITION}" prepare', normal_transition)
+        self.assertLess(adoption_probe, normal_transition)
+        self.assertLess(normal_transition, transition_prepare)
+        self.assertIn('rm -f -- "${RUNTIME_ADOPT_FILE}"', runner)
+        self.assertIn("Existing managed runtime adopted without replacement", runner)
+
+    def test_doctor_reports_pending_runtime_adoption(self) -> None:
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        lock = (ROOT / "scripts" / "lib" / "operation-lock.sh").read_text(encoding="utf-8")
+        self.assertIn("runtime-adopt.env", doctor)
+        self.assertIn("one-shot runtime adoption is still pending", doctor)
+        self.assertIn("operation_lock_runtime_adopt_guard", lock)
+        self.assertIn("QWEN38_RUNTIME_ADOPT_CONTEXT", lock)
+
     def test_service_runner_recovers_profile_switch_before_manifest_parse(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
 
