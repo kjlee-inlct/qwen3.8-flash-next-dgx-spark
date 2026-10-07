@@ -11,7 +11,7 @@ Files directly under `scripts/` fall into one of three intentionally different r
 | Role | Purpose | Examples | Relocation policy |
 |---|---|---|---|
 | Upstream-derived | Preserve provenance and compatibility with the upstream repository layout. | `serve.sh`, `bench-prefill.py`, `download-weights.sh`, `patch-*.py`, `Dockerfile.*` | Keep the upstream path. |
-| Stable operator entry point | Human- or service-facing command whose path is part of the operational interface. | `doctor.sh`, `manage-*.sh`, `release-manager.sh`, `update-release.sh`, `runtime-transition.sh`, `profile-switch-transition.sh`, `release-profile-refresh-transition.sh`, `prepare-h38-image.sh` | Keep the public path stable; move implementation only when a thin entry point can preserve compatibility. |
+| Stable operator entry point | Human- or service-facing command whose path is part of the operational interface. | `doctor.sh`, `manage-*.sh`, `release-manager.sh`, `update-release.sh`, `runtime-transition.sh`, `profile-switch-transition.sh`, `release-profile-refresh-transition.sh`, `prepare-h38-image.sh`, `run-h38-managed-followup-gates.sh` | Keep the public path stable; move implementation only when a thin entry point can preserve compatibility. |
 | Compatibility shim | Legacy helper path that forwards to a canonical implementation in a role directory. | `qualify-release.sh`, `collect-diagnostics.sh`, `validate-runtime.py`, `state_file.py` | Keep thin; new internal code must target the canonical path. |
 
 Canonical repository-specific implementation belongs in `scripts/<role>/`, currently:
@@ -67,6 +67,7 @@ entry points and remain directly available:
 - `profile-switch-transition.sh`
 - `release-profile-refresh-transition.sh`
 - `prepare-h38-image.sh`
+- `run-h38-managed-followup-gates.sh`
 - `preflight-runtime.sh`
 - `service-runner.sh`
 
