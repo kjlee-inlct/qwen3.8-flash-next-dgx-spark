@@ -138,6 +138,9 @@ clear_transaction() {
 acquire_transition_lock() {
   local label="$1"
   export QWEN38_RELEASE_PROFILE_REFRESH_CONTEXT=1
+  # runtime-adopt.env is subordinate state owned by this outer transaction.
+  # Only the refresh coordinator may bypass its guard to finish/undo adoption.
+  export QWEN38_RUNTIME_ADOPT_CONTEXT=1
   [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
   # shellcheck source=scripts/lib/operation-lock.sh
   source "${OPERATION_LOCK_LIB}"
