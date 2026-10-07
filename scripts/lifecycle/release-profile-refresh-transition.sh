@@ -203,6 +203,79 @@ ensure_qualified_release() {
   verify_bound_qualification "${release_id}"
 }
 
+verify_recorded_target_release() {
+  local expected="${RELEASE_MANIFEST_SHA256}" observed marker parsed key value
+  local qualified="" qualified_digest=""
+  [[ "${expected}" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'ERROR: recorded target release manifest digest is invalid\n' >&2
+    return 1
+  }
+  bash "${RELEASE_MANAGER}" verify "${TARGET_RELEASE}" >/dev/null || return 1
+  observed="$(sha256_file "${RELEASES_DIR}/${TARGET_RELEASE}/.release-manifest.json")" || return 1
+  [[ "${observed}" == "${expected}" ]] || {
+    printf 'ERROR: target release manifest drift: recorded=%s observed=%s\n' "${expected}" "${observed}" >&2
+    return 1
+  }
+  marker="${QUALIFIED_DIR}/${TARGET_RELEASE}.env"
+  [[ -f "${marker}" && ! -L "${marker}" ]] || {
+    printf 'ERROR: target release qualification marker is missing or unsafe\n' >&2
+    return 1
+  }
+  parsed="$(mktemp)"
+  if ! python3 "${QUALIFICATION_PARSER}" "${marker}" --require-bound >"${parsed}"; then
+    rm -f -- "${parsed}"
+    printf 'ERROR: target release qualification marker is invalid\n' >&2
+    return 1
+  fi
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      QUALIFIED_RELEASE) qualified="${value}" ;;
+      RELEASE_MANIFEST_SHA256) qualified_digest="${value}" ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ "${qualified}" == "${TARGET_RELEASE}" && "${qualified_digest}" == "${expected}" ]] || {
+    printf 'ERROR: target release qualification binding drift\n' >&2
+    return 1
+  }
+}
+
+verify_target_manifest_binding() {
+  [[ -f "${TARGET_MANIFEST}" && ! -L "${TARGET_MANIFEST}" ]] || {
+    printf 'ERROR: target refresh manifest is missing or unsafe\n' >&2
+    return 1
+  }
+  [[ -f "${INSTALL_STATE_FILE}" && ! -L "${INSTALL_STATE_FILE}" ]] || {
+    printf 'ERROR: live install manifest is missing or unsafe\n' >&2
+    return 1
+  }
+  [[ "$(sha256_file "${TARGET_MANIFEST}")" == "${TARGET_MANIFEST_SHA256}" ]] || {
+    printf 'ERROR: target refresh manifest digest drift\n' >&2
+    return 1
+  }
+  python3 - "${STATE_PARSER}" "${TARGET_MANIFEST}" "${INSTALL_STATE_FILE}" <<'PY'
+import importlib.util
+import pathlib
+import sys
+
+parser_path, candidate_path, live_path = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("qwen38_state_file", parser_path)
+module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(module)
+candidate = module.parse_install(pathlib.Path(candidate_path), "install-maintenance")
+live = module.parse_install(pathlib.Path(live_path), "install-maintenance")
+if candidate["PHASE"] != "service_ready":
+    raise SystemExit("target refresh manifest is not service_ready")
+if live["PHASE"] not in {"service_ready", "complete"}:
+    raise SystemExit("live refresh manifest has invalid phase")
+expected = dict(candidate)
+expected["PHASE"] = live["PHASE"]
+if live != expected:
+    raise SystemExit("live install manifest drifted from target refresh manifest")
+PY
+}
+
 load_target_profile_defaults() {
   local target_root="$1" model_root
   [[ -r "${target_root}/scripts/model-profiles.sh" ]] || die 'target release has no model profile registry'
@@ -372,6 +445,8 @@ restore_previous_pair() {
 
 target_runtime_committed() {
   local target_root="${RELEASES_DIR}/${TARGET_RELEASE}" current_root container_id image scope
+  verify_recorded_target_release || return 1
+  verify_target_manifest_binding || return 1
   python3 "${STATE_PARSER}" install-service-runtime "${INSTALL_STATE_FILE}" >/dev/null || return 1
   parse_manifest "${INSTALL_STATE_FILE}" LIVE || return 1
   [[ "${LIVE_PHASE}" == service_ready || "${LIVE_PHASE}" == complete ]] || return 1
