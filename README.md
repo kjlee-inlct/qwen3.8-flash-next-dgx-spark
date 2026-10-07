@@ -573,11 +573,14 @@ exists yet.
 
 > **H38 runtime status:** the validated OrcaRouter H38 decoder-only runtime lives
 > in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. This feature
-> branch implements the corresponding candidate image/runtime controls for the transactional
-> `orcarouter` installer/systemd path, but managed-service qualification is still pending.
-> Existing installs first update the immutable release while retaining a supported legacy
-> stock/skinny image, then use `--refresh-profile-defaults` for the explicit H38
-> manifest/runtime migration.
+> branch implements the corresponding candidate image/runtime controls plus an atomic
+> cross-release release/profile refresh for the transactional `orcarouter`
+> installer/systemd path, but managed-service qualification is still pending.
+> The earlier two-stage legacy-READY requirement was invalidated by a matched PR-base
+> control. Existing installations migrate through
+> `./scripts/update-release.sh TARGET --refresh-profile-defaults`, which activates the
+> qualified target release and H38 candidate manifest before the single managed-service
+> replacement and restores both together on failure.
 > Do not call the managed H38 path production until the acceptance plan in
 > `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md` passes.
 
@@ -590,6 +593,10 @@ deleting the model or swap:
 ./install.sh --model orcarouter --refresh-profile-defaults --no-start --dry-run
 ./install.sh --model orcarouter --refresh-profile-defaults --no-start
 ```
+
+The direct installer refresh above is a same-release maintenance path. Cross-release H38
+migration must use the atomic `scripts/update-release.sh TARGET --refresh-profile-defaults`
+coordinator instead; it must not recreate the invalid legacy-intermediate sequence.
 
 This refresh preserves the checkpoint, swap, config, API/service policy and ownership
 metadata; it only adopts current profile runtime defaults. The optimized image is treated
