@@ -94,7 +94,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
             if hybrid
             else model_dir / ".qwen38-model-manifest.json"
         )
-        manifest.write_text("{}\n", encoding="utf-8")
+        manifest.write_text('{"status":"complete"}\n', encoding="utf-8")
         return model_dir
 
 
@@ -182,13 +182,47 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertIn("OrcaRouter Hybrid H6", result.stdout)
             self.assertIn("lychee888 FP8-PLE", result.stdout)
 
+    def test_list_models_distinguishes_incomplete_managed_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            model_dir = home / "models" / "qwen3.8-flash-next-orcarouter"
+            model_dir.mkdir(parents=True)
+            (model_dir / ".qwen38-model-manifest.json").write_text(
+                '{"status":"downloading"}\n',
+                encoding="utf-8",
+            )
+            self.write_manifest(home)
+
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--list-models"],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "XDG_STATE_HOME": str(home / "state"),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+incomplete\s+yes\s+",
+            )
+            self.assertNotRegex(
+                result.stdout,
+                r"(?m)^orcarouter\s+stable\s+yes\s+installed\s+yes\s+",
+            )
+
     def test_list_models_includes_active_custom_model_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             model_dir = home / "custom-store" / "qwen3.8-flash-next-orcarouter"
             model_dir.mkdir(parents=True)
             (model_dir / ".qwen38-model-manifest.json").write_text(
-                "{}\n",
+                '{"status":"complete"}\n',
                 encoding="utf-8",
             )
             self.write_manifest(home, model_dir=model_dir)
