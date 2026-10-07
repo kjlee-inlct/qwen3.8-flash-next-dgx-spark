@@ -33,6 +33,7 @@ CURRENT_RELEASE_LINK="${DATA_HOME}/current"
 SWAP_FILE="${SWAP_FILE:-/swap-ple.img}"
 CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
 CONFIG_OVERRIDE_CLI=""
+CONFIG_OVERRIDE_CLI_SET=0
 MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
@@ -496,7 +497,8 @@ while [[ $# -gt 0 ]]; do
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
-    --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; CONFIG_OVERRIDE_CLI="$2"; shift ;;
+    --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; [[ -n "$2" ]] || die "--config-override requires a non-empty PATH"; CONFIG_OVERRIDE_CLI="$2"; CONFIG_OVERRIDE_CLI_SET=1; shift ;;
+    --no-config-override) CONFIG_OVERRIDE_CLI=""; CONFIG_OVERRIDE_CLI_SET=1 ;;
     --list-models) LIST_MODELS=1 ;;
     --list-backends) LIST_BACKENDS=1 ;;
     --monitor) MONITOR_ENABLED_CLI=1; MONITOR_PROTECT_CLI=0 ;;
@@ -613,7 +615,7 @@ MONITOR_ENABLED="${MONITOR_ENABLED:-${MONITOR_PROTECT:-0}}"
 [[ -z "${MONITOR_MIN_SWAP_FREE_CLI}" ]] || MONITOR_MIN_SWAP_FREE_GIB="${MONITOR_MIN_SWAP_FREE_CLI}"
 [[ -z "${MONITOR_CONSECUTIVE_CLI}" ]] || MONITOR_CONSECUTIVE="${MONITOR_CONSECUTIVE_CLI}"
 [[ -z "${MONITOR_HEARTBEAT_CLI}" ]] || MONITOR_HEARTBEAT="${MONITOR_HEARTBEAT_CLI}"
-if [[ -n "${CONFIG_OVERRIDE_CLI}" ]]; then
+if [[ "${CONFIG_OVERRIDE_CLI_SET}" == 1 ]]; then
   CONFIG_OVERRIDE="${CONFIG_OVERRIDE_CLI}"
   CONFIG_OWNED=0
 fi
