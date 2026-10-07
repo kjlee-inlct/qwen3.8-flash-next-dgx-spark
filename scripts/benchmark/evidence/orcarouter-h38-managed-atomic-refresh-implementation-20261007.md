@@ -28,6 +28,11 @@ rather than weakening host-safety protection.
 - live gate executable-mode repair: `b3f91460612d46e79ca241f18156354978013049`
 - guarded gate contract test: `dd8f47b0690c24cda95dc0400096cf144102e79a`
 - atomic live-plan replacement: `76f2e83457933b38a002c4399b0dd0a70ea6d541`
+- identity-aware service stop helper: `f9f873637db9c09de137dee6835c6f9132d6661a`
+- restored-runtime adoption path: `8f4844bcfcceb68eee2cb9c33b41733cbaf70fd9`
+- cold-restart refusal / restored-root delegation: `91bf2d8f5eed323633e4fa94027a5130f4069906`
+- rollback service-ownership restoration: `283c73009f03f3c203b65658950710c086ba8439`
+- identity-safe rollback regression coverage: `40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`
 
 Later commits may advance the branch; the exact live acceptance target must always be the
 then-current PR head, not one of the intermediate SHAs above.
@@ -119,22 +124,38 @@ Recovery behavior:
   must not pretend that rollback is still symmetric;
 - protected startup stop remains a failed candidate/safety intervention and is not
   converted into PASS;
-- malformed/missing digest evidence, unsafe pointers, stale artifacts, image mismatch,
-  release-manifest drift, or ambiguous container state fail closed.
+- rollback never relies on an unconditional legacy service restart. The managed unit's
+  stop helper stops only the exact container ID covered by the current runtime
+  attestation, so a just-restored predecessor container is not accidentally stopped by
+  the failed candidate service's `ExecStop`;
+- when the predecessor container is still running, a strict one-shot
+  `runtime-adopt.env` marker lets systemd attach to that exact container ID, image,
+  model mount and served identity without replacing it. The previous release's normal
+  unit definition is then restored with `--no-start`;
+- when safety protection has left the predecessor container stopped, recovery preserves
+  that stopped state instead of cold-starting the legacy runtime merely to make systemd
+  active again;
+- malformed/missing digest evidence, unsafe pointers, stale adoption state, image
+  mismatch, release-manifest drift, or ambiguous container state fail closed.
 
 `service-runner.sh` invokes release-profile refresh startup recovery before
 profile-switch recovery and before parsing the canonical install manifest. During an
 intentional cutover the outer lifecycle lock is active and startup recovery defers.
 After interruption with no outer lock, recovery either finishes a fully proven target
-or restores the previous tuple and lets systemd retry from the restored current release.
+or restores the previous tuple. A running restored predecessor is reattached by exact
+container identity; a stopped predecessor remains stopped. The service runner also
+refuses to cold-replace an already-restored legacy container when no valid adoption
+marker is present.
 
 ## Operation lock, diagnostics, and entry points
 
 `lib/operation-lock.sh` (under `scripts/`) blocks unrelated lifecycle mutation while a
 release-profile refresh state exists, except for the trusted inherited refresh context.
 
-`scripts/doctor.sh` fails on incomplete/malformed refresh state or orphan refresh
-backup/candidate artifacts.
+`scripts/doctor.sh` fails on incomplete/malformed refresh state, orphan refresh
+backup/candidate artifacts, or a pending/malformed one-shot runtime-adoption marker.
+The global operation lock likewise blocks unrelated lifecycle mutation while adoption
+is pending.
 
 Stable entry points now include:
 
@@ -198,6 +219,10 @@ Historical failures are retained because they found real design or test-harness 
   and `runtime/` categories. The gate now uses stable top-level entry points; no
   dependency waiver was added.
 - atomic implementation/docs CI run `37604211474` on `d44e3ddd53896c7d87b533f5db315a168e65dd59`: **SUCCESS**, including **567/567 unit tests PASS** and whitespace PASS.
+- identity-safe rollback/service-adoption hardening CI run `37616889537` on
+  `40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`: **SUCCESS**. Shell syntax,
+  ShellCheck, Python compilation, the full unit-test suite, and whitespace checks all
+  passed.
 
 ## Acceptance boundary
 
@@ -206,7 +231,8 @@ No DGX H38 managed migration has been executed through this new transaction yet.
 Current classification:
 
 - atomic transaction implementation: IMPLEMENTED ON BRANCH
-- atomic implementation static/CI: PASS (`d44e3ddd53896c7d87b533f5db315a168e65dd59`, run `37604211474`)
+- atomic implementation static/CI: PASS, including identity-safe rollback hardening
+  (`40cf5f8a2d13d3b30b6ae0f71cffb4fdfdd3512b`, run `37616889537`)
 - managed H38 migration FUNCTIONAL: NOT REACHED
 - managed H38 migration HOST-STABILITY: NOT REACHED
 - managed H38 DETERMINISM: NOT REACHED
