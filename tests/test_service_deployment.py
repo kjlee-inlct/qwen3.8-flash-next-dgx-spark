@@ -278,6 +278,26 @@ class ServiceDeploymentTests(unittest.TestCase):
     def test_uninstaller_removes_only_owned_service(self) -> None:
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
         self.assertIn('if [[ "${SERVICE_OWNED}" == 1 ]]', uninstaller)
+
+    def test_uninstaller_fails_closed_on_newer_lifecycle_artifacts(self) -> None:
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        for marker in (
+            "runtime-adopt.env",
+            "release-profile-refresh-transition.env",
+            "release-profile-refresh-backup",
+            "release-profile-refresh-candidate",
+            "settings-transition.phase",
+            "settings-transition.start",
+            "settings-transition.no-start",
+            "settings-transition.previous-service-active",
+            "settings-transition.previous-container-running",
+            "settings-backup",
+            "settings-candidate",
+        ):
+            self.assertIn(marker, uninstaller)
+        self.assertIn("finish release-profile recovery before uninstalling", uninstaller)
+        self.assertIn("release-profile refresh artifacts exist without an active transaction", uninstaller)
+        self.assertIn("settings transaction or stale settings artifact exists", uninstaller)
         self.assertIn('manage-service.sh" remove --yes', uninstaller)
 
 
