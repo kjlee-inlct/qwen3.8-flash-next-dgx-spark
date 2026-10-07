@@ -504,7 +504,7 @@ and mazinb inputs through the proven H3 -> H4-all -> H5 -> H6 pipeline.
 
 | Profile | Checkpoint | Runtime image |
 |---|---|---|
-| `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-skinny-tp1:v1` (stock image + GB10 TP=1 skinny-GEMM patch) |
+| `orcarouter` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` | candidate managed default: locally built `vllm-orcarouter-v029-h38-decoder-scope:v1`; existing pre-H38 manifests remain explicitly migratable from `vllm-skinny-tp1:v1` |
 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | locally built `vllm-nv-mixed:v2` with the required patches |
 | `mazinb` | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | locally built `vllm-orcarouter-v029:v1` with PLE mmap + exact-QSA v0.29 path |
 | `orcarouter-hybrid` | generated H6: OrcaRouter + mazinb -> ModelOpt `W4A16_NVFP4` | `vllm-orcarouter-v029:v1`, with H6 parent mounts + PLE mmap + exact QSA |
@@ -571,12 +571,14 @@ mazinb again. Clean hosts still download both pinned sources because no reusable
 exists yet.
 
 
-> **H38 runtime status:** the validated OrcaRouter H38 decoder-only production profile lives
-> in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. The transactional
-> `install.sh` / systemd-managed `scripts/serve.sh` path has **not yet been migrated** to
-> that H38 image/profile. Until that integration is separately qualified, “H38 production”
-> means the validated v0.29 runtime profile, not the installer-managed service default. See
-> `docs/H38-DETERMINISM.md`.
+> **H38 runtime status:** the validated OrcaRouter H38 decoder-only runtime lives
+> in `scripts/runtime/orcarouter-v029.sh` as `hybrid-h38-deterministic`. This feature
+> branch implements the corresponding candidate image/runtime controls for the transactional
+> `orcarouter` installer/systemd path, but managed-service qualification is still pending.
+> Existing installs first update the immutable release while retaining their legacy image,
+> then use `--refresh-profile-defaults` for the explicit H38 manifest/runtime migration.
+> Do not call the managed H38 path production until the acceptance plan in
+> `scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md` passes.
 
 When defaults for the *same* installed profile change (for example OrcaRouter moving from
 the stock image to the GB10 TP=1 skinny-GEMM image), existing manifests deliberately keep
@@ -671,16 +673,16 @@ warning means the layout needs review but does not prove incompatibility. In par
 do not apply `patch-nv-mixed.py` merely because a checkpoint is named NVFP4: that patch is
 specific to NVIDIA's `MIXED_PRECISION` PLE and block-FP8 MTP layout.
 
-The OrcaRouter TP=1 managed default keeps the conservative runtime settings and builds
-`vllm-skinny-tp1:v1`: the published Qwen3.8 image plus only the GB10/TP=1 skinny-GEMM
-enablement patch. It does **not** include `patch-nv-mixed.py`; NVIDIA's mixed-precision
-PLE/MTP compatibility changes remain isolated to the NVIDIA profile. The managed OrcaRouter
-profile keeps PLE CPU offload, the `mp` executor, native 262144 context, a 16 GiB pinned KV
-resilience default, MTP `k=2`, disabled prefix cache, disabled FlashInfer autotune, and
-disabled async scheduling. The same skinny-GEMM path improved step rate on the earlier
-compatible Flash-Next checkpoint, but the exact OrcaRouter checkpoint must still be
-benchmarked after install; do not treat the historical percentage as an OrcaRouter
-measurement.
+The candidate OrcaRouter managed default builds
+`vllm-orcarouter-v029-h38-decoder-scope:v1` from the pinned v0.29 -> H9 -> H10 ->
+H11 -> H12 -> H38 chain. NVIDIA's `patch-nv-mixed.py` remains isolated to the
+NVIDIA profile. When the installation manifest selects the H38 image, managed
+OrcaRouter uses PLE mmap, exact QSA, decoder-only Marlin canonical ordering, native
+262144 context, the retained 16 GiB KV resilience default, MTP `k=2`, disabled
+prefix cache, disabled FlashInfer autotune, and an isolated H38 compile-cache
+namespace. A legacy `vllm-skinny-tp1:v1` manifest still uses its pre-H38 controls
+until an explicit `--refresh-profile-defaults` migration. Performance on the managed
+H38 path remains an acceptance gate, not an assumed improvement.
 
 ### Manage the dedicated PLE swap
 
