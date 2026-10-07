@@ -11,6 +11,7 @@ The following files are parsed by the strict state parser (`scripts/lib/state_fi
 - `~/.local/state/qwen38-spark/runtime-stop.env`
 - `~/.local/state/qwen38-spark/runtime-commit.env`
 - `~/.local/state/qwen38-spark/profile-switch-transition.env`
+- `~/.local/state/qwen38-spark/release-profile-refresh-transition.env`
 - `~/.local/share/qwen38-spark/qualified/<release>.env`
 
 The parser uses a schema-specific key whitelist and rejects unknown, duplicate, missing, or malformed keys and values. Bash consumers receive validated key/value pairs through a NUL-delimited stream and assign only whitelisted variable names with `printf -v`.
@@ -18,6 +19,8 @@ The parser uses a schema-specific key whitelist and rejects unknown, duplicate, 
 `runtime-transition.env` is parsed with the dedicated `runtime-transition` schema before rollback/recovery decisions are made. It binds the transaction phase, canonical/rollback container names, whether a previous runtime existed, and the update timestamp. The runtime transition helper never sources this file; malformed state fails closed.
 
 `profile-switch-transition.env` is parsed with the dedicated `profile-switch` schema. It binds the source/target profiles, phase, backup/candidate manifest paths, their recorded digests, and update timestamp. The profile-switch helper never sources this file; malformed or ambiguous state fails closed.
+
+`release-profile-refresh-transition.env` is parsed with the dedicated `release-profile-refresh` schema. It binds the exact target/previous immutable release IDs, qualified release-manifest digest, backup/candidate install-manifest paths and digests, same-profile marker, old/target image identity, served-model identity, transaction phase, and update timestamp. It is the sole recovery owner for the atomic cross-release OrcaRouter H38 refresh.
 
 ## Runtime commit attestation
 
@@ -33,6 +36,7 @@ The locking scope covers:
 - `scripts/update-release.sh` for non-dry-run cutover;
 - `scripts/lifecycle/update-transition.sh` actions `prepare`, `commit`, `rollback`, and `recover`;
 - `scripts/lifecycle/profile-switch-transition.sh` actions `prepare`, `activate`, `runtime-committed`, `commit`, `rollback`, `recover`, and service-startup recovery when it is not deferred by an existing outer lock;
+- `scripts/lifecycle/release-profile-refresh-transition.sh` atomic apply/recover operations, including target release qualification, H38 asset preparation, release+manifest activation, managed runtime validation, and symmetric rollback;
 - `scripts/release-manager.sh` actions `stage`, `activate`, `discard`, and `rollback`;
 - `scripts/lifecycle/bootstrap-release.sh`;
 - `scripts/manage-service.sh` actions `create` and `remove`;
@@ -54,6 +58,7 @@ Read-only `status`/`verify` paths and all supported dry-runs remain unlocked. No
 - `uninstall.sh` uses `install-uninstall`, validating and emitting only resource paths, ownership flags, container name, configuration path, and UI language needed to decide cleanup actions;
 - `install.sh` resume/migration uses `install-maintenance`, validating the closed installer field set while preserving schema-2/3/4 compatibility and emitting only keys actually present in the existing manifest;
 - `profile-switch-transition.sh` parses the live, backup, and candidate install manifests with strict maintenance/runtime views before it activates, commits, restores, or recovers a switch.
+- `release-profile-refresh-transition.sh` strictly parses the current/backup/candidate install manifests and couples them to the recorded immutable release IDs and manifest digests before activation, commit, or recovery.
 
 During a managed profile switch, `install.env.profile-switch-candidate` and `install.env.profile-switch-backup` are install-manifest data files, not shell state. The candidate is prepared and strictly validated before activation; the backup is validated before rollback. Their paths and digests are bound by `profile-switch-transition.env`, and orphan candidate/backup files without matching transition state are treated as an ambiguous recovery condition rather than silently adopted.
 
@@ -87,6 +92,8 @@ bash ./scripts/runtime-transition.sh recover
 bash ./scripts/profile-switch-transition.sh status
 bash ./scripts/profile-switch-transition.sh recover
 bash ./scripts/profile-switch-transition.sh rollback
+bash ./scripts/release-profile-refresh-transition.sh status
+bash ./scripts/release-profile-refresh-transition.sh recover
 ```
 
 For an interrupted profile switch, inspect/recover the profile-switch transaction before manually changing containers or install manifests. Recovery either proves and commits the target, proves and restores the previous profile, or leaves the persisted state intact and fails closed when neither side can be proven.
