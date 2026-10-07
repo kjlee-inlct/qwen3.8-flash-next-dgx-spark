@@ -149,3 +149,18 @@ The validator is now an explicit `if ! python3 ... <<'PY' ... PY; then fail; fi`
 structure. The runner also tracks `IDENTITY_VALIDATED=1` only after the proof
 succeeds, records it in evidence, and requires it for `VALID_CLEAN`. Static tests
 reject the malformed `<<'PY' ||` pattern.
+
+
+### Attempt 03 diagnostic timing retained
+
+Although attempt 03 is formally harness-invalid because exact Docker identity was not
+attested, its runtime/kernel chronology is retained as non-gating diagnostic evidence.
+The launched candidate reported `SPEC=none`, completed 18/18 main-model shards, then
+recorded four strict RM `_memdescAllocInternal / NV_ERR_NO_MEMORY` events beginning
+about two seconds after the weight-loader completion marker. The first protected-monitor
+count followed the first RM OOM rather than preceding it, and the candidate was stopped
+at protect 5/5 with about 35 GiB non-CMA available still reclaimable.
+
+This is materially different from the first atomic H38 run, where protection intervened
+with no strict RM event in the measured window. It weakens MTP-only causation but remains
+non-canonical until the corrected runner proves `identity_validated=1`.

@@ -189,6 +189,15 @@ invalid regardless of any later runtime outcome. The validator is now explicit
 persisted successful identity proof. Strict RM kernel evidence remains the classification
 source of truth.
 
+Attempt 03 also retained a useful non-gating diagnostic sequence: the launched
+candidate reported `SPEC=none`, completed all 18 main checkpoint shards, and then
+recorded four strict RM `_memdescAllocInternal / NV_ERR_NO_MEMORY` events. The first
+RM event occurred before the monitor's first counted protection sample; protection
+stopped the candidate only afterward. This materially weakens MTP materialization as
+the sole cause and distinguishes this run from the earlier no-RM monitor-heuristic
+collision. Because exact identity was not attested, one corrected rerun is still
+required before rejecting MTP causation formally.
+
 ## Historical evidence semantics
 
 Dated evidence files are intentionally historical. Preserve their measured facts and

@@ -74,3 +74,72 @@ In addition, the runner now:
 
 Any runtime or protection observation from this attempt may be retained only as
 diagnostic context, not as managed-H38 acceptance evidence.
+
+
+## Retained diagnostic observations from the invalid run
+
+The identity-attestation defect prevents this run from becoming a formal discriminator
+result, but the observed runtime/kernel sequence is still useful diagnostic evidence.
+
+The isolated candidate reported:
+
+```text
+started qwen38-h38-mtp-none
+profile=orcarouter
+executor=mp
+PLE=mmap
+SPEC=none
+qsa_exact_topk=1
+maxlen=262144
+util=0.80
+```
+
+Checkpoint loading completed all 18 main-model shards. Relevant chronology:
+
+```text
+07:56:00.656  Loading weights took 493.49 seconds
+07:56:02.678  NV_ERR_NO_MEMORY from _memdescAllocInternal
+07:56:02.701  NV_ERR_NO_MEMORY from _memdescAllocInternal
+07:56:02.710  NV_ERR_NO_MEMORY from _memdescAllocInternal
+07:56:03       monitor protect=1/5
+07:56:04.554  NV_ERR_NO_MEMORY from _memdescAllocInternal
+07:56:11       monitor protect=5/5 -> PROTECT stop
+07:56:13.243  Model loading took 71.72 GiB memory and 509.775746 seconds
+```
+
+The monitor remained healthy through most of the 18-shard load. Immediately before
+the stop, non-CMA available remained about 35 GiB, non-CMA free was about 1.3-1.5 GiB,
+and swap growth was 501 MiB. The strict RM failures therefore preceded the protective
+stop. In this invalid run, protection was not the first event that prevented an
+otherwise clean startup.
+
+The runner summary observed:
+
+```text
+api_ready=0
+oom_killed=false
+kernel_window_rc=0
+rm_oom_count=4
+protected_stop=1
+result=FUNCTIONAL_NOT_REACHED_HOST_FAIL
+```
+
+Because `IDENTITY_VALIDATED` did not exist in this runner revision and the validator
+itself was malformed, these fields remain diagnostic observations only and are not
+promoted to a formal MTP-discriminator classification.
+
+### Diagnostic interpretation
+
+This materially weakens the hypothesis that MTP materialization is the sole cause of
+the H38 startup RM event:
+
+- the launched command reported `SPEC=none`;
+- all 18 main checkpoint shards completed;
+- no MTP/speculator initialization marker was observed;
+- strict RM `_memdescAllocInternal / NV_ERR_NO_MEMORY` appeared immediately after
+  main weight loading and before the protection counter began accumulating.
+
+The corrected identity-attested rerun remains required. If it reproduces strict RM OOM
+with `identity_validated=1`, MTP-only causation is rejected and investigation should
+return to the H38 core/main-model startup allocation path rather than monitor tuning or
+MTP materialization.
