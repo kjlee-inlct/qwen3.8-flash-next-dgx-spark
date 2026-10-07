@@ -41,10 +41,10 @@ class H38ManagedIntegrationTests(unittest.TestCase):
             "vllm-orcarouter-v029-h10-ct-global-scale:v1",
             "vllm-orcarouter-v029-h11-ct-packed-modelweight:v1",
             "vllm-orcarouter-v029-h12-ct-postload-preserve:v1",
-            "vllm-orcarouter-v029-h38-decoder-scope:v1",
         ]
-        positions = [text.index(image) for image in chain]
+        positions = [text.index(f'build_stage "{image}"') for image in chain]
         self.assertEqual(positions, sorted(positions))
+        self.assertIn('build_stage "${TARGET_IMAGE}" "Dockerfile.v029-h38-decoder-scope"', text)
         self.assertIn('EXPECTED_SCOPE="decoder-v1"', text)
         self.assertIn("qwen38.h38scope", text)
 
