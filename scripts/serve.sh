@@ -30,21 +30,25 @@ case "${MODEL_PROFILE}" in
     IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029-h38-decoder-scope:v1}"
     MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
-    # Keep the promoted 16 GiB managed resilience setting while moving the runtime
-    # implementation to the H38 decoder-only deterministic v0.29 path.
     # 2026-10-03 adverse-state controlled A/B: 16 GiB passed strict readiness/soak/host checks;
     # 24 GiB reproduced repeated RM NV_ERR_NO_MEMORY events and a five-sample protected stop.
-    DEFAULT_GPU_UTIL=0.80; DEFAULT_KV_MEM=17179869184; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
-    DEFAULT_QSA_EXACT_TOPK=1
-    PLE_MODE=mmap
-    KV_MEMORY_FLAG=--kv-cache-memory-bytes
-    VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
-    FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
-    RUNTIME_ENV=(
-      -e QWEN38_MARLIN_CANONICAL_ORDER=1
-      -e QWEN38_MARLIN_CANONICAL_SCOPE=decoder
-      -e VLLM_CACHE_ROOT=/root/.cache/vllm/h38-marlin-canonical-decoder-managed-v1
-    )
+    DEFAULT_GPU_UTIL=0.85; DEFAULT_KV_MEM=17179869184; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    # An immutable code update must remain compatible with the pre-H38 install
+    # manifest long enough for --refresh-profile-defaults to perform the explicit
+    # image migration. Only the H38 image selects the v0.29 deterministic controls.
+    if [[ "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]; then
+      DEFAULT_GPU_UTIL=0.80
+      DEFAULT_QSA_EXACT_TOPK=1
+      PLE_MODE=mmap
+      KV_MEMORY_FLAG=--kv-cache-memory-bytes
+      VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
+      FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
+      RUNTIME_ENV=(
+        -e QWEN38_MARLIN_CANONICAL_ORDER=1
+        -e QWEN38_MARLIN_CANONICAL_SCOPE=decoder
+        -e VLLM_CACHE_ROOT=/root/.cache/vllm/h38-marlin-canonical-decoder-managed-v1
+      )
+    fi
     SERVED_NAME="${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   nvidia)
