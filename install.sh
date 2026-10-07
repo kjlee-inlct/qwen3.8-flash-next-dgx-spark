@@ -5,6 +5,10 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/model-profiles.sh
 source "${ROOT_DIR}/scripts/model-profiles.sh"
+PROFILE_MANAGER="${ROOT_DIR}/scripts/model/profile-manager.sh"
+[[ -r "${PROFILE_MANAGER}" ]] || { printf 'ERROR: profile manager helper missing: %s\n' "${PROFILE_MANAGER}" >&2; exit 1; }
+# shellcheck source=scripts/model/profile-manager.sh
+source "${PROFILE_MANAGER}"
 BACKEND_REGISTRY="${ROOT_DIR}/scripts/backend/backends.sh"
 # shellcheck source=scripts/backend/backends.sh
 source "${BACKEND_REGISTRY}"
@@ -386,14 +390,22 @@ restore_profile_switch_manifest_on_exit() {
 
 wizard_choose_model_profile() {
   local current_profile="${1:-}" mode="${2:-fresh}" default_choice=1 answer
-  local orcarouter_detail nvidia_detail mazinb_detail hybrid_detail
+  local profile detail selected="" candidate cancel_choice index
+  local -a profiles=()
 
-  case "${current_profile}" in
-    nvidia) default_choice=2 ;;
-    mazinb) default_choice=3 ;;
-    orcarouter-hybrid) default_choice=4 ;;
-    *) default_choice=1 ;;
-  esac
+  mapfile -t profiles < <(list_model_profiles)
+  [[ "${#profiles[@]}" -gt 0 ]] || die 'model profile registry has no installable profiles'
+
+  for index in "${!profiles[@]}"; do
+    profile="${profiles[${index}]}"
+    describe_model_profile "${profile}" || die "invalid model profile registry entry: ${profile}"
+    [[ "${PROFILE_INSTALLABLE}" == 1 ]] || die "installable profile list contains non-installable entry: ${profile}"
+    if [[ -n "${current_profile}" && "${profile}" == "${current_profile}" ]]; then
+      default_choice=$((index + 1))
+    elif [[ -z "${current_profile}" && "${PROFILE_DEFAULT}" == 1 ]]; then
+      default_choice=$((index + 1))
+    fi
+  done
 
   if [[ "${UI_LANG}" == ko ]]; then
     if [[ "${mode}" == existing ]]; then
@@ -402,10 +414,6 @@ wizard_choose_model_profile() {
     else
       wizard_step 2 6 '모델 선택'
     fi
-    orcarouter_detail='Stable / 기본 프로필 / NVFP4'
-    nvidia_detail='Experimental / NVIDIA 비교 프로필'
-    mazinb_detail='Experimental / BF16 PLE + NVFP4 experts'
-    hybrid_detail='Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
   else
     if [[ "${mode}" == existing ]]; then
       wizard_step 1 1 'Model selection'
@@ -413,38 +421,48 @@ wizard_choose_model_profile() {
     else
       wizard_step 2 6 'Model selection'
     fi
-    orcarouter_detail='Stable / default profile / NVFP4'
-    nvidia_detail='Experimental / NVIDIA comparison profile'
-    mazinb_detail='Experimental / BF16 PLE + NVFP4 experts'
-    hybrid_detail='Experimental / OrcaRouter + mazinb experts / W4A16 NVFP4'
   fi
 
-  [[ "${current_profile}" != orcarouter ]] || orcarouter_detail+=" / Active"
-  [[ "${current_profile}" != nvidia ]] || nvidia_detail+=" / Active"
-  [[ "${current_profile}" != mazinb ]] || mazinb_detail+=" / Active"
-  [[ "${current_profile}" != orcarouter-hybrid ]] || hybrid_detail+=" / Active"
+  for index in "${!profiles[@]}"; do
+    profile="${profiles[${index}]}"
+    profile_manager_load "${profile}" "${current_profile}" || die "cannot load profile manager entry: ${profile}"
+    detail="$(profile_manager_loaded_detail)"
+    wizard_menu_option "$((index + 1))" "${PM_DISPLAY_NAME}" "${detail}"
+  done
 
-  wizard_menu_option 1 'OrcaRouter Uncensored' "${orcarouter_detail}"
-  wizard_menu_option 2 'NVIDIA Official NVFP4' "${nvidia_detail}"
-  wizard_menu_option 3 'mazinb NVFP4' "${mazinb_detail}"
-  wizard_menu_option 4 'OrcaRouter Hybrid H6' "${hybrid_detail}"
+  while IFS= read -r candidate; do
+    [[ -n "${candidate}" ]] || continue
+    profile_manager_load "${candidate}" "${current_profile}" || die "cannot load profile candidate: ${candidate}"
+    detail="$(profile_manager_loaded_detail)"
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_info "선택 불가: ${PM_DISPLAY_NAME} — ${detail}"
+    else
+      wizard_info "Not selectable: ${PM_DISPLAY_NAME} — ${detail}"
+    fi
+  done < <(list_model_candidates)
+
+  cancel_choice=$(("${#profiles[@]}" + 1))
   if [[ "${mode}" == existing ]]; then
-    [[ "${UI_LANG}" == ko ]] && wizard_menu_option 5 '취소' || wizard_menu_option 5 'Cancel'
+    [[ "${UI_LANG}" == ko ]] && wizard_menu_option "${cancel_choice}" '취소' || wizard_menu_option "${cancel_choice}" 'Cancel'
   fi
   [[ "${UI_LANG}" == ko ]] && wizard_input answer '선택' "${default_choice}" || wizard_input answer 'Select' "${default_choice}"
 
-  case "${answer}" in
-    1|orcarouter) MODEL_PROFILE=orcarouter ;;
-    2|nvidia) MODEL_PROFILE=nvidia ;;
-    3|mazinb) MODEL_PROFILE=mazinb ;;
-    4|orcarouter-hybrid) MODEL_PROFILE=orcarouter-hybrid ;;
-    5)
-      [[ "${mode}" == existing ]] || die "invalid model selection"
+  if [[ "${answer}" =~ ^[0-9]+$ ]]; then
+    if [[ "${mode}" == existing && "${answer}" -eq "${cancel_choice}" ]]; then
       [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
       exit 0
-      ;;
-    *) die "invalid model selection" ;;
-  esac
+    fi
+    if (( answer >= 1 && answer <= ${#profiles[@]} )); then
+      selected="${profiles[answer - 1]}"
+    fi
+  else
+    for profile in "${profiles[@]}"; do
+      [[ "${answer}" != "${profile}" ]] || selected="${profile}"
+    done
+  fi
+
+  [[ -n "${selected}" ]] || die "invalid model selection"
+  MODEL_PROFILE="${selected}"
 }
 
 usage() {
@@ -500,7 +518,14 @@ done
 
 if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
   if [[ "${LIST_MODELS}" == 1 ]]; then
-    print_model_profiles
+    profile_manager_active=""
+    if [[ -r "${STATE_FILE}" && -r "${STATE_PARSER}" ]]; then
+      profile_manager_phase="$(read_manifest_phase 2>/dev/null || true)"
+      if [[ "${profile_manager_phase}" == complete ]]; then
+        profile_manager_active="$(read_manifest_profile 2>/dev/null || true)"
+      fi
+    fi
+    print_profile_manager "${profile_manager_active}"
   fi
   if [[ "${LIST_MODELS}" == 1 && "${LIST_BACKENDS}" == 1 ]]; then
     printf '\n'
