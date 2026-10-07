@@ -77,7 +77,11 @@ managed predecessor in its original stopped state. It does not call `install.sh`
 - whitespace: PASS.
 
 The static gate proves the isolated discriminator contract only. It does not advance
-managed-H38 FUNCTIONAL or HOST-STABILITY acceptance.
+managed-H38 FUNCTIONAL or HOST-STABILITY acceptance. Before live execution, the runner
+was additionally hardened so its post-start Docker identity proof rejects legacy CPU
+offload and requires the matched H38 command shape: GPU utilization 0.80, 8192 max
+batched tokens, prefix caching off, FlashInfer autotune off, chunked prefill on, and
+async scheduling off. This keeps the intended live delta limited to removal of MTP.
 
 ## Classification
 

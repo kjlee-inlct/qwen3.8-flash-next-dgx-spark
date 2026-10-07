@@ -33,6 +33,12 @@ class H38MtpStartupDiscriminatorTests(unittest.TestCase):
         self.assertIn("QWEN38_MARLIN_CANONICAL_ORDER=1", text)
         self.assertIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", text)
         self.assertIn('if "--speculative-config" in cmd:', text)
+        self.assertIn('if "VLLM_PLE_CPU_OFFLOAD=1" in env:', text)
+        self.assertIn('value("--gpu-memory-utilization") != "0.80"', text)
+        self.assertIn('value("--max-num-batched-tokens") != "8192"', text)
+        self.assertIn('"--no-enable-prefix-caching"', text)
+        self.assertIn('"--no-enable-flashinfer-autotune"', text)
+        self.assertIn('"--no-async-scheduling"', text)
 
     def test_runner_preserves_protection_policy(self) -> None:
         text = RUNNER.read_text(encoding="utf-8")

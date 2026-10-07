@@ -501,6 +501,8 @@ required = {
 missing = sorted(required - env)
 if missing:
     raise SystemExit(f"missing env: {missing}")
+if "VLLM_PLE_CPU_OFFLOAD=1" in env:
+    raise SystemExit("legacy CPU offload unexpectedly enabled")
 
 cmd = obj["Config"].get("Cmd") or []
 if "--speculative-config" in cmd:
@@ -520,6 +522,18 @@ if value("--max-model-len") != "262144":
     raise SystemExit("max model length mismatch")
 if value("--max-num-seqs") != "3":
     raise SystemExit("max sequences mismatch")
+if value("--gpu-memory-utilization") != "0.80":
+    raise SystemExit("GPU utilization mismatch")
+if value("--max-num-batched-tokens") != "8192":
+    raise SystemExit("max batched tokens mismatch")
+for required_flag in (
+    "--no-enable-prefix-caching",
+    "--no-enable-flashinfer-autotune",
+    "--enable-chunked-prefill",
+    "--no-async-scheduling",
+):
+    if required_flag not in cmd:
+        raise SystemExit(f"missing runtime flag: {required_flag}")
 
 mounts = {
     mount["Destination"]: os.path.realpath(mount["Source"])
