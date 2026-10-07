@@ -187,7 +187,7 @@ assert_post_protection_baseline() {
   bash "${RELEASE_MANAGER}" verify "${CURRENT_RELEASE}" >/dev/null ||
     fail "restored current release failed manifest verification: ${CURRENT_RELEASE}"
 
-  # INSTALL_ROOT records the repository root from which install.sh wrote the
+  # INSTALL_ROOT records the repository root from which the installer wrote the
   # canonical manifest. It is not the immutable runtime pointer. A failed
   # release-profile refresh intentionally restores the exact predecessor
   # manifest, so this can legitimately be the operator checkout while
@@ -195,7 +195,7 @@ assert_post_protection_baseline() {
   restored_install_root="$(realpath -e -- "${INSTALL_ROOT}" 2>/dev/null || true)"
   [[ -n "${restored_install_root}" && -d "${restored_install_root}" ]] ||
     fail "restored manifest INSTALL_ROOT is unavailable: ${INSTALL_ROOT}"
-  [[ -r "${restored_install_root}/install.sh" &&
+  [[ -r "${restored_install_root}/scripts/model-profiles.sh" &&
      -r "${restored_install_root}/scripts/release-manager.sh" ]] ||
     fail "restored manifest INSTALL_ROOT is not a repository root: ${restored_install_root}"
 
