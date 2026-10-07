@@ -497,7 +497,7 @@ verify_previous_runtime_restored() {
   container_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null || true)"
   [[ -n "${container_id}" && "${container_id}" == "${OLD_CONTAINER_ID}" ]] ||
     die "restored previous runtime container ID mismatch: expected=${OLD_CONTAINER_ID} observed=${container_id:-missing}"
-  image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)
+  image="$(docker inspect --format '{{.Config.Image}}' qwen38-flash-next 2>/dev/null || true)"
   [[ "${image}" == "${OLD_IMAGE}" ]] || die "previous runtime cannot be proven after rollback: expected=${OLD_IMAGE} observed=${image:-missing}"
   oom="$(docker inspect --format '{{.State.OOMKilled}}' qwen38-flash-next 2>/dev/null || true)"
   [[ "${oom}" == false ]] || die 'restored previous runtime is OOMKilled'
