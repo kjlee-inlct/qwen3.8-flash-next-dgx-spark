@@ -30,6 +30,7 @@ DOCTOR="${ROOT}/scripts/doctor.sh"
 MANAGE_SERVICE="${ROOT}/scripts/manage-service.sh"
 BENCHMARK="${ROOT}/scripts/benchmark/run.py"
 DET_GATE="${ROOT}/scripts/benchmark/run-h38-production-gate.sh"
+OPERATION_LOCK_LIB="${ROOT}/scripts/lib/operation-lock.sh"
 
 SETTINGS_PHASE_FILE="${STATE_HOME}/settings-transition.phase"
 SETTINGS_START_FILE="${STATE_HOME}/settings-transition.start"
@@ -105,6 +106,15 @@ load_install() {
   parse_state install-maintenance "$1" "$2"
 }
 
+sudo_with_operation_lock() {
+  sudo -n env \
+    QWEN38_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}" \
+    QWEN38_OPERATION_LOCK_HELD="${QWEN38_OPERATION_LOCK_HELD}" \
+    QWEN38_OPERATION_LOCK_FILE="${QWEN38_OPERATION_LOCK_FILE}" \
+    QWEN38_OPERATION_LOCK_OWNER_PID="${QWEN38_OPERATION_LOCK_OWNER_PID}" \
+    "$@"
+}
+
 assert_idle() {
   grep -qx 'UPDATE_STATE=idle' < <(bash "${UPDATE_TRANSITION}" status) ||
     fail 'update transition is not idle'
@@ -169,14 +179,16 @@ assert_h38_runtime() {
   done
 
   docker inspect --format '{{json .Config.Cmd}}' "${CONTAINER}" >"${OUT}/h38-cmd-current.json"
-  python3 - "${OUT}/h38-cmd-current.json" <<'PY' ||
+  if ! python3 - "${OUT}/h38-cmd-current.json" <<'PY'
 import json
 import sys
 cmd = json.load(open(sys.argv[1], encoding="utf-8"))
 idx = cmd.index("--kv-cache-memory-bytes")
 raise SystemExit(0 if idx + 1 < len(cmd) and cmd[idx + 1] == "17179869184" else 1)
 PY
-  [[ "$?" == 0 ]] || fail 'managed H38 runtime does not pin the expected 16 GiB KV cache'
+  then
+    fail 'managed H38 runtime does not pin the expected 16 GiB KV cache'
+  fi
 
   [[ -f "${RUNTIME_COMMIT_FILE}" && ! -L "${RUNTIME_COMMIT_FILE}" ]] ||
     fail 'runtime commit attestation is missing'
@@ -338,6 +350,10 @@ ACTUAL_SHA="$(git -C "${ROOT}" rev-parse HEAD)"
   fail 'working tree is dirty; preserve local changes before live acceptance'
 sudo -n true >/dev/null 2>&1 ||
   fail 'sudo timestamp unavailable; run sudo -v before this gate'
+[[ -r "${OPERATION_LOCK_LIB}" ]] ||
+  fail "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
+# shellcheck source=scripts/lib/operation-lock.sh
+source "${OPERATION_LOCK_LIB}"
 
 migration_target="$(cat "${MIGRATION_EVIDENCE}/target-sha.txt" 2>/dev/null || true)"
 [[ "${migration_target}" == "${TARGET_SHA}" ]] ||
@@ -363,6 +379,8 @@ PY
 mkdir -p -- "${OUT}"
 OUT_READY=1
 exec > >(tee -a "${OUT}/run.log") 2>&1
+
+acquire_operation_lock "${STATE_HOME}" "managed H38 follow-up acceptance" || exit $?
 
 printf '%s\n' "${TARGET_SHA}" >"${OUT}/target-sha.txt"
 printf '%s\n' "${MIGRATION_EVIDENCE}" >"${OUT}/migration-evidence-path.txt"
@@ -434,7 +452,7 @@ PERFORMANCE="PASS"
 
 printf '\n===== managed H38 service replacement / restart =====\n'
 set +e
-sudo -n bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes   >"${OUT}/restart.log" 2>&1
+sudo_with_operation_lock bash "${MANAGE_SERVICE}" create --runtime-root "${CURRENT_LINK}" --start --yes   >"${OUT}/restart.log" 2>&1
 restart_rc=$?
 set -e
 cat "${OUT}/restart.log"
