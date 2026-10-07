@@ -84,6 +84,13 @@ class H38MtpStartupDiscriminatorTests(unittest.TestCase):
             text,
         )
         self.assertIn("stale rollback container exists", text)
+        self.assertIn('verify "${CURRENT_RELEASE}"', text)
+        self.assertIn("manifest-install-root.txt", text)
+        self.assertIn("current-release-root.txt", text)
+        self.assertNotIn(
+            "install root does not match restored current release",
+            text,
+        )
 
 
 if __name__ == "__main__":

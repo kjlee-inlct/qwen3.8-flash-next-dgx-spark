@@ -171,10 +171,15 @@ A/B keeps the protective monitor and H38 runtime identity unchanged but disables
 speculative MTP only (`SPEC=none`) to test whether the later MTP materialization is what
 crosses the protection boundary. The runner requires the recovered managed predecessor
 to remain stopped, so it does not cold-start the legacy runtime merely to establish an
-experiment baseline. This is a mechanism discriminator, not a production configuration. The isolated runner
-passed static CI on `3d4eadcf2ce60c55b600d9e3ecd4143d061355de` in run
-`37633676272` with **587/587 tests**; no live SPEC=none result has been recorded yet.
-Strict RM kernel evidence remains the classification source of truth.
+experiment baseline. This is a mechanism discriminator, not a production configuration. The isolated runner passed static CI on
+`3d4eadcf2ce60c55b600d9e3ecd4143d061355de` in run `37633676272` with
+**587/587 tests**. The first 2026-10-08 operator invocation was setup-invalid before
+candidate start because the harness incorrectly equated manifest `INSTALL_ROOT` with
+the immutable current-release root. The installer records the source repository root in
+`INSTALL_ROOT`; immutable runtime identity is the separate verified release pointer.
+The harness was corrected without changing runtime or protection policy. No live
+SPEC=none result has yet been recorded. Strict RM kernel evidence remains the
+classification source of truth.
 
 ## Historical evidence semantics
 

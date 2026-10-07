@@ -83,6 +83,17 @@ offload and requires the matched H38 command shape: GPU utilization 0.80, 8192 m
 batched tokens, prefix caching off, FlashInfer autotune off, chunked prefill on, and
 async scheduling off. This keeps the intended live delta limited to removal of MTP.
 
+The first operator invocation on 2026-10-08 was **SETUP INVALID / NO CANDIDATE START**.
+The recovered predecessor and all lifecycle states were correct, but the harness
+incorrectly required manifest `INSTALL_ROOT` to equal the immutable current-release
+directory. The installer contract writes `INSTALL_ROOT` as the repository root from
+which `install.sh` runs, while the immutable runtime identity is separately represented
+by the verified `current` release pointer. Failed atomic refresh recovery correctly
+restored that predecessor manifest, so the checkout-root value was expected. The runner
+was fixed to verify the immutable current release independently and only require the
+restored manifest install root to be a valid repository root. No runtime/container
+mutation occurred in this invalid attempt.
+
 ## Classification
 
 - `VALID_CLEAN`: SPEC=none reaches exact model READY, Docker OOM is false,

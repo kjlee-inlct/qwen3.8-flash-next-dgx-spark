@@ -184,8 +184,20 @@ assert_post_protection_baseline() {
   CURRENT_ROOT="$(readlink -f -- "${CURRENT_LINK}")"
   [[ "${CURRENT_ROOT}" == "${DATA_HOME}/releases/${CURRENT_RELEASE}" ]] ||
     fail "current release pointer mismatch: ${CURRENT_ROOT}"
-  [[ "$(realpath -m -- "${INSTALL_ROOT}")" == "${CURRENT_ROOT}" ]] ||
-    fail "install root does not match restored current release: ${INSTALL_ROOT}"
+  bash "${RELEASE_MANAGER}" verify "${CURRENT_RELEASE}" >/dev/null ||
+    fail "restored current release failed manifest verification: ${CURRENT_RELEASE}"
+
+  # INSTALL_ROOT records the repository root from which install.sh wrote the
+  # canonical manifest. It is not the immutable runtime pointer. A failed
+  # release-profile refresh intentionally restores the exact predecessor
+  # manifest, so this can legitimately be the operator checkout while
+  # CURRENT_LINK points at the verified immutable predecessor release.
+  restored_install_root="$(realpath -e -- "${INSTALL_ROOT}" 2>/dev/null || true)"
+  [[ -n "${restored_install_root}" && -d "${restored_install_root}" ]] ||
+    fail "restored manifest INSTALL_ROOT is unavailable: ${INSTALL_ROOT}"
+  [[ -r "${restored_install_root}/install.sh" &&
+     -r "${restored_install_root}/scripts/release-manager.sh" ]] ||
+    fail "restored manifest INSTALL_ROOT is not a repository root: ${restored_install_root}"
 
   if systemctl is-active --quiet "${UNIT}"; then
     fail 'managed service is active; this discriminator requires the preserved stopped post-protection state'
@@ -418,6 +430,8 @@ SUDO_KEEPALIVE_PID=$!
 
 printf '%s\n' "${TARGET_SHA}" >"${OUT}/target-sha.txt"
 printf '%s\n' "${CURRENT_RELEASE}" >"${OUT}/current-release.txt"
+printf '%s\n' "${CURRENT_ROOT}" >"${OUT}/current-release-root.txt"
+printf '%s\n' "${INSTALL_ROOT}" >"${OUT}/manifest-install-root.txt"
 printf '%s\n' "${MANAGED_CONTAINER_ID}" >"${OUT}/managed-container-id-before.txt"
 printf '%s\n' "${MODEL_DIR}" >"${OUT}/model-dir.txt"
 printf '%s\n' "${MODEL}" >"${OUT}/served-model.txt"
