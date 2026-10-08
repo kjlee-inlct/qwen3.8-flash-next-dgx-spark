@@ -32,7 +32,7 @@ Tests: `tests/test_h38_allocator_protection_discriminator.py`
 
 Evidence directory is generated automatically under `/tmp/orcarouter-h38-allocator-protection-<UTC>` or the explicit new `H38_ALLOCATOR_DISCRIMINATOR_OUT`. Capture exact target SHA, starting identities, collector log, fast/slow samples, full event snapshots, candidate inspect/command/env and startup phase, kernel window with return code, monitor trigger, summary and upload-summary.
 
-The analyzer emits `allocator-trajectory.csv` and `allocator-analysis.txt`, preserves absolute UTC timestamps and sample-to-event offsets, and reports T-60/T-30/T-10/T-5/T-1/T0 nearest samples with explicit coverage markers. It uses 4 KiB pages and node0 Normal order-4+ calculations as in R21/R22. `--reference /path/to/preserved-strict-RM-evidence` optionally adds a read-only reference trajectory. Do not invent historical evidence paths or compare against an invalid run as a formal reference. The monitor prints host-local time; use the default Asia/Seoul timezone only when that is the host's configured timezone, otherwise pass the correct `--monitor-timezone` during offline reanalysis.
+The analyzer emits `allocator-trajectory.csv` and `allocator-analysis.txt`, preserves absolute UTC timestamps and sample-to-event offsets, and reports T-60/T-30/T-10/T-5/T-1/T0 **at-or-before-target samples only** with explicit coverage markers. Samples after the RM/protection event are never backfilled into a pre-event T0 value: previous R21/R22 strict-RM results established that page rollback can replenish the post-failure reservoir. If no sufficiently recent pre-target sample exists, coverage is `MISSING` instead of interpolation or a post-event substitute. It uses 4 KiB pages and node0 Normal order-4+ calculations as in R21/R22. `--reference /path/to/preserved-strict-RM-evidence` optionally adds a read-only reference trajectory. Do not invent historical evidence paths or compare against an invalid run as a formal reference. The monitor prints host-local time; use the default Asia/Seoul timezone only when that is the host's configured timezone, otherwise pass the correct `--monitor-timezone` during offline reanalysis.
 
 No initial healthy/collapsed threshold is assumed. `RESERVOIR_CLASSIFICATION=UNDETERMINED` is intentional until matched controlled evidence exists.
 
@@ -70,3 +70,10 @@ Do not substitute a placeholder evidence path. Copy the emitted `upload_summary`
 - shell syntax, ShellCheck, Python compile, 592/592 unit tests and whitespace: PASS
 - This does **not** qualify live host stability, managed migration, or promotion.
 - Existing monitor policy and canonical old evidence are unchanged.
+
+## Analyzer pre-event alignment hardening — 2026-10-08
+
+- The first implementation's symmetric nearest-sample rule could select T0 data taken **after** a strict RM allocation error, thereby observing allocator pages released by RM rollback.
+- New rule: select only samples at or before each target offset; require <=2.5 s age for fast and <=7.5 s age for slow records. Preserve missing coverage rather than inferring a pre-event reservoir.
+- Reject missing fast PSI and short/unparseable pagetype order-4 rows instead of misreporting zero capacity.
+- The historical post-RM R21/R22 event snapshots are intentionally retained as post-event evidence, not promoted to instantaneous pre-failure values.

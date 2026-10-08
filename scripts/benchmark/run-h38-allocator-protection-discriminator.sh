@@ -91,7 +91,7 @@ usage() {
 Usage:
   sudo -v
   H38_ALLOCATOR_DISCRIMINATOR_TARGET_SHA=<exact-40-char-sha> \
-    bash scripts/benchmark/run-h38-mtp-startup-discriminator.sh
+    bash scripts/benchmark/run-h38-allocator-protection-discriminator.sh
 
 Optional:
   H38_ALLOCATOR_DISCRIMINATOR_OUT=/path/to/new/evidence-dir

@@ -77,6 +77,7 @@ class H38AllocatorRunnerTests(unittest.TestCase):
             "NV_ERR_NO_MEMORY|_memdescAllocInternal",
             "Managed predecessor remains in its original stopped post-protection state.",
             "RUN_COMPLETED=1", "finish_collector", "if ! python3 -",
+            "run-h38-allocator-protection-discriminator.sh",
             "COLLECTOR_HEALTHY", "ANALYSIS_RC", "KERNEL_WINDOW_RC",
         ):
             self.assertIn(item, content, item)
@@ -127,6 +128,62 @@ class H38AllocatorAnalyzerTests(unittest.TestCase):
             rc, _, report = self.run_analysis(evidence)
             self.assertEqual(rc.returncode, 0, rc.stderr)
             self.assertIn("event_type=RM_EVENT", report.read_text())
+
+    def test_event_boundary_never_uses_rollback_recovered_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fixture(root, rm=True)
+            event = root / "allocator-state" / "events" / "rm-oom-01-1234" / "meta.txt"
+            event.write_text(
+                "wall=2026-10-08T00:00:02.800000+00:00\nmonotonic_ns=3800000000\n"
+            )
+            fast = root / "allocator-state" / "fast-state.txt"
+            fast.write_text(
+                fast.read_text().replace(
+                    "Node 0, zone Normal 0 0 0 0 7 2",
+                    "Node 0, zone Normal 0 0 0 0 7777 2",
+                )
+            )
+            rc, _, path = self.run_analysis(root)
+            self.assertEqual(rc.returncode, 0, rc.stderr)
+            report = path.read_text()
+            self.assertIn("ALIGNMENT=AT_OR_BEFORE_TARGET_ONLY", report)
+            self.assertIn(
+                "h38_fast=T+0 coverage=OBSERVED actual_offset_s=-0.800 "
+                "normal_o4_mib=0.500 normal_o4plus_mib=0.750",
+                report,
+            )
+            self.assertIn("h38_fast=T-60 coverage=MISSING", report)
+
+    def test_incomplete_pagetype_is_not_falsely_zero_reservoir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fixture(root)
+            slow = root / "allocator-state" / "slow-state.txt"
+            slow.write_text(
+                slow.read_text().replace(
+                    "Node 0, zone Normal, type Unmovable 0 0 0 0 6 2",
+                    "Node 0, zone Normal, type Unmovable UNAVAILABLE",
+                )
+            )
+            rc, _, _ = self.run_analysis(root)
+            self.assertNotEqual(rc.returncode, 0)
+            self.assertIn("pagetype has no order-4 column", rc.stderr)
+
+    def test_missing_psi_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fixture(root)
+            fast = root / "allocator-state" / "fast-state.txt"
+            fast.write_text(
+                fast.read_text().replace(
+                    "some avg10=0.20 avg60=0.10 avg300=0.05 total=1234",
+                    "some unavailable"
+                )
+            )
+            rc, _, _ = self.run_analysis(root)
+            self.assertNotEqual(rc.returncode, 0)
+            self.assertIn("required meminfo or PSI", rc.stderr)
 
     def test_missing_slow_samples_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

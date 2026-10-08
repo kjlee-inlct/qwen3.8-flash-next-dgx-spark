@@ -119,12 +119,18 @@ def parse_body(body: str, kind: str) -> dict[str, float]:
             if match and match.group(1) == "0" and match.group(2) == "Normal":
                 group = match.group(3)
                 if group in ("Unmovable", "Movable"):
-                    values[group.lower() + "_o4plus_mib"] = mib(counts(match.group(4)), 4)
+                    blocks = counts(match.group(4))
+                    if len(blocks) < 5:
+                        raise ValueError(f"Normal {group} pagetype has no order-4 column")
+                    values[group.lower() + "_o4plus_mib"] = mib(blocks, 4)
                     types.add(group)
     if kind == "fast" and (not found or not all(
-        field in values for field in ("memavailable_mib", "memfree_mib", "swapfree_mib")
+        field in values for field in (
+            "memavailable_mib", "memfree_mib", "swapfree_mib",
+            "psi_some_avg10", "psi_full_avg10"
+        )
     )):
-        raise ValueError("fast sample missing node0 Normal or required meminfo")
+        raise ValueError("fast sample missing node0 Normal, required meminfo or PSI")
     if kind == "slow" and types != {"Unmovable", "Movable"}:
         raise ValueError("slow sample missing Normal Unmovable/Movable rows")
     return values
@@ -189,12 +195,21 @@ def build(root: pathlib.Path, event: dt.datetime, source: str) -> tuple[
     return rows, streams
 
 
-def nearest(stream: list[dict[str, str | float]], target: int, max_distance: float
-            ) -> dict[str, str | float] | None:
-    chosen = min(stream, key=lambda row: abs(float(row["offset_s"]) - target))
-    if abs(float(chosen["offset_s"]) - target) > max_distance:
+def at_or_before(stream: list[dict[str, str | float]], target: int, max_age: float
+                 ) -> dict[str, str | float] | None:
+    """Return latest *pre-target* sample, never a post-event/rollback sample.
+
+    In the R11/R21/R22 allocator mechanism, post-failure RM rollback can return
+    high-order pages. Nearest-neighbor matching across T0 would mislabel the
+    recovered pool as pre-failure capacity. Missing pre-event coverage is safer.
+    """
+    eligible = [row for row in stream if float(row["offset_s"]) <= target]
+    if not eligible:
         return None
-    return chosen
+    selected = max(eligible, key=lambda row: float(row["offset_s"]))
+    if target - float(selected["offset_s"]) > max_age:
+        return None
+    return selected
 
 
 def fmt(row: dict[str, str | float] | None, metrics: tuple[str, ...]) -> str:
@@ -225,6 +240,8 @@ def analysis(evidence: pathlib.Path, timezone: str, reference: pathlib.Path | No
         f"event_type={event_kind} event_utc={event.isoformat()}",
         "page_size_bytes=4096 node=0 zone=Normal min_order=4",
         "WARNING: metrics are snapshot reservoirs, not proof of contiguous availability",
+        "ALIGNMENT=AT_OR_BEFORE_TARGET_ONLY; post-event/rollback samples excluded",
+        "T0_VALUES=last available pre-event samples, NOT instantaneous failure state",
         "RESERVOIR_CLASSIFICATION=UNDETERMINED",
     ]
     for kind, metrics, window in (
@@ -233,7 +250,7 @@ def analysis(evidence: pathlib.Path, timezone: str, reference: pathlib.Path | No
         for target in TARGETS:
             report.append(
                 f"h38_{kind}=T{target:+d} "
-                + fmt(nearest(streams[kind], target, window), metrics)
+                + fmt(at_or_before(streams[kind], target, window), metrics)
             )
     if reference is not None:
         ref_type, ref_event = get_event(reference, timezone)
@@ -250,7 +267,7 @@ def analysis(evidence: pathlib.Path, timezone: str, reference: pathlib.Path | No
             for target in TARGETS:
                 report.append(
                     f"reference_{kind}=T{target:+d} "
-                    + fmt(nearest(ref_streams[kind], target, window), metrics)
+                    + fmt(at_or_before(ref_streams[kind], target, window), metrics)
                 )
         report.append("COMPARISON_VERDICT=UNDETERMINED; no classifier threshold inferred")
     report.append("H38_ALLOCATOR_PROTECTION_TRAJECTORY=END")

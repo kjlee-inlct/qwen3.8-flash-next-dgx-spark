@@ -222,7 +222,11 @@ and aligns them with RM or protection event timestamps. The canonical plan is
 Static implementation commit `1f8adbd90e0ba04f0beb990f41f0e7c78ed462df`
 passed GitHub Actions CI `37711658336`: shell syntax, ShellCheck, Python
 compile, **592/592 unit tests** and whitespace PASS. **Live host preflight and
-allocator/protection observation remain pending.** This does not authorize
+allocator/protection observation remain pending. Pre-event alignment
+hardening now forbids T0 comparisons from selecting post-RM samples: rollback
+can replenish the apparent order-4 reservoir after NVIDIA RM failure.
+Missing earlier samples are reported as missing, not interpolated. The
+current hardening requires a fresh static CI result before the next live run.** This does not authorize
 altering monitor policy or running managed follow-up gates. PR #259 remains
 Draft, and the managed follow-up gates remain blocked.
 
