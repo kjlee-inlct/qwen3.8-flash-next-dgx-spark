@@ -542,6 +542,9 @@ MONITOR_ENABLED=0 \
 MONITOR_PROTECT=0 \
 CONFIG_OVERRIDE="${OUT}/config.vllm.json" \
 MAXLEN=262144 \
+EXECUTOR=mp \
+BATCHED_TOKENS=8192 \
+QSA_DET_TOPK=0 \
 NSPEC=2 \
 INDEX_SHARE=0 \
 GPU_UTIL=0.80 \
@@ -582,6 +585,7 @@ env = set(obj["Config"].get("Env") or [])
 required = {
     "VLLM_PLE_MMAP=1",
     "VLLM_QSA_EXACT_TOPK=1",
+    "VLLM_QSA_DET_TOPK=0",
     "QWEN38_MARLIN_CANONICAL_ORDER=1",
     "QWEN38_MARLIN_CANONICAL_SCOPE=decoder",
     "VLLM_CACHE_ROOT=/root/.cache/vllm/h38-marlin-canonical-decoder-managed-v1",
@@ -606,6 +610,10 @@ spec = json.loads(value("--speculative-config"))
 if spec != {"method": "mtp", "num_speculative_tokens": 2}:
     raise SystemExit(f"production MTP k=2 mismatch: {spec}")
 
+if value("--distributed-executor-backend") != "mp":
+    raise SystemExit("executor must be mp")
+if value("--tensor-parallel-size") != "1":
+    raise SystemExit("tensor parallel size mismatch")
 if value("--served-model-name") != served:
     raise SystemExit("served name mismatch")
 if value("--kv-cache-memory-bytes") != kv:

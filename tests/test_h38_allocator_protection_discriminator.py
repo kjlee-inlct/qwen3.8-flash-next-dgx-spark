@@ -60,6 +60,8 @@ class H38AllocatorRunnerTests(unittest.TestCase):
             "status --porcelain=v1 --untracked-files=all",
             "assert_idle", "assert_post_protection_baseline",
             "SPEC=mtp", "NSPEC=2", "KV_MEM=",
+            "EXECUTOR=mp", "BATCHED_TOKENS=8192", "QSA_DET_TOPK=0",
+            '"VLLM_QSA_DET_TOPK=0"', '"--distributed-executor-backend"',
             'spec != {"method": "mtp", "num_speculative_tokens": 2}',
             "VLLM_PLE_MMAP=1", "VLLM_QSA_EXACT_TOPK=1",
             "QWEN38_MARLIN_CANONICAL_ORDER=1",
