@@ -316,26 +316,37 @@ The implementation passed GitHub Actions `37778807130`:
 **SUCCESS, 613/613 unit tests**, shell syntax, ShellCheck,
 Python compilation and whitespace PASS.
 
-A **read-only, exact-H38-installed-source prerequisite inspector**
-is now staged, **not executed on DGX**:
-`scripts/benchmark/check-h38-ct-meta-prerequisites.sh`,
-`scripts/benchmark/inspect-h38-ct-meta-prerequisites.py`,
-and `tests/test_h38_ct_meta_prerequisites.py`.
-The full feasibility/mismatch and acceptance plan is
-`scripts/benchmark/evidence/orcarouter-h38-ct-meta-w13-feasibility-plan-20261008.md`.
-It checks H11/H12 CT weight/alias syntax and the installed vLLM
-layerwise `uses_meta_device`, wrapper, materialize/finalize
-**source prerequisites only**, with no model/GPU launch or CT patch.
+**H38 CT Meta static prerequisites: VALID DGX SOURCE PASS.** The
+operator ran the unmodified guarded checker at
+`ac58309620ace2213df68ebf06b2c18b9592f394` on
+`vllm-orcarouter-v029-h38-decoder-scope:v1` image ID
+`sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`.
+Both `H38_CT_META_STATIC_PREREQUISITES=PASS` and
+`H38_CT_META_SOURCE_PREFLIGHT=PASS` were observed; image
+identity unchanged, no model/GPU launch, service/protection change.
+Canonical result:
+`scripts/benchmark/evidence/orcarouter-h38-ct-meta-w13-source-prerequisites-result-20261009.md`.
+Installed CT class `uses_meta_device` direct declaration was
+**NO**; base-loader/layerwise wrapper/materialization functions were
+`SOURCE_PRESENT`; original H11 packed `torch.empty` persists,
+H12 aliases pass. **No actual CT meta patch/materialization or RM
+reduction is established.** The checker and synchronization static
+CI `37778807130` / `37779107553` passed **613/613** tests.
 
-R28 ModelOpt's `400 MiB x48` series is **19,200 MiB of logical RM
-request activity**, not an H38 measured resident-memory saving.
-The `800 MiB x48` series precedes ModelOpt create-weights and is
-not directly targeted by M1. The next independent prerequisite
-after a source-check pass is a metadata-only H38 production
-checkpoint (18 shards) ordering and worst-case buffered-weight
-assessment. A CT meta prototype and any live run remain unauthorized.
-No H38 source change/mitigation claim, memory protection weakening
-or PR #259 promotion is implied.
+A **separate metadata-only H38 production checkpoint (18-shard)
+order/limited buffer-scenario analyzer is staged, not executed**:
+`scripts/benchmark/inspect-h38-checkpoint-metadata-order.py`,
+`scripts/benchmark/check-h38-checkpoint-metadata-order.sh`,
+`tests/test_h38_checkpoint_metadata_order.py` and
+`scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-plan-20261009.md`.
+It requires the actual OrcaRouter model directory, reads only safetensors
+header/keys without tensor payloads, and fails closed for incorrect
+index, missing layers or revisited routed experts. Even a later
+metadata-order PASS assumes the default single-thread iterator
+and does **not** prove the exact H38 loader's weight-buffer lifecycle
+or bounded peak memory. No new GPU run, model patch, R33,
+relaxed protection or managed promotion is approved.
+
 
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The

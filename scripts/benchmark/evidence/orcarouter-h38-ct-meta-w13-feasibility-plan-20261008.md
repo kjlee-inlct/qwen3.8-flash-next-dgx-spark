@@ -182,3 +182,22 @@ Current H38 managed state remains `PROTECTED_STOP`,
   operator-provided actual H38 CT meta prerequisite checker output
   exists yet, no checkpoint-key-order feasibility gate ran, and no
   CT meta-w13 patch, new image or host memory experiment was made.
+
+## Observed exact-H38-installed-source prerequisites — 2026-10-09
+
+The original operator executed the CPU-only source inspector at
+`ac58309620ace2213df68ebf06b2c18b9592f394` against the exact
+H38 image. Output: `H38_CT_META_STATIC_PREREQUISITES=PASS`,
+`H38_CT_META_SOURCE_PREFLIGHT=PASS`, image ID unchanged,
+`ct_declares_own_uses_meta_device=NO`, native layerwise loader
+components `SOURCE_PRESENT`, and `ct_meta_w13_patch_implemented=NO`.
+Canonical observed result:
+`orcarouter-h38-ct-meta-w13-source-prerequisites-result-20261009.md`.
+
+**This completes only the prerequisite source check.** The next
+metadata-only production 18-shard order test is now staged (not run):
+`orcarouter-h38-checkpoint-metadata-order-plan-20261009.md`.
+That analyzer independently reports shard/index completeness, routed
+layer revisits and theoretical on-disk byte retention scenarios;
+its check does not read tensor payloads or certify H38 runtime
+loader equivalence, bounded buffers, CUDA/RM memory or host stability.
