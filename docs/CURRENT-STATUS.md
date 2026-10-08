@@ -333,6 +333,12 @@ H12 aliases pass. **No actual CT meta patch/materialization or RM
 reduction is established.** The checker and synchronization static
 CI `37778807130` / `37779107553` passed **613/613** tests.
 
+The metadata tool implementation was statically qualified at
+`b476441899d07d04e9db3669ccd881f4351ef15e`: GitHub Actions
+`37822913604` **SUCCESS, 620/620 unit tests**, shell syntax,
+ShellCheck, Python compilation and whitespace PASS.
+The following host checkpoint check is **still not executed**.
+
 A **separate metadata-only H38 production checkpoint (18-shard)
 order/limited buffer-scenario analyzer is staged, not executed**:
 `scripts/benchmark/inspect-h38-checkpoint-metadata-order.py`,

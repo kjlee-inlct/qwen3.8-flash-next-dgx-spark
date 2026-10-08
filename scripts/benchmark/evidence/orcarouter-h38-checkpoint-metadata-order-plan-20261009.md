@@ -136,3 +136,13 @@ condition for considering CT-specific deferred w13:
 **No CT meta patch, checkpoint payload read, R33, production restart,
 monitor relaxation, managed promotion, PR Ready or merge is authorized
 by this metadata-only static gate.**
+
+## Synthetic/static CI result — 2026-10-09
+
+- Implementation commit: `b476441899d07d04e9db3669ccd881f4351ef15e`.
+- GitHub Actions `37822913604`: **SUCCESS, 620 of 620 unit tests**;
+  shell syntax, ShellCheck, Python compile and whitespace PASS.
+- This only validates the implemented metadata checker and synthetic
+  failure paths. No actual H38 production checkpoint metadata scan
+  has been executed, and no H38-specific loader-order/peak-memory
+  acceptance claim is made.
