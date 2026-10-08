@@ -85,3 +85,20 @@ Do not substitute a placeholder evidence path. Copy the emitted `upload_summary`
 - shell syntax, ShellCheck, Python compile, **595/595 unit tests**, whitespace: PASS
 - T0 pre-event sample rule, PSI and pagetype incomplete-data errors, and runner usage correction are included.
 - This is a static gate only. Live H38 allocator evidence is not yet available, strict host stability is not qualified, and the protected predecessor must not be auto-started.
+
+## Live attempt 01 observed — 2026-10-08
+
+The first live production-shape run completed its intended protected observation.
+See `orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md`.
+It stopped at 11:06:47 KST with identity/collector/kernel validity PASS,
+`rm_oom_count=0`, `protected_stop=1`, `api_ready=0`, and
+`RESULT=PROTECTED_STOP` / `HOST-STABILITY=INCONCLUSIVE`.
+The managed predecessor remains stopped. Do **not** repeat this live run unchanged.
+Use the already-preserved `allocator-trajectory.csv` to compute full-history
+high-order depletion and cold-load phase alignment without restarting the model.
+
+The runner originally emitted an intermediate `script_rc=0` summary before
+exiting with 1 for `PROTECTED_STOP`, then rewrote it in the EXIT trap. This was
+a summary consistency issue, not a discrepancy in the measured result. A
+follow-up correction writes the intended result code once and prevents
+re-finalization, while retaining sudo keepalive cleanup in the EXIT trap.

@@ -210,28 +210,41 @@ comparison against preserved strict-RM failures before any monitor-policy change
 
 ## H38 allocator/protection observability — 2026-10-08
 
-The valid MTP-off protected stop has closed the MTP-only hypothesis. A new
-observability-only candidate is staged on the integration branch:
-`scripts/benchmark/run-h38-allocator-protection-discriminator.sh` attaches
-the existing Linux allocator collector to an exact production-shape
-`SPEC=mtp, k=2` H38 startup with the existing protection policy unchanged.
-`scripts/benchmark/analyze-h38-allocator-protection-trajectory.py` records
-node0 Normal order-4+/Unmovable/Movable, meminfo and memory PSI trajectories
-and aligns them with RM or protection event timestamps. The canonical plan is
-`scripts/benchmark/evidence/orcarouter-h38-allocator-protection-discriminator-plan-20261008.md`.
-Static implementation commit `1f8adbd90e0ba04f0beb990f41f0e7c78ed462df`
-passed GitHub Actions CI `37711658336`: shell syntax, ShellCheck, Python
-compile, **592/592 unit tests** and whitespace PASS. **Live host preflight and
-allocator/protection observation remain pending. Pre-event alignment
-hardening now forbids T0 comparisons from selecting post-RM samples: rollback
-can replenish the apparent order-4 reservoir after NVIDIA RM failure.
-Missing earlier samples are reported as missing, not interpolated. The
-allocator pre-event hardening was statically qualified on exact commit
-`75dfe1cd983e84b78093d1383770c82c968d8a82` by GitHub Actions
-`37713396361`: shell syntax, ShellCheck, Python compile, **595/595 unit
-tests**, and whitespace all PASS. This is **not** live H38 acceptance.** This does not authorize
-altering monitor policy or running managed follow-up gates. PR #259 remains
-Draft, and the managed follow-up gates remain blocked.
+The valid MTP-off attempt 04 showed that removing MTP is not sufficient to
+avoid the H38 protected-stop boundary. Production-shape allocator/protection
+discriminator attempt 01 on the single DGX Spark was then **executed** under
+exact `SPEC=mtp k=2` identity and the unchanged protective monitor:
+`scripts/benchmark/evidence/orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md`.
+
+At `2026-10-08 11:06:47 KST`, the monitor protected-stop condition reached
+5/5, before API READY and at 15/18 model shards loaded. Exact candidate
+identity passed; the measured kernel window was valid; no strict RM failure
+was observed; Docker `OOMKilled=false`. Collector and event-aligned analyzer
+both completed. **RESULT=PROTECTED_STOP; FUNCTIONAL=NOT_REACHED;
+HOST-STABILITY=INCONCLUSIVE.** It is a valid observation, not a host-stability
+PASS and not a strict RM failure.
+
+Immediately before protection, non-CMA free memory fell to about 1.3 GiB,
+while observed monitor swap growth reached 717 MiB. Node0 Normal order-4+
+was 139.938 MiB at T-0.804 s and Normal Unmovable order-4+ was
+24.000 MiB at T-1.802 s. These are *pre-protection, non-simultaneous*
+observations, not a contiguous-memory guarantee or an RM-failure threshold.
+The earlier R21/R22 strict-RM event snapshots are post-failure observations
+and cannot be treated as matched measurements. Existing monitor policy
+remains unchanged.
+
+The exact read-only instrumentation implementation passed CI `37713396361`
+(595/595 unit tests) and documentation synchronization CI `37713578855`
+(595/595). One follow-up runner-only correction prevents the EXIT trap from
+rewriting the already-finalized `script_rc` field. Neither the observed
+classification nor the protected host-state is affected by that correction.
+
+PR #259 remains **Draft / Open**. Managed migration is not qualified;
+no H38 managed performance, determinism, restart, promotion or merge is
+authorized. The next useful step is **offline analysis of the already
+preserved allocator-trajectory.csv** to locate the first high-order collapse
+and compare window shapes, not an unchanged live rerun.
+
 
 ## Historical evidence semantics
 

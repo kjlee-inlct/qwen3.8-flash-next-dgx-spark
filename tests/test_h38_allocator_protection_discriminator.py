@@ -53,6 +53,26 @@ class H38AllocatorRunnerTests(unittest.TestCase):
                                 capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_runner_writes_summary_with_actual_result_exit_status(self) -> None:
+        content = RUNNER.read_text()
+        self.assertEqual(
+            content.count("EVIDENCE_FINALIZED=1"), 1,
+            "completed evidence must not be re-finalized at process EXIT"
+        )
+        self.assertIn(
+            'if [[ "${OUT_READY}" == 1 && -d "${OUT}" && '
+            '"${EVIDENCE_FINALIZED}" != 1 ]]; then',
+            content,
+        )
+        self.assertIn(
+            'VALID_CLEAN) write_summary 0 ;;\n  *) write_summary 1 ;;',
+            content,
+        )
+        self.assertLess(
+            content.index('write_upload_summary\nEVIDENCE_FINALIZED=1'),
+            content.index('H38_ALLOCATOR_PROTECTION_DISCRIMINATOR=PROTECTED_STOP'),
+        )
+
     def test_runner_preserves_identity_protection_and_safety(self) -> None:
         content = RUNNER.read_text()
         for item in (
@@ -79,6 +99,12 @@ class H38AllocatorRunnerTests(unittest.TestCase):
             "RUN_COMPLETED=1", "finish_collector", "if ! python3 -",
             "run-h38-allocator-protection-discriminator.sh",
             "COLLECTOR_HEALTHY", "ANALYSIS_RC", "KERNEL_WINDOW_RC",
+            'EVIDENCE_FINALIZED=0',
+            '"${EVIDENCE_FINALIZED}" != 1',
+            'EVIDENCE_FINALIZED=1',
+            'VALID_CLEAN) write_summary 0',
+            '*) write_summary 1',
+            'write_upload_summary',
         ):
             self.assertIn(item, content, item)
         for item in (

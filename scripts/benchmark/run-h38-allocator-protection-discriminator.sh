@@ -66,6 +66,7 @@ EXPERIMENT_STARTED=0
 WINDOW_STARTED=0
 WINDOW_CAPTURED=0
 FINALIZED=0
+EVIDENCE_FINALIZED=0
 START_JOURNAL=""
 END_JOURNAL=""
 KERNEL_WINDOW_RC=125
@@ -403,7 +404,7 @@ finalize() {
   trap - EXIT INT TERM
   set +e
 
-  if [[ "${OUT_READY}" == 1 && -d "${OUT}" ]]; then
+  if [[ "${OUT_READY}" == 1 && -d "${OUT}" && "${EVIDENCE_FINALIZED}" != 1 ]]; then
     if [[ -n "${MONITOR_PID}" ]] && kill -0 "${MONITOR_PID}" >/dev/null 2>&1; then
       kill "${MONITOR_PID}" >/dev/null 2>&1 || true
       wait "${MONITOR_PID}" >/dev/null 2>&1 || true
@@ -705,8 +706,15 @@ capture_kernel_window
 RUN_COMPLETED=1
 classify
 stop_experiment
-write_summary 0
+# A protected stop (or strict RM failure) is a valid measured result but must
+# return nonzero. Persist the final exit code *before* the EXIT trap executes.
+# The trap still terminates sudo keepalive but must not rewrite this evidence.
+case "${RESULT}" in
+  VALID_CLEAN) write_summary 0 ;;
+  *) write_summary 1 ;;
+esac
 write_upload_summary
+EVIDENCE_FINALIZED=1
 
 printf '\n===== H38 allocator protection discriminator summary =====\n'
 cat "${OUT}/summary.txt"

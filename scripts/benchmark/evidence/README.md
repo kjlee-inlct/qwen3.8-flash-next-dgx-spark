@@ -16,7 +16,9 @@ experiment-runtime closure and from the R9-R32 RM allocator investigation.
 - Gate A matched base-main control: `orcarouter-h38-managed-gate-a-base-control-20261007.md`
 - atomic cross-release transaction implementation: `orcarouter-h38-managed-atomic-refresh-implementation-20261007.md`
 - first atomic live migration attempt: `orcarouter-h38-managed-atomic-gate-attempt01-20261007.md`
-- production-shape allocator/protection discriminator plan: `orcarouter-h38-allocator-protection-discriminator-plan-20261008.md` (read-only instrumentation; static CI `37711658336` PASS / 592 tests; live pending)
+- production-shape allocator/protection discriminator plan: `orcarouter-h38-allocator-protection-discriminator-plan-20261008.md` (unchanged protection; static CI `37713578855` PASS / 595 tests)
+- production-shape allocator/protection attempt 01: `orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md` (**VALID PROTECTED_STOP** at 11:06:47 KST; exact MTP k2 identity; 15/18 shards; strict RM 0; NOT_REACHED / INCONCLUSIVE; host evidence preserved)
+
 - allocator observer runner: `scripts/benchmark/run-h38-allocator-protection-discriminator.sh` (production SPEC=mtp k=2, same protect thresholds)
 - trajectory analyzer: `scripts/benchmark/analyze-h38-allocator-protection-trajectory.py` (pre-event-only T-60/T-30/T-10/T-5/T-1/T0 samples, optional strict-RM reference; no post-failure rollback contamination or inferred threshold); pre-event hardening CI `37713396361` SUCCESS (595/595)
 - MTP startup discriminator plan: `orcarouter-h38-managed-mtp-startup-discriminator-plan-20261007.md`
