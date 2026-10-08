@@ -226,7 +226,10 @@ allocator/protection observation remain pending. Pre-event alignment
 hardening now forbids T0 comparisons from selecting post-RM samples: rollback
 can replenish the apparent order-4 reservoir after NVIDIA RM failure.
 Missing earlier samples are reported as missing, not interpolated. The
-current hardening requires a fresh static CI result before the next live run.** This does not authorize
+allocator pre-event hardening was statically qualified on exact commit
+`75dfe1cd983e84b78093d1383770c82c968d8a82` by GitHub Actions
+`37713396361`: shell syntax, ShellCheck, Python compile, **595/595 unit
+tests**, and whitespace all PASS. This is **not** live H38 acceptance.** This does not authorize
 altering monitor policy or running managed follow-up gates. PR #259 remains
 Draft, and the managed follow-up gates remain blocked.
 

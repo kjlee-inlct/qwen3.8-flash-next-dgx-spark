@@ -77,3 +77,11 @@ Do not substitute a placeholder evidence path. Copy the emitted `upload_summary`
 - New rule: select only samples at or before each target offset; require <=2.5 s age for fast and <=7.5 s age for slow records. Preserve missing coverage rather than inferring a pre-event reservoir.
 - Reject missing fast PSI and short/unparseable pagetype order-4 rows instead of misreporting zero capacity.
 - The historical post-RM R21/R22 event snapshots are intentionally retained as post-event evidence, not promoted to instantaneous pre-failure values.
+
+## Final pre-event static qualification — 2026-10-08
+
+- hardening commit: `75dfe1cd983e84b78093d1383770c82c968d8a82`
+- GitHub Actions run `37713396361`: **SUCCESS**
+- shell syntax, ShellCheck, Python compile, **595/595 unit tests**, whitespace: PASS
+- T0 pre-event sample rule, PSI and pagetype incomplete-data errors, and runner usage correction are included.
+- This is a static gate only. Live H38 allocator evidence is not yet available, strict host stability is not qualified, and the protected predecessor must not be auto-started.
