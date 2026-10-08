@@ -1,6 +1,6 @@
 # H38 production-shape allocator/protection trajectory discriminator — 2026-10-08
 
-Status: **STATIC IMPLEMENTATION CANDIDATE; LIVE NOT AUTHORIZED UNTIL CI AND HOST PREFLIGHT PASS**
+Status: **STATIC CI PASS (37711658336, 592/592); LIVE NOT YET EXECUTED — REQUIRES HOST PREFLIGHT**
 
 ## Question and provenance
 
@@ -62,3 +62,11 @@ H38_ALLOCATOR_DISCRIMINATOR_TARGET_SHA="$(git rev-parse HEAD)" bash scripts/benc
 ```
 
 Do not substitute a placeholder evidence path. Copy the emitted `upload_summary`, `allocator-analysis.txt`, and (when needed) the CSV and raw allocator-state sample/event files. Record all invalid attempts and valid results in new dated evidence documents and synchronize `docs/CURRENT-STATUS.md`, the evidence index, and PR #259. Managed follow-up determinism/performance/restart remains unauthorized pending migration FUNCTIONAL and HOST-STABILITY PASS.
+
+## Static validation result — 2026-10-08
+
+- implementation commit: `1f8adbd90e0ba04f0beb990f41f0e7c78ed462df`
+- GitHub Actions CI `37711658336`: SUCCESS
+- shell syntax, ShellCheck, Python compile, 592/592 unit tests and whitespace: PASS
+- This does **not** qualify live host stability, managed migration, or promotion.
+- Existing monitor policy and canonical old evidence are unchanged.

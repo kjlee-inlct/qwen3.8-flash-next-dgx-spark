@@ -219,8 +219,11 @@ the existing Linux allocator collector to an exact production-shape
 node0 Normal order-4+/Unmovable/Movable, meminfo and memory PSI trajectories
 and aligns them with RM or protection event timestamps. The canonical plan is
 `scripts/benchmark/evidence/orcarouter-h38-allocator-protection-discriminator-plan-20261008.md`.
-This is **static implementation awaiting CI and later host preflight**, not
-live evidence or permission to modify the protection policy. PR #259 remains
+Static implementation commit `1f8adbd90e0ba04f0beb990f41f0e7c78ed462df`
+passed GitHub Actions CI `37711658336`: shell syntax, ShellCheck, Python
+compile, **592/592 unit tests** and whitespace PASS. **Live host preflight and
+allocator/protection observation remain pending.** This does not authorize
+altering monitor policy or running managed follow-up gates. PR #259 remains
 Draft, and the managed follow-up gates remain blocked.
 
 ## Historical evidence semantics
