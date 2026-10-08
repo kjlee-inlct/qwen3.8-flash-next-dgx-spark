@@ -16,6 +16,9 @@ experiment-runtime closure and from the R9-R32 RM allocator investigation.
 - Gate A matched base-main control: `orcarouter-h38-managed-gate-a-base-control-20261007.md`
 - atomic cross-release transaction implementation: `orcarouter-h38-managed-atomic-refresh-implementation-20261007.md`
 - first atomic live migration attempt: `orcarouter-h38-managed-atomic-gate-attempt01-20261007.md`
+- production-shape allocator/protection discriminator plan: `orcarouter-h38-allocator-protection-discriminator-plan-20261008.md` (read-only instrumentation candidate; static/live not yet qualified)
+- allocator observer runner: `scripts/benchmark/run-h38-allocator-protection-discriminator.sh` (production SPEC=mtp k=2, same protect thresholds)
+- trajectory analyzer: `scripts/benchmark/analyze-h38-allocator-protection-trajectory.py` (event-aligned samples, optional strict-RM comparison, no inferred safe threshold)
 - MTP startup discriminator plan: `orcarouter-h38-managed-mtp-startup-discriminator-plan-20261007.md`
 - MTP startup discriminator attempt 01 (setup invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt01-20261008.md`
 - MTP startup discriminator attempt 02 (setup invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt02-20261008.md`

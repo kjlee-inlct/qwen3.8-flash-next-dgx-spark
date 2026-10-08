@@ -208,6 +208,21 @@ armed protection. Therefore MTP materialization is **not sufficient to explain t
 managed-H38 protected-stop boundary**. The next step is offline/read-only trajectory
 comparison against preserved strict-RM failures before any monitor-policy change.
 
+## H38 allocator/protection observability — 2026-10-08
+
+The valid MTP-off protected stop has closed the MTP-only hypothesis. A new
+observability-only candidate is staged on the integration branch:
+`scripts/benchmark/run-h38-allocator-protection-discriminator.sh` attaches
+the existing Linux allocator collector to an exact production-shape
+`SPEC=mtp, k=2` H38 startup with the existing protection policy unchanged.
+`scripts/benchmark/analyze-h38-allocator-protection-trajectory.py` records
+node0 Normal order-4+/Unmovable/Movable, meminfo and memory PSI trajectories
+and aligns them with RM or protection event timestamps. The canonical plan is
+`scripts/benchmark/evidence/orcarouter-h38-allocator-protection-discriminator-plan-20261008.md`.
+This is **static implementation awaiting CI and later host preflight**, not
+live evidence or permission to modify the protection policy. PR #259 remains
+Draft, and the managed follow-up gates remain blocked.
+
 ## Historical evidence semantics
 
 Dated evidence files are intentionally historical. Preserve their measured facts and
