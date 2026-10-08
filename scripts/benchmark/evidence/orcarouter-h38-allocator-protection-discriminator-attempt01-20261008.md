@@ -195,3 +195,9 @@ a clean run.
   shard-phase markers; optionally ingest historical R21/R22 raw
   trajectories only if exact source paths are independently verified.
   Record an offline finding rather than launching another costly run.
+
+## Follow-up static qualification of evidence-recording fix
+
+- Commit: `d2e51d4457f5e99ce55c2ce39285d1f6a3cfbb14`
+- CI: `37718076547` **SUCCESS**, 596/596 unit tests; ShellCheck, shell syntax, Python compilation, whitespace PASS.
+- This fixes duplicate `script_rc` reporting in future attempts only. The original operator transcript and measured protected-stop interpretation above are unchanged; no additional DGX run was performed.

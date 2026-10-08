@@ -238,6 +238,10 @@ The exact read-only instrumentation implementation passed CI `37713396361`
 (595/595). One follow-up runner-only correction prevents the EXIT trap from
 rewriting the already-finalized `script_rc` field. Neither the observed
 classification nor the protected host-state is affected by that correction.
+The result-recording commit `d2e51d4457f5e99ce55c2ce39285d1f6a3cfbb14`
+passed GitHub Actions `37718076547` **SUCCESS: 596/596 unit tests**, shell
+syntax, ShellCheck, Python compilation and whitespace PASS; this is static
+qualification, not an additional live H38 run.
 
 PR #259 remains **Draft / Open**. Managed migration is not qualified;
 no H38 managed performance, determinism, restart, promotion or merge is
