@@ -87,3 +87,20 @@ inspector container, without loading vLLM or changing the managed
 service. **No DGX execution is claimed by this staged source code.**
 An eventual PASS would not establish fewer RM bytes or a safe managed
 startup. R33 live tracing remains unauthorized.
+
+## Exact-H38-installed-image contract — observed DGX PASS
+
+The previously planned source-only check was executed on the original
+H38 image (checkout `1a4416581f4064baa110fc83947c442c360c4689`,
+image ID `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`)
+and produced `H38_EXACT_IMAGE_SOURCE_PREFLIGHT=PASS` with exit code 0.
+Canonical result:
+`orcarouter-h38-exact-image-source-contract-result-20261008.md`.
+This **closes the H38-specific direct source syntax gap** identified
+above: exact H38 installed source passes the original R32 direct precreate
+allocation syntax contract, without cloning the earlier R28 live
+allocation trace into this run. H11 still retains the packed `torch.empty`
+requests, H12 preserves parameter objects, and H38 runtime patch
+source guards pass. The unknown CUDA/RM backing-growth caller and
+H38 HOST-STABILITY qualification remain **open/unproven**; no live
+R33, memory-protection change, service migration, promotion or merge.

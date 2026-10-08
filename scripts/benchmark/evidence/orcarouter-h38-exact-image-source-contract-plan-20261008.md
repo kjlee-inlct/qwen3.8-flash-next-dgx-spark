@@ -125,3 +125,22 @@ unless an operator provides its real output.
   authentic DGX output before claiming an exact-image result.
 - Host runtime remains in protected-stop state, no H38 candidate was
   launched and PR #259 is still Draft/Open.
+
+## Observed DGX closure — 2026-10-08
+
+The operator executed the guarded checker on checkout
+`1a4416581f4064baa110fc83947c442c360c4689` against the existing exact
+H38 image `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`.
+The actual terminal output ends with
+`H38_EXACT_IMAGE_SOURCE_CONTRACT=PASS`,
+`H38_EXACT_IMAGE_SOURCE_PREFLIGHT=PASS`,
+`image_identity_unchanged=YES`, `source_check_rc=0`.
+
+**Source-only PASS is now observed, not merely staged.** Canonical result:
+`orcarouter-h38-exact-image-source-contract-result-20261008.md`.
+The H11 packed `torch.empty` tensor requests remain in the actual H38
+source; both H12 alias and H38 runtime patch syntax checks passed; the
+R32 negative direct precreate syntax check was independently replayed
+on the H38 image. Indirect allocations and an original CUDA/RM caller
+remain unresolved. No RM mitigation, HOST-STABILITY PASS, managed
+promotion or new live allocator experiment is implied.

@@ -273,24 +273,32 @@ requires separate evidence if a concrete mitigation warrants it.
 The R23–R32 line of model-component prefix tracing stays closed;
 **no new live R33 is authorized**.
 
-A **source-only H38 exact-image checker** is staged, NOT yet executed
-on the DGX: `scripts/benchmark/check-h38-exact-image-source.sh`
-and `inspect-h38-exact-image-source.py`, with synthetic unit tests.
-It requires the exact H38 image's H11/H12/H38 labels and checks
-installed CT H11 packed `torch.empty`/ModelWeightParameter
-construction, H12 post-load aliases, H38 Humming/Marlin patch
-source and the original R32 *direct allocation syntax* contract
-on that same H38 image. Canonical guarded preflight plan:
+The **exact-H38-installed-image source check has now been executed**
+on the DGX Spark, using the guarded SHA
+`1a4416581f4064baa110fc83947c442c360c4689` and the
+`vllm-orcarouter-v029-h38-decoder-scope:v1` image
+(`sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`).
+Operator output closed `H38_EXACT_IMAGE_SOURCE_PREFLIGHT=PASS`,
+`H38_EXACT_IMAGE_SOURCE_CONTRACT=PASS`, `source_check_rc=0`,
+and `image_identity_unchanged=YES`.
+Canonical DGX result:
+`scripts/benchmark/evidence/orcarouter-h38-exact-image-source-contract-result-20261008.md`.
+The original guarded preflight and static-check plan remains at
 `scripts/benchmark/evidence/orcarouter-h38-exact-image-source-contract-plan-20261008.md`.
-The preflight uses a short-lived **CPU-only, runc, no-network,
-read-only-rootfs** inspector container; it does **not** load a model,
-access a GPU, tune VM, or mutate the managed service. A future PASS
-would be source-only evidence, **not** RM mitigation/host-stability
-PASS, and would not authorize R33 or promotion.
-GitHub Actions run `37747053983` on `bf7153536f78b48222dbb68b611b1d31dfa9f7db`
-**SUCCESS**, shell syntax, ShellCheck, Python compile, whitespace and
-**606/606 unit tests PASS**. This is static CI only: no host source
-inspection has been executed.
+
+The H38 installed source retained both packed `torch.empty`
+allocations under H11 `ModelWeightParameter`, H12 object-preserving
+post-load rename, H38 Humming/Marlin controls and **the R32 precreate
+source contract now replayed on the exact H38 image**.
+The direct precreate allocation syntax count was **0** in both
+inspected factory/routed scopes. This only rules out the checker's
+specific explicit syntax, not indirect allocations. There was no
+GPU/model load, managed-service replacement or protection change.
+**This is a source-contract PASS only. RM mitigation is unproven;
+the original H38 protected stop remains FUNCTIONAL NOT_REACHED /
+HOST-STABILITY INCONCLUSIVE.** The checker CI `37747053983` and
+docs CI `37747347746` both passed **606/606 tests**.
+No R33 live trace or managed promotion is authorized.
 
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
