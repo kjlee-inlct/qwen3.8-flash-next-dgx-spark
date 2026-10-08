@@ -300,6 +300,39 @@ HOST-STABILITY INCONCLUSIVE.** The checker CI `37747053983` and
 docs CI `37747347746` both passed **606/606 tests**.
 No R33 live trace or managed promotion is authorized.
 
+## H38 CT deferred-w13 feasibility — 2026-10-08
+
+The historical M1 branch `exp/m1-deferred-meta-w13`
+(`4d72f8750e8a7beaec96a869e2dbfeaa7d4c747a`) is a
+**ModelOpt/H6/R28 prototype**, not a tested H38 CT mitigation.
+It defers the `ModelOptNvFp4FusedMoE.w13_weight` allocation with
+`device="meta"` and native layerwise processing. The current H38
+production image instead uses H11/H12
+`CompressedTensorsW4A4Nvfp4MoEMethod` with
+`w13_weight_packed` and post-load aliases. A direct M1 patch
+transplant is invalid.
+
+A **read-only, exact-H38-installed-source prerequisite inspector**
+is now staged, **not executed on DGX**:
+`scripts/benchmark/check-h38-ct-meta-prerequisites.sh`,
+`scripts/benchmark/inspect-h38-ct-meta-prerequisites.py`,
+and `tests/test_h38_ct_meta_prerequisites.py`.
+The full feasibility/mismatch and acceptance plan is
+`scripts/benchmark/evidence/orcarouter-h38-ct-meta-w13-feasibility-plan-20261008.md`.
+It checks H11/H12 CT weight/alias syntax and the installed vLLM
+layerwise `uses_meta_device`, wrapper, materialize/finalize
+**source prerequisites only**, with no model/GPU launch or CT patch.
+
+R28 ModelOpt's `400 MiB x48` series is **19,200 MiB of logical RM
+request activity**, not an H38 measured resident-memory saving.
+The `800 MiB x48` series precedes ModelOpt create-weights and is
+not directly targeted by M1. The next independent prerequisite
+after a source-check pass is a metadata-only H38 production
+checkpoint (18 shards) ordering and worst-case buffered-weight
+assessment. A CT meta prototype and any live run remain unauthorized.
+No H38 source change/mitigation claim, memory protection weakening
+or PR #259 promotion is implied.
+
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
 next useful work is code/evidence-level attribution of the **early
