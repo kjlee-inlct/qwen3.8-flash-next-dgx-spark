@@ -312,6 +312,10 @@ production image instead uses H11/H12
 `w13_weight_packed` and post-load aliases. A direct M1 patch
 transplant is invalid.
 
+The implementation passed GitHub Actions `37778807130`:
+**SUCCESS, 613/613 unit tests**, shell syntax, ShellCheck,
+Python compilation and whitespace PASS.
+
 A **read-only, exact-H38-installed-source prerequisite inspector**
 is now staged, **not executed on DGX**:
 `scripts/benchmark/check-h38-ct-meta-prerequisites.sh`,
