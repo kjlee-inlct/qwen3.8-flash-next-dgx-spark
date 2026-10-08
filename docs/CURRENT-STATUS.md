@@ -287,6 +287,10 @@ read-only-rootfs** inspector container; it does **not** load a model,
 access a GPU, tune VM, or mutate the managed service. A future PASS
 would be source-only evidence, **not** RM mitigation/host-stability
 PASS, and would not authorize R33 or promotion.
+GitHub Actions run `37747053983` on `bf7153536f78b48222dbb68b611b1d31dfa9f7db`
+**SUCCESS**, shell syntax, ShellCheck, Python compile, whitespace and
+**606/606 unit tests PASS**. This is static CI only: no host source
+inspection has been executed.
 
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The

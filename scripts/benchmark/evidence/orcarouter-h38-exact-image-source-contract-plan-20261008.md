@@ -85,10 +85,14 @@ git switch feat/h38-managed-integration
 git pull --ff-only origin feat/h38-managed-integration
 test -z "$(git status --porcelain=v1 --untracked-files=all)" || exit 1
 
+set -o pipefail
 TARGET="$(git rev-parse HEAD)"
 H38_EXACT_SOURCE_TARGET_SHA="$TARGET" \
   bash scripts/benchmark/check-h38-exact-image-source.sh \
-  | tee /tmp/h38-exact-image-source-contract.txt
+  2>&1 | tee /tmp/h38-exact-image-source-contract.txt
+RC=${PIPESTATUS[0]}
+printf "source_check_rc=%s\n" "$RC"
+test "$RC" -eq 0
 ```
 
 This is a strictly source-only static check. Pass or fail, preserve
@@ -110,3 +114,14 @@ unless an operator provides its real output.
   PASS and HOST-STABILITY PASS** before managed promotion.
 - **No R33 live tracing, no generic UVM/CUDA probes, no unchanged
   startup, no monitor weakening, no PR merge.**
+
+## Static implementation CI qualification — 2026-10-08
+
+- Implementation commit: `bf7153536f78b48222dbb68b611b1d31dfa9f7db`.
+- GitHub Actions `37747053983`: **SUCCESS**, 606/606 tests; shell syntax,
+  ShellCheck, Python compilation and whitespace PASS.
+- This qualifies only the implementation and synthetic regressions.
+  Installed-image source semantics require a separate operator-provided
+  authentic DGX output before claiming an exact-image result.
+- Host runtime remains in protected-stop state, no H38 candidate was
+  launched and PR #259 is still Draft/Open.
