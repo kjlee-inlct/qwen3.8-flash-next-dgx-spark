@@ -273,6 +273,21 @@ requires separate evidence if a concrete mitigation warrants it.
 The R23–R32 line of model-component prefix tracing stays closed;
 **no new live R33 is authorized**.
 
+A **source-only H38 exact-image checker** is staged, NOT yet executed
+on the DGX: `scripts/benchmark/check-h38-exact-image-source.sh`
+and `inspect-h38-exact-image-source.py`, with synthetic unit tests.
+It requires the exact H38 image's H11/H12/H38 labels and checks
+installed CT H11 packed `torch.empty`/ModelWeightParameter
+construction, H12 post-load aliases, H38 Humming/Marlin patch
+source and the original R32 *direct allocation syntax* contract
+on that same H38 image. Canonical guarded preflight plan:
+`scripts/benchmark/evidence/orcarouter-h38-exact-image-source-contract-plan-20261008.md`.
+The preflight uses a short-lived **CPU-only, runc, no-network,
+read-only-rootfs** inspector container; it does **not** load a model,
+access a GPU, tune VM, or mutate the managed service. A future PASS
+would be source-only evidence, **not** RM mitigation/host-stability
+PASS, and would not authorize R33 or promotion.
+
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
 next useful work is code/evidence-level attribution of the **early

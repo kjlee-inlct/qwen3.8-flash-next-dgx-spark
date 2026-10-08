@@ -73,3 +73,17 @@ The H38 attempt 01 *runtime identity* was attested by its guard, but its archive
 4. A narrower R33 is **optional** only after the previous step yields a specific change whose acceptance truly depends on distinguishing the lower CUDA/RM backing transition. No R33 is implied or currently authorized.
 
 For this PR, the immediate correct decision is **recorded cause-chain closure with H38-specific attribution still unmeasured**, retain the protected-stop gate and keep the managed promotion blocked.
+
+## Prepared but not executed: exact H38 installed-image source preflight
+
+A minimum-scope CPU-only source-contract preflight is now staged at
+`orcarouter-h38-exact-image-source-contract-plan-20261008.md`, with
+source-only runner `scripts/benchmark/check-h38-exact-image-source.sh`
+and installed-source inspector `scripts/benchmark/inspect-h38-exact-image-source.py`.
+It reuses R32 as a separate check **on the H38 image**, and verifies
+H11/H12 allocation/alias syntax and H38 runtime patch sources.
+It creates only one transient unprivileged no-network/no-GPU runc
+inspector container, without loading vLLM or changing the managed
+service. **No DGX execution is claimed by this staged source code.**
+An eventual PASS would not establish fewer RM bytes or a safe managed
+startup. R33 live tracing remains unauthorized.
