@@ -11,10 +11,14 @@ read-only `collect-linux-allocator-state.py` and the pre-event-only
 `analyze-h38-allocator-protection-trajectory.py`. This was *not* the
 managed migration gate and did not authorize a release/profile change.
 
-The operator supplied the terminal transcript including the final
-`upload-summary.txt` and `allocator-analysis.txt`, with no underlying raw
-`fast-state.txt`/`slow-state.txt` or all-row `allocator-trajectory.csv`
-uploaded for independent full-history recomputation.
+The operator initially supplied the terminal transcript including the final
+`upload-summary.txt` and `allocator-analysis.txt` but not the raw files.
+**Later the complete original 274,967-byte archive was uploaded**, enabling
+independent full-history recomputation. Its final, separately dated offline
+finding is `orcarouter-h38-allocator-protection-offline-analysis-20261008.md`
+(SHA256 `cb0e3d03ac20eb49ce095df23807550415ffa1cfccf1679e84d4ba6ea6875818`).
+The initial excerpt-only interpretation below is retained as historical
+context; the offline finding supersedes its pending next-analysis plan.
 
 - Branch: `feat/h38-managed-integration`
 - Exact executed checkout: `2e7aff15b03ffa49cb9aafd8cf688c140891c1e7`
@@ -71,8 +75,12 @@ fields, not an assumed independent re-run, support the collector status.
 ## Startup phase and protection sequence
 
 External monitor started at `10:58:26 KST`. Candidate startup reported
-18 safetensors shards; the supplied phase log reached **15/18** at
-`11:06:47 KST` before the monitor stopped the candidate. API READY was
+18 safetensors shards; the last **logged** completion before the
+`11:06:47 KST` stop was **14/18** at `11:06:24.2269 KST`.
+A 15/18 progress message was timestamped `11:06:53.9451 KST`,
+**6.95 seconds AFTER** the monitor stop signal during graceful shutdown.
+The original excerpt lacked these timestamped progress lines.
+API READY was
 not reached. The checkpoint was reported as 170.88 GiB and the worker's
 initial Available RAM as 40.78 GiB; auto-prefetch was disabled on EXT4.
 The shard-progress line is a coarse startup-phase indicator, not exact
@@ -138,8 +146,9 @@ Observations are dynamic, including an increase in Normal order-4+
 from 171.375 MiB at T-30 to 698.000 MiB at T-10 before falling again.
 Do not impose a monotonic depletion assumption or infer a causal
 allocator owner from these totals. **Do not sum fast and slow order-4+
-rows** as if they were simultaneous snapshots. The full trajectory is
-needed to locate the onset relative to checkpoint loading.
+rows** as if they were simultaneous snapshots. The subsequent uploaded raw archive and full trajectory locate the
+dominant high-order collapse at `01:59:02.196334Z -> 01:59:07.196252Z`,
+**before the first shard completion**. See the dedicated offline analysis.
 
 ## R21 / R22 comparison boundary
 
@@ -189,12 +198,14 @@ a clean run.
   while strict RM events were not observed.
 - Do **not** weaken protection, tune system VM settings, restart the
   predecessor automatically, repeat unchanged MTP startup, or merge PR #259.
-- **Next step: read-only analysis of the preserved**
-  `/tmp/orcarouter-h38-allocator-protection-20261008T015824Z/allocator-trajectory.csv`
-  to characterize early order-4+ collapse and align its timing with
-  shard-phase markers; optionally ingest historical R21/R22 raw
-  trajectories only if exact source paths are independently verified.
-  Record an offline finding rather than launching another costly run.
+- **Completed follow-up:** the preserved allocator CSV and raw samples
+  were analyzed read-only in
+  `orcarouter-h38-allocator-protection-offline-analysis-20261008.md`.
+  The early 5 s core-unexplained physical residual grew by
+  **74,761.516 MiB**, with **zero SwapFree change** in that window;
+  the same order-4+ collapse occurred during shard 0/18 initialization.
+  The R21/R22 matched-scale comparison does not prove exact owner.
+  No additional DGX live run was needed.
 
 ## Follow-up static qualification of evidence-recording fix
 

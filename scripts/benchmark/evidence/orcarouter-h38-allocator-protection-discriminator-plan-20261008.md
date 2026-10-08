@@ -102,3 +102,19 @@ exiting with 1 for `PROTECTED_STOP`, then rewrote it in the EXIT trap. This was
 a summary consistency issue, not a discrepancy in the measured result. A
 follow-up correction writes the intended result code once and prevents
 re-finalization, while retaining sudo keepalive cleanup in the EXIT trap.
+
+## Completed full-history offline analysis — 2026-10-08
+
+The operator uploaded the complete original 274,967-byte evidence archive.
+Reproducible analysis and R21/R22 comparison are now recorded at
+`orcarouter-h38-allocator-protection-offline-analysis-20261008.md`.
+A maximum five-second core-unexplained physical-page burst of
+**+74,761.516 MiB** (MemFree loss 75,157.664 MiB; conventional
+resident growth 396.148 MiB) occurred at `01:59:02.196Z ->
+01:59:07.196Z`, with no concurrent SwapFree decrease. The last
+shard-progress line before protection was **14/18**; 15/18 was logged
+6.95 s after protection. These corrections supersede the initial
+excerpt-only phase assessment; no host restart or protection change
+was performed. The next potential analysis is narrowly scoped
+attribution of the initial loading/allocator boundary, not another
+unchanged protection-stop run.

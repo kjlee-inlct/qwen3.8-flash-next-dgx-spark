@@ -210,44 +210,53 @@ comparison against preserved strict-RM failures before any monitor-policy change
 
 ## H38 allocator/protection observability — 2026-10-08
 
-The valid MTP-off attempt 04 showed that removing MTP is not sufficient to
-avoid the H38 protected-stop boundary. Production-shape allocator/protection
-discriminator attempt 01 on the single DGX Spark was then **executed** under
-exact `SPEC=mtp k=2` identity and the unchanged protective monitor:
-`scripts/benchmark/evidence/orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md`.
+The valid MTP-off discriminator attempt 04 established that removing MTP
+is insufficient to avoid the H38 protected-stop boundary. The exact
+production-shape `SPEC=mtp k=2` allocator/protection attempt 01
+also yielded a valid `PROTECTED_STOP` at `2026-10-08 11:06:47 KST`:
+`FUNCTIONAL=NOT_REACHED`, `HOST-STABILITY=INCONCLUSIVE`,
+`rm_oom_count=0`, `OOMKilled=false`, collector and kernel window valid.
+The external memory protection policy was not changed. The managed
+predecessor remains stopped.
 
-At `2026-10-08 11:06:47 KST`, the monitor protected-stop condition reached
-5/5, before API READY and at 15/18 model shards loaded. Exact candidate
-identity passed; the measured kernel window was valid; no strict RM failure
-was observed; Docker `OOMKilled=false`. Collector and event-aligned analyzer
-both completed. **RESULT=PROTECTED_STOP; FUNCTIONAL=NOT_REACHED;
-HOST-STABILITY=INCONCLUSIVE.** It is a valid observation, not a host-stability
-PASS and not a strict RM failure.
+The operator's **complete raw archive** was subsequently analyzed
+offline; canonical result:
+`scripts/benchmark/evidence/orcarouter-h38-allocator-protection-offline-analysis-20261008.md`.
+The read-only analysis uses 502 pre-event 1 s fast samples and 101
+pre-event 5 s slow samples, explicitly excluding 40/8 post-event samples.
+The dominant Normal order-4+ collapse was
+**-74,508.750 MiB** from `01:59:02.196334Z` to
+`01:59:07.196252Z` (same window global MemFree
+**-75,157.664 MiB**, node0 Normal free **-75,157.254 MiB**,
+MemAvailable **-76,158.621 MiB**, SwapFree **0.000 MiB**).
+Using the deliberately non-overlapping R21/R22 meminfo category set,
+conventional resident growth was **+396.148 MiB**, giving an
+approximate **+74,761.516 MiB core-unexplained physical-page loss**.
+The identical-scale R21/R22 maxima were +75,174.387 and +75,138.043 MiB
+over five seconds. This establishes a reproducible early-host-pressure
+pattern but does **not** attribute exact NVIDIA RM/UVM page ownership
+or authorize a safety threshold change.
 
-Immediately before protection, non-CMA free memory fell to about 1.3 GiB,
-while observed monitor swap growth reached 717 MiB. Node0 Normal order-4+
-was 139.938 MiB at T-0.804 s and Normal Unmovable order-4+ was
-24.000 MiB at T-1.802 s. These are *pre-protection, non-simultaneous*
-observations, not a contiguous-memory guarantee or an RM-failure threshold.
-The earlier R21/R22 strict-RM event snapshots are post-failure observations
-and cannot be treated as matched measurements. Existing monitor policy
-remains unchanged.
+The full timestamped phase log corrects an earlier summary: only
+**14/18 shards were logged complete BEFORE the protection event**;
+`15/18` was logged `6.95 s AFTER` protection had triggered.
+The dominant physical-page burst occurs around the initial `0/18`
+startup marker and before the first shard completion, not at shard 15.
+The previous excerpt-only report is superseded by this full-history
+phase correlation.
 
-The exact read-only instrumentation implementation passed CI `37713396361`
-(595/595 unit tests) and documentation synchronization CI `37713578855`
-(595/595). One follow-up runner-only correction prevents the EXIT trap from
-rewriting the already-finalized `script_rc` field. Neither the observed
-classification nor the protected host-state is affected by that correction.
-The result-recording commit `d2e51d4457f5e99ce55c2ce39285d1f6a3cfbb14`
-passed GitHub Actions `37718076547` **SUCCESS: 596/596 unit tests**, shell
-syntax, ShellCheck, Python compilation and whitespace PASS; this is static
-qualification, not an additional live H38 run.
+Original live runner exit-summary consistency was fixed and CI
+`37718076547` succeeded with 596/596 tests; documentation
+synchronization CI `37718270884` likewise passed 596/596.
+A separate archived-evidence offline analyzer and regressions make
+the full-history result reproducible. The analysis is read-only and
+requires no new DGX experiment.
 
-PR #259 remains **Draft / Open**. Managed migration is not qualified;
-no H38 managed performance, determinism, restart, promotion or merge is
-authorized. The next useful step is **offline analysis of the already
-preserved allocator-trajectory.csv** to locate the first high-order collapse
-and compare window shapes, not an unchanged live rerun.
+**PR #259 stays Draft/Open.** Managed migration and performance,
+determinism, restart, promotion, and merge remain blocked. The
+next useful work is code/evidence-level attribution of the **early
+common ~75 GiB allocation burst**, not an unchanged live rerun,
+compaction, drop-caches, sysctl or protection weakening.
 
 
 ## Historical evidence semantics

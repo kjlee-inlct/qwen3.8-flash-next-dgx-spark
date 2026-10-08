@@ -17,7 +17,9 @@ experiment-runtime closure and from the R9-R32 RM allocator investigation.
 - atomic cross-release transaction implementation: `orcarouter-h38-managed-atomic-refresh-implementation-20261007.md`
 - first atomic live migration attempt: `orcarouter-h38-managed-atomic-gate-attempt01-20261007.md`
 - production-shape allocator/protection discriminator plan: `orcarouter-h38-allocator-protection-discriminator-plan-20261008.md` (unchanged protection; static CI `37713578855` PASS / 595 tests)
-- production-shape allocator/protection attempt 01: `orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md` (**VALID PROTECTED_STOP** at 11:06:47 KST; exact MTP k2 identity; 15/18 shards; strict RM 0; NOT_REACHED / INCONCLUSIVE; host evidence preserved); result documentation/runner exit-summary fix CI `37718076547` SUCCESS, 596/596
+- production-shape allocator/protection attempt 01: `orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md` (**VALID PROTECTED_STOP** at 11:06:47 KST; exact MTP k2 identity; last pre-event shard 14/18; strict RM 0; NOT_REACHED / INCONCLUSIVE); runner summary fix CI `37718076547` SUCCESS, 596/596
+- **completed full-history offline finding**: `orcarouter-h38-allocator-protection-offline-analysis-20261008.md` (archive SHA256 recorded; corrected R21/R22-equivalent physical-page residual **+74,761.516 MiB** over 5 s, **SwapFree delta 0**, 40 fast/8 slow post-event samples excluded; 15/18 phase line actually AFTER protected stop)
+- archived-evidence offline analyzer: `scripts/benchmark/analyze-h38-allocator-attempt-archive.py` (read-only tar parser, meminfo+buddy accounting, phase/event strict alignment); regression: `tests/test_h38_allocator_attempt_archive.py`
 
 - allocator observer runner: `scripts/benchmark/run-h38-allocator-protection-discriminator.sh` (production SPEC=mtp k=2, same protect thresholds)
 - trajectory analyzer: `scripts/benchmark/analyze-h38-allocator-protection-trajectory.py` (pre-event-only T-60/T-30/T-10/T-5/T-1/T0 samples, optional strict-RM reference; no post-failure rollback contamination or inferred threshold); pre-event hardening CI `37713396361` SUCCESS (595/595)
