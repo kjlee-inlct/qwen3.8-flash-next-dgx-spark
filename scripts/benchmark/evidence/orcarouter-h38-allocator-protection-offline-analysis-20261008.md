@@ -207,3 +207,14 @@ python3 scripts/benchmark/analyze-h38-allocator-attempt-archive.py \
 
 This command only reads the original archive and optionally writes a
 local JSON analysis; it does not start a container or change protection.
+
+## Offline implementation/static qualification — 2026-10-08
+
+The reproducible analyzer and synthetic regressions were committed as
+`a9f4ec6658653b49cf908b567aea608e831313d6`.
+GitHub Actions workflow `37744164668`: **SUCCESS; 599/599 unit tests**,
+shell syntax, ShellCheck, Python compilation, whitespace PASS. The three
+new regression cases cover parenthesized meminfo keys, strict exclusion
+of post-protection samples and shard messages, and rejection of
+misaligned CSV event offsets. This CI is independent static validation;
+no DGX live test or managed runtime qualification is inferred.

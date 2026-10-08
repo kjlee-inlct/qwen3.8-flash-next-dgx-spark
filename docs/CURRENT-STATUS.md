@@ -251,6 +251,10 @@ synchronization CI `37718270884` likewise passed 596/596.
 A separate archived-evidence offline analyzer and regressions make
 the full-history result reproducible. The analysis is read-only and
 requires no new DGX experiment.
+The full-history offline analyzer and synthetic regressions were committed
+at `a9f4ec6658653b49cf908b567aea608e831313d6` and qualified by
+GitHub Actions `37744164668` **SUCCESS, 599/599 unit tests**, shell syntax,
+ShellCheck, Python compile and whitespace PASS.
 
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
