@@ -256,6 +256,23 @@ at `a9f4ec6658653b49cf908b567aea608e831313d6` and qualified by
 GitHub Actions `37744164668` **SUCCESS, 599/599 unit tests**, shell syntax,
 ShellCheck, Python compile and whitespace PASS.
 
+The **R11/R23–R32-to-H38 mechanism transfer review** is now recorded at
+`scripts/benchmark/evidence/orcarouter-h38-r23-r32-allocator-mechanism-transfer-20261008.md`.
+R23 directly localized its historical same-scale burst to NVIDIA RM
+`nv_alloc_pages` / `nv_alloc_system_pages`: 74,537.938 MiB logical
+order-4 activity over a 75,083.652 MiB physical residual (99.273191%)
+**in that R23 measurement**. H38's similar 74,761.516 MiB early
+residual supports transfer of the **RM/backing-growth mechanism
+hypothesis**, but **H38 did not capture its own RM call trace** and
+the H38 physical residual is not driver-owned bytes. R30/R31 closed
+the repeated 400 MiB (packed w13) and pre-MoE 800 MiB request
+positions; R32's negative direct-allocation source check covered an
+exact R28 image, not the H38 image. H38 carries H11/H12 patched
+compressed-tensors semantics, so an exact-H38-image source check
+requires separate evidence if a concrete mitigation warrants it.
+The R23–R32 line of model-component prefix tracing stays closed;
+**no new live R33 is authorized**.
+
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
 next useful work is code/evidence-level attribution of the **early

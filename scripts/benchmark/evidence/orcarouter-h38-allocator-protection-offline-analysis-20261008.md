@@ -218,3 +218,18 @@ new regression cases cover parenthesized meminfo keys, strict exclusion
 of post-protection samples and shard messages, and rejection of
 misaligned CSV event offsets. This CI is independent static validation;
 no DGX live test or managed runtime qualification is inferred.
+
+## Prior R11/R23–R32 attribution bridge — static review only
+
+The closed previous direct RM mechanism and R32 model-construction boundary were
+cross-checked against the H38 measured physical-page burst and H38 image
+patch ancestry. Detailed provenance and exact-image limitations:
+`orcarouter-h38-r23-r32-allocator-mechanism-transfer-20261008.md`.
+
+This **does not turn** H38's read-only Linux samples into an H38-specific
+RM/UVM driver trace. It identifies direct NVIDIA RM allocation as the
+best-supported *historical mechanism* (R23) and repeated CUDA/RM
+backing growth as the best-supported 800 MiB model-construction-cycle
+interpretation (R29–R32), while retaining independent H38 attribution
+and safety gates as unproven. No further broad model-prefix ownership
+tracing or unchanged live startup is warranted.
