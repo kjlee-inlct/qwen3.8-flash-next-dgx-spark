@@ -170,3 +170,25 @@ whitespace PASS. These results include synthetic source-contract
 mutation tests and runner safety guards, **not** a DGX-installed-H38
 loader source check. Do not claim the H38 source is identical to
 upstream or that selected runtime config/MTP I/O is established.
+
+## Observed exact H38 installed-loader source PASS — 2026-10-09
+
+The operator ran the guarded CPU-only, no-checkpoint-mount inspector at
+`b85f506a4f3f6e7a1272f6e5b37a137a5f57a5f9` on the pinned H38
+image `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`.
+Observed `H38_LOADER_STATIC_CONTRACT=PASS` and
+`H38_LOADER_SOURCE_PREFLIGHT=PASS` with eight SHA256 source
+identities, source-path markers, unchanged image ID and no managed
+mutation/GPU/model load. Canonical real-run record:
+`orcarouter-h38-installed-loader-source-contract-result-20261009.md`.
+
+**This closes only the availability of the relevant source paths in
+the exact image.** It does not prove which vLLM loader format,
+strategy, prefetch/thread mode and MTP execution path was actually
+selected by the H38 candidate; skipping names at the model mapper
+does not necessarily avoid a preceding `get_tensor` read.
+The original checkpoint `ORDER_GATE=FAIL` and unknown split
+layer 8/11 CT completion/peak buffers remain. Next discriminator:
+read-only attestation of captured H38 launch/container configuration
+and static packed parameter completion/scale lifecycle. No repeated
+image source check or unchanged checkpoint header scan is justified.

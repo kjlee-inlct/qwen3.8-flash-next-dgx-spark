@@ -433,8 +433,34 @@ unit tests**, shell syntax, ShellCheck, Python compile and
 whitespace PASS. This is **checker implementation CI only**,
 not an actual image-source observation.
 
-A new **read-only, CPU-only, pinned installed H38 image source
-inspector is staged, NOT yet DGX-executed**:
+**Real DGX H38 installed-loader source inspection completed: PASS.**
+The operator ran exact clean checkout
+`b85f506a4f3f6e7a1272f6e5b37a137a5f57a5f9` against immutable
+image ID
+`sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`
+in a no-network/no-GPU, read-only, UID 65534 runc inspector.
+Observed `H38_LOADER_STATIC_CONTRACT=PASS`,
+`H38_LOADER_SOURCE_PREFLIGHT=PASS`, unchanged image identity,
+no checkpoint payload read or managed-service mutation. Eight
+exact installed source SHA256 fingerprints and all observed
+`SOURCE_PRESENT` conditions are in:
+`scripts/benchmark/evidence/orcarouter-h38-installed-loader-source-contract-result-20261009.md`.
+
+**Source proof only:** default indexed file selection, natural sorted
+safetensors + `safe_open.keys()` + `get_tensor`, Qwen4Exp
+`mtp.` name mapper, alternative loader routes, native layerwise
+numel-based buffer/replay and H11/H12 CT aliases are present.
+An `mtp.` model-mapping skip does **not** establish a pre-read
+checkpoint payload skip. Actual selected H38 load format/strategy,
+prefetch/multithread, EP filter, MTP model path and split
+layer 8/11 packed-scale completion are **UNVERIFIED**.
+The 18-file checkpoint `ORDER_GATE=FAIL` remains unmodified,
+with 17 numbered base files + MTP, layer 8/11 base shard revisits
+and no verified safe buffering bound. No CT meta patch,
+RM reduction, functional or host stability qualification results.
+
+The previously staged source-only checker is:
+
 `scripts/benchmark/inspect-h38-installed-loader-source.py`,
 `scripts/benchmark/check-h38-installed-loader-source.sh`, and
 `tests/test_h38_installed_loader_source.py`.
