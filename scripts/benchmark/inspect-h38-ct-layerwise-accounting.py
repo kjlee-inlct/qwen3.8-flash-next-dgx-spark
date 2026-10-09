@@ -76,12 +76,84 @@ def one_line(n: ast.AST, limit: int = 260) -> str:
     return value if len(value) <= limit else value[:limit] + "...[TRUNCATED]"
 
 
+
+def torch_empty_allocation(init: ast.AST) -> dict[str, object]:
+    """Read literal AST allocation shape/metadata without evaluating any tensor."""
+    require(isinstance(init, ast.Call), "unresolved_parameter_initializer")
+    assert isinstance(init, ast.Call)
+    outer = call_name(init.func)
+    require(outer in ("ModelWeightParameter", "torch.nn.Parameter"),
+            f"unsupported_CT_parameter_wrapper:{outer}")
+    kwargs = {kw.arg: kw.value for kw in init.keywords if kw.arg is not None}
+    if outer == "ModelWeightParameter":
+        data = kwargs.get("data")
+        require(data is not None, "missing_ModelWeightParameter_data")
+    else:
+        data = init.args[0] if init.args else None
+    require(isinstance(data, ast.Call) and call_name(data.func) == "torch.empty",
+            f"missing_parameter_torch_empty:{outer}")
+    assert isinstance(data, ast.Call)
+    empty_kwargs = {kw.arg: kw.value for kw in data.keywords if kw.arg is not None}
+    require("dtype" in empty_kwargs, "missing_torch_empty_dtype")
+    result: dict[str, object] = {
+        "wrapper": outer,
+        "shape": [ast.unparse(arg) for arg in data.args],
+        "dtype": ast.unparse(empty_kwargs["dtype"]),
+        "device": (ast.unparse(empty_kwargs["device"])
+                   if "device" in empty_kwargs else "NOT_EXPLICIT"),
+        "requires_grad": (ast.unparse(kwargs["requires_grad"])
+                          if "requires_grad" in kwargs else "NOT_EXPLICIT"),
+    }
+    if outer == "ModelWeightParameter":
+        for name, expected in (("input_dim", "1"), ("output_dim", "2"),
+                               ("weight_loader", "weight_loader")):
+            require(name in kwargs and ast.unparse(kwargs[name]) == expected,
+                    f"invalid_H11_{name}")
+        result["input_dim"] = "1"
+        result["output_dim"] = "2"
+        result["weight_loader"] = "weight_loader"
+    return result
+
+# Stored allocation dimensions from the upstream class preserved by H11/H12.
+# A mismatch is an unqualified source change, NOT evidence of corrupt weights.
+EXPECTED_CT_ALLOCATIONS = {
+    "w13_weight_packed": (
+        "ModelWeightParameter",
+        ["num_experts", "w13_num_shards * intermediate_size_per_partition",
+         "hidden_size // 2"], "torch.uint8"),
+    "w2_weight_packed": (
+        "ModelWeightParameter",
+        ["num_experts", "hidden_size",
+         "intermediate_size_per_partition // 2"], "torch.uint8"),
+    "w13_weight_scale": (
+        "torch.nn.Parameter",
+        ["num_experts", "w13_num_shards * intermediate_size_per_partition",
+         "hidden_size // self.group_size"], "torch.float8_e4m3fn"),
+    "w2_weight_scale": (
+        "torch.nn.Parameter",
+        ["num_experts", "hidden_size",
+         "intermediate_size_per_partition // self.group_size"],
+        "torch.float8_e4m3fn"),
+    "w13_weight_global_scale": (
+        "torch.nn.Parameter", ["num_experts", "w13_num_shards"],
+        "torch.float32"),
+    "w2_weight_global_scale": (
+        "torch.nn.Parameter", ["num_experts"], "torch.float32"),
+    "w13_input_global_scale": (
+        "torch.nn.Parameter", ["num_experts", "w13_num_shards"],
+        "torch.float32"),
+    "w2_input_global_scale": (
+        "torch.nn.Parameter", ["num_experts"], "torch.float32"),
+}
+
+
 def parameter_registry(create: ast.FunctionDef) -> dict[str, dict[str, object]]:
     """Report registrations and originating initializer AST without evaluation."""
     assigns = {}
     registrations: dict[str, dict[str, object]] = {}
     # Traverse the function (including conditional branches) in source order.
-    for node in ast.walk(create):
+    for node in sorted(ast.walk(create), key=lambda n: (getattr(n, 'lineno', 0),
+                                                    getattr(n, 'col_offset', 0))):
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             target = node.targets[0]
             if isinstance(target, ast.Name):
@@ -97,12 +169,14 @@ def parameter_registry(create: ast.FunctionDef) -> dict[str, dict[str, object]]:
         require(name not in registrations, f"duplicate_registration:{name}")
         value = node.args[1]
         init = assigns.get(value.id) if isinstance(value, ast.Name) else None
+        require(init is not None, f"registration_without_initializer:{name}")
+        allocation = torch_empty_allocation(init)
         registrations[name] = {
             "line": node.lineno,
             "source_value": one_line(value),
-            "initializer": one_line(init) if init is not None else "NOT_DIRECT_ASSIGNMENT",
-            "initializer_type": call_name(init.func) if isinstance(init, ast.Call)
-                                else "UNRESOLVED",
+            "initializer": one_line(init),
+            "initializer_type": allocation["wrapper"],
+            "allocation": allocation,
         }
     return registrations
 
@@ -114,14 +188,15 @@ def assert_packed_and_h12(trees: dict[str, ast.Module]) -> dict:
     registry = parameter_registry(create)
     for name in PACKED + SCALES:
         require(name in registry, f"missing_parameter_registration:{name}")
-    for name in PACKED:
+    for name in PACKED + SCALES:
         row = registry[name]
-        require(row["initializer_type"] == "ModelWeightParameter",
-                f"missing_H11_ModelWeightParameter:{name}")
-        require("torch.empty(" in str(row["initializer"]),
-                f"missing_torch_empty:{name}")
-        require("weight_loader=weight_loader" in str(row["initializer"]),
-                f"missing_H11_loader:{name}")
+        alloc = row["allocation"]
+        wrapper, shape, dtype = EXPECTED_CT_ALLOCATIONS[name]
+        require(alloc["wrapper"] == wrapper, f"incorrect_CT_parameter_wrapper:{name}")
+        require(alloc["shape"] == shape, f"incorrect_CT_parameter_shape:{name}")
+        require(alloc["dtype"] == dtype, f"incorrect_CT_parameter_dtype:{name}")
+        require(alloc["device"] == "NOT_EXPLICIT",
+                f"explicit_CT_allocation_device:{name}")
     post_code = ast.unparse(post)
     for packed in PACKED:
         target = packed.removesuffix("_packed")
@@ -172,6 +247,20 @@ def check_accounting(trees: dict[str, ast.Module]) -> dict:
         "copy_counter_numel": "self.copied_numel += args[0].numel()"
                               in ast.unparse(dispatch),
         "get_layer_size_uses_numel": ".numel()" in bodies["size"],
+        "get_layer_size_skips_nonloadable": "SKIP_LOAD_TENSORS" in bodies["size"],
+        "late_registered_size_refresh": (
+            "info.load_numel_total = get_layer_size(layer)" in bodies["online_loader"]),
+        "late_parameter_wrap": (
+            "_wrap_parameters_weight_loader(layer)" in bodies["online_loader"]),
+        "postcompletion_load_rejection": "not info.can_load()" in bodies["online_loader"],
+        "materialize_preserves_parameter_class": (
+            "tensor.__class__ = meta_tensor.__class__" in
+            ast.unparse(source_func(meta, "materialize_meta_tensor"))),
+        "materialize_preserves_parameter_attributes": (
+            "tensor.__dict__ = meta_tensor.__dict__.copy()" in
+            ast.unparse(source_func(meta, "materialize_meta_tensor"))),
+        "partial_layer_finalization": (
+            "info.load_numel < info.load_numel_total" in bodies["finalize"]),
     }
     require(all(anchors.values()),
             "accounting_source_contract_missing:" +
