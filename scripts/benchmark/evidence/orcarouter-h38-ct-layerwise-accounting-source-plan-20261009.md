@@ -103,3 +103,12 @@ This update does not modify H11/H12 patches or the H38 image, checkpoint, servic
 The source-only success condition cannot show that TorchDispatchMode counts all indexed scale writes, actual per-expert unique element coverage, full layer 8/11 shard ordering, functional behavior or finite peak buffer use. The correction should be reviewed against a new exact-image output; another INVALID remains a checker evidence result, not permission to execute H38 GPU/model loads.
 
 **Unverified:** exact corrected AST execution, PerTensorScaleParameter exact registration location/constructor shape/loader values, CopyCounter credit for indexed assignments, CT completion and host stability. No image rebuild, CT meta change, host-protection adjustment, model/GPU start or PR #259 merge.
+
+
+## Fail-closed eight-registration diagnostic fallback — repository stage, 2026-10-09
+
+The repository's next source-inspection tool revision adds an automatic **non-passing fallback** on any source-contract exception. It checks all five installed source hashes afresh before reporting all eight expected CT registration sites, bounded AST initializer forms, constructor class, literal torch.empty shape/dtype/device and weight-loader keyword. Unexpected constructors/metadata no longer hide later registration diagnostics; the source contract still exits with rc=2 and retains its original INVALID reason. The fallback cannot report runtime correctness, effective loader callbacks, per-expert weight/scale uniqueness or peak memory.
+
+The fallback reports PINNED_CT_SOURCE_SYNTAX_ONLY_NOT_A_PASS, explicitly never a qualification. If any source digest mismatch prevents trustworthy inspection, output is UNAVAILABLE rather than a partial unverified source dump. Dedicated synthetic tests check non-PASS behavior, all-eight error reporting and hash-drift fail-closed.
+
+No DGX Attempt 02 result has yet been observed. The previous pasted Attempt 01 failure remains immutable in orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md. A further operator-side source-only run should always pin an exact clean CI-qualified HEAD and preserve exit code and full log, but must not execute H38 model/GPU or change host protection.
