@@ -337,10 +337,23 @@ The metadata tool implementation was statically qualified at
 `b476441899d07d04e9db3669ccd881f4351ef15e`: GitHub Actions
 `37822913604` **SUCCESS, 620/620 unit tests**, shell syntax,
 ShellCheck, Python compilation and whitespace PASS.
-The following host checkpoint check is **still not executed**.
+The host checkpoint metadata attempt 01 **was executed** on the
+DGX at `551da2c603f2e83c6aedb4668e831e67dae82da6`, but ended
+**PREFLIGHT INVALID** with `[Errno 2] No usable temporary directory`
+before any shard/layer metadata-order result. Canonical observed
+failure: `scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-attempt01-invalid-tempfile-20261009.md`.
+This is an inspector execution-environment issue, not evidence
+of a bad checkpoint, and it does not change host stability.
+The narrowly corrected runner adds **only a 64 MiB private /tmp
+tmpfs** (`noexec,nosuid,nodev,mode=1777` and `TMPDIR=/tmp`)
+while preserving read-only checkpoint mounts, unprivileged UID,
+no network, no model/GPU launch and strict protection. No real
+DGX retest has been performed on the repaired runner yet.
 
 A **separate metadata-only H38 production checkpoint (18-shard)
-order/limited buffer-scenario analyzer is staged, not executed**:
+order/limited buffer-scenario analyzer is staged; its initial DGX
+attempt was INVALID before measurement, and its corrected runner
+is not yet executed**:
 `scripts/benchmark/inspect-h38-checkpoint-metadata-order.py`,
 `scripts/benchmark/check-h38-checkpoint-metadata-order.sh`,
 `tests/test_h38_checkpoint_metadata_order.py` and

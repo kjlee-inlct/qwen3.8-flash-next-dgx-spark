@@ -147,6 +147,31 @@ class H38CheckpointMetadataOrderTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("missing_exact_checkout_sha", result.stderr)
 
+    def test_tempfile_mount_is_private_bounded_and_only_writable_location(self) -> None:
+        code = RUNNER.read_text(encoding="utf-8")
+        # Regression for original DGX INVALID: Python tempfile on a fully
+        # read-only rootfs had no writable tmp directory as UID 65534.
+        self.assertIn(
+            "--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
+            code,
+        )
+        self.assertIn("--env TMPDIR=/tmp", code)
+        self.assertEqual(code.count("--tmpfs "), 1)
+        self.assertEqual(code.count("--mount "), 2)
+        self.assertIn("--runtime runc --network none --read-only", code)
+        self.assertIn("--user 65534:65534", code)
+        self.assertIn("type=bind,src=${MODEL_DIR},dst=/opt/checkpoint,readonly", code)
+        for unsafe in ("--privileged", "--user 0:0", "--gpus all",
+                       "chmod -R", "docker exec", "--network host"):
+            self.assertNotIn(unsafe, code)
+
+    def test_tmpfs_is_not_a_host_checkpoint_write_mount(self) -> None:
+        code = RUNNER.read_text(encoding="utf-8")
+        self.assertIn("--tmpfs /tmp:", code)
+        self.assertNotIn("dst=/tmp", code)
+        self.assertNotIn("src=/tmp", code)
+        self.assertNotIn("src=${MODEL_DIR},dst=/opt/checkpoint,rw", code)
+
     def test_no_payload_access_in_analyzer_source(self) -> None:
         code = SCRIPT.read_text(encoding="utf-8")
         self.assertNotIn(".get_tensor(", code)

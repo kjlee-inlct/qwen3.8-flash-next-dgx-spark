@@ -146,3 +146,31 @@ by this metadata-only static gate.**
   failure paths. No actual H38 production checkpoint metadata scan
   has been executed, and no H38-specific loader-order/peak-memory
   acceptance claim is made.
+
+## Real DGX attempt 01 — INVALID; narrowly repaired runner pending — 2026-10-09
+
+The operator ran this exact checkpoint header-only preflight on
+`551da2c603f2e83c6aedb4668e831e67dae82da6`, image ID
+`sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`,
+pointing to the canonical `$HOME/models/qwen3.8-flash-next-orcarouter`.
+It failed **before any shard/order/buffer result**:
+
+```text
+H38_CKPT_METADATA_ORDER=INVALID reason=[Errno 2] No usable temporary directory found in ['/tmp', '/var/tmp', '/usr/tmp', '/vllm-workspace']
+H38_CKPT_METADATA_PREFLIGHT=INVALID reason=checkpoint_metadata_order_invalid
+```
+
+Cause inferred from observed security configuration: a completely
+read-only inspector image plus UID 65534 had no usable temporary
+filesystem. Exact Python import/call stack was not captured. Canonical
+failure record:
+`orcarouter-h38-checkpoint-metadata-order-attempt01-invalid-tempfile-20261009.md`.
+
+The repaired runner supplies **only a private 64 MiB RAM-backed /tmp**:
+`--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777`
+and `--env TMPDIR=/tmp`. All image/source/checkpoint read-only,
+no-network, unprivileged runc, image-ID/checkout guards remain.
+New static regressions verify exactly one bounded tmpfs and absence
+of writable checkpoint or privileged execution flags.
+**No actual repaired-image rerun has occurred yet, and no checkpoint
+order or memory-stability PASS can be claimed.**

@@ -37,13 +37,18 @@ before="$(docker image inspect --format '{{.Id}}' "${IMAGE}")"
 printf 'H38_CKPT_METADATA_PREFLIGHT=BEGIN\n'
 printf 'checkout_sha=%s\nimage_id=%s\n' "${TARGET_SHA}" "${before}"
 printf 'scope=read_only_header_and_safe_open_keys_no_tensor_data_no_gpu\n'
-# Only the caller-specified existing checkpoint directory is bound, read-only.
+printf 'ephemeral_tmpfs=/tmp:64m:noexec:nosuid:nodev:mode1777\n'
+# The original source-only attempt had no writable tempfile location because
+# --read-only + UID 65534 rendered image /tmp unusable. Supply only a capped,
+# container-private /tmp tmpfs; keep checkpoint bind and rootfs read-only.
 # Access denied to an unprivileged inspector is INVALID; do not retry as root.
 docker run \
   --rm --pull never --runtime runc --network none --read-only \
   --cap-drop ALL --security-opt no-new-privileges \
   --pids-limit 64 --memory 1g --memory-swap 1g --cpus 1 \
   --user 65534:65534 \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777 \
+  --env TMPDIR=/tmp \
   --mount "type=bind,src=${MODEL_DIR},dst=/opt/checkpoint,readonly" \
   --mount "type=bind,src=${INSPECTOR},dst=/opt/h38-checkpoint-order.py,readonly" \
   --entrypoint python3 "${IMAGE}" \
