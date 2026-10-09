@@ -429,3 +429,11 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 ## H38 CT per-parameter layerwise accounting — 2026-10-09 (source discriminator staged)
 
 - [H38 CT packed/scale layerwise source-only accounting plan](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — pins the H11/H12/installed-source contract, adds a guarded source-only checker plus synthetic regressions, and explicitly retains CT completion, shard-split buffer peak and host stability as unverified. This is a plan and tool implementation, **not an executed DGX result**.
+
+
+### H38 CT layerwise accounting counterexamples — 2026-10-09
+
+- [H38 CT accounting source-only plan and synthetic counterexamples](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — updated AST inspector now pins all eight CT shapes/dtypes and partial/finalizer paths; the offline synthetic suite demonstrates an aggregate element-count false-completion possibility without asserting it happened in the H38 runtime.
+- Tools: scripts/benchmark/inspect-h38-ct-layerwise-accounting.py, scripts/benchmark/simulate-h38-ct-layerwise-completion.py; tests/test_h38_ct_layerwise_accounting.py and tests/test_h38_ct_layerwise_completion_cases.py.
+- Test-only evidence (intermediate commit 511bef4c01268e7a4745fad8eae6843a7d1ca3e9): Actions run 37911091805 **SUCCESS / 662 tests** plus syntax/ShellCheck/compile/whitespace. CI and exact SHA must be checked again at the final documentation HEAD.
+- Distinction: **SYNTHETIC_ONLY**; exact-image CPU-only inspector execution **PENDING**; real CT completion, shard 8/11 buffer lifetime, actual peak and host stability **UNVERIFIED**. PR #259 stays Draft/Open and is not mergeable under current qualification rules.
