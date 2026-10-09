@@ -437,3 +437,10 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 - Tools: scripts/benchmark/inspect-h38-ct-layerwise-accounting.py, scripts/benchmark/simulate-h38-ct-layerwise-completion.py; tests/test_h38_ct_layerwise_accounting.py and tests/test_h38_ct_layerwise_completion_cases.py.
 - Test-only evidence (intermediate commit 511bef4c01268e7a4745fad8eae6843a7d1ca3e9): Actions run 37911091805 **SUCCESS / 662 tests** plus syntax/ShellCheck/compile/whitespace. CI and exact SHA must be checked again at the final documentation HEAD.
 - Distinction: **SYNTHETIC_ONLY**; exact-image CPU-only inspector execution **PENDING**; real CT completion, shard 8/11 buffer lifetime, actual peak and host stability **UNVERIFIED**. PR #259 stays Draft/Open and is not mergeable under current qualification rules.
+
+
+### H38 RoutedExperts mixed scale-write syntax — 2026-10-09
+
+- [CT layerwise-accounting source plan and routed dispatch contract](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — source-only inspector now checks a fifth pinned installed H38 source (RoutedExperts), including expert ID remapping/nonlocal rejection, GROUP/TENSOR/packed loader paths, explicit w13/w2 copy helpers and indexed scale assignment sites.
+- Relevant source-only code/test implementation CI: run 37914943450, SUCCESS / 666 unit tests, shell syntax/ShellCheck/Python compile/whitespace PASS. The final canonical docs HEAD requires a fresh CI check.
+- Observation is **UPSTREAM SOURCE / CODE CONTRACT ONLY**, not actual pinned-image execution and not a TorchDispatchMode trace. Indexed assignment is not automatically equivalent to counted aten.copy_; actual CT scale copy credit, unique expert coverage and layer 8/11 buffering remain UNVERIFIED. PR #259 is Draft/Open, merge forbidden.
