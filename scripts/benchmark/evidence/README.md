@@ -425,3 +425,7 @@ Model-prefix/component localization is now closed. Do not add more model-prefix,
 R33 is optional and is **not** automatically authorized. A new live allocator-focused discriminator is justified only if an actionable mitigation requires identifying the exact lower-level transition responsible for the 800 MiB request.
 
 PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6` on 2026-10-06. The R9–R32 allocator/localization chain above is therefore the post-merge canonical repository state. The unqualified M1 mitigation prototype was intentionally excluded from that merge and remains a separate follow-up track.
+
+## H38 CT per-parameter layerwise accounting — 2026-10-09 (source discriminator staged)
+
+- [H38 CT packed/scale layerwise source-only accounting plan](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — pins the H11/H12/installed-source contract, adds a guarded source-only checker plus synthetic regressions, and explicitly retains CT completion, shard-split buffer peak and host stability as unverified. This is a plan and tool implementation, **not an executed DGX result**.
