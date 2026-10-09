@@ -551,3 +551,16 @@ index instead of duplicating volatile experiment-state text.
 The M1 mitigation prototype was intentionally excluded from PR #244 and is not part of
 the R9–R32 canonical merge. Do not describe it as qualified or merged until its own
 measurement/acceptance gates are completed.
+
+## H38 CT layerwise-accounting source discriminator — 2026-10-09
+
+The Draft PR #259 branch now stages a new exact-image, read-only AST CT packed/scale accounting inspector and guarded CPU-only wrapper:
+
+- `scripts/benchmark/inspect-h38-ct-layerwise-accounting.py`
+- `scripts/benchmark/check-h38-ct-layerwise-accounting.sh`
+- `tests/test_h38_ct_layerwise_accounting.py`
+- `scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md`
+
+The inspector pins the earlier verified H38 installed source digests and checks two packed H11 `ModelWeightParameter` registrations, six component scale registrations, H12 object aliases and the layerwise count/buffer/finalizer source anchors. The repository H11 patch supplies explicit packed `uint8` shape formulas. Upstream vLLM v0.29 per-invocation `get_numel_loaded` capping does not prove per-parameter lifetime deduplication or that all 512 experts and scales have arrived at a layerwise completion boundary.
+
+**Status: STAGED / SYNTHETIC TESTS / NO NEW ACTUAL DGX RESULT YET.** Exact installed H38 tool execution and per-expert completeness, layer 8/11 shard-split finalization, subclass/alias materialization, effective iterator and simultaneous buffer peaks are still unverified. The earlier `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `FUNCTIONAL=NOT_REACHED`, `HOST-STABILITY=INCONCLUSIVE`, and `RM_MITIGATION=UNPROVEN` remain unchanged. H38 GPU/model rerun and PR #259 Ready/merge remain BLOCKED; no host protection modification is authorized.
