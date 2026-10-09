@@ -349,6 +349,12 @@ tmpfs** (`noexec,nosuid,nodev,mode=1777` and `TMPDIR=/tmp`)
 while preserving read-only checkpoint mounts, unprivileged UID,
 no network, no model/GPU launch and strict protection. No real
 DGX retest has been performed on the repaired runner yet.
+Implementation commit `d3ff823d3b7c183bb84c53079e25984e321a23e0`
+was statically verified by GitHub Actions `37882840040`:
+**SUCCESS, 622/622 unit tests**, shell syntax, ShellCheck,
+Python compilation and whitespace PASS.
+This validates the repair's source/guard tests, **not**
+actual H38 container tempfile availability.
 
 A **separate metadata-only H38 production checkpoint (18-shard)
 order/limited buffer-scenario analyzer is staged; its initial DGX

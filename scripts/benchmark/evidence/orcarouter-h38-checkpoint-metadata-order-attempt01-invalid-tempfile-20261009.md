@@ -88,3 +88,16 @@ host_stability=INCONCLUSIVE
 **No H38 model/allocator run, checkpoint mutation, VM/protection change,
 PR Ready or merge is authorized.** A repaired source-only check is
 the next justified action, not a GPU/M1/R33 experiment.
+
+## Repair source-level qualification — 2026-10-09
+
+- Fixed-source commit: `d3ff823d3b7c183bb84c53079e25984e321a23e0`.
+- GitHub Actions `37882840040`: **SUCCESS / 622 of 622 tests**,
+  ShellCheck, shell syntax, Python compile and whitespace PASS.
+- **Not yet proved on actual H38 container:** Python tempfile
+  usability, shard/index order, 48 routed layer order, hypothetical
+  routed-buffer byte scenarios, actual vLLM loader equivalence,
+  CT meta materialization, NVIDIA RM demand or host stability.
+- Corrected source is staged for a single CPU-only, header-only,
+  unchanged-image read-only recheck. Do not reinterpret this CI as
+  an H38 checkpoint content PASS.
