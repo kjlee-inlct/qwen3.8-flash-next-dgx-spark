@@ -41,7 +41,7 @@ class H38CtSyntheticCompletionTests(unittest.TestCase):
 
     def test_duplicate_partial_can_hide_missing_packed_subrange(self) -> None:
         got = module.cases()["duplicate_partial_early_completion"]
-        self.assertEqual(got["threshold_processing_event"], 7)
+        self.assertEqual(got["threshold_processing_event"], 8)
         self.assertEqual(got["credited_elements"], 20)
         self.assertEqual(got["uniquely_covered_elements"], 16)
         self.assertEqual(got["missing_elements_by_parameter"], {"w13_weight_packed": 4})
