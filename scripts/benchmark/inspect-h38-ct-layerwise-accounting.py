@@ -20,6 +20,7 @@ FILES = {
     "layerwise": "vllm/model_executor/model_loader/reload/layerwise.py",
     "meta": "vllm/model_executor/model_loader/reload/meta.py",
     "utils": "vllm/model_executor/model_loader/reload/utils.py",
+    "routed": "vllm/model_executor/layers/fused_moe/routed_experts.py",
 }
 # Verified by earlier guarded installed-H38 inspections. Reject silent drift.
 EXPECTED_SHA256 = {
@@ -27,6 +28,7 @@ EXPECTED_SHA256 = {
     "layerwise": "9f37db893446d1f8ddc654a3bbcc3addf4b3020565920c56ef0c1ae29fd32a4a",
     "meta": "87a98fe340f7e39a7ba3ed136506bf5e3eef463f9215420cce5ddeb5d25a2b9c",
     "utils": "9421654170a04244d9ad702ba8c81dcf6c09a3c8bfe7e04ccbe099baf57b63a1",
+    "routed": "5206219da6b78315d6b35bee89fd0caa783681846affbf6917f430ef7f2481b5",
 }
 PACKED = ("w13_weight_packed", "w2_weight_packed")
 SCALES = (
@@ -276,6 +278,103 @@ def check_accounting(trees: dict[str, ast.Module]) -> dict:
                      "ownership are NOT proven by AST presence.")}
 
 
+
+def inspect_routed_weight_loader(tree: ast.Module) -> dict[str, object]:
+    """Inspect dispatched writes, not the effective Torch dispatcher events.
+
+    A Tensor subscript assignment may trigger internal aten copy operations,
+    but it cannot be equated with CopyCounter increments by static AST alone.
+    """
+    routed = member(tree.body, "RoutedExperts", ast.ClassDef)
+    assert isinstance(routed, ast.ClassDef)
+    def get_method(name: str, *, overloaded: bool = False) -> ast.FunctionDef:
+        defs = [x for x in routed.body
+                if isinstance(x, ast.FunctionDef) and x.name == name]
+        require(bool(defs), f"missing_routed_method:{name}")
+        if not overloaded:
+            require(len(defs) == 1, f"ambiguous_routed_method:{name}")
+        # weight_loader has @overload declarations before its implementation.
+        # The concrete last definition is the one Python binds at import time.
+        result = defs[-1]
+        require(not (len(result.body) == 1 and isinstance(result.body[0], ast.Expr)
+                     and isinstance(result.body[0].value, ast.Constant)
+                     and result.body[0].value.value is Ellipsis),
+                f"missing_concrete_routed_method:{name}")
+        return result
+
+    initializer = get_method("__init__")
+    loader = get_method("weight_loader", overloaded=True)
+    scalar = get_method("_load_single_value")
+    tensor_scale = get_method("_load_per_tensor_weight_scale")
+    group = get_method("_load_model_weight_or_group_weight_scale")
+    w13 = get_method("_load_w13")
+    w2 = get_method("_load_w2")
+
+    init_text = ast.unparse(initializer)
+    loader_text = ast.unparse(loader)
+    checks = {
+        "routed_constructor_exports_weight_loader":
+            "'weight_loader': self.weight_loader" in init_text,
+        "routed_global_to_local_expert_map":
+            "self._map_global_expert_id_to_local_expert_id(global_expert_id)"
+            in loader_text,
+        "routed_nonlocal_expert_skip":
+            "expert_id == -1" in loader_text and "use_global_sf" in loader_text,
+        "routed_input_scale_dispatch":
+            "self._load_single_value(" in loader_text,
+        "routed_tensor_scale_dispatch":
+            "self._load_per_tensor_weight_scale(" in loader_text,
+        "routed_group_or_packed_dispatch":
+            "self._load_model_weight_or_group_weight_scale(" in loader_text,
+        "routed_GROUP_scale_tag":
+            "FusedMoeWeightScaleSupported.GROUP.value" in loader_text,
+        "routed_TENSOR_scale_tag":
+            "FusedMoeWeightScaleSupported.TENSOR.value" in loader_text,
+        "routed_group_helper_calls_w13":
+            "self._load_w13(" in ast.unparse(group),
+        "routed_group_helper_calls_w2":
+            "self._load_w2(" in ast.unparse(group),
+        "routed_w13_copy":
+            "expert_data.copy_(loaded_weight)" in ast.unparse(w13),
+        "routed_w2_copy":
+            "expert_data.copy_(loaded_weight)" in ast.unparse(w2),
+    }
+
+    def subscript_assignment_count(node: ast.FunctionDef) -> int:
+        return sum(isinstance(target, ast.Subscript)
+                   for item in ast.walk(node)
+                   if isinstance(item, (ast.Assign, ast.AnnAssign))
+                   for target in (item.targets if isinstance(item, ast.Assign)
+                                  else [item.target]))
+
+    scalar_assigns = subscript_assignment_count(scalar)
+    tensor_assigns = subscript_assignment_count(tensor_scale)
+    checks["routed_single_value_subscript_write"] = scalar_assigns >= 1
+    checks["routed_tensor_scale_subscript_write"] = tensor_assigns >= 2
+    require(all(checks.values()),
+            "routed_loader_source_contract_missing:" +
+            ",".join(k for k, value in checks.items() if not value))
+    return {
+        "anchors": checks,
+        "source_lines": {
+            "weight_loader": loader.lineno,
+            "single_value": scalar.lineno,
+            "tensor_scale": tensor_scale.lineno,
+            "group_or_packed": group.lineno,
+            "w13": w13.lineno,
+            "w2": w2.lineno,
+        },
+        "direct_subscript_assignment_sites": {
+            "input_global_scale_helper": scalar_assigns,
+            "tensor_global_scale_helper": tensor_assigns,
+        },
+        "dispatch_interpretation": "MIXED_EXPLICIT_COPY_AND_INDEXED_ASSIGNMENT",
+        "actual_aten_copy_event_coverage": "UNVERIFIED",
+        "actual_nonlocal_expert_or_global_sf_coverage": "UNVERIFIED",
+        "actual_512_expert_parameter_completeness": "UNVERIFIED",
+    }
+
+
 def inspect(root: Path) -> dict:
     trees: dict[str, ast.Module] = {}
     actual: dict[str, str] = {}
@@ -291,6 +390,7 @@ def inspect(root: Path) -> dict:
         "source_sha256": actual,
         "ct": assert_packed_and_h12(trees),
         "layerwise": check_accounting(trees),
+        "routed_expert_dispatch": inspect_routed_weight_loader(trees["routed"]),
         "classification": "SOURCE_CONTRACT_ONLY_NOT_RUNTIME_QUALIFICATION",
         "complete_parameter_coverage": "UNVERIFIED",
         "per_expert_loader_mapping": "UNVERIFIED",
