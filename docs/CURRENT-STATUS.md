@@ -580,3 +580,12 @@ Implementation and coverage:
 - scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md
 
 **Do not promote SOURCE_ONLY/SYNTHETIC into actual installed-image execution or model qualification.** The guarded exact H38 CPU-only inspector still requires an operator-side run and its output; real CT loader completeness and finite simultaneous buffer lifetime are UNVERIFIED. CHECKPOINT_METADATA_ORDER_GATE=FAIL; FUNCTIONAL=NOT_REACHED; HOST-STABILITY=INCONCLUSIVE; RM mitigation UNPROVEN; H38 model/GPU rerun BLOCKED; PR #259 DRAFT/OPEN and MERGE BLOCKED. All host memory protection stays unchanged.
+
+
+## H38 RoutedExperts dispatch source prerequisite — 2026-10-09
+
+The staged H38 CT source inspector now also requires the earlier installed-image SHA256 fingerprint of RoutedExperts (5206219da6b78315d6b35bee89fd0caa783681846affbf6917f430ef7f2481b5), alongside the existing CT, layerwise, meta and reload-utils fingerprints. Synthetic regression fixtures cover the exact inspected *source* contract, missing indexed-scale writes, missing nonlocal-expert skip, and the overloaded weight_loader concrete implementation.
+
+Public upstream vLLM v0.29.0 RoutedExperts source shows explicit .copy_() in routed weight helpers, but indexed Tensor assignments for scalar/tensor input and global-scale helpers; scale dispatch can depend on GROUP/TENSOR tags, global/local expert remapping and nonlocal expert filtering. Exact TorchDispatchMode operations from these indexed assignments are **not certified by AST source**. In particular, it remains unjustified to treat every syntactic Tensor assignment as a CopyCounter count or to infer complete unique destination coverage for CT scales.
+
+**State: SOURCE_ONLY CODE STAGED; exact H38 installed-source execution PENDING.** The bounded interpreter output is pending DGX operator evidence and can confirm only the exact source anchors and digests. No model/accelerator run, H38 image/source/checkpoint modification or host safety change was made. CT_COPYCOUNTER_SCALE_COVERAGE=UNVERIFIED; CT_WEIGHT_COMPLETENESS=UNVERIFIED; CHECKPOINT_METADATA_ORDER_GATE=FAIL; HOST-STABILITY=INCONCLUSIVE; PR #259 remains DRAFT/OPEN and MERGE BLOCKED. The separate source-plan result is recorded in scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md.
