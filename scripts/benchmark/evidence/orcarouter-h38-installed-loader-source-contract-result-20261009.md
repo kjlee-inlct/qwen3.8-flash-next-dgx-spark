@@ -97,3 +97,16 @@ secrets and distinguishing explicit CLI flags from defaults.
 **The preserved archive has not yet been inspected**. Even a pass
 would not upgrade source-only loader contract or checkpoint FAIL to
 runtime stability or bounded CT deferred materialization.
+
+## Archived Attempt 04 loader flags — actual DGX closure (2026-10-09)
+
+The previously planned archived-only read was performed at
+`1bc76cb12cc8df9d9512de0d0cd29e49120c1233` and returned
+`PASS_ARCHIVED_LAUNCH_FLAGS_ONLY`. Explicit H38 SPEC=none flags:
+`--load-format safetensors`, `--distributed-executor-backend mp`,
+`--tensor-parallel-size 1`; the archived Attempt 04 log contained
+`Auto-prefetch is disabled`. Prefetch strategy, loader extra config,
+thread/block defaults and EP settings remain **NOT_EXPLICIT**.
+The source-only PASS above cannot substitute for exact effective
+runtime loader behavior. Full real operator record:
+`orcarouter-h38-preserved-loader-config-result-20261009.md`.

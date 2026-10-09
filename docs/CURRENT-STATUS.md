@@ -485,20 +485,34 @@ launches. The valid **MTP SPEC=none Attempt 04** source
 (`scripts/benchmark/evidence/orcarouter-h38-managed-mtp-startup-discriminator-attempt04-20261008.md`)
 recorded an exact runtime identity match and **PROTECTED_STOP**,
 `FUNCTIONAL=NOT_REACHED`, `HOST-STABILITY=INCONCLUSIVE`.
-Its execution harness had already preserved
-`candidate-inspect.json`, `candidate-cmd.json` and
-`startup-phase.txt` under the named original evidence directory;
-**current continued availability of these host files is not yet
-verified**.
+**Actual DGX Attempt 04 historical archive attestation completed:
+PASS_ARCHIVED_LAUNCH_FLAGS_ONLY.** The operator ran the offline
+parser at exact clean checkout
+`1bc76cb12cc8df9d9512de0d0cd29e49120c1233`,
+using the unchanged captured archive:
+`/tmp/orcarouter-h38-mtp-none-attempt04-20261007T232026Z`.
+Captured Docker image tag/ID, `candidate-inspect.json` command
+versus `candidate-cmd.json`, H38 env lineage and model mount all
+matched. The explicitly captured CLI was
+**`--load-format safetensors`, executor `mp`, TP=1**.
+`--safetensors-load-strategy`, model-loader extra config,
+expert-parallel enable/disable, prefetch num threads/block size,
+pipeline parallel size and `--speculative-config` were all
+**NOT_EXPLICIT**, not inferred defaults. The **same archived
+Attempt 04 startup log** contained the marker
+`Auto-prefetch is disabled`. This is an observed startup message,
+**not** a complete effective `LoadConfig` record.
 
-Implementation commit `0a71beb7fdd64ed06e9879c4349acb681e11f99f`
-passed GitHub Actions `37892699414`: **SUCCESS, 641/641
-unit tests**, shell syntax, ShellCheck, Python compile and
-whitespace PASS. This is **only local/synthetic archive parser
-qualification**, not real captured H38 loader settings.
+Canonical operator result:
+`scripts/benchmark/evidence/orcarouter-h38-preserved-loader-config-result-20261009.md`.
+Source-only code quality CI: implementation
+`0a71beb7fdd64ed06e9879c4349acb681e11f99f`,
+GitHub Actions `37892699414` **SUCCESS, 641/641 tests**
+(and documentation-sync CI `37892894955` **SUCCESS,
+641/641 tests**). No Docker command/model/GPU work or host
+protection change was performed by this archived-file analysis.
 
-A new **read-only offline, capture-only config inspector is staged,
-not actually run against the preserved DGX evidence**:
+The guarded **read-only offline capture inspector** is:
 `scripts/benchmark/inspect-h38-preserved-loader-config.py`,
 guard `scripts/benchmark/check-h38-preserved-loader-config.sh`,
 regression `tests/test_h38_preserved_loader_config.py`,
@@ -507,14 +521,9 @@ and canonical protocol
 It reads only preserved launch identity/CLI fields, redacts
 secret environment and host paths, and prints `NOT_EXPLICIT`
 for absent options — **never infers effective vLLM defaults**.
-Any `Auto-prefetch is disabled` marker must be observed in
-**that same archived log** rather than projected from another
-H38 experiment. No live Docker, GPU, model or checkpoint read
-is needed, and an unavailable archive is INVALID, not a reason
-to recreate the candidate.
-
-Even a successful archived launch-flag attestation would **not**
-prove exact effective `LoadConfig`, tensor delivery,
+The same-archive prefetch marker **was observed** in
+Attempt 04. The archived CLI and source checks **do not**
+prove exact resolved `LoadConfig`, tensor delivery,
 CT scale-completion or bounded buffers. Checkpoint
 `ORDER_GATE=FAIL`, split base layers 8/11, and MTP
 I/O ambiguity remain. CT Meta and runtime promotion stay blocked.

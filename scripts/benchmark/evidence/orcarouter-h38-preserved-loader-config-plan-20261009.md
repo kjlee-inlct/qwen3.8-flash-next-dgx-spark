@@ -161,3 +161,34 @@ archived CLI options alone. PR #259 remains Draft/Open.
 - **No actual Attempt 04 DGX archive parsed yet.** Actual archive
   existence, its specific CLI options, effective loader strategy,
   MTP I/O, CT buffers and host stability remain unverified.
+
+## Observed Attempt 04 archived launch-config result — 2026-10-09
+
+The DGX operator ran the exact clean-checkout source
+`1bc76cb12cc8df9d9512de0d0cd29e49120c1233` on the
+original archived Attempt 04 directory
+`/tmp/orcarouter-h38-mtp-none-attempt04-20261007T232026Z`.
+All image tag/image ID, independently captured Cmd, H38 env lineage
+and model mount checks passed:
+`H38_PRESERVED_LOADER_CONFIG_GATE=PASS_ARCHIVED_LAUNCH_FLAGS_ONLY`
+and `H38_PRESERVED_LOADER_PREFLIGHT=PASS_ARCHIVED_LAUNCH_FLAGS_ONLY`.
+
+Observed explicit CLI: **`--load-format safetensors`**,
+**`--distributed-executor-backend mp`**, **`--tensor-parallel-size 1`**.
+`--safetensors-load-strategy`, model-loader extra config,
+safetensors prefetch thread/block size, `--enable-expert-parallel`,
+`--no-enable-expert-parallel`, pipeline parallel flag and
+`--speculative-config` all **NOT_EXPLICIT**, *not resolved
+runtime defaults*. The same original Attempt 04 startup log included
+`Auto-prefetch is disabled`. The synthetic tests and original
+reader remain unchanged. Canonical exact operator evidence:
+`orcarouter-h38-preserved-loader-config-result-20261009.md`.
+
+This closes the **preserved explicit candidate launch flags** gate.
+It does NOT close selected effective vLLM load strategy, EP filter,
+MTP tensor fetch semantics, full CT parameter/scale completion or
+safe peak memory; strict checkpoint `ORDER_GATE=FAIL` and
+`HOST-STABILITY=INCONCLUSIVE` are preserved. Next static work:
+source-only CT `get_numel_loaded`/weight-loader completion and
+scales/aliases review for sharded layers 8 and 11. No live or
+identical archive rerun is required.
