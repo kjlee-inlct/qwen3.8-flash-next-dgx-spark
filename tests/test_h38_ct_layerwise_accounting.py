@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import ast
+import contextlib
+import io
 import importlib.util
 from pathlib import Path
 import hashlib
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -398,6 +401,85 @@ class H38CtAccountingTests(unittest.TestCase):
         altered = altered.replace("\\n", "\n")
         result = tool.inspect_routed_weight_loader(ast.parse(altered))
         self.assertTrue(result["anchors"]["routed_group_or_packed_dispatch"])
+
+    def test_diagnostics_report_all_eight_even_if_first_wrapper_unsupported(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            expected = {}
+            fixtures = dict(FIXTURES)
+            fixtures["ct"] = CT.replace(
+                "c = torch.nn.Parameter(torch.empty(",
+                "c = UnrecognizedScaleParameter(data=torch.empty(",
+            )
+            for key, relative in tool.FILES.items():
+                p = directory / relative
+                p.parent.mkdir(parents=True, exist_ok=True)
+                raw = fixtures[key].encode("utf-8")
+                p.write_bytes(raw)
+                expected[key] = hashlib.sha256(raw).hexdigest()
+            with patch.dict(tool.EXPECTED_SHA256, expected):
+                report = tool.pinned_ct_diagnostics(directory)
+                self.assertEqual(report["registration_count"], 8)
+                self.assertEqual(report["missing_expected_registrations"], [])
+                self.assertEqual(report["classification"],
+                                 "PINNED_CT_SOURCE_SYNTAX_ONLY_NOT_A_PASS")
+                registrations = report["registrations"]
+                self.assertEqual(registrations[2]["registration_name"],
+                                 "w13_weight_scale")
+                self.assertEqual(registrations[4]["constructor"],
+                                 "UnrecognizedScaleParameter")
+                self.assertEqual(registrations[7]["registration_name"],
+                                 "w2_input_global_scale")
+                self.assertEqual(report["gpu_model_runtime"], "NOT_EXECUTED")
+
+    def test_main_invalid_keeps_rc2_and_emits_pinned_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            expected = {}
+            fixtures = dict(FIXTURES)
+            fixtures["ct"] = CT.replace(
+                "c = torch.nn.Parameter(torch.empty(",
+                "c = UnrecognizedScaleParameter(data=torch.empty(",
+            )
+            for key, relative in tool.FILES.items():
+                p = directory / relative
+                p.parent.mkdir(parents=True, exist_ok=True)
+                raw = fixtures[key].encode("utf-8")
+                p.write_bytes(raw)
+                expected[key] = hashlib.sha256(raw).hexdigest()
+            stderr = io.StringIO()
+            with patch.dict(tool.EXPECTED_SHA256, expected), \
+                 patch.object(sys, "argv", [str(PY), "--root", str(directory)]), \
+                 contextlib.redirect_stderr(stderr):
+                rc = tool.main()
+            self.assertEqual(rc, 2)
+            output = stderr.getvalue()
+            self.assertIn("H38_CT_ACCOUNTING_SOURCE=INVALID", output)
+            self.assertIn("H38_CT_ACCOUNTING_DIAGNOSTICS=PINNED_CT_SOURCE_ONLY",
+                          output)
+            self.assertIn('"registration_count": 8', output)
+            self.assertIn("w2_input_global_scale", output)
+
+    def test_diagnostics_never_omit_hash_pin_or_claim_runtime_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            expected = {}
+            for key, relative in tool.FILES.items():
+                p = directory / relative
+                p.parent.mkdir(parents=True, exist_ok=True)
+                raw = FIXTURES[key].encode("utf-8")
+                p.write_bytes(raw)
+                expected[key] = hashlib.sha256(raw).hexdigest()
+            with patch.dict(tool.EXPECTED_SHA256, expected):
+                report = tool.pinned_ct_diagnostics(directory)
+                self.assertEqual(report["loaded_parameter_coverage"],
+                                 "UNVERIFIED")
+                drift = directory / tool.FILES["routed"]
+                drift.write_text(ROUTED + "\n# changed", encoding="utf-8")
+                with self.assertRaisesRegex(
+                        ValueError, "diagnostics_source_sha256_mismatch:routed"):
+                    tool.pinned_ct_diagnostics(directory)
 
     def test_no_unsafe_host_or_gpu_actions_in_runner(self) -> None:
         script = SH.read_text(encoding="utf-8")
