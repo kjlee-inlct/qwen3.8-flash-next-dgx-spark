@@ -160,3 +160,13 @@ Only after the actual installed-image source probe:
    `HOST-STABILITY=INCONCLUSIVE`, strict RM/protection, and
    PR #259 **Draft/Open**. No model/GPU run, R33, source image
    patch, checkpoint mutation, host tuning, Ready or merge.
+
+## Implementation/static test qualification — 2026-10-09
+
+Implementation SHA: `1e4aadaa029937a61007e225c173239079481a16`.
+GitHub Actions run `37889474895`: **SUCCESS / 633 of 633
+unit tests**, with shell syntax, ShellCheck, Python compile and
+whitespace PASS. These results include synthetic source-contract
+mutation tests and runner safety guards, **not** a DGX-installed-H38
+loader source check. Do not claim the H38 source is identical to
+upstream or that selected runtime config/MTP I/O is established.

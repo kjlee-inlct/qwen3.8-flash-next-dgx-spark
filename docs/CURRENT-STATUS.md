@@ -427,6 +427,12 @@ args and replays loaders through meta materialization; this source
 structure does **not** prove safe CT-scale/packed-weight completion
 for split routed layers 8 and 11.
 
+Implementation commit `1e4aadaa029937a61007e225c173239079481a16`
+passed GitHub Actions `37889474895`: **SUCCESS, 633/633
+unit tests**, shell syntax, ShellCheck, Python compile and
+whitespace PASS. This is **checker implementation CI only**,
+not an actual image-source observation.
+
 A new **read-only, CPU-only, pinned installed H38 image source
 inspector is staged, NOT yet DGX-executed**:
 `scripts/benchmark/inspect-h38-installed-loader-source.py`,
