@@ -375,8 +375,34 @@ The follow-up source/diagnostic commit
 `51850e28230c760dadac8fd86268d949b7623345` passed
 GitHub Actions `37883805274`: **SUCCESS / 624 of 624 tests**,
 shell syntax, ShellCheck, Python compilation and whitespace PASS.
-**This is checker CI, not an observed DGX diagnostic rerun.**
-The exact new per-shard revisit positions remain unmeasured.
+**Attempt 03: actual DGX revisit diagnostic observed**, running
+`f875aa2ea141e004fe2c0b37174bd275d9df39a1` against the
+unchanged H38 image and canonical OrcaRouter checkpoint.
+`H38_CKPT_METADATA_ORDER_GATE=FAIL` and
+`H38_CKPT_METADATA_PREFLIGHT=ORDER_GATE_FAIL` were correctly
+reported; exit code **3**. The exact source and run spans are in
+`scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-attempt03-revisit-ownership-20261009.md`.
+**Base-model layer 0** resides in numbered shard 1; the
+second layer-0 run is actually the distinct **MTP module namespace**
+(`mtp.layers.0`) in `model-mtp.safetensors`.
+Independent **base-model layer 8** runs across numbered shards
+4→5, and **layer 11** runs across numbered shards 5→6.
+Base-only revisit diagnostic is **[8,11]**, so the strict
+contiguous routed-layer condition fails even without the
+MTP numeric-layer classifier collision.
+
+Observed index: **17 numbered base-model shards plus
+1 MTP file**, 223,046 keys, 221,186 routed keys, 48 routed
+layers, maximum overlap **3**. Both hypothetical routed-byte
+retention cases reported **6,448,748,544 bytes**; these
+are on-disk metadata estimates and **not measured RSS/RM/GPU
+peaks**. Image ID unchanged, no model/GPU launch.
+The per-shard revisit attribution question is **closed** for
+the tested assumed key-order model; **actual H38 installed loader
+order and materialization lifecycle remain unverified**.
+No new identical checkpoint recheck is authorized: next
+engineering gate is exact-installed-loader source inspection,
+not re-running unchanged metadata.
 
 The full 18-file acceptance gate **cannot be overridden**
 by omitting MTP. The actual H38 loader stream order, scales and

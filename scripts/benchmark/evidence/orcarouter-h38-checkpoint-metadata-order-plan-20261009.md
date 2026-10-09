@@ -221,3 +221,33 @@ is deliberately not overridden by the base-only diagnostic and
 `ORDER_GATE_FAIL` is distinct from preflight INVALID.
 No source CI result authorizes a CT meta implementation, model restart,
 allocator/RM trace or monitor change.
+
+## Actual DGX Attempt 03 — bounded revisit ownership closure (2026-10-09)
+
+The exact checkpoint metadata diagnostic was executed against the
+original H38 image and indexed OrcaRouter checkpoint with clean checkout
+`f875aa2ea141e004fe2c0b37174bd275d9df39a1`.
+The complete inspector emitted `H38_CKPT_METADATA_ORDER_GATE=FAIL`,
+corrected outer `H38_CKPT_METADATA_PREFLIGHT=ORDER_GATE_FAIL`,
+and `metadata_check_rc=3` with image ID unchanged.
+
+Actual per-run provenance:
+- **Layer 0**: numbered shard 1, then two distinctly named
+  `mtp.layers.0.mlp.experts` tensors in `model-mtp.safetensors`.
+  This is a numeric-layer-ID namespace collision in the broad
+  header-only classifier, **not** duplicate base-model layer-0 weights.
+- **Layer 8**: two base-model runs in numbered shards **4 → 5**.
+- **Layer 11**: two base-model runs in numbered shards **5 → 6**.
+- The diagnostic-only base-model revisit set is **[8,11]**,
+  proving the strict contiguous-layer criterion remains **FAIL**
+  even without the auxiliary MTP source. Max overlap **3**.
+
+Canonical real-run closure and exact key/ordinal boundaries:
+`orcarouter-h38-checkpoint-metadata-order-attempt03-revisit-ownership-20261009.md`.
+
+**Stop repeated checkpoint scans**: the intended source of the 0/8/11
+revisit is now determined under the assumed natural file and
+`safe_open.keys()` iteration. Next work is static exact-installed-vLLM
+loader stream/order + CT packed-weight completion analysis, including
+separate MTP handling, before designing any bounded deferred-w13
+mitigation. This checkpoint gate was never a HOST-STABILITY PASS.
