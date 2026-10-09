@@ -88,3 +88,18 @@ Moreover, static source branch availability does not prove the live H38 configur
 **Next gate:** after the image-source inspector has run successfully under its exact SHA/ID safety wrapper, correlate CT name mapping and actual per-expert loader dispatch semantics, without a model/GPU startup. If an indexed assignment's dispatch coverage cannot be shown safely, explicitly retain CT_COPYCOUNTER_SCALE_COVERAGE=UNVERIFIED; do not infer it from the AST source syntax or synthetic counterexamples.
 
 This update does not modify H11/H12 patches or the H38 image, checkpoint, service or host protection and does not authorize PR Ready/Merge.
+
+
+## Attempt 01 — first real DGX source check INVALID, 2026-10-09
+
+- Exact-clean HEAD: b9db2c901676ebc974c22f5ee65b37bc6c208c72.
+- H38 image ID at preflight: sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc.
+- Guarded source-only check reached BEGIN and returned H38_CT_ACCOUNTING_SOURCE=INVALID reason=unsupported_CT_parameter_wrapper:PerTensorScaleParameter, with source_check_rc=2. There is no passing output or source accounting report.
+- This proves a limitation in the previous AST allocation inspector's allowed constructor classes, **not a loader defect**. It allowed ModelWeightParameter and torch.nn.Parameter only; the installed CT code calls PerTensorScaleParameter at an unspecified registration. All five pinned file SHA256 checks completed before this failure, but success footer/post-inspection image identity were not reached.
+- Original operator transcript and bounded interpretation: [Attempt 01 result](orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md).
+
+**Remediation implementation (stage for another source-only run):** an allowlist for vLLM-specific GroupQuantScaleParameter (group weight scales) and PerTensorScaleParameter (global/input scales), plus existing torch.nn.Parameter and packed ModelWeightParameter. Require explicit data=torch.empty(...), unchanged symbolic shape and dtype, no explicit allocation device, and weight_loader=weight_loader for the vLLM subclasses. GroupQuantScaleParameter requires input_dim=1 and output_dim=2. Unknown classes, incomplete attrs and unexpected shape/dtype remain INVALID. Add positive and negative AST fixtures.
+
+The source-only success condition cannot show that TorchDispatchMode counts all indexed scale writes, actual per-expert unique element coverage, full layer 8/11 shard ordering, functional behavior or finite peak buffer use. The correction should be reviewed against a new exact-image output; another INVALID remains a checker evidence result, not permission to execute H38 GPU/model loads.
+
+**Unverified:** exact corrected AST execution, PerTensorScaleParameter exact registration location/constructor shape/loader values, CopyCounter credit for indexed assignments, CT completion and host stability. No image rebuild, CT meta change, host-protection adjustment, model/GPU start or PR #259 merge.
