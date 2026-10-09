@@ -23,7 +23,7 @@ References:
 
 ## New code and expected result
 
-- scripts/benchmark/inspect-h38-ct-layerwise-accounting.py: Python stdlib AST inspector; fingerprints four pinned installed H38 source files, fails closed on drift, enumerates two packed and six scale registrations and initialization expressions, checks H12 alias syntax, CopyCounter, per-call count cap, layerwise aggregate counting, buffering, materialization, replay, finalize and post-load source anchors. It does NOT evaluate torch, import vLLM, or read checkpoint/model data.
+- scripts/benchmark/inspect-h38-ct-layerwise-accounting.py: Python stdlib AST inspector; fingerprints five pinned installed H38 source files (CT, layerwise, meta, reload utils, and RoutedExperts), fails closed on drift, enumerates two packed and six scale registrations and initialization expressions, checks H12 alias syntax, CopyCounter, per-call count cap, layerwise aggregate counting, buffering, materialization, replay, finalize and post-load source anchors. It does NOT evaluate torch, import vLLM, or read checkpoint/model data.
 - scripts/benchmark/check-h38-ct-layerwise-accounting.sh: requires exact clean Git SHA, fixed image ID, H11/H12/H38 labels; read-only unprivileged runc, no network or GPU, no image pull, bounded memory/CPU/PIDs and private /tmp.
 - tests/test_h38_ct_layerwise_accounting.py: synthetic happy/negative registration and alias fixtures; missing scale, missing count cap, source drift and runner safety/invalid SHA tests. Such tests alone do not prove actual installed H38 semantics.
 
@@ -66,3 +66,25 @@ The synthetic cases establish that aggregate element counting *without lifetime 
 This reinforces the next hard gate: inspect actual weight_loader call mapping, copy destinations and source shape/scale coverage, especially for split routed layers 8 and 11, before authorizing any CT meta storage or memory-peak claim. Historical CHECKPOINT_METADATA_ORDER_GATE=FAIL, FUNCTIONAL=NOT_REACHED, HOST_STABILITY=INCONCLUSIVE, RM_MITIGATION=UNPROVEN, and draft merge prohibition remain unchanged.
 
 **Execution provenance boundary:** repository GitHub CI can qualify synthetic tests and AST implementation; exact pinned installed-H38 CPU-only checker execution remains a separate pending DGX operator record. Do not report synthetic cases as reproduced H38 startup failures or memory-use measurements.
+
+
+## RoutedExperts write-path discriminator — source-only, 2026-10-09
+
+The original exact installed-H38 audit previously fingerprinted vllm/model_executor/layers/fused_moe/routed_experts.py at 5206219da6b78315d6b35bee89fd0caa783681846affbf6917f430ef7f2481b5. The new accounting inspector now requires that fifth source digest, too, rather than silently substituting upstream.
+
+Independent **public upstream v0.29.0** reference inspection (not an execution of the modified H38 image) finds these distinctly named helper paths:
+
+- RoutedExperts.weight_loader maps global to local expert ID, may skip nonlocal experts, and selects input-scale, GROUP/TENSOR weight-scale, or packed-weight helper branches.
+- _load_single_value and _load_per_tensor_weight_scale perform writes through indexed Tensor assignment (param_data[expert_id] = ..., including a two-index w1/w3 scale case).
+- _load_model_weight_or_group_weight_scale delegates to _load_w13 / _load_w2; these helpers perform explicit .copy_(loaded_weight) on selected destination views.
+- CopyCounter in reload/meta.py only increments for dispatch op torch.ops.aten.copy_.default, according to the previously inspected source.
+
+Reference: https://github.com/vllm-project/vllm/blob/v0.29.0/vllm/model_executor/layers/fused_moe/routed_experts.py
+
+The current checker tests those source anchors and reports MIXED_EXPLICIT_COPY_AND_INDEXED_ASSIGNMENT. The **Torch operation actually produced by indexed assignment** cannot be established from syntax alone; it may lower into a copy or a different dispatch path, and must not be assigned a numerical CopyCounter credit without additional evidence.
+
+Moreover, static source branch availability does not prove the live H38 configuration's local expert map, global scale behavior, number of loader callbacks, copied destination coverage, or correct post-load scales. The new fifth pinned-source audit is useful for eliminating unsupported assumptions and identifying the next discriminating CPU-only execution contract; it is **not** a proof of wrong H38 loading or memory savings.
+
+**Next gate:** after the image-source inspector has run successfully under its exact SHA/ID safety wrapper, correlate CT name mapping and actual per-expert loader dispatch semantics, without a model/GPU startup. If an indexed assignment's dispatch coverage cannot be shown safely, explicitly retain CT_COPYCOUNTER_SCALE_COVERAGE=UNVERIFIED; do not infer it from the AST source syntax or synthetic counterexamples.
+
+This update does not modify H11/H12 patches or the H38 image, checkpoint, service or host protection and does not authorize PR Ready/Merge.
