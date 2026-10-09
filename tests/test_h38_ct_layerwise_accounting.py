@@ -111,7 +111,53 @@ def get_layer_size(layer):
     return sum(t.numel() for name, t in tensors.items() if name not in SKIP_LOAD_TENSORS)
 """
 
-FIXTURES = {"ct": CT, "layerwise": LAYERWISE, "meta": META, "utils": UTILS}
+ROUTED = """
+class RoutedExperts:
+    def __init__(self):
+        moe_quant_params = {'weight_loader': self.weight_loader}
+
+    def _load_per_tensor_weight_scale(self, shard_id, param, loaded_weight, expert_id):
+        param_data = param.data
+        if shard_id in ('w1', 'w3'):
+            param_data[expert_id][0] = loaded_weight
+        elif shard_id == 'w2':
+            param_data[expert_id] = loaded_weight
+
+    def _load_single_value(self, param, loaded_weight, expert_id):
+        param_data = param.data
+        param_data[expert_id] = loaded_weight
+
+    def _load_w13(self, expert_data, loaded_weight):
+        expert_data.copy_(loaded_weight)
+
+    def _load_w2(self, expert_data, loaded_weight):
+        expert_data.copy_(loaded_weight)
+
+    def _load_model_weight_or_group_weight_scale(self, shard_id):
+        self._load_w13(...)
+        self._load_w2(...)
+
+    def weight_loader(self, expert_id, weight_name, param):
+        global_expert_id = expert_id
+        expert_id = self._map_global_expert_id_to_local_expert_id(global_expert_id)
+        use_global_sf = True
+        if expert_id == -1 and not use_global_sf:
+            return
+        if "input_scale" in weight_name:
+            self._load_single_value(...)
+        if "scale" in weight_name:
+            if param.quant_method == FusedMoeWeightScaleSupported.GROUP.value:
+                self._load_model_weight_or_group_weight_scale(...)
+            elif param.quant_method == FusedMoeWeightScaleSupported.TENSOR.value:
+                self._load_per_tensor_weight_scale(...)
+        if "weight" in weight_name:
+            self._load_model_weight_or_group_weight_scale(...)
+"""
+
+FIXTURES = {
+    "ct": CT, "layerwise": LAYERWISE, "meta": META, "utils": UTILS,
+    "routed": ROUTED,
+}
 
 
 class H38CtAccountingTests(unittest.TestCase):
@@ -229,6 +275,44 @@ class H38CtAccountingTests(unittest.TestCase):
                 path.write_text(META + "\n# drift\n", encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "sha256_mismatch:meta"):
                     tool.inspect(directory)
+
+    def test_routed_scales_have_indexed_assignments_not_proven_aten_copies(self) -> None:
+        result = tool.inspect_routed_weight_loader(self.parse("routed"))
+        self.assertEqual(result["dispatch_interpretation"],
+                         "MIXED_EXPLICIT_COPY_AND_INDEXED_ASSIGNMENT")
+        self.assertEqual(result["actual_aten_copy_event_coverage"], "UNVERIFIED")
+        self.assertEqual(result["actual_512_expert_parameter_completeness"],
+                         "UNVERIFIED")
+        self.assertEqual(
+            result["direct_subscript_assignment_sites"]
+            ["input_global_scale_helper"], 1)
+        self.assertEqual(
+            result["direct_subscript_assignment_sites"]
+            ["tensor_global_scale_helper"], 2)
+
+    def test_routed_missing_scale_write_fails_closed(self) -> None:
+        altered = ROUTED.replace(
+            "param_data[expert_id][0] = loaded_weight",
+            "noop(param_data, loaded_weight)",
+        )
+        with self.assertRaisesRegex(ValueError, "routed_tensor_scale_subscript_write"):
+            tool.inspect_routed_weight_loader(ast.parse(altered))
+
+    def test_routed_missing_nonlocal_skip_fails_closed(self) -> None:
+        altered = ROUTED.replace("expert_id == -1 and not use_global_sf",
+                                 "expert_id > 0")
+        with self.assertRaisesRegex(ValueError, "routed_nonlocal_expert_skip"):
+            tool.inspect_routed_weight_loader(ast.parse(altered))
+
+    def test_routed_loader_with_overloads_picks_concrete_body(self) -> None:
+        altered = ROUTED.replace("    def weight_loader(self, expert_id, weight_name, param):",
+                                 "    @overload\\n"
+                                 "    def weight_loader(self, expert_id): ...\\n\\n"
+                                 "    def weight_loader(self, expert_id, weight_name, param):")
+        # Use actual line breaks rather than a raw escaped newline inside code.
+        altered = altered.replace("\\n", "\n")
+        result = tool.inspect_routed_weight_loader(ast.parse(altered))
+        self.assertTrue(result["anchors"]["routed_group_or_packed_dispatch"])
 
     def test_no_unsafe_host_or_gpu_actions_in_runner(self) -> None:
         script = SH.read_text(encoding="utf-8")
