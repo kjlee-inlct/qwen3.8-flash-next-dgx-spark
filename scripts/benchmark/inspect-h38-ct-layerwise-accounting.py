@@ -421,6 +421,91 @@ def inspect(root: Path) -> dict:
     }
 
 
+
+def pinned_ct_diagnostics(root: Path) -> dict[str, object]:
+    """Show all CT registration expressions after *every* exact source pin.
+
+    This deliberately does not call parameter_registry: a malformed or
+    previously unrecognized initializer must not hide later registrations.
+    It reports syntax ONLY, never validates loaded tensors.
+    """
+    for key, relative in FILES.items():
+        raw = (root / relative).read_bytes()
+        digest = hashlib.sha256(raw).hexdigest()
+        require(digest == EXPECTED_SHA256[key],
+                f"diagnostics_source_sha256_mismatch:{key}:{digest}")
+    ct = ast.parse((root / FILES["ct"]).read_bytes().decode("utf-8"))
+    create = source_method(ct, CT_CLASS, "create_weights")
+
+    assignments: dict[str, ast.expr] = {}
+    records: dict[str, dict[str, object]] = {}
+    calls = sorted(ast.walk(create),
+                   key=lambda n: (getattr(n, "lineno", 0),
+                                  getattr(n, "col_offset", 0)))
+    for node in calls:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            if isinstance(node.targets[0], ast.Name):
+                assignments[node.targets[0].id] = node.value
+        if not isinstance(node, ast.Call) or (
+                call_name(node.func) != "layer.register_parameter"):
+            continue
+        if len(node.args) < 2 or not isinstance(node.args[0], ast.Constant) \
+                or not isinstance(node.args[0].value, str):
+            continue
+        name = node.args[0].value
+        if name not in PACKED + SCALES:
+            continue
+        target = node.args[1]
+        init = assignments.get(target.id) if isinstance(target, ast.Name) \
+            else target
+        record: dict[str, object] = {
+            "line": node.lineno,
+            "registration_name": name,
+            "constructor": call_name(init.func) if isinstance(init, ast.Call)
+                           else "UNRESOLVED",
+            "initializer": one_line(init, 420) if init is not None
+                           else "UNRESOLVED",
+            "shape": "UNRESOLVED",
+            "dtype": "UNRESOLVED",
+            "weight_loader": "UNRESOLVED",
+            "constructor_keywords": [],
+        }
+        if isinstance(init, ast.Call):
+            kw = {k.arg: k.value for k in init.keywords if k.arg is not None}
+            record["constructor_keywords"] = sorted(kw)
+            record["weight_loader"] = (one_line(kw["weight_loader"], 100)
+                                       if "weight_loader" in kw
+                                       else "NOT_EXPLICIT")
+            data = kw.get("data") if "data" in kw else (
+                init.args[0] if init.args else None)
+            if isinstance(data, ast.Call):
+                record["data_constructor"] = call_name(data.func)
+                record["shape"] = [one_line(a, 100) for a in data.args]
+                data_kw = {k.arg: k.value for k in data.keywords
+                           if k.arg is not None}
+                record["dtype"] = (one_line(data_kw["dtype"], 100)
+                                   if "dtype" in data_kw else "NOT_EXPLICIT")
+                record["device"] = (one_line(data_kw["device"], 100)
+                                    if "device" in data_kw else "NOT_EXPLICIT")
+        if name in records:
+            record["duplicate_registration"] = True
+        records[name] = record
+
+    return {
+        "classification": "PINNED_CT_SOURCE_SYNTAX_ONLY_NOT_A_PASS",
+        "registration_count": len(records),
+        "missing_expected_registrations":
+            [name for name in PACKED + SCALES if name not in records],
+        "registrations": [
+            records.get(name, {"registration_name": name,
+                               "status": "NOT_FOUND"})
+            for name in PACKED + SCALES
+        ],
+        "loaded_parameter_coverage": "UNVERIFIED",
+        "gpu_model_runtime": "NOT_EXECUTED",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
@@ -429,6 +514,16 @@ def main() -> int:
         report = inspect(args.root)
     except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
         print(f"H38_CT_ACCOUNTING_SOURCE=INVALID reason={exc}", file=sys.stderr)
+        try:
+            diagnostics = pinned_ct_diagnostics(args.root)
+        except (OSError, UnicodeError, SyntaxError, ValueError) as diag_exc:
+            print("H38_CT_ACCOUNTING_DIAGNOSTICS=UNAVAILABLE "
+                  f"reason={diag_exc}", file=sys.stderr)
+        else:
+            print("H38_CT_ACCOUNTING_DIAGNOSTICS=PINNED_CT_SOURCE_ONLY",
+                  file=sys.stderr)
+            print(json.dumps(diagnostics, ensure_ascii=True, indent=2,
+                             sort_keys=True), file=sys.stderr)
         return 2
     print("H38_CT_ACCOUNTING_SOURCE=PASS_SOURCE_CONTRACT_ONLY")
     print(json.dumps(report, ensure_ascii=True, indent=2, sort_keys=True))
