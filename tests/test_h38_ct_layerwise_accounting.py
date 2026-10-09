@@ -23,22 +23,22 @@ CT = """
 class CompressedTensorsW4A4Nvfp4MoEMethod:
     def create_weights(self, layer):
         weight_loader = loader
-        w13 = ModelWeightParameter(data=torch.empty(4, 5, dtype=torch.uint8),
+        w13 = ModelWeightParameter(data=torch.empty(num_experts, w13_num_shards * intermediate_size_per_partition, hidden_size // 2, dtype=torch.uint8),
                                    input_dim=1, output_dim=2,
                                    weight_loader=weight_loader)
-        w2 = ModelWeightParameter(data=torch.empty(5, 4, dtype=torch.uint8),
+        w2 = ModelWeightParameter(data=torch.empty(num_experts, hidden_size, intermediate_size_per_partition // 2, dtype=torch.uint8),
                                   input_dim=1, output_dim=2,
                                   weight_loader=weight_loader)
         layer.register_parameter("w13_weight_packed", w13)
         layer.register_parameter("w2_weight_packed", w2)
         for name in []:
             pass
-        a = torch.nn.Parameter(torch.empty(1))
-        b = torch.nn.Parameter(torch.empty(1))
-        c = torch.nn.Parameter(torch.empty(1))
-        d = torch.nn.Parameter(torch.empty(1))
-        e = torch.nn.Parameter(torch.empty(1))
-        f = torch.nn.Parameter(torch.empty(1))
+        a = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards * intermediate_size_per_partition, hidden_size // self.group_size, dtype=torch.float8_e4m3fn))
+        b = torch.nn.Parameter(torch.empty(num_experts, hidden_size, intermediate_size_per_partition // self.group_size, dtype=torch.float8_e4m3fn))
+        c = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards, dtype=torch.float32))
+        d = torch.nn.Parameter(torch.empty(num_experts, dtype=torch.float32))
+        e = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards, dtype=torch.float32))
+        f = torch.nn.Parameter(torch.empty(num_experts, dtype=torch.float32))
         layer.register_parameter("w13_weight_scale", a)
         layer.register_parameter("w2_weight_scale", b)
         layer.register_parameter("w13_weight_global_scale", c)
@@ -60,6 +60,10 @@ def initialize_online_processing(layer):
 
 def make_online_process_loader(layer, param_name):
     def online_process_loader(*args, **kwargs):
+        if not info.can_load():
+            return
+        info.load_numel_total = get_layer_size(layer)
+        _wrap_parameters_weight_loader(layer)
         info.loaded_weights.append((param_name, args))
         num_loaded, ret = get_numel_loaded(original_loader, bound_args)
         info.load_numel += num_loaded
@@ -75,7 +79,8 @@ def _layerwise_process(layer, info):
     quant_method.process_weights_after_loading(layer)
 
 def finalize_layerwise_processing(model, model_config):
-    _layerwise_process(layer, info)
+    if info.load_numel < info.load_numel_total:
+        _layerwise_process(layer, info)
 """
 
 META = """
@@ -93,11 +98,17 @@ def get_numel_loaded(weight_loader, args):
 def materialize_layer(layer, info):
     if tensor.is_meta:
         materialize_meta_tensor(tensor)
+
+def materialize_meta_tensor(meta_tensor):
+    tensor = torch.empty_strided(size=meta_tensor.size(), stride=meta_tensor.stride(), dtype=meta_tensor.dtype)
+    tensor.__class__ = meta_tensor.__class__
+    tensor.__dict__ = meta_tensor.__dict__.copy()
+    return tensor
 """
 
 UTILS = """
 def get_layer_size(layer):
-    return sum(t.numel() for t in tensors)
+    return sum(t.numel() for name, t in tensors.items() if name not in SKIP_LOAD_TENSORS)
 """
 
 FIXTURES = {"ct": CT, "layerwise": LAYERWISE, "meta": META, "utils": UTILS}
@@ -113,6 +124,59 @@ class H38CtAccountingTests(unittest.TestCase):
         self.assertEqual(row["h12_object_alias_syntax"], "PRESENT")
         self.assertEqual(row["registrations"]["w13_weight_packed"]["initializer_type"],
                          "ModelWeightParameter")
+
+
+    def test_packed_dimensions_and_dtypes_are_explicitly_captured(self) -> None:
+        row = tool.assert_packed_and_h12({"ct": self.parse("ct")})
+        w13 = row["registrations"]["w13_weight_packed"]["allocation"]
+        self.assertEqual(w13["dtype"], "torch.uint8")
+        self.assertEqual(w13["device"], "NOT_EXPLICIT")
+        self.assertEqual(w13["input_dim"], "1")
+        self.assertEqual(w13["output_dim"], "2")
+        self.assertEqual(
+            row["registrations"]["w13_weight_scale"]["allocation"]["dtype"],
+            "torch.float8_e4m3fn")
+        self.assertEqual(row["registrations"]["w2_weight_global_scale"]
+                         ["allocation"]["shape"], ["num_experts"])
+
+    def test_changed_shape_or_dtype_fails_closed(self) -> None:
+        changed = CT.replace("hidden_size // 2, dtype=torch.uint8",
+                             "hidden_size, dtype=torch.uint8")
+        with self.assertRaisesRegex(ValueError, "incorrect_CT_parameter_shape"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+        changed_scale = CT.replace(
+            "hidden_size // self.group_size, dtype=torch.float8_e4m3fn",
+            "hidden_size // self.group_size, dtype=torch.float32")
+        with self.assertRaisesRegex(ValueError, "incorrect_CT_parameter_dtype"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed_scale)})
+
+    def test_meta_allocation_is_not_accepted_as_old_image(self) -> None:
+        changed = CT.replace(
+            "hidden_size // 2, dtype=torch.uint8)",
+            "hidden_size // 2, dtype=torch.uint8, device='meta')")
+        with self.assertRaisesRegex(ValueError, "explicit_CT_allocation_device"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
+    def test_missing_meta_subclass_preservation_fails_closed(self) -> None:
+        changed = META.replace(
+            "tensor.__class__ = meta_tensor.__class__", "tensor.__class__ = torch.Tensor")
+        with self.assertRaisesRegex(ValueError, "materialize_preserves_parameter_class"):
+            tool.check_accounting({
+                "layerwise": self.parse("layerwise"),
+                "meta": ast.parse(changed),
+                "utils": self.parse("utils"),
+            })
+
+    def test_missing_partial_finalization_is_reported(self) -> None:
+        changed = LAYERWISE.replace(
+            "if info.load_numel < info.load_numel_total:",
+            "if info.load_numel == info.load_numel_total:")
+        with self.assertRaisesRegex(ValueError, "partial_layer_finalization"):
+            tool.check_accounting({
+                "layerwise": ast.parse(changed),
+                "meta": self.parse("meta"),
+                "utils": self.parse("utils"),
+            })
 
     def test_missing_scale_blocks_source_contract(self) -> None:
         broken = CT.replace('layer.register_parameter("w2_input_global_scale", f)',
@@ -135,7 +199,7 @@ class H38CtAccountingTests(unittest.TestCase):
             "utils": self.parse("utils"),
         })
         self.assertTrue(all(out["anchors"].values()))
-        self.assertIn("complete", out["note"].lower() + " complete")
+        self.assertIn("NOT proven", out["note"])
 
     def test_removed_count_cap_fails_closed(self) -> None:
         broken = META.replace("min(numel, param.numel())", "numel")
