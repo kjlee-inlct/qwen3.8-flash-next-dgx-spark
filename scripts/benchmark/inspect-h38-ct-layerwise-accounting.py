@@ -84,14 +84,21 @@ def torch_empty_allocation(init: ast.AST) -> dict[str, object]:
     require(isinstance(init, ast.Call), "unresolved_parameter_initializer")
     assert isinstance(init, ast.Call)
     outer = call_name(init.func)
-    require(outer in ("ModelWeightParameter", "torch.nn.Parameter"),
-            f"unsupported_CT_parameter_wrapper:{outer}")
+    # vLLM scale-specific Parameter subclasses are legitimate source-level
+    # containers. Do not conflate acceptance of the class with proof of its
+    # weight-loader/counter or tensor semantics.
+    supported = (
+        "ModelWeightParameter", "GroupQuantScaleParameter",
+        "PerTensorScaleParameter", "torch.nn.Parameter",
+    )
+    require(outer in supported, f"unsupported_CT_parameter_wrapper:{outer}")
     kwargs = {kw.arg: kw.value for kw in init.keywords if kw.arg is not None}
-    if outer == "ModelWeightParameter":
-        data = kwargs.get("data")
-        require(data is not None, "missing_ModelWeightParameter_data")
+    if outer == "torch.nn.Parameter":
+        data = init.args[0] if init.args else kwargs.get("data")
     else:
-        data = init.args[0] if init.args else None
+        require(not init.args, f"unexpected_positional_vllm_parameter:{outer}")
+        data = kwargs.get("data")
+        require(data is not None, f"missing_vllm_parameter_data:{outer}")
     require(isinstance(data, ast.Call) and call_name(data.func) == "torch.empty",
             f"missing_parameter_torch_empty:{outer}")
     assert isinstance(data, ast.Call)
@@ -106,14 +113,18 @@ def torch_empty_allocation(init: ast.AST) -> dict[str, object]:
         "requires_grad": (ast.unparse(kwargs["requires_grad"])
                           if "requires_grad" in kwargs else "NOT_EXPLICIT"),
     }
-    if outer == "ModelWeightParameter":
-        for name, expected in (("input_dim", "1"), ("output_dim", "2"),
-                               ("weight_loader", "weight_loader")):
+    if outer != "torch.nn.Parameter":
+        require("weight_loader" in kwargs,
+                f"missing_scale_or_packed_weight_loader:{outer}")
+        loader_expr = ast.unparse(kwargs["weight_loader"])
+        require(loader_expr == "weight_loader",
+                f"unexpected_scale_or_packed_weight_loader:{outer}:{loader_expr}")
+        result["weight_loader"] = loader_expr
+    if outer in ("ModelWeightParameter", "GroupQuantScaleParameter"):
+        for name, expected in (("input_dim", "1"), ("output_dim", "2")):
             require(name in kwargs and ast.unparse(kwargs[name]) == expected,
-                    f"invalid_H11_{name}")
-        result["input_dim"] = "1"
-        result["output_dim"] = "2"
-        result["weight_loader"] = "weight_loader"
+                    f"invalid_sharded_CT_{name}:{outer}")
+            result[name] = expected
     return result
 
 # Stored allocation dimensions from the upstream class preserved by H11/H12.
@@ -128,24 +139,24 @@ EXPECTED_CT_ALLOCATIONS = {
         ["num_experts", "hidden_size",
          "intermediate_size_per_partition // 2"], "torch.uint8"),
     "w13_weight_scale": (
-        "torch.nn.Parameter",
+        ("torch.nn.Parameter", "GroupQuantScaleParameter"),
         ["num_experts", "w13_num_shards * intermediate_size_per_partition",
          "hidden_size // self.group_size"], "torch.float8_e4m3fn"),
     "w2_weight_scale": (
-        "torch.nn.Parameter",
+        ("torch.nn.Parameter", "GroupQuantScaleParameter"),
         ["num_experts", "hidden_size",
          "intermediate_size_per_partition // self.group_size"],
         "torch.float8_e4m3fn"),
     "w13_weight_global_scale": (
-        "torch.nn.Parameter", ["num_experts", "w13_num_shards"],
+        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts", "w13_num_shards"],
         "torch.float32"),
     "w2_weight_global_scale": (
-        "torch.nn.Parameter", ["num_experts"], "torch.float32"),
+        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts"], "torch.float32"),
     "w13_input_global_scale": (
-        "torch.nn.Parameter", ["num_experts", "w13_num_shards"],
+        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts", "w13_num_shards"],
         "torch.float32"),
     "w2_input_global_scale": (
-        "torch.nn.Parameter", ["num_experts"], "torch.float32"),
+        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts"], "torch.float32"),
 }
 
 
@@ -172,7 +183,13 @@ def parameter_registry(create: ast.FunctionDef) -> dict[str, dict[str, object]]:
         value = node.args[1]
         init = assigns.get(value.id) if isinstance(value, ast.Name) else None
         require(init is not None, f"registration_without_initializer:{name}")
-        allocation = torch_empty_allocation(init)
+        try:
+            allocation = torch_empty_allocation(init)
+        except ValueError as exc:
+            # Precise name and bounded initializer, to diagnose image/source
+            # contracts without dumping untrusted full installed source.
+            raise ValueError(f"CT_registration:{name}:{exc}:"
+                             f"initializer={one_line(init, 360)}") from exc
         registrations[name] = {
             "line": node.lineno,
             "source_value": one_line(value),
@@ -194,7 +211,9 @@ def assert_packed_and_h12(trees: dict[str, ast.Module]) -> dict:
         row = registry[name]
         alloc = row["allocation"]
         wrapper, shape, dtype = EXPECTED_CT_ALLOCATIONS[name]
-        require(alloc["wrapper"] == wrapper, f"incorrect_CT_parameter_wrapper:{name}")
+        wrappers = wrapper if isinstance(wrapper, tuple) else (wrapper,)
+        require(alloc["wrapper"] in wrappers,
+                f"incorrect_CT_parameter_wrapper:{name}:{alloc['wrapper']}")
         require(alloc["shape"] == shape, f"incorrect_CT_parameter_shape:{name}")
         require(alloc["dtype"] == dtype, f"incorrect_CT_parameter_dtype:{name}")
         require(alloc["device"] == "NOT_EXPLICIT",
@@ -393,6 +412,8 @@ def inspect(root: Path) -> dict:
         "routed_expert_dispatch": inspect_routed_weight_loader(trees["routed"]),
         "classification": "SOURCE_CONTRACT_ONLY_NOT_RUNTIME_QUALIFICATION",
         "complete_parameter_coverage": "UNVERIFIED",
+        "scale_parameter_class_semantics": "UNVERIFIED",
+        "actual_scale_copy_counter_credit": "UNVERIFIED",
         "per_expert_loader_mapping": "UNVERIFIED",
         "shard_split_8_11_completion": "UNVERIFIED",
         "peak_buffer_bytes": "UNVERIFIED",
