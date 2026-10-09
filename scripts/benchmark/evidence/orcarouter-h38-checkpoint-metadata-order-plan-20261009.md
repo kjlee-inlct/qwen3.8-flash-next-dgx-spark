@@ -205,3 +205,19 @@ The expected investigation objective is finding the numbered-shard
 vs auxiliary-MTP positions for revisits 0/8/11, **not** converting
 this FAIL into a PASS or revising managed stability. Stop on any
 unexpected image/checkout/permissions or output mismatch.
+
+## Attempt 02 follow-up static diagnostics qualified — 2026-10-09
+
+The exact-source checker improvement and corrected outer exit-code
+classification at `51850e28230c760dadac8fd86268d949b7623345`
+passed GitHub Actions `37883805274` (**624/624 tests**, shell
+syntax, ShellCheck, Python compile and whitespace PASS).
+
+An optional single guarded 18-indexed-file header-only replay is
+now technically ready. It should be recorded as **Attempt 03**,
+with objective limited to where layers 0/8/11 revisit and how
+`model-mtp.safetensors` participates. The full order-gate FAIL
+is deliberately not overridden by the base-only diagnostic and
+`ORDER_GATE_FAIL` is distinct from preflight INVALID.
+No source CI result authorizes a CT meta implementation, model restart,
+allocator/RM trace or monitor change.

@@ -371,6 +371,13 @@ classifier will preserve exit **3 = ORDER_GATE_FAIL**, while retaining
 **2/infrastructure failure = INVALID**. Header-only diagnostics
 will report the concrete first/last shard positions of the 0/8/11
 revisits and separate numbered model files from auxiliary MTP.
+The follow-up source/diagnostic commit
+`51850e28230c760dadac8fd86268d949b7623345` passed
+GitHub Actions `37883805274`: **SUCCESS / 624 of 624 tests**,
+shell syntax, ShellCheck, Python compilation and whitespace PASS.
+**This is checker CI, not an observed DGX diagnostic rerun.**
+The exact new per-shard revisit positions remain unmeasured.
+
 The full 18-file acceptance gate **cannot be overridden**
 by omitting MTP. The actual H38 loader stream order, scales and
 peak buffered-memory behavior remain unverified. No CT meta patch,

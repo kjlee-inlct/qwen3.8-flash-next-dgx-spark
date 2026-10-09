@@ -67,3 +67,24 @@ production_promotion=BLOCKED
 ```
 
 **No GPU/model run, R33 instrumentation, monitoring change, managed restart/promotion, PR Ready or merge is authorized. PR #259 stays Draft/Open.**
+
+## Static diagnostic implementation and gate classification — 2026-10-09
+
+The follow-up commit `51850e28230c760dadac8fd86268d949b7623345`
+adds a non-promoting, read-only diagnostic to expose repeated
+routed-expert layer run boundaries (source file plus first/last key),
+the 17 numbered model shards vs auxiliary MTP breakdown, and a
+*diagnostic-only* numbered-file revisit count. The strict 18-file
+checkpoint acceptance gate is unchanged.
+
+It also prevents the outer shell from relabeling completed
+`H38_CKPT_METADATA_ORDER_GATE=FAIL` as `PREFLIGHT=INVALID`:
+analyzer exit 3 maps to outer `ORDER_GATE_FAIL`, whereas an
+invalid/infrastructure check maps to `INVALID`.
+
+GitHub Actions `37883805274`: **SUCCESS / 624 of 624 tests**,
+including synthetic numbered-plus-MTP revisit fixture and runner
+failure-code classification regression, plus ShellCheck, syntax,
+Python compile and whitespace PASS. No **actual DGX** diagnostic
+replay has been performed on the new code, and the historical
+Attempt 02 figures above remain the primary observed result.
