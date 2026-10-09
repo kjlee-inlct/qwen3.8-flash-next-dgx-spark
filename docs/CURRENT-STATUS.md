@@ -411,6 +411,40 @@ checkpoint contents modification, new GPU model test, R33,
 monitor relaxation or managed promotion is authorized.
 
 
+## H38 exact-installed weight-loader source-contract gate — 2026-10-09
+
+The checkpoint Attempt 03 source/namespace attribution is **closed**
+but exact H38 runtime loader order remains **unverified**. vLLM
+**upstream v0.29.0 source** independently contains the default
+index-filtered safetensors iterator, natural file sort,
+`safe_open.keys()` and `get_tensor`; Qwen4Exp CausalLM and
+ConditionalGeneration `load_weights()` pass
+`orig_to_new_substr={"mtp.": None}` through `WeightsMapper`.
+The mapper skips **model assignment** of MTP names, but source
+order alone does **not** show that MTP data was excluded before
+`get_tensor`. Native layerwise `load_numel` completion buffers
+args and replays loaders through meta materialization; this source
+structure does **not** prove safe CT-scale/packed-weight completion
+for split routed layers 8 and 11.
+
+A new **read-only, CPU-only, pinned installed H38 image source
+inspector is staged, NOT yet DGX-executed**:
+`scripts/benchmark/inspect-h38-installed-loader-source.py`,
+`scripts/benchmark/check-h38-installed-loader-source.sh`, and
+`tests/test_h38_installed_loader_source.py`.
+It checks eight installed vLLM source files and fingerprints
+their SHA256; exact H38 image ID, H11/H12/H38 labels, SHA, clean
+checkout, no GPU/model/network, read-only inspector mount,
+unprivileged runc and private 32 MiB `/tmp` are guarded.
+Canonical protocol:
+`scripts/benchmark/evidence/orcarouter-h38-installed-loader-source-contract-plan-20261009.md`.
+**This is a staged source audit only**: no selected H38 config
+path, runtime MTP I/O, buffer bound, memory reduction or stability
+qualification has been measured. The 18-file checkpoint strict
+contiguous-layer `ORDER_GATE=FAIL` remains authoritative.
+No CT `device="meta"` patch or unchanged checkpoint replay is
+justified.
+
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
 next useful work is code/evidence-level attribution of the **early
