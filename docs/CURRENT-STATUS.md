@@ -564,3 +564,19 @@ The Draft PR #259 branch now stages a new exact-image, read-only AST CT packed/s
 The inspector pins the earlier verified H38 installed source digests and checks two packed H11 `ModelWeightParameter` registrations, six component scale registrations, H12 object aliases and the layerwise count/buffer/finalizer source anchors. The repository H11 patch supplies explicit packed `uint8` shape formulas. Upstream vLLM v0.29 per-invocation `get_numel_loaded` capping does not prove per-parameter lifetime deduplication or that all 512 experts and scales have arrived at a layerwise completion boundary.
 
 **Status: STAGED / SYNTHETIC TESTS / NO NEW ACTUAL DGX RESULT YET.** Exact installed H38 tool execution and per-expert completeness, layer 8/11 shard-split finalization, subclass/alias materialization, effective iterator and simultaneous buffer peaks are still unverified. The earlier `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `FUNCTIONAL=NOT_REACHED`, `HOST-STABILITY=INCONCLUSIVE`, and `RM_MITIGATION=UNPROVEN` remain unchanged. H38 GPU/model rerun and PR #259 Ready/merge remain BLOCKED; no host protection modification is authorized.
+
+
+## H38 CT accounting boundary — synthetic proof scope, 2026-10-09
+
+The branch now also includes stronger installed-source AST shape/dtype checks (two packed ModelWeightParameter uint8 tensors, two float8 group scales and four float32 global/input scales; all eight symbolic size formulas), loadable-tensor exclusions, late size refresh, post-completion rejection, and meta parameter-class/attribute-preserving source markers.
+
+A separate pure-stdlib synthetic suite demonstrates why a layerwise aggregate copied-element threshold does **not by itself prove unique per-parameter coverage**. In a toy model with eight names and only 20 total elements, repeating packed w13 copies can satisfy the aggregate target with missing scales (20 credited, 12 unique), or with a missing half of w13 (20 credited, 16 unique). A separate toy split-shard case leaves 16/20 elements and exposes the non-attention partial-finalizer branch. These are logical counterexamples, **not observations of real H38 repeated calls, unsafe postload or memory footprint**. Historical layer 8/11 shard revisits remain independently observed metadata-only facts.
+
+Implementation and coverage:
+- scripts/benchmark/inspect-h38-ct-layerwise-accounting.py
+- scripts/benchmark/simulate-h38-ct-layerwise-completion.py
+- tests/test_h38_ct_layerwise_accounting.py
+- tests/test_h38_ct_layerwise_completion_cases.py
+- scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md
+
+**Do not promote SOURCE_ONLY/SYNTHETIC into actual installed-image execution or model qualification.** The guarded exact H38 CPU-only inspector still requires an operator-side run and its output; real CT loader completeness and finite simultaneous buffer lifetime are UNVERIFIED. CHECKPOINT_METADATA_ORDER_GATE=FAIL; FUNCTIONAL=NOT_REACHED; HOST-STABILITY=INCONCLUSIVE; RM mitigation UNPROVEN; H38 model/GPU rerun BLOCKED; PR #259 DRAFT/OPEN and MERGE BLOCKED. All host memory protection stays unchanged.
