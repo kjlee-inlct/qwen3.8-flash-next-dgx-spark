@@ -15,7 +15,7 @@ from pathlib import Path
 import re
 import struct
 import sys
-from typing import Callable, Iterator
+from typing import Callable
 
 MAX_HEADER = 64 * 1024 * 1024
 EXPECTED_SHARDS = 18
@@ -23,6 +23,8 @@ EXPECTED_LAYERS = 48
 DIGITS = re.compile(r"(\d+)")
 LAYER = re.compile(r"(?:^|\.)(?:layers|h)\.(\d+)(?:\.|$)")
 ROUTED_PARTS = (".experts.", ".routed_experts.", ".routed_expert.")
+NUMBERED_SHARD = re.compile(r"^model-\d+-of-\d+\.safetensors$")
+MAX_RUN_SAMPLES_PER_REVISITED_LAYER = 8
 
 
 def fail(reason: str) -> None:
@@ -134,8 +136,16 @@ def scan_checkpoint(
         if any(index.get(name) != path.name for name in names):
             fail(f"index_header_mapping_mismatch:{path.name}")
         all_seen.update(names)
-        per_shard.append({"name": path.name, "tensor_count": len(names),
-                          "routed_count": sum(routed_expert(n) for n in names)})
+        routed_in_file = [n for n in names if routed_expert(n)]
+        per_shard.append({
+            "name": path.name, "tensor_count": len(names),
+            "routed_count": len(routed_in_file),
+            "routed_layer_ids": sorted({
+                lid for n in routed_in_file
+                if (lid := layer_id(n)) is not None
+            }),
+            "is_numbered_model_shard": bool(NUMBERED_SHARD.fullmatch(path.name)),
+        })
         ordered.extend((name, sizes[name], layer_id(name), routed_expert(name))
                        for name in names)
     if all_seen != set(index):
@@ -167,6 +177,52 @@ def scan_checkpoint(
     counts = Counter(runs)
     revisited = sorted(lid for lid, cnt in counts.items() if cnt > 1)
 
+    # Each run spans consecutive routed keys (non-routed keys may interleave);
+    # report *bounded* first/last key and owning shard for repeated layers.
+    run_spans: dict[int, list[dict[str, object]]] = {}
+    run_start = 0
+    for pos in range(1, len(routed) + 1):
+        if pos < len(routed) and routed[pos][3] == routed[run_start][3]:
+            continue
+        first_key = routed[run_start][1]
+        last_key = routed[pos - 1][1]
+        lid = int(routed[run_start][3])
+        spans = run_spans.setdefault(lid, [])
+        if len(spans) < MAX_RUN_SAMPLES_PER_REVISITED_LAYER:
+            spans.append({
+                "first_shard": index[first_key],
+                "last_shard": index[last_key],
+                "first_key": first_key,
+                "last_key": last_key,
+                "routed_key_count": pos - run_start,
+                "first_global_tensor_ordinal": routed[run_start][0],
+                "last_global_tensor_ordinal": routed[pos - 1][0],
+            })
+        run_start = pos
+    revisit_locations = [
+        {
+            "layer": lid,
+            "total_run_count": counts[lid],
+            "run_sample_count": len(run_spans[lid]),
+            "runs_truncated": counts[lid] > len(run_spans[lid]),
+            "runs": run_spans[lid],
+        }
+        for lid in revisited
+    ]
+
+    # Optional diagnostic using only indexed numbered base-model shards.
+    # This NEVER alters the full-stream strict gate or silently drops MTP.
+    base_layers = [
+        lid for _, key, _, lid in routed
+        if NUMBERED_SHARD.fullmatch(index[key])
+    ]
+    base_runs = [base_layers[0]] if base_layers else []
+    for lid in base_layers[1:]:
+        if lid != base_runs[-1]:
+            base_runs.append(lid)
+    base_counts = Counter(base_runs)
+    base_revisited = sorted(lid for lid, n in base_counts.items() if n > 1)
+
     # Interval concurrency over the FULL stream, not filtered expert-only indices.
     events: list[tuple[int, int]] = []
     for lid, first in first_routed.items():
@@ -197,6 +253,16 @@ def scan_checkpoint(
         "semantics": "metadata_only_safetensors_key_order_assuming_default_single_thread_loader",
         "index_verified": True,
         "shard_count": len(paths),
+        "numbered_model_shard_count": sum(
+            bool(NUMBERED_SHARD.fullmatch(path.name)) for path in paths
+        ),
+        "auxiliary_shard_names": [
+            path.name for path in paths
+            if not NUMBERED_SHARD.fullmatch(path.name)
+        ],
+        "base_model_only_revisited_layers_diagnostic": base_revisited,
+        "base_model_only_routed_layer_count_diagnostic": len(set(base_layers)),
+        "routed_expert_revisit_run_locations": revisit_locations,
         "tensor_count": len(ordered),
         "routed_expert_tensor_count": len(routed),
         "routed_expert_layer_count": len(observed),
@@ -210,6 +276,7 @@ def scan_checkpoint(
         "scenario_peak_routed_bytes_release_at_last_any_layer_key":
             hypothetical_peak(last_all),
         "per_shard": per_shard,
+        "diagnostic_base_only_scope_can_override_full_gate": False,
         "exact_h38_loader_order_contract_verified": False,
         "all_layerwise_weight_buffers_bounded": False,
         "meta_materialization_proven": False,

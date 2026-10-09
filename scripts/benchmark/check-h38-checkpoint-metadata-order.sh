@@ -42,7 +42,7 @@ printf 'ephemeral_tmpfs=/tmp:64m:noexec:nosuid:nodev:mode1777\n'
 # --read-only + UID 65534 rendered image /tmp unusable. Supply only a capped,
 # container-private /tmp tmpfs; keep checkpoint bind and rootfs read-only.
 # Access denied to an unprivileged inspector is INVALID; do not retry as root.
-docker run \
+if docker run \
   --rm --pull never --runtime runc --network none --read-only \
   --cap-drop ALL --security-opt no-new-privileges \
   --pids-limit 64 --memory 1g --memory-swap 1g --cpus 1 \
@@ -52,12 +52,23 @@ docker run \
   --mount "type=bind,src=${MODEL_DIR},dst=/opt/checkpoint,readonly" \
   --mount "type=bind,src=${INSPECTOR},dst=/opt/h38-checkpoint-order.py,readonly" \
   --entrypoint python3 "${IMAGE}" \
-  -B /opt/h38-checkpoint-order.py --model-dir /opt/checkpoint ||
-  fail 'checkpoint_metadata_order_invalid'
+  -B /opt/h38-checkpoint-order.py --model-dir /opt/checkpoint; then
+  inspect_rc=0
+else
+  inspect_rc=$?
+fi
 
 after="$(docker image inspect --format '{{.Id}}' "${IMAGE}")"
 [[ "${before}" == "${after}" ]] || fail 'image_identity_changed'
 printf 'image_identity_unchanged=YES\n'
+if [[ "${inspect_rc}" -eq 3 ]]; then
+  # The analyzer completed its metadata output and deliberately
+  # rejected the layer-order acceptance gate; NOT a preflight INVALID.
+  printf 'H38_CKPT_METADATA_PREFLIGHT=ORDER_GATE_FAIL\n'
+  exit 3
+fi
+[[ "${inspect_rc}" -eq 0 ]] ||
+  fail "checkpoint_metadata_inspector_invalid_rc_${inspect_rc}"
 printf 'tensor_payload_read=NO\n'
 printf 'model_or_gpu_load=NO\n'
 printf 'managed_service_mutation=NO\n'

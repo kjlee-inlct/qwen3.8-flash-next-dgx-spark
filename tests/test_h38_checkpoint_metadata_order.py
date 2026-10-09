@@ -69,6 +69,10 @@ class H38CheckpointMetadataOrderTests(unittest.TestCase):
             self.assertFalse(result["exact_h38_loader_order_contract_verified"])
             self.assertFalse(result["all_layerwise_weight_buffers_bounded"])
             self.assertFalse(result["host_stability_qualified"])
+            self.assertEqual(result["numbered_model_shard_count"], 18)
+            self.assertEqual(result["auxiliary_shard_names"], [])
+            self.assertEqual(result["base_model_only_revisited_layers_diagnostic"], [])
+            self.assertFalse(result["diagnostic_base_only_scope_can_override_full_gate"])
 
     def test_revisit_across_shards_fails_even_with_all_layers_present(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -78,6 +82,40 @@ class H38CheckpointMetadataOrderTests(unittest.TestCase):
             self.assertEqual(result["status"], "FAIL")
             self.assertEqual(result["routed_expert_revisited_layers"], [0])
             self.assertGreater(result["routed_expert_max_overlapping_intervals"], 1)
+            details = result["routed_expert_revisit_run_locations"]
+            self.assertEqual([entry["layer"] for entry in details], [0])
+            self.assertEqual(details[0]["total_run_count"], 2)
+            self.assertEqual(details[0]["runs"][0]["first_shard"],
+                             "model-00001-of-00018.safetensors")
+            self.assertEqual(details[0]["runs"][1]["last_shard"],
+                             "model-00018-of-00018.safetensors")
+
+    def test_auxiliary_mtp_revisit_does_not_weaken_full_stream_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            create_fixture(root, revisit=True)
+            old_name = "model-00018-of-00018.safetensors"
+            (root / old_name).rename(root / "model-mtp.safetensors")
+            idx = root / "model.safetensors.index.json"
+            data = json.loads(idx.read_text(encoding="utf-8"))
+            data["weight_map"] = {
+                key: ("model-mtp.safetensors" if shard == old_name else shard)
+                for key, shard in data["weight_map"].items()
+            }
+            idx.write_text(json.dumps(data), encoding="utf-8")
+            result = ckpt.scan_checkpoint(root, synthetic_key_reader)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(result["shard_count"], 18)
+            self.assertEqual(result["numbered_model_shard_count"], 17)
+            self.assertEqual(result["auxiliary_shard_names"],
+                             ["model-mtp.safetensors"])
+            self.assertEqual(result["routed_expert_revisited_layers"], [0])
+            self.assertEqual(result["base_model_only_revisited_layers_diagnostic"], [])
+            self.assertFalse(result["diagnostic_base_only_scope_can_override_full_gate"])
+            self.assertEqual(
+                result["routed_expert_revisit_run_locations"][0]["runs"][-1]["last_shard"],
+                "model-mtp.safetensors",
+            )
 
     def test_index_missing_or_mismatched_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -171,6 +209,16 @@ class H38CheckpointMetadataOrderTests(unittest.TestCase):
         self.assertNotIn("dst=/tmp", code)
         self.assertNotIn("src=/tmp", code)
         self.assertNotIn("src=${MODEL_DIR},dst=/opt/checkpoint,rw", code)
+
+    def test_completed_order_fail_is_not_reclassified_as_invalid(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        self.assertIn("if docker run", runner)
+        self.assertIn('inspect_rc=$?', runner)
+        self.assertIn('if [[ "${inspect_rc}" -eq 3 ]]; then', runner)
+        self.assertIn('H38_CKPT_METADATA_PREFLIGHT=ORDER_GATE_FAIL', runner)
+        self.assertIn('exit 3', runner)
+        self.assertIn('checkpoint_metadata_inspector_invalid_rc_${inspect_rc}', runner)
+        self.assertNotIn("fail 'checkpoint_metadata_order_invalid'", runner)
 
     def test_no_payload_access_in_analyzer_source(self) -> None:
         code = SCRIPT.read_text(encoding="utf-8")

@@ -337,40 +337,45 @@ The metadata tool implementation was statically qualified at
 `b476441899d07d04e9db3669ccd881f4351ef15e`: GitHub Actions
 `37822913604` **SUCCESS, 620/620 unit tests**, shell syntax,
 ShellCheck, Python compilation and whitespace PASS.
-The host checkpoint metadata attempt 01 **was executed** on the
-DGX at `551da2c603f2e83c6aedb4668e831e67dae82da6`, but ended
-**PREFLIGHT INVALID** with `[Errno 2] No usable temporary directory`
-before any shard/layer metadata-order result. Canonical observed
-failure: `scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-attempt01-invalid-tempfile-20261009.md`.
-This is an inspector execution-environment issue, not evidence
-of a bad checkpoint, and it does not change host stability.
-The narrowly corrected runner adds **only a 64 MiB private /tmp
-tmpfs** (`noexec,nosuid,nodev,mode=1777` and `TMPDIR=/tmp`)
-while preserving read-only checkpoint mounts, unprivileged UID,
-no network, no model/GPU launch and strict protection. No real
-DGX retest has been performed on the repaired runner yet.
-Implementation commit `d3ff823d3b7c183bb84c53079e25984e321a23e0`
-was statically verified by GitHub Actions `37882840040`:
-**SUCCESS, 622/622 unit tests**, shell syntax, ShellCheck,
-Python compilation and whitespace PASS.
-This validates the repair's source/guard tests, **not**
-actual H38 container tempfile availability.
+The production checkpoint metadata attempt 01 on
+`551da2c603f2e83c6aedb4668e831e67dae82da6` was
+**PREFLIGHT INVALID** before any shard result, due to Python
+`No usable temporary directory`. Canonical record:
+`scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-attempt01-invalid-tempfile-20261009.md`.
+The private `/tmp` 64 MiB `tmpfs` repair passed
+static CI `37882840040` and `37883026595`,
+**622/622 tests**.
 
-A **separate metadata-only H38 production checkpoint (18-shard)
-order/limited buffer-scenario analyzer is staged; its initial DGX
-attempt was INVALID before measurement, and its corrected runner
-is not yet executed**:
-`scripts/benchmark/inspect-h38-checkpoint-metadata-order.py`,
-`scripts/benchmark/check-h38-checkpoint-metadata-order.sh`,
-`tests/test_h38_checkpoint_metadata_order.py` and
-`scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-plan-20261009.md`.
-It requires the actual OrcaRouter model directory, reads only safetensors
-header/keys without tensor payloads, and fails closed for incorrect
-index, missing layers or revisited routed experts. Even a later
-metadata-order PASS assumes the default single-thread iterator
-and does **not** prove the exact H38 loader's weight-buffer lifecycle
-or bounded peak memory. No new GPU run, model patch, R33,
-relaxed protection or managed promotion is approved.
+**Attempt 02: VALID METADATA ANALYSIS / ORDER_GATE FAIL** on
+`eadaaeefbc23abf428e880890537ca26ea162f9d`,
+with the same pinned H38 image
+`sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`.
+The isolated tempdir worked. The index mapped **18 files: 17 numbered
+`model-XXXXX-of-00017.safetensors` shards plus
+`model-mtp.safetensors`**, 223,046 tensor keys, 221,186 routed keys,
+all 48 routed layers. However, layers **0, 8, 11 were revisited**
+and the maximum routed interval overlap was **3**.
+The strict metadata-order gate is **FAIL**, not checkpoint
+corruption or runtime materialization failure; canonical result:
+`scripts/benchmark/evidence/orcarouter-h38-checkpoint-metadata-order-attempt02-gate-fail-20261009.md`.
+Routed disk bytes total **72,981,184,512**; both theoretical
+release-at-last-routed and release-at-last-layer-key scenarios
+reported **6,448,748,544** bytes. These are **not**
+observed runtime RAM/GPU peaks.
+
+The outer runner previously misclassified a completed
+`H38_CKPT_METADATA_ORDER_GATE=FAIL` as
+`H38_CKPT_METADATA_PREFLIGHT=INVALID` because the
+Docker command's non-zero exit was collapsed. The follow-up
+classifier will preserve exit **3 = ORDER_GATE_FAIL**, while retaining
+**2/infrastructure failure = INVALID**. Header-only diagnostics
+will report the concrete first/last shard positions of the 0/8/11
+revisits and separate numbered model files from auxiliary MTP.
+The full 18-file acceptance gate **cannot be overridden**
+by omitting MTP. The actual H38 loader stream order, scales and
+peak buffered-memory behavior remain unverified. No CT meta patch,
+checkpoint contents modification, new GPU model test, R33,
+monitor relaxation or managed promotion is authorized.
 
 
 **PR #259 stays Draft/Open.** Managed migration and performance,

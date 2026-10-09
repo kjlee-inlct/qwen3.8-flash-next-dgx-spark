@@ -174,3 +174,34 @@ New static regressions verify exactly one bounded tmpfs and absence
 of writable checkpoint or privileged execution flags.
 **No actual repaired-image rerun has occurred yet, and no checkpoint
 order or memory-stability PASS can be claimed.**
+
+## Actual DGX attempt 02 — VALID metadata result, strict order FAIL (2026-10-09)
+
+The exact H38 image and checkpoint were analyzed after the `/tmp` repair
+(commit `eadaaeefbc23abf428e880890537ca26ea162f9d`).
+`H38_CKPT_METADATA_ORDER=BEGIN`/END and JSON output were completed;
+`H38_CKPT_METADATA_ORDER_GATE=FAIL`. The observed ordered
+checkpoint consists of **17 numbered model shards** plus indexed
+`model-mtp.safetensors`, 48 routed layers, revisited layers **0,8,11**,
+maximum overlap **3**. This is not a corrupt checkpoint finding.
+The full data and source limitations are recorded at
+`orcarouter-h38-checkpoint-metadata-order-attempt02-gate-fail-20261009.md`.
+
+Original outer `PREFLIGHT=INVALID` following `ORDER_GATE=FAIL`
+was a classification bug: `docker run ... || fail` collapsed a
+legitimate completed analyzer exit 3 into infrastructure INVALID.
+The next static-only fix distinguishes completed order FAIL from
+invalid execution and adds bounded per-run shard provenance for
+revisited layers, along with explicitly diagnostic-only numbered
+model shard breakdown. It does **not** alter the full-stream gate,
+exclude MTP, or claim a safe buffer bound.
+
+### Optional single bounded diagnostic rerun after new CI PASS
+
+Reuse the existing guarded command with the **new exact branch HEAD**
+and the same canonical model directory. Keep full output in a new
+`/tmp/h38-checkpoint-metadata-order-attempt03.txt` log.
+The expected investigation objective is finding the numbered-shard
+vs auxiliary-MTP positions for revisits 0/8/11, **not** converting
+this FAIL into a PASS or revising managed stability. Stop on any
+unexpected image/checkout/permissions or output mismatch.
