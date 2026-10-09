@@ -147,3 +147,17 @@ must not be assumed I/O-free solely because the Qwen4Exp
 Do not reinterpret checkpoint `ORDER_GATE=FAIL` as PASS, promote
 `HOST-STABILITY`, or propose CT meta implementation from
 archived CLI options alone. PR #259 remains Draft/Open.
+
+## Synthetic qualification, no historical capture inspection — 2026-10-09
+
+- Implementation commit: `0a71beb7fdd64ed06e9879c4349acb681e11f99f`.
+- GitHub Actions run `37892699414`: **SUCCESS / 641 of 641 unit tests**,
+  shell syntax, ShellCheck, Python compile and whitespace PASS.
+- Includes isolated fixture tests proving `NOT_EXPLICIT` rather than
+  fabricated defaults, whitelist-based extra-config redaction,
+  speculative-config redaction, duplicate flag/image mismatch and
+  symlink/missing archive rejection; the runner has no live Docker,
+  GPU, service or model interaction.
+- **No actual Attempt 04 DGX archive parsed yet.** Actual archive
+  existence, its specific CLI options, effective loader strategy,
+  MTP I/O, CT buffers and host stability remain unverified.

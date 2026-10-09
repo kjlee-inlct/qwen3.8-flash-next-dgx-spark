@@ -491,6 +491,12 @@ Its execution harness had already preserved
 **current continued availability of these host files is not yet
 verified**.
 
+Implementation commit `0a71beb7fdd64ed06e9879c4349acb681e11f99f`
+passed GitHub Actions `37892699414`: **SUCCESS, 641/641
+unit tests**, shell syntax, ShellCheck, Python compile and
+whitespace PASS. This is **only local/synthetic archive parser
+qualification**, not real captured H38 loader settings.
+
 A new **read-only offline, capture-only config inspector is staged,
 not actually run against the preserved DGX evidence**:
 `scripts/benchmark/inspect-h38-preserved-loader-config.py`,
