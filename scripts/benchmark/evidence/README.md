@@ -452,3 +452,10 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 - This is a **source-inspector class allowlist mismatch**. The wrapper never reached the success footer; do NOT call it an H38 model/scale-loading defect or an image identity-unchanged after-check result.
 - Remediation on PR #259 extends the inspector to allow scale-specific vLLM wrappers under strict symbolic shape/dtype/weight_loader rules; adds negative synthetic regressions. Exact-image rerun is **PENDING** after CI-qualified HEAD.
 - No model/GPU, service or host-protection change. All H38 functional/memory/stability qualification remains blocked and UNVERIFIED.
+
+
+### H38 CT source checker diagnostic fallback (repo-only, 2026-10-09)
+
+- [CT source plan, current staged fallback contract](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md): the exact-image AST checker now prints bounded **all-eight registration source diagnostics** on INVALID, after rechecking all five pinned installed-source SHA256 digests. It preserves original exit code 2; it cannot convert a mismatch into PASS or certify loaded tensors.
+- [Attempt 01 original user-provided DGX result](orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md): only observed installed-image run so far, INVALID on unsupported PerTensorScaleParameter; unchanged historical result. **Attempt 02 has not been observed**.
+- The H38 image, model/checkpoint, GPU, managed service and host protection remain untouched. The branch's CI-tested synthetics do not substitute for DGX operator evidence; retain all CT completeness, scale CopyCounter credit and buffer-lifetime statuses as UNVERIFIED.
