@@ -224,6 +224,91 @@ class H38CtAccountingTests(unittest.TestCase):
                 "utils": self.parse("utils"),
             })
 
+    def test_vllm_scale_parameter_subclasses_are_recognized(self) -> None:
+        """Match the real H38 wrapper family without claiming execution."""
+        modified = CT
+        for param in ("a", "b"):
+            modified = modified.replace(
+                f"{param} = torch.nn.Parameter(torch.empty(",
+                f"{param} = GroupQuantScaleParameter(data=torch.empty(",
+                1,
+            )
+        for param in ("c", "d", "e", "f"):
+            modified = modified.replace(
+                f"{param} = torch.nn.Parameter(torch.empty(",
+                f"{param} = PerTensorScaleParameter(data=torch.empty(",
+                1,
+            )
+        # The subclass constructors require explicit loader metadata.
+        modified = modified.replace(
+            "dtype=torch.float8_e4m3fn))",
+            "dtype=torch.float8_e4m3fn), input_dim=1, output_dim=2, "
+            "weight_loader=weight_loader)",
+        ).replace(
+            "dtype=torch.float32))",
+            "dtype=torch.float32), weight_loader=weight_loader)",
+        )
+        row = tool.assert_packed_and_h12({"ct": ast.parse(modified)})
+        self.assertEqual(
+            row["registrations"]["w13_weight_scale"]["allocation"]["wrapper"],
+            "GroupQuantScaleParameter",
+        )
+        self.assertEqual(
+            row["registrations"]["w2_input_global_scale"]["allocation"]["wrapper"],
+            "PerTensorScaleParameter",
+        )
+        self.assertEqual(
+            row["registrations"]["w13_weight_scale"]["allocation"]["output_dim"],
+            "2",
+        )
+
+    def test_vllm_scale_parameter_requires_weight_loader(self) -> None:
+        changed = CT.replace(
+            "c = torch.nn.Parameter(torch.empty(",
+            "c = PerTensorScaleParameter(data=torch.empty(",
+        )
+        with self.assertRaisesRegex(
+                ValueError, "missing_scale_or_packed_weight_loader"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
+    def test_wrong_scale_wrapper_name_fails_closed(self) -> None:
+        changed = CT.replace(
+            "c = torch.nn.Parameter(torch.empty(",
+            "c = UnknownScaleParameter(data=torch.empty(",
+        )
+        with self.assertRaisesRegex(
+                ValueError,
+                "CT_registration:w13_weight_global_scale:"
+                "unsupported_CT_parameter_wrapper:UnknownScaleParameter",
+        ):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
+    def test_wrong_scale_family_fails_closed(self) -> None:
+        changed = CT.replace(
+            "c = torch.nn.Parameter(torch.empty(",
+            "c = GroupQuantScaleParameter(data=torch.empty(",
+        ).replace(
+            "dtype=torch.float32))",
+            "dtype=torch.float32), input_dim=1, output_dim=2, "
+            "weight_loader=weight_loader)",
+            1,
+        )
+        with self.assertRaisesRegex(
+                ValueError, "incorrect_CT_parameter_wrapper:w13_weight_global_scale"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
+    def test_subclass_constructor_shape_dtype_still_checked(self) -> None:
+        changed = CT.replace(
+            "c = torch.nn.Parameter(torch.empty(num_experts, "
+            "w13_num_shards, dtype=torch.float32))",
+            "c = PerTensorScaleParameter(data=torch.empty(num_experts, "
+            "w13_num_shards + 1, dtype=torch.float32), "
+            "weight_loader=weight_loader)",
+        )
+        with self.assertRaisesRegex(
+                ValueError, "incorrect_CT_parameter_shape:w13_weight_global_scale"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
     def test_missing_scale_blocks_source_contract(self) -> None:
         broken = CT.replace('layer.register_parameter("w2_input_global_scale", f)',
                             'layer.skip_parameter("w2_input_global_scale", f)')
