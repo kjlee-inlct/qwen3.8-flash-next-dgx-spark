@@ -444,3 +444,11 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 - [CT layerwise-accounting source plan and routed dispatch contract](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — source-only inspector now checks a fifth pinned installed H38 source (RoutedExperts), including expert ID remapping/nonlocal rejection, GROUP/TENSOR/packed loader paths, explicit w13/w2 copy helpers and indexed scale assignment sites.
 - Relevant source-only code/test implementation CI: run 37914943450, SUCCESS / 666 unit tests, shell syntax/ShellCheck/Python compile/whitespace PASS. The final canonical docs HEAD requires a fresh CI check.
 - Observation is **UPSTREAM SOURCE / CODE CONTRACT ONLY**, not actual pinned-image execution and not a TorchDispatchMode trace. Indexed assignment is not automatically equivalent to counted aten.copy_; actual CT scale copy credit, unique expert coverage and layer 8/11 buffering remain UNVERIFIED. PR #259 is Draft/Open, merge forbidden.
+
+
+### H38 exact-image accounting Attempt 01 — checker INVALID, 2026-10-09
+
+- [Actual operator source-only Attempt 01 result](orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md) — clean checkout b9db2c901676ebc974c22f5ee65b37bc6c208c72, exact pinned H38 image ID preflight, CT AST rejected an installed PerTensorScaleParameter initializer: source_check_rc=2; no PASS claim.
+- This is a **source-inspector class allowlist mismatch**. The wrapper never reached the success footer; do NOT call it an H38 model/scale-loading defect or an image identity-unchanged after-check result.
+- Remediation on PR #259 extends the inspector to allow scale-specific vLLM wrappers under strict symbolic shape/dtype/weight_loader rules; adds negative synthetic regressions. Exact-image rerun is **PENDING** after CI-qualified HEAD.
+- No model/GPU, service or host-protection change. All H38 functional/memory/stability qualification remains blocked and UNVERIFIED.
