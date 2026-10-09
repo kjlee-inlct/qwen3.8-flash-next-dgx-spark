@@ -84,3 +84,16 @@ Canonical related documents:
 4. If any of these are unknown, keep H38 deferred-meta implementation **BLOCKED**; preserve strict RM protection, `FUNCTIONAL=NOT_REACHED`, `HOST-STABILITY=INCONCLUSIVE` and PR #259 Draft/Open.
 
 No live H38 rerun, source image patch, checkpoint rewrite, container/service state mutation, privileged inspect, memory-policy relaxation, R33, PR Ready or merge is authorized by this result.
+
+## Follow-up preserved runtime-config discriminator — source-only staging (2026-10-09)
+
+A new archive-only, no-Docker/no-model/no-GPU inspector was staged:
+`orcarouter-h38-preserved-loader-config-plan-20261009.md` and
+`scripts/benchmark/inspect-h38-preserved-loader-config.py`.
+It intends to inspect existing `candidate-inspect.json`,
+`candidate-cmd.json` and optional `startup-phase.txt` from the
+previously validated SPEC=none H38 Attempt 04 archive, preserving
+secrets and distinguishing explicit CLI flags from defaults.
+**The preserved archive has not yet been inspected**. Even a pass
+would not upgrade source-only loader contract or checkpoint FAIL to
+runtime stability or bounded CT deferred materialization.

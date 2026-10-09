@@ -477,6 +477,42 @@ contiguous-layer `ORDER_GATE=FAIL` remains authoritative.
 No CT `device="meta"` patch or unchanged checkpoint replay is
 justified.
 
+## H38 preserved launch loader-config attestation — 2026-10-09
+
+Exact H38 installed loader source check **PASS** does not attest
+which loader settings were active during earlier protected candidate
+launches. The valid **MTP SPEC=none Attempt 04** source
+(`scripts/benchmark/evidence/orcarouter-h38-managed-mtp-startup-discriminator-attempt04-20261008.md`)
+recorded an exact runtime identity match and **PROTECTED_STOP**,
+`FUNCTIONAL=NOT_REACHED`, `HOST-STABILITY=INCONCLUSIVE`.
+Its execution harness had already preserved
+`candidate-inspect.json`, `candidate-cmd.json` and
+`startup-phase.txt` under the named original evidence directory;
+**current continued availability of these host files is not yet
+verified**.
+
+A new **read-only offline, capture-only config inspector is staged,
+not actually run against the preserved DGX evidence**:
+`scripts/benchmark/inspect-h38-preserved-loader-config.py`,
+guard `scripts/benchmark/check-h38-preserved-loader-config.sh`,
+regression `tests/test_h38_preserved_loader_config.py`,
+and canonical protocol
+`scripts/benchmark/evidence/orcarouter-h38-preserved-loader-config-plan-20261009.md`.
+It reads only preserved launch identity/CLI fields, redacts
+secret environment and host paths, and prints `NOT_EXPLICIT`
+for absent options — **never infers effective vLLM defaults**.
+Any `Auto-prefetch is disabled` marker must be observed in
+**that same archived log** rather than projected from another
+H38 experiment. No live Docker, GPU, model or checkpoint read
+is needed, and an unavailable archive is INVALID, not a reason
+to recreate the candidate.
+
+Even a successful archived launch-flag attestation would **not**
+prove exact effective `LoadConfig`, tensor delivery,
+CT scale-completion or bounded buffers. Checkpoint
+`ORDER_GATE=FAIL`, split base layers 8/11, and MTP
+I/O ambiguity remain. CT Meta and runtime promotion stay blocked.
+
 **PR #259 stays Draft/Open.** Managed migration and performance,
 determinism, restart, promotion, and merge remain blocked. The
 next useful work is code/evidence-level attribution of the **early
