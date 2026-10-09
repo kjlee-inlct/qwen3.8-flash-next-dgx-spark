@@ -45,3 +45,24 @@ No CT deferred-meta patch is authorized. No checkpoint payload scan, H38 image r
 Execute the guarded wrapper once from an exact clean CI-qualified HEAD with H38_CT_ACCOUNTING_TARGET_SHA set to that same SHA; retain full stdout/stderr and exit code. PASS_SOURCE_CONTRACT_ONLY only enables further source-level review; INVALID is a source/guard contract or environment error and does not establish a runtime defect. Neither outcome qualifies the memory optimization or host stability.
 
 No DGX execution or independent SHA256 copy of operator source logs is asserted in this staging document.
+
+
+## Static hardening and synthetic counterexamples — continuation, 2026-10-09
+
+The staged AST checker now separately validates the exact **eight** H11/H12-source creation contracts rather than just the registration names: both packed uint8 tensors, both per-group float8-e4m3fn scales and four float32 global/input scales; symbolic shape expressions, ModelWeightParameter input_dim/output_dim/weight_loader, and the absence of a literal device kwarg. These are *symbolic code expressions*, not measured concrete dimensions/device allocations. The checker also pins SKIP_LOAD_TENSORS, late parameter-size refresh, post-completion rejection, incomplete-layer finalization, and the *source syntax* used to preserve parameter class/attributes in meta materialization. It still does **not** establish class preservation during actual execution.
+
+The public vLLM v0.29 code documents that its per-invocation cap prevents one loader's internal double-copy from immediately inflating the layer total. However, the aggregate counter is not an index-range coverage map. Source-only checker presence cannot prove lack of repeated *separate* invocations of the same destination. The built-in finalizer also processes positive but incomplete non-attention layers (e.g., padding), which cannot be promoted to CT weight/scale completeness without a separate contract.
+
+New scripts/benchmark/simulate-h38-ct-layerwise-completion.py and tests/test_h38_ct_layerwise_completion_cases.py provide a **pure-standard-library TOY counterexample**, not a runtime observation. Eight parameter names intentionally match H38 CT, but their element counts are tiny synthetic integers:
+
+- Synthetic complete case: both halves of w13 arrive with remaining packed/scale parameters: aggregate 20 and unique coverage 20.
+- Synthetic duplicate whole-packed case: copying packed w13 size 8 **twice** and w2 size 4 once yields aggregate 20, unique coverage 12, and six missing scales. The threshold could be reached before the later synthetic scales.
+- Synthetic duplicate half-packed case: copying the first half of w13 twice and all other parameters yields aggregate 20 but unique coverage 16; the other w13 half remains missing.
+- Synthetic delayed finalizer case: only first half of w13 plus all other named parameters yields aggregate 16 of 20; the source partial-finalization branch can still be entered.
+- Synthetic shard/layer labels 8 and 11 are mnemonic references to historical checkpoint revisits; **they do not reproduce the actual 4,608 keyed tensors, 512 experts, shapes, loader callbacks, shard ownership or memory footprint**.
+
+The synthetic cases establish that aggregate element counting *without lifetime per-parameter unique-coverage accounting* does not logically imply CT weight-and-scale completeness. They do **not** show that the installed H38 loader ever makes the repeated calls in these witness scenarios.
+
+This reinforces the next hard gate: inspect actual weight_loader call mapping, copy destinations and source shape/scale coverage, especially for split routed layers 8 and 11, before authorizing any CT meta storage or memory-peak claim. Historical CHECKPOINT_METADATA_ORDER_GATE=FAIL, FUNCTIONAL=NOT_REACHED, HOST_STABILITY=INCONCLUSIVE, RM_MITIGATION=UNPROVEN, and draft merge prohibition remain unchanged.
+
+**Execution provenance boundary:** repository GitHub CI can qualify synthetic tests and AST implementation; exact pinned installed-H38 CPU-only checker execution remains a separate pending DGX operator record. Do not report synthetic cases as reproduced H38 startup failures or memory-use measurements.
