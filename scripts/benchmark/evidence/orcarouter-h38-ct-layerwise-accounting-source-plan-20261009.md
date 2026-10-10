@@ -112,3 +112,23 @@ The repository's next source-inspection tool revision adds an automatic **non-pa
 The fallback reports PINNED_CT_SOURCE_SYNTAX_ONLY_NOT_A_PASS, explicitly never a qualification. If any source digest mismatch prevents trustworthy inspection, output is UNAVAILABLE rather than a partial unverified source dump. Dedicated synthetic tests check non-PASS behavior, all-eight error reporting and hash-drift fail-closed.
 
 No DGX Attempt 02 result has yet been observed. The previous pasted Attempt 01 failure remains immutable in orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md. A further operator-side source-only run should always pin an exact clean CI-qualified HEAD and preserve exit code and full log, but must not execute H38 model/GPU or change host protection.
+
+
+## Attempt 02 pinned-image eight-registration evidence and correction — 2026-10-10
+
+The actual DGX source-only run at clean commit 88e8a0509676ddfa87780a556d26a82d6ac95a74 reached its H38 exact-image AST inspector and failed on an overly narrow checker assertion for w13_weight_scale:
+
+- H38_CT_ACCOUNTING_SOURCE=INVALID reason=incorrect_CT_parameter_wrapper:w13_weight_scale:ModelWeightParameter
+- SHA-pinned diagnostic fallback: 8/8 expected registration names, no missing registrations.
+- Two packed parameters: ModelWeightParameter / uint8 / input_dim=1 / output_dim=2 / weight_loader.
+- Two group scales: **ModelWeightParameter / float8_e4m3fn / input_dim=1 / output_dim=2 / weight_loader**. This supersedes the prior speculative expectation that their constructors might be ordinary Parameter or GroupQuantScaleParameter.
+- Two global weight scales: PerTensorScaleParameter / float32 / explicit constructor weight_loader.
+- Two global input scales: torch.nn.Parameter / float32 / requires_grad=False, **no explicit constructor weight_loader** (post-construction setter is a different question).
+- All eight have the previously expected symbolic shape expressions and torch.empty without an explicit device argument.
+- Original transcript fields, per-registration shapes/line numbers and provenance are preserved in [Attempt 02 INVALID](orcarouter-h38-ct-layerwise-accounting-attempt02-invalid-20261010.md). The operator-reported file hash is not available.
+
+**Exact-image corrective source contract:** Pin the checker EXPECTED_CT_ALLOCATIONS constructor field **individually for all eight names** to the observed types, preserving explicit shape, dtype, ModelWeightParameter sharding keywords, PerTensorScaleParameter loader keywords and five SHA256 checks. Synthetic tests now reproduce all eight observed constructor types and reject class substitutions. This is intended to close static checker drift and must be demonstrated by a separate source-only image run.
+
+**Do not infer loader or runtime validity:** An AST constructor without an explicit loader keyword cannot establish absence of a loader attribute after set_weight_attrs or related code. ModelWeightParameter allocation syntax does not prove an actual copy path or CopyCounter credit. Validation of total expected elements versus unique 512-expert loaded elements, actual scale semantics, shard 8/11 lifetime, peak memory and successful startup are deferred.
+
+Status: ATTEMPT02_INVALID_CHECKER_CONTRACT; SOURCE_PASS_PENDING; FUNCTIONAL_NOT_REACHED; HOST_STABILITY_INCONCLUSIVE; RM_MITIGATION_UNPROVEN; NO_H38_GPU_MODEL_RUN; PR_259_DRAFT_OPEN; MERGE_BLOCKED.
