@@ -127,8 +127,9 @@ def torch_empty_allocation(init: ast.AST) -> dict[str, object]:
             result[name] = expected
     return result
 
-# Stored allocation dimensions from the upstream class preserved by H11/H12.
-# A mismatch is an unqualified source change, NOT evidence of corrupt weights.
+# Expected constructor classes, symbolic shapes and dtypes are sourced from
+# the operator's exact-H38 Attempt 02 pinned-source diagnostics (2026-10-10).
+# Mismatches are source contracts, NOT evidence of corrupt runtime weights.
 EXPECTED_CT_ALLOCATIONS = {
     "w13_weight_packed": (
         "ModelWeightParameter",
@@ -139,24 +140,24 @@ EXPECTED_CT_ALLOCATIONS = {
         ["num_experts", "hidden_size",
          "intermediate_size_per_partition // 2"], "torch.uint8"),
     "w13_weight_scale": (
-        ("torch.nn.Parameter", "GroupQuantScaleParameter"),
+        "ModelWeightParameter",
         ["num_experts", "w13_num_shards * intermediate_size_per_partition",
          "hidden_size // self.group_size"], "torch.float8_e4m3fn"),
     "w2_weight_scale": (
-        ("torch.nn.Parameter", "GroupQuantScaleParameter"),
+        "ModelWeightParameter",
         ["num_experts", "hidden_size",
          "intermediate_size_per_partition // self.group_size"],
         "torch.float8_e4m3fn"),
     "w13_weight_global_scale": (
-        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts", "w13_num_shards"],
+        "PerTensorScaleParameter", ["num_experts", "w13_num_shards"],
         "torch.float32"),
     "w2_weight_global_scale": (
-        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts"], "torch.float32"),
+        "PerTensorScaleParameter", ["num_experts"], "torch.float32"),
     "w13_input_global_scale": (
-        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts", "w13_num_shards"],
+        "torch.nn.Parameter", ["num_experts", "w13_num_shards"],
         "torch.float32"),
     "w2_input_global_scale": (
-        ("torch.nn.Parameter", "PerTensorScaleParameter"), ["num_experts"], "torch.float32"),
+        "torch.nn.Parameter", ["num_experts"], "torch.float32"),
 }
 
 
