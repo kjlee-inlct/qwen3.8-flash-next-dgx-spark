@@ -607,3 +607,20 @@ Following operator Attempt 01 (INVALID: unsupported PerTensorScaleParameter), th
 This design minimizes blind repeated DGX runs that discover one unsupported constructor at a time. Diagnostics explicitly classify as PINNED_CT_SOURCE_SYNTAX_ONLY_NOT_A_PASS and cannot convert INVALID into PASS. If source hashes drift, no CT AST fallback output is qualified. The wrapper's GPU/no-network/no-pull/sandbox restrictions are unchanged.
 
 **Execution status:** No DGX Attempt 02 result has been provided. Attempt 01 remains the only actual source-check execution observed: INVALID / inspector contract mismatch, not a model failure. Subsequent AST diagnostic code and synthetic tests are repository-side only pending any exact-image invocation. PR #259 remains Draft/Open, no H38 model/GPU run or host-protection change, no CT deferred-meta implementation, no Ready/Merge.
+
+
+## H38 exact-image CT AST Attempt 02 — eight-parameter source closure pending PASS, 2026-10-10
+
+The operator executed the guarded exact H38 source-only inspector on clean HEAD 88e8a0509676ddfa87780a556d26a82d6ac95a74 and pinned H38 image sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc. The wrapper began and the **SHA-pinned diagnostic fallback** enumerated exactly 8 expected registration sites with no missing names after an AST contract error:
+
+- w13_weight_packed and w2_weight_packed: ModelWeightParameter / uint8.
+- w13_weight_scale and w2_weight_scale: **ModelWeightParameter / float8_e4m3fn**, not the previous static checker's allowed torch.nn.Parameter or GroupQuantScaleParameter.
+- w13_weight_global_scale and w2_weight_global_scale: PerTensorScaleParameter / float32.
+- w13_input_global_scale and w2_input_global_scale: torch.nn.Parameter / float32; the constructor itself has no explicit weight_loader keyword (post-construction attribute paths NOT resolved by this output).
+- All eight initializer torch.empty forms have no explicit device keyword, and symbolic shapes match the eight registered names in the operator source diagnostics.
+
+Observed H38_CT_ACCOUNTING_SOURCE=INVALID reason=incorrect_CT_parameter_wrapper:w13_weight_scale:ModelWeightParameter; return code 2. The original failure is **AST CHECKER CLASS-EXPECTATION MISMATCH**, not observed model failure. The fallback checks all five installed source SHA256 digests before returning the diagnostic; neither the complete AST PASS nor the wrapper's final post-success image-identity check was reached.
+
+Canonical immutable result: scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-attempt02-invalid-20261010.md. The inspector/test source contract is corrected to the **eight exact observed constructor types** with retained shape/dtype/weight-loader and digest guards, not a permissive class-wide allowlist. Pending an independent source-only rerun, CT_SOURCE_CONTRACT remains INVALID_ATTEMPT02 / PASS_PENDING. CI tests are source/synthetic evidence only.
+
+CopyCounter indexed scale write credit, per-expert unique coverage, live split-shard 8/11 finalization/buffer lifetime, peak memory, postload completeness, functional startup, and host stability remain UNVERIFIED. GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; CT_META_PATCH=BLOCKED; PR_259=DRAFT_OPEN / MERGE=BLOCKED.
