@@ -36,12 +36,12 @@ class CompressedTensorsW4A4Nvfp4MoEMethod:
         layer.register_parameter("w2_weight_packed", w2)
         for name in []:
             pass
-        a = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards * intermediate_size_per_partition, hidden_size // self.group_size, dtype=torch.float8_e4m3fn))
-        b = torch.nn.Parameter(torch.empty(num_experts, hidden_size, intermediate_size_per_partition // self.group_size, dtype=torch.float8_e4m3fn))
-        c = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards, dtype=torch.float32))
-        d = torch.nn.Parameter(torch.empty(num_experts, dtype=torch.float32))
-        e = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards, dtype=torch.float32))
-        f = torch.nn.Parameter(torch.empty(num_experts, dtype=torch.float32))
+        a = ModelWeightParameter(data=torch.empty(num_experts, w13_num_shards * intermediate_size_per_partition, hidden_size // self.group_size, dtype=torch.float8_e4m3fn), input_dim=1, output_dim=2, weight_loader=weight_loader)
+        b = ModelWeightParameter(data=torch.empty(num_experts, hidden_size, intermediate_size_per_partition // self.group_size, dtype=torch.float8_e4m3fn), input_dim=1, output_dim=2, weight_loader=weight_loader)
+        c = PerTensorScaleParameter(data=torch.empty(num_experts, w13_num_shards, dtype=torch.float32), weight_loader=weight_loader)
+        d = PerTensorScaleParameter(data=torch.empty(num_experts, dtype=torch.float32), weight_loader=weight_loader)
+        e = torch.nn.Parameter(torch.empty(num_experts, w13_num_shards, dtype=torch.float32), requires_grad=False)
+        f = torch.nn.Parameter(torch.empty(num_experts, dtype=torch.float32), requires_grad=False)
         layer.register_parameter("w13_weight_scale", a)
         layer.register_parameter("w2_weight_scale", b)
         layer.register_parameter("w13_weight_global_scale", c)
@@ -227,48 +227,44 @@ class H38CtAccountingTests(unittest.TestCase):
                 "utils": self.parse("utils"),
             })
 
-    def test_vllm_scale_parameter_subclasses_are_recognized(self) -> None:
-        """Match the real H38 wrapper family without claiming execution."""
-        modified = CT
-        for param in ("a", "b"):
-            modified = modified.replace(
-                f"{param} = torch.nn.Parameter(torch.empty(",
-                f"{param} = GroupQuantScaleParameter(data=torch.empty(",
-                1,
-            )
-        for param in ("c", "d", "e", "f"):
-            modified = modified.replace(
-                f"{param} = torch.nn.Parameter(torch.empty(",
-                f"{param} = PerTensorScaleParameter(data=torch.empty(",
-                1,
-            )
-        # The subclass constructors require explicit loader metadata.
-        modified = modified.replace(
-            "dtype=torch.float8_e4m3fn))",
-            "dtype=torch.float8_e4m3fn), input_dim=1, output_dim=2, "
-            "weight_loader=weight_loader)",
-        ).replace(
-            "dtype=torch.float32))",
-            "dtype=torch.float32), weight_loader=weight_loader)",
-        )
-        row = tool.assert_packed_and_h12({"ct": ast.parse(modified)})
-        self.assertEqual(
-            row["registrations"]["w13_weight_scale"]["allocation"]["wrapper"],
-            "GroupQuantScaleParameter",
-        )
-        self.assertEqual(
-            row["registrations"]["w2_input_global_scale"]["allocation"]["wrapper"],
-            "PerTensorScaleParameter",
-        )
-        self.assertEqual(
-            row["registrations"]["w13_weight_scale"]["allocation"]["output_dim"],
-            "2",
-        )
+    def test_exact_eight_installed_H38_constructor_classes(self) -> None:
+        """Mirror operator Attempt 02 constructor/shape/dtype evidence."""
+        row = tool.assert_packed_and_h12({"ct": self.parse("ct")})
+        expected = {
+            "w13_weight_packed": ("ModelWeightParameter", "torch.uint8"),
+            "w2_weight_packed": ("ModelWeightParameter", "torch.uint8"),
+            "w13_weight_scale": ("ModelWeightParameter", "torch.float8_e4m3fn"),
+            "w2_weight_scale": ("ModelWeightParameter", "torch.float8_e4m3fn"),
+            "w13_weight_global_scale": ("PerTensorScaleParameter", "torch.float32"),
+            "w2_weight_global_scale": ("PerTensorScaleParameter", "torch.float32"),
+            "w13_input_global_scale": ("torch.nn.Parameter", "torch.float32"),
+            "w2_input_global_scale": ("torch.nn.Parameter", "torch.float32"),
+        }
+        self.assertEqual(len(row["registrations"]), 8)
+        for name, (expected_wrapper, expected_dtype) in expected.items():
+            with self.subTest(name=name):
+                alloc = row["registrations"][name]["allocation"]
+                self.assertEqual(alloc["wrapper"], expected_wrapper)
+                self.assertEqual(alloc["dtype"], expected_dtype)
+                self.assertEqual(alloc["device"], "NOT_EXPLICIT")
+                if expected_wrapper != "torch.nn.Parameter":
+                    self.assertEqual(alloc["weight_loader"], "weight_loader")
+                if expected_wrapper == "ModelWeightParameter":
+                    self.assertEqual(alloc["input_dim"], "1")
+                    self.assertEqual(alloc["output_dim"], "2")
+        self.assertEqual(row["registrations"]["w13_weight_scale"]["allocation"]
+                         ["shape"], [
+                             "num_experts",
+                             "w13_num_shards * intermediate_size_per_partition",
+                             "hidden_size // self.group_size",
+                         ])
 
-    def test_vllm_scale_parameter_requires_weight_loader(self) -> None:
+    def test_per_tensor_parameter_requires_weight_loader(self) -> None:
         changed = CT.replace(
-            "c = torch.nn.Parameter(torch.empty(",
-            "c = PerTensorScaleParameter(data=torch.empty(",
+            "c = PerTensorScaleParameter(data=torch.empty(num_experts, "
+            "w13_num_shards, dtype=torch.float32), weight_loader=weight_loader)",
+            "c = PerTensorScaleParameter(data=torch.empty(num_experts, "
+            "w13_num_shards, dtype=torch.float32))",
         )
         with self.assertRaisesRegex(
                 ValueError, "missing_scale_or_packed_weight_loader"):
@@ -276,40 +272,82 @@ class H38CtAccountingTests(unittest.TestCase):
 
     def test_wrong_scale_wrapper_name_fails_closed(self) -> None:
         changed = CT.replace(
-            "c = torch.nn.Parameter(torch.empty(",
+            "c = PerTensorScaleParameter(data=torch.empty(",
             "c = UnknownScaleParameter(data=torch.empty(",
         )
         with self.assertRaisesRegex(
-                ValueError,
-                "CT_registration:w13_weight_global_scale:"
-                "unsupported_CT_parameter_wrapper:UnknownScaleParameter",
-        ):
+                ValueError, "CT_registration:w13_weight_global_scale:"
+                "unsupported_CT_parameter_wrapper:UnknownScaleParameter"):
             tool.assert_packed_and_h12({"ct": ast.parse(changed)})
 
-    def test_wrong_scale_family_fails_closed(self) -> None:
+    def test_group_scale_must_use_exact_model_weight_parameter(self) -> None:
         changed = CT.replace(
-            "c = torch.nn.Parameter(torch.empty(",
-            "c = GroupQuantScaleParameter(data=torch.empty(",
+            "a = ModelWeightParameter(data=torch.empty(",
+            "a = GroupQuantScaleParameter(data=torch.empty(",
+        )
+        with self.assertRaisesRegex(
+                ValueError, "incorrect_CT_parameter_wrapper:w13_weight_scale"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+        changed = CT.replace(
+            "b = ModelWeightParameter(data=torch.empty(",
+            "b = torch.nn.Parameter(torch.empty(",
         ).replace(
-            "dtype=torch.float32))",
-            "dtype=torch.float32), input_dim=1, output_dim=2, "
+            "dtype=torch.float8_e4m3fn), input_dim=1, output_dim=2, "
             "weight_loader=weight_loader)",
+            "dtype=torch.float8_e4m3fn), requires_grad=False)",
+            1,
+        )
+        # A constructor change can be rejected even before the explicit
+        # wrapper comparison; it still must not pass silently.
+        with self.assertRaises(ValueError):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
+    def test_tensor_global_scale_rejects_other_vllm_class(self) -> None:
+        changed = CT.replace(
+            "c = PerTensorScaleParameter(data=torch.empty(",
+            "c = ModelWeightParameter(data=torch.empty(",
+        ).replace(
+            "w13_num_shards, dtype=torch.float32), weight_loader=weight_loader)",
+            "w13_num_shards, dtype=torch.float32), input_dim=1, "
+            "output_dim=2, weight_loader=weight_loader)",
             1,
         )
         with self.assertRaisesRegex(
                 ValueError, "incorrect_CT_parameter_wrapper:w13_weight_global_scale"):
             tool.assert_packed_and_h12({"ct": ast.parse(changed)})
 
+    def test_input_global_scale_plain_parameter_required(self) -> None:
+        changed = CT.replace(
+            "e = torch.nn.Parameter(torch.empty(num_experts, "
+            "w13_num_shards, dtype=torch.float32), requires_grad=False)",
+            "e = PerTensorScaleParameter(data=torch.empty(num_experts, "
+            "w13_num_shards, dtype=torch.float32), weight_loader=weight_loader)",
+        )
+        with self.assertRaisesRegex(
+                ValueError, "incorrect_CT_parameter_wrapper:w13_input_global_scale"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+
     def test_subclass_constructor_shape_dtype_still_checked(self) -> None:
         changed = CT.replace(
-            "c = torch.nn.Parameter(torch.empty(num_experts, "
-            "w13_num_shards, dtype=torch.float32))",
+            "c = PerTensorScaleParameter(data=torch.empty(num_experts, "
+            "w13_num_shards, dtype=torch.float32), weight_loader=weight_loader)",
             "c = PerTensorScaleParameter(data=torch.empty(num_experts, "
             "w13_num_shards + 1, dtype=torch.float32), "
             "weight_loader=weight_loader)",
         )
         with self.assertRaisesRegex(
                 ValueError, "incorrect_CT_parameter_shape:w13_weight_global_scale"):
+            tool.assert_packed_and_h12({"ct": ast.parse(changed)})
+        changed = CT.replace(
+            "a = ModelWeightParameter(data=torch.empty(num_experts, "
+            "w13_num_shards * intermediate_size_per_partition, "
+            "hidden_size // self.group_size, dtype=torch.float8_e4m3fn)",
+            "a = ModelWeightParameter(data=torch.empty(num_experts, "
+            "w13_num_shards * intermediate_size_per_partition, "
+            "hidden_size // self.group_size, dtype=torch.float32)",
+        )
+        with self.assertRaisesRegex(
+                ValueError, "incorrect_CT_parameter_dtype:w13_weight_scale"):
             tool.assert_packed_and_h12({"ct": ast.parse(changed)})
 
     def test_missing_scale_blocks_source_contract(self) -> None:
@@ -409,7 +447,7 @@ class H38CtAccountingTests(unittest.TestCase):
             expected = {}
             fixtures = dict(FIXTURES)
             fixtures["ct"] = CT.replace(
-                "c = torch.nn.Parameter(torch.empty(",
+                "c = PerTensorScaleParameter(data=torch.empty(",
                 "c = UnrecognizedScaleParameter(data=torch.empty(",
             )
             for key, relative in tool.FILES.items():
@@ -439,7 +477,7 @@ class H38CtAccountingTests(unittest.TestCase):
             expected = {}
             fixtures = dict(FIXTURES)
             fixtures["ct"] = CT.replace(
-                "c = torch.nn.Parameter(torch.empty(",
+                "c = PerTensorScaleParameter(data=torch.empty(",
                 "c = UnrecognizedScaleParameter(data=torch.empty(",
             )
             for key, relative in tool.FILES.items():
