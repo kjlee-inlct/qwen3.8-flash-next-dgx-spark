@@ -132,3 +132,30 @@ The actual DGX source-only run at clean commit 88e8a0509676ddfa87780a556d26a82d6
 **Do not infer loader or runtime validity:** An AST constructor without an explicit loader keyword cannot establish absence of a loader attribute after set_weight_attrs or related code. ModelWeightParameter allocation syntax does not prove an actual copy path or CopyCounter credit. Validation of total expected elements versus unique 512-expert loaded elements, actual scale semantics, shard 8/11 lifetime, peak memory and successful startup are deferred.
 
 Status: ATTEMPT02_INVALID_CHECKER_CONTRACT; SOURCE_PASS_PENDING; FUNCTIONAL_NOT_REACHED; HOST_STABILITY_INCONCLUSIVE; RM_MITIGATION_UNPROVEN; NO_H38_GPU_MODEL_RUN; PR_259_DRAFT_OPEN; MERGE_BLOCKED.
+
+
+## Actual pinned installed-H38 Attempt 03 source PASS — 2026-10-11
+
+**This is now an OBSERVED OPERATOR RESULT, not a staged-only plan.** The operator fast-forwarded the previously behind branch to exact SHA 5fa4265d394255744f8886b857804a28c433cf3f, ran the image-ID and five-source-SHA-pinned, read-only/runc/no-network/no-GPU/no-checkpoint script, and supplied complete terminal output:
+
+- H38_CT_ACCOUNTING_SOURCE=PASS_SOURCE_CONTRACT_ONLY
+- H38_CT_ACCOUNTING_PREFLIGHT=PASS_SOURCE_CONTRACT_ONLY
+- source_check_rc=0; image_identity_unchanged=YES
+- gpu_or_model_load=NO; checkpoint_payload_read=NO; managed_service_mutation=NO; host_protection_changed=NO; ct_meta_patch_implemented=NO
+- Eight expected CT parameter constructor/shape/dtype contracts validated against actual pinned H38 installed source; 21 Layerwise accounting/meta anchors true; 14 RoutedExperts dispatcher/write AST anchors true; H12 same-object alias syntax present.
+- The source output explicitly states actual_scale_copy_counter_credit, complete_parameter_coverage, per_expert_loader_mapping, peak_buffer_bytes, scale_parameter_class_semantics, shard_split_8_11_completion as UNVERIFIED.
+
+Full bounded result and provenance: [H38 CT Attempt 03 source-only PASS](orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md). Historical Attempt 01 and Attempt 02 remain INVALID **checker contracts** and are not reinterpretations of runtime model failure. The operator /tmp log hash is not independently retrieved. The original exact installed image/source inputs were not changed by this documentation update.
+
+### Source PASS does not close the engineering problem
+
+In particular:
+
+1. The actual constructor-only source contract shows plain input scale torch.nn.Parameter objects with no constructor weight_loader; inspection still needs to trace later set_weight_attrs and actual RoutedExperts dispatched callbacks.
+2. CopyCounter increments for torch.ops.aten.copy_.default, whereas RoutedExperts uses a mix of explicit copy_ and indexed Tensor assignments. A source AST assignment does NOT certify an aten.copy event, count, or per-destination lifetime uniqueness.
+3. Even a tiny CPU-only dispatch demonstration, if designed and approved under bounded safety, can only qualify the dispatcher for **those synthetic operations**, not actual 512-expert completeness.
+4. Layer 8/11 safetensors split-shard behavior, loaded unique element coverage, whether postload triggers too early, lifetime of concurrent read buffers and any host/GB10 memory budget still require separate evidence. The earlier 6,448,748,544-byte counterfactual remains not a measured retention bound.
+
+No CT deferred-meta patch, H38 model/GPU rerun, checkpoint scan, H38 image rebuild, managed service change or host-protection change is justified by the PASS. PR #259 stays Draft/Open, no Ready/Merge.
+
+**Next useful independent work:** keep a source-only post-construction loader-attribute trace and a separate, optional synthetic low-footprint Tensor index assignment→TorchDispatchMode event experiment as distinct hypotheses/evidence gates. Do not change the pinned-image source audit unless fresh contrary evidence appears.
