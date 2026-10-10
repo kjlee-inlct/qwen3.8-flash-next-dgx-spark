@@ -624,3 +624,20 @@ Observed H38_CT_ACCOUNTING_SOURCE=INVALID reason=incorrect_CT_parameter_wrapper:
 Canonical immutable result: scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-attempt02-invalid-20261010.md. The inspector/test source contract is corrected to the **eight exact observed constructor types** with retained shape/dtype/weight-loader and digest guards, not a permissive class-wide allowlist. Pending an independent source-only rerun, CT_SOURCE_CONTRACT remains INVALID_ATTEMPT02 / PASS_PENDING. CI tests are source/synthetic evidence only.
 
 CopyCounter indexed scale write credit, per-expert unique coverage, live split-shard 8/11 finalization/buffer lifetime, peak memory, postload completeness, functional startup, and host stability remain UNVERIFIED. GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; CT_META_PATCH=BLOCKED; PR_259=DRAFT_OPEN / MERGE=BLOCKED.
+
+
+## H38 CT installed-image source audit — Attempt 03 PASS (2026-10-11)
+
+**Current authoritative source-only disposition supersedes the earlier PENDING/INVALID status sections; historical Attempt 01/02 logs are retained unchanged.**
+
+The DGX operator successfully fast-forwarded the clean branch to exact HEAD 5fa4265d394255744f8886b857804a28c433cf3f and executed the previously CI-qualified guarded H38 source-only inspector against pinned image sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc. The supplied complete console transcript reports H38_CT_ACCOUNTING_SOURCE=PASS_SOURCE_CONTRACT_ONLY, H38_CT_ACCOUNTING_PREFLIGHT=PASS_SOURCE_CONTRACT_ONLY, source_check_rc=0, image_identity_unchanged=YES; gpu_or_model_load=NO, checkpoint_payload_read=NO, host_protection_changed=NO, managed_service_mutation=NO and ct_meta_patch_implemented=NO. All five pinned installed source SHA256 values passed.
+
+Static source confirmation is now established for eight CT parameter registrations (four ModelWeightParameter: two uint8 packed + two FP8 group scales; two PerTensorScaleParameter float32 global weight scales; two plain torch.nn.Parameter float32 input scales), symbolic shape/dtype/source keyword contracts, the H12 packed→weight same-object alias syntax, 21 Layerwise/CopyCounter/materialization AST anchors and 14 RoutedExperts write-path AST anchors. The two plain input-scale constructors do not explicitly accept a weight_loader keyword; this does NOT establish absence of post-construction setter attributes.
+
+This **does not** establish real TorchDispatchMode credit for indexed scale assignment, all 512-expert unique loaded element coverage, complete shard 8/11 replay, finite peak buffer bounds, functioning H38 inference or host safety. Indexed assignment sites in source remain distinct from observed aten.copy_.default dispatch events. Earlier toy counterexamples remain hypothetical and were not reproduced on H38.
+
+Canonical source result: scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md. Original operator /tmp logfile and its hash were not independently obtained; provenance is the supplied terminal transcript. This result belongs to the **old checked source HEAD** 5fa4265d394255744f8886b857804a28c433cf3f, not a later documentation-only commit.
+
+Current gates: CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY; CT_WEIGHT_COMPLETENESS=UNVERIFIED; CT_COPYCOUNTER_SCALE_CREDIT=UNVERIFIED; CT_SCALE_PARAMETER_SEMANTICS=UNVERIFIED; SHARD_8_11_COMPLETENESS=UNVERIFIED; PEAK_BUFFER_BYTES=UNVERIFIED; CHECKPOINT_METADATA_ORDER_GATE=FAIL; FUNCTIONAL=NOT_REACHED; HOST_STABILITY=INCONCLUSIVE; RM_MITIGATION=UNPROVEN; CT_META_IMPLEMENTATION=BLOCKED; GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; PR_259=DRAFT_OPEN / MERGE=BLOCKED.
+
+Next bounded plan: inspect post-construction attribute binding of input scales, then consider a strictly isolated, tiny synthetic CPU TorchDispatchMode witness for indexed writes **only if resource and service safety are validated**, followed by source-driven shard 8/11 ownership analysis. No automatic model startup, image rebuild, host resource relaxation, or PR Ready/Merge.
