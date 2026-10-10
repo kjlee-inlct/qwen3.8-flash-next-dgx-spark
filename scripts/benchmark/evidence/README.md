@@ -459,3 +459,11 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 - [CT source plan, current staged fallback contract](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md): the exact-image AST checker now prints bounded **all-eight registration source diagnostics** on INVALID, after rechecking all five pinned installed-source SHA256 digests. It preserves original exit code 2; it cannot convert a mismatch into PASS or certify loaded tensors.
 - [Attempt 01 original user-provided DGX result](orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md): only observed installed-image run so far, INVALID on unsupported PerTensorScaleParameter; unchanged historical result. **Attempt 02 has not been observed**.
 - The H38 image, model/checkpoint, GPU, managed service and host protection remain untouched. The branch's CI-tested synthetics do not substitute for DGX operator evidence; retain all CT completeness, scale CopyCounter credit and buffer-lifetime statuses as UNVERIFIED.
+
+
+### Exact H38 CT Attempt 02 source checker INVALID — 2026-10-10
+
+- [Attempt 02 actual DGX source-only diagnostic](orcarouter-h38-ct-layerwise-accounting-attempt02-invalid-20261010.md): exact H38 image/source SHA-pinned fallback reports **8/8 expected CT names**, but the previous AST checker rejects w13_weight_scale:ModelWeightParameter as an unexpected group-scale constructor (source_check_rc=2).
+- The exact installed H38 constructors are **4 ModelWeightParameter** (two packed weights plus two group scales), **2 PerTensorScaleParameter** (global weight scales), and **2 torch.nn.Parameter** (input scales). Preserve original shapes, dtype, sharding keywords and source-only limitations.
+- [CT source-plan correction](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md): stage a narrowly corrected eight-name constructor contract and positive/negative synthetic regression suite. A corrected code/CI pass is not an actual image source PASS.
+- Only operator Attempt 01 and Attempt 02 source-only INVALID runs are established. No H38 model/GPU run and no authorization to alter image, host protection, PR readiness or merge. Unique copy/scale coverage and memory peak remain UNVERIFIED.
