@@ -5,7 +5,7 @@
 This is **actual user-provided DGX console output** from the guarded, no-restart offline metadata inspector. It is not a runtime success, model-validation, startup, or strict host-stability test. The original path `/tmp/managed-runtime-offline-attempt01-20261012.txt` was reported by the operator but its file bytes/SHA256 have **not** been independently retrieved.
 
 - Checkout: `feat/h38-managed-integration` exact clean operator HEAD **`6ce45561640f4069d534cbe04f5064a39095a88a`**, fast-forward from `bbeceaf`.
-- Inspector `scripts/lifecycle/inspect-readonly-runtime-offline.sh`, exact `QWEN38_OFFLINE_DIAGNOSTIC_TARGET_SHA`.
+- The canonical offline metadata inspector (operator entry point documented in `OPERATIONS.md`) used exact `QWEN38_OFFLINE_DIAGNOSTIC_TARGET_SHA`.
 - Guard: `MANAGED_RUNTIME_OFFLINE_PREFLIGHT=BEGIN`; `scope=readonly_container_state_service_state_file_metadata_no_restart`; `gpu_or_model_launch=NO`; `install_uninstall_purge=NO`; `host_service_or_protection_mutation=NO`.
 - All three checked read-only queries returned rc=0. Final `MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY`, `offline_diagnostic_rc=0`, `MANAGED_LIFECYCLE_LIVE_E2E=NOT_QUALIFIED`, `H38_MODEL_GPU_RERUN=BLOCKED`.
 - Result markers explicitly said `RUNTIME_ATTESTATION_VALIDITY=NOT_PROVEN` and `RUNTIME_STOP_REASON=NOT_YET_PROVEN`.
