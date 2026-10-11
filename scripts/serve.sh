@@ -2,9 +2,12 @@
 # Serve supported Qwen3.8-Flash-Next profiles on one DGX Spark (GB10 / sm_121a).
 #
 # PLE handling is profile-specific:
-#   - orcarouter / nvidia keep the legacy CPU-offload managed path;
+#   - nvidia keeps the legacy CPU-offload managed path;
 #   - mazinb and orcarouter-hybrid use the validated vLLM v0.29 PLE mmap path
-#     and exact-QSA fallback.
+#     and exact-QSA fallback;
+#   - orcarouter keeps legacy CPU-offload controls for a pre-H38 manifest, then
+#     selects the v0.29 PLE-mmap/exact-QSA path plus the qualified H38
+#     decoder-only Marlin canonical-order repair after explicit image migration.
 #
 # Keep profile defaults explicit below. Do not silently make experimental runtime flags
 # global because the published checkpoints differ in PLE representation and runtime image.
@@ -22,14 +25,31 @@ KV_MEMORY_FLAG=--kv-cache-memory
 VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38"
 FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer"
 HYBRID_MOUNTS=()
+RUNTIME_ENV=()
 case "${MODEL_PROFILE}" in
   orcarouter)
-    IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:qwen38-flash-next-arm64-cu130}"
+    IMAGE="${VLLM_IMAGE:-vllm-orcarouter-v029-h38-decoder-scope:v1}"
     MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/qwen3.8-flash-next-orcarouter}"
     DEFAULT_MAXLEN=262144; DEFAULT_NSPEC=2; DEFAULT_INDEX_SHARE=0
     # 2026-10-03 adverse-state controlled A/B: 16 GiB passed strict readiness/soak/host checks;
     # 24 GiB reproduced repeated RM NV_ERR_NO_MEMORY events and a five-sample protected stop.
     DEFAULT_GPU_UTIL=0.85; DEFAULT_KV_MEM=17179869184; DEFAULT_MAXSEQS=3; DEFAULT_AUTOTUNE=0
+    # An immutable code update must remain compatible with the pre-H38 install
+    # manifest long enough for --refresh-profile-defaults to perform the explicit
+    # image migration. Only the H38 image selects the v0.29 deterministic controls.
+    if [[ "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]; then
+      DEFAULT_GPU_UTIL=0.80
+      DEFAULT_QSA_EXACT_TOPK=1
+      PLE_MODE=mmap
+      KV_MEMORY_FLAG=--kv-cache-memory-bytes
+      VLLM_CACHE_DIR="${HOME}/.cache/vllm-qwen38-v029"
+      FLASHINFER_CACHE_DIR="${HOME}/.cache/flashinfer-v029"
+      RUNTIME_ENV=(
+        -e QWEN38_MARLIN_CANONICAL_ORDER=1
+        -e QWEN38_MARLIN_CANONICAL_SCOPE=decoder
+        -e VLLM_CACHE_ROOT=/root/.cache/vllm/h38-marlin-canonical-decoder-managed-v1
+      )
+    fi
     SERVED_NAME="${SERVED_NAME:-orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
     ;;
   nvidia)
@@ -275,6 +295,7 @@ docker run -d \
   -e VLLM_TARGET_DEVICE=cuda \
   -e CUTE_DSL_ARCH=sm_121a \
   "${PLE_ENV[@]}" \
+  "${RUNTIME_ENV[@]}" \
   -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
   "${QSA_DET_ENV[@]}" \
   "${QSA_EXACT_ENV[@]}" \

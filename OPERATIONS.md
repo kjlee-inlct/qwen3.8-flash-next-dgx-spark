@@ -3,18 +3,36 @@
 
 ## H38 runtime vs managed-service status
 
-The qualified OrcaRouter H38 decoder-only runtime is currently exposed through
+The qualified OrcaRouter H38 decoder-only runtime remains exposed through
 `scripts/runtime/orcarouter-v029.sh --profile hybrid-h38-deterministic`.
 
-It is **not yet the transactional installer/systemd-managed runtime**. The
-managed path still derives its image and served-model state from
-`install.sh`, `scripts/model/model-profiles.sh`, the installation manifest,
-`scripts/serve.sh`, and `scripts/runtime/service-runner.sh`.
+This feature branch also implements the candidate transactional
+installer/systemd integration for the existing `orcarouter` profile. It is
+**not yet live-qualified or promoted**. The managed 16 GiB KV resilience
+setting is retained; H38-specific PLE mmap, exact-QSA, decoder canonicalization,
+and compile-cache controls are selected only when the installation manifest
+selects the H38 image.
 
-Do not migrate those managed defaults implicitly. H38 managed-service promotion
-requires its own lifecycle qualification: image preparation from a clean host,
-manifest migration, service replacement, rollback, doctor/attestation,
-production-alias determinism, and performance regression checks.
+For an existing OrcaRouter installation, the H38 migration is one explicit
+cross-release transaction. Stage/qualify the target immutable release, then run:
+
+```bash
+bash ./scripts/update-release.sh "${TARGET}" --refresh-profile-defaults
+```
+
+The coordinator builds/reuses and verifies H38, prepares the target manifest, activates
+the target release + manifest pair, and only then starts the managed H38 replacement.
+It does **not** require the persisted legacy CPU-offload image to become READY under
+the new release. Failure restores the previous release pointers, canonical manifest,
+runtime and service as one recovery boundary.
+
+Do not skip directly from a mutable checkout to a manifest rewrite, do not use the
+direct installer refresh as a substitute for this cross-release transaction, and do not
+call the managed H38 path production until the lifecycle/restart/doctor,
+managed-alias determinism, performance, and strict RM host-stability acceptance
+in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+has passed.
 
 Current H38 evidence and runtime roles are summarized in
 `docs/H38-DETERMINISM.md`.
@@ -238,6 +256,7 @@ Wildcard LAN listeners (`0.0.0.0`) are not supported. The selected LAN address m
 bash ./scripts/release-manager.sh status
 bash ./scripts/update-transition.sh status
 bash ./scripts/runtime-transition.sh status
+bash ./scripts/release-profile-refresh-transition.sh status
 bash ./scripts/profile-switch-transition.sh status
 systemctl is-active qwen38-flash-next.service
 docker ps -a --filter name=qwen38-flash-next
@@ -299,7 +318,7 @@ Use strict mode when maintenance automation should fail on warnings as well as h
 ./scripts/doctor.sh --strict
 ```
 
-Examples of signals that require operator attention include an incomplete update/runtime/profile-switch transaction, a tampered current immutable release, an unsafe/dangling release pointer, a legacy or digest-mismatched qualification marker, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
+Examples of signals that require operator attention include an incomplete update/runtime/profile-switch/release-profile-refresh transaction, a tampered current immutable release, an unsafe/dangling release pointer, a legacy or digest-mismatched qualification marker, a service that no longer points at the immutable `current` root, a stale `runtime-stop.env` marker referencing a running or replaced container, or a managed API listener that no longer matches the installation manifest.
 
 ## Update a checkout revision
 
@@ -320,13 +339,22 @@ Preview the cutover without changing the runtime:
 bash ./scripts/update-release.sh "${TARGET}" --dry-run
 ```
 
-Perform the cutover:
+Perform an ordinary code-only cutover when the persisted runtime image is intentionally retained:
 
 ```bash
 bash ./scripts/update-release.sh "${TARGET}"
 ```
 
-The update path changes the immutable `current` pointer, restarts the managed service from that stable pointer, validates a replacement container, and commits only after runtime validation. On a cutover failure it attempts to restore the previous release pointer and service.
+For the OrcaRouter cross-release H38 migration, use the atomic release + profile-default refresh path instead:
+
+```bash
+bash ./scripts/update-release.sh "${TARGET}" --refresh-profile-defaults
+```
+
+The ordinary update path changes the immutable `current` pointer and validates the
+persisted runtime. The atomic H38 path owns the target release and H38 install manifest
+together and starts only the H38 replacement. Do not use the ordinary path as a
+precondition that requires legacy READY before H38 migration.
 
 ## Recovery after an interrupted operation
 

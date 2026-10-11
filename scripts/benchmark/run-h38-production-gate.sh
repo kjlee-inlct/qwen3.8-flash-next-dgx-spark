@@ -4,8 +4,8 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 RUNNER="${ROOT}/scripts/benchmark/run.py"
-MODEL="hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4"
-OUT="${ROOT}/scripts/benchmark/results/local/h38-production"
+MODEL="${H38_GATE_MODEL:-hybrid-h38-deterministic/Qwen3.8-Flash-Next-Uncensored-NVFP4}"
+OUT="${H38_GATE_OUT:-${ROOT}/scripts/benchmark/results/local/h38-production}"
 
 mkdir -p "${OUT}"
 

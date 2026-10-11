@@ -355,7 +355,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
         self.assertIn("profile     : orcarouter", result.stdout)
-        self.assertIn("vllm-skinny-tp1:v1", result.stdout)
+        self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
 
     def test_nvidia_profile(self) -> None:
         result = self.run_install("nvidia")
@@ -712,9 +712,9 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("vllm-skinny-tp1:v1", result.stdout)
+            self.assertIn("vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
             self.assertIn(
-                "image change: vllm/vllm-openai:qwen38-flash-next-arm64-cu130 -> vllm-skinny-tp1:v1",
+                "image change: vllm/vllm-openai:qwen38-flash-next-arm64-cu130 -> vllm-orcarouter-v029-h38-decoder-scope:v1",
                 result.stdout,
             )
             self.assertEqual((state / "install.env").read_bytes(), before)

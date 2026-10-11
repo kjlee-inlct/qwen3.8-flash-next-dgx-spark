@@ -28,6 +28,8 @@ This directory contains canonical managed-runtime transition, preflight, service
 - `preflight-runtime.sh`
 - `runtime-transition.sh`
 - `service-runner.sh`
+- `service-adopt-runner.sh`: one-shot exact-container supervisor used only to reattach a restored predecessor without replacement.
+- `service-stop.sh`: identity-aware systemd stop helper; it stops only the container ID covered by the current runtime attestation.
 - `monitor-runtime.sh`
 - `wait-ready.sh`
 - `validate_runtime.py`
@@ -58,9 +60,22 @@ The production profile uses
 The canonical evidence is in `../benchmark/README.md`, with a concise summary
 in `../../docs/H38-DETERMINISM.md`.
 
-These H38 profiles are dedicated v0.29 runtime helpers and are not yet wired
-into the transactional `install.sh` / systemd-managed `serve.sh` lifecycle.
-Do not conflate H38 runtime qualification with managed-service qualification.
+The dedicated H38 profiles above remain the historical qualification surface.
+The current H38 managed-integration feature branch selects the decoder-scope image
+for the managed `orcarouter` profile through the atomic
+`update-release.sh TARGET --refresh-profile-defaults` path. The target immutable
+release and H38 candidate manifest are activated before the single managed-service
+replacement; the legacy CPU-offload image is not started as an intermediate READY
+gate. If the candidate fails, service teardown is bound to the attested candidate
+container ID. A still-running restored predecessor is reattached by exact identity
+without replacement, while a predecessor stopped by safety protection remains stopped
+instead of being cold-started as part of rollback.
+
+That managed integration is implemented but live qualification is still
+pending. Do not conflate the historical H38 runtime qualification with
+installer/systemd managed-service qualification. See
+`../benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+for the acceptance gate.
 
 ## Temporary NVIDIA tuning runtimes
 

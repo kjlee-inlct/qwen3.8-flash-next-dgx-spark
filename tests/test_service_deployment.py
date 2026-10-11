@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 import unittest
 from pathlib import Path
 
@@ -8,13 +9,24 @@ ROOT = Path(__file__).parents[1]
 
 
 class ServiceDeploymentTests(unittest.TestCase):
+    def test_serve_helper_is_executable_for_immutable_release_cutover(self) -> None:
+        serve = ROOT / "scripts" / "serve.sh"
+        self.assertTrue(
+            serve.stat().st_mode & stat.S_IXUSR,
+            "scripts/serve.sh must keep its Git executable bit because immutable "
+            "releases are produced with git archive and service-runner executes it directly",
+        )
+
     def test_service_has_bounded_restart_and_loopback_runner(self) -> None:
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
         shim = (ROOT / "scripts" / "service-runner.sh").read_text(encoding="utf-8")
         self.assertIn("StartLimitBurst=2", manager)
         self.assertIn("Restart=on-failure", manager)
-        self.assertIn("docker stop --timeout 30", manager)
+        stop_helper = (ROOT / "scripts" / "runtime" / "service-stop.sh").read_text(encoding="utf-8")
+        self.assertIn("SERVICE_STOP_HELPER", manager)
+        self.assertIn("ExecStop=${SERVICE_EXEC_STOP}", manager)
+        self.assertIn("docker stop --timeout 30", stop_helper)
         self.assertIn("WantedBy=multi-user.target", manager)
         self.assertNotIn('docker rm -f "${CONTAINER_NAME}"', manager)
         self.assertIn("--runtime-root", manager)
@@ -58,14 +70,17 @@ class ServiceDeploymentTests(unittest.TestCase):
             ROOT / "scripts" / "runtime" / "preflight-runtime.sh"
         ).read_text(encoding="utf-8")
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
-        self.assertIn("orcarouter-hybrid)", server)
-        self.assertIn("vllm-orcarouter-v029:v1", server)
-        self.assertIn("qwen3.8-h6-modelopt-w4a16", server)
+        start = server.index("  orcarouter-hybrid)\n")
+        end = server.index("  *) echo", start)
+        hybrid_block = server[start:end]
+        self.assertIn("orcarouter-hybrid)", hybrid_block)
+        self.assertIn("vllm-orcarouter-v029:v1", hybrid_block)
+        self.assertIn("qwen3.8-h6-modelopt-w4a16", hybrid_block)
         for mount in ("/base-model:ro", "/h3-model:ro", "/h4-all:ro", "/h5-parent:ro"):
-            self.assertIn(mount, server)
-        self.assertIn("VLLM_PLE_MMAP=1", server)
-        self.assertIn("DEFAULT_QSA_EXACT_TOPK=1", server)
-        self.assertNotIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", server)
+            self.assertIn(mount, hybrid_block)
+        self.assertIn("PLE_MODE=mmap", hybrid_block)
+        self.assertIn("DEFAULT_QSA_EXACT_TOPK=1", hybrid_block)
+        self.assertNotIn("QWEN38_MARLIN_CANONICAL_SCOPE=decoder", hybrid_block)
         self.assertIn('"${MODEL_PROFILE:-}" == orcarouter-hybrid', runner)
         self.assertIn("validate-orcarouter-hybrid.py", preflight)
         self.assertIn("--runtime-only", preflight)
@@ -94,6 +109,78 @@ class ServiceDeploymentTests(unittest.TestCase):
         manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         self.assertIn('"${value}" == service_ready || "${value}" == complete', manager)
 
+    def test_service_can_adopt_exact_restored_runtime_without_replacement(self) -> None:
+        manager = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        adopter = (ROOT / "scripts" / "runtime" / "service-adopt-runner.sh").read_text(encoding="utf-8")
+        stopper = (ROOT / "scripts" / "runtime" / "service-stop.sh").read_text(encoding="utf-8")
+        parser = (ROOT / "scripts" / "lib" / "state_file.py").read_text(encoding="utf-8")
+
+        self.assertIn("--adopt-existing", manager)
+        self.assertIn("prepare_runtime_adoption()", manager)
+        self.assertIn("existing runtime adoption marker does not match restored runtime", manager)
+        self.assertIn('"${candidate_container_id}" == "${previous_container_id}"', manager)
+        self.assertIn("runtime-adopt.env", manager)
+        self.assertIn("runtime-adopt", parser)
+        self.assertIn("service-adopt-runner.sh", manager)
+        self.assertIn("service-stop.sh", manager)
+
+        self.assertIn("delegate_restored_runtime_root()", runner)
+        self.assertIn("runtime-adopt.env", runner)
+        self.assertIn("refusing a cold replacement", runner)
+        self.assertIn("preserving stopped state instead of cold-starting legacy runtime", runner)
+
+        self.assertIn("runtime adoption container ID mismatch", adopter)
+        self.assertIn("runtime adoption model mount mismatch", adopter)
+        self.assertIn("runtime adoption served model identity mismatch", adopter)
+        self.assertIn("Existing runtime supervised without replacement", adopter)
+        self.assertIn("runtime adoption attestation container ID mismatch", adopter)
+        self.assertIn("preserving stopped state instead of cold-starting it", adopter)
+        self.assertIn('rm -f -- "${ADOPT_FILE}"', adopter)
+        self.assertIn("runtime_monitor_matches_restored()", adopter)
+        self.assertIn('"${MONITOR_CMDLINE}" == *"${monitor_helper}"*', adopter)
+        self.assertIn("Replacing mismatched runtime monitor before restored-runtime adoption", adopter)
+        self.assertIn("restored runtime monitor failed exact-policy attachment", adopter)
+        for option in (
+            "--min-available-gib",
+            "--min-free-gib",
+            "--free-gate-gib",
+            "--min-swap-free-gib",
+            "--consecutive",
+            "--heartbeat",
+            "--protect",
+        ):
+            self.assertIn(option, adopter)
+
+        self.assertIn("no runtime attestation; preserving any canonical container", stopper)
+        self.assertIn("canonical container changed", stopper)
+        self.assertIn("docker stop --timeout 30", stopper)
+
+    def test_doctor_reports_pending_runtime_adoption(self) -> None:
+        doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
+        lock = (ROOT / "scripts" / "lib" / "operation-lock.sh").read_text(encoding="utf-8")
+        self.assertIn("runtime-adopt.env", doctor)
+        self.assertIn("one-shot runtime adoption is still pending", doctor)
+        self.assertIn("operation_lock_runtime_adopt_guard", lock)
+        self.assertIn("QWEN38_RUNTIME_ADOPT_CONTEXT", lock)
+
+    def test_refresh_recovery_adopts_before_dynamic_current_retry(self) -> None:
+        runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
+        refresh = 'bash "${RELEASE_PROFILE_REFRESH_TRANSITION}" service-recover'
+        special = 'if [[ "${refresh_recovery_rc}" == 75 ]]'
+        adopter = 'exec bash "${adopt_runner}" --runtime-root "${restored_root}"'
+        profile = 'bash "${PROFILE_SWITCH_TRANSITION}" service-recover'
+
+        self.assertIn("dynamic current symlink", runner)
+        self.assertIn("cold-replace the exact", runner)
+        self.assertIn(refresh, runner)
+        self.assertIn(special, runner)
+        self.assertIn(adopter, runner)
+        self.assertLess(runner.index(refresh), runner.index(special))
+        self.assertLess(runner.index(special), runner.index(adopter))
+        self.assertLess(runner.index(adopter), runner.index(profile))
+        self.assertIn('python3 "${STATE_PARSER}" install-service "${STATE_FILE}"', runner)
+
     def test_service_runner_recovers_profile_switch_before_manifest_parse(self) -> None:
         runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(encoding="utf-8")
 
@@ -118,7 +205,12 @@ class ServiceDeploymentTests(unittest.TestCase):
         self.assertIn('curl -fsS --max-time 3 http://127.0.0.1:8888/health', manager)
         self.assertIn('bash "${RUNTIME_TRANSITION}" commit', runner)
         self.assertIn('write_runtime_commit_attestation "${container_id}"', runner)
-        self.assertLess(runner.index('bash "${RUNTIME_TRANSITION}" commit'), runner.index('write_runtime_commit_attestation "${container_id}"'))
+        self.assertIn("release_profile_refresh_owns_runtime_commit", runner)
+        self.assertIn("transition-commit-deferred", runner)
+        refresh_branch = runner.index('if [[ "${refresh_runtime_owner}" == 1 ]]')
+        refresh_attest = runner.index('write_runtime_commit_attestation "${container_id}"', refresh_branch)
+        standalone_commit = runner.index('bash "${RUNTIME_TRANSITION}" commit', refresh_branch)
+        self.assertLess(refresh_attest, standalone_commit)
         self.assertIn("EXPECTED_RUNTIME_ROOT", manager)
         self.assertIn("ATTESTED_RUNTIME_ROOT", manager)
         self.assertIn("ATTESTED_CONTAINER_ID", manager)
@@ -162,7 +254,15 @@ class ServiceDeploymentTests(unittest.TestCase):
             self.assertIn(f'log_runtime_phase "{phase}"', runner)
         self.assertIn("elapsed=%ss", runner)
         self.assertLess(runner.index('log_runtime_phase "health-ready"'), runner.index('log_runtime_phase "model-list-validated"'))
-        self.assertLess(runner.index('log_runtime_phase "transition-committed"'), runner.index('log_runtime_phase "runtime-attestation-written"'))
+        self.assertIn('log_runtime_phase "transition-commit-deferred"', runner)
+        refresh_branch = runner.index('if [[ "${refresh_runtime_owner}" == 1 ]]')
+        refresh_attest = runner.index('log_runtime_phase "runtime-attestation-written"', refresh_branch)
+        deferred = runner.index('log_runtime_phase "transition-commit-deferred"', refresh_branch)
+        self.assertLess(refresh_attest, deferred)
+        standalone = runner.index("else", deferred)
+        standalone_commit = runner.index('log_runtime_phase "transition-committed"', standalone)
+        standalone_attest = runner.index('log_runtime_phase "runtime-attestation-written"', standalone_commit)
+        self.assertLess(standalone_commit, standalone_attest)
 
     def test_release_qualification_does_not_mutate_payload(self) -> None:
         qualifier = (ROOT / "scripts" / "lifecycle" / "qualify-release.sh").read_text(encoding="utf-8")
@@ -209,6 +309,26 @@ class ServiceDeploymentTests(unittest.TestCase):
     def test_uninstaller_removes_only_owned_service(self) -> None:
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
         self.assertIn('if [[ "${SERVICE_OWNED}" == 1 ]]', uninstaller)
+
+    def test_uninstaller_fails_closed_on_newer_lifecycle_artifacts(self) -> None:
+        uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+        for marker in (
+            "runtime-adopt.env",
+            "release-profile-refresh-transition.env",
+            "release-profile-refresh-backup",
+            "release-profile-refresh-candidate",
+            "settings-transition.phase",
+            "settings-transition.start",
+            "settings-transition.no-start",
+            "settings-transition.previous-service-active",
+            "settings-transition.previous-container-running",
+            "settings-backup",
+            "settings-candidate",
+        ):
+            self.assertIn(marker, uninstaller)
+        self.assertIn("finish release-profile recovery before uninstalling", uninstaller)
+        self.assertIn("release-profile refresh artifacts exist without an active transaction", uninstaller)
+        self.assertIn("settings transaction or stale settings artifact exists", uninstaller)
         self.assertIn('manage-service.sh" remove --yes', uninstaller)
 
 

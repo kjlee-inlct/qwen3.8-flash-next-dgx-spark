@@ -98,6 +98,30 @@ class StateFileParserTests(unittest.TestCase):
         ]))
         self.assertEqual(valid.returncode, 0, valid.stderr.decode()); self.assertNotEqual(unsafe_root.returncode, 0)
 
+    def test_runtime_adopt_marker_binds_exact_restored_identity(self) -> None:
+        valid = self.run_parser("runtime-adopt", "\n".join([
+            "RUNTIME_ADOPT_SCHEMA_VERSION=1",
+            "RUNTIME_ROOT=/home/inlc/.local/share/qwen38-spark/releases/" + "a" * 40,
+            "RUNTIME_CONTAINER_NAME=qwen38-flash-next",
+            "RUNTIME_CONTAINER_ID=" + "b" * 64,
+            "EXPECTED_IMAGE=vllm-skinny-tp1:v1",
+            "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "CREATED_AT=2026-10-07T10:00:00Z",
+            "",
+        ]))
+        wrong_name = self.run_parser("runtime-adopt", "\n".join([
+            "RUNTIME_ADOPT_SCHEMA_VERSION=1",
+            "RUNTIME_ROOT=/home/inlc/.local/share/qwen38-spark/releases/" + "a" * 40,
+            "RUNTIME_CONTAINER_NAME=unexpected",
+            "RUNTIME_CONTAINER_ID=" + "b" * 64,
+            "EXPECTED_IMAGE=vllm-skinny-tp1:v1",
+            "SERVED_NAME=orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "CREATED_AT=2026-10-07T10:00:00Z",
+            "",
+        ]))
+        self.assertEqual(valid.returncode, 0, valid.stderr.decode())
+        self.assertNotEqual(wrong_name.returncode, 0)
+
     def test_install_runtime_decodes_printf_q_paths_and_emits_only_runtime_fields(self) -> None:
         result = self.run_parser("install-runtime", self.install_manifest())
         self.assertEqual(result.returncode, 0, result.stderr.decode())

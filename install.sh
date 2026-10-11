@@ -180,6 +180,27 @@ asset_track_profile_images() {
   fi
   if asset_image_owned "${IMAGE}"; then IMAGE_OWNED=1; else IMAGE_OWNED=0; fi
 }
+asset_track_h38_image_chain() {
+  local owned dependency="" image
+  local chain=(
+    vllm-orcarouter-v029:v1
+    vllm-orcarouter-v029-h9-ct-modelweight:v1
+    vllm-orcarouter-v029-h10-ct-global-scale:v1
+    vllm-orcarouter-v029-h11-ct-packed-modelweight:v1
+    vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+    vllm-orcarouter-v029-h38-decoder-scope:v1
+  )
+  for image in "${chain[@]}"; do
+    owned="$(asset_image_ownership_for_name "${image}")"
+    if [[ -n "${dependency}" ]]; then
+      asset_track_image "${image}" "${owned}" "${dependency}"
+    else
+      asset_track_image "${image}" "${owned}"
+    fi
+    dependency="${image}"
+  done
+}
+
 parse_install_manifest() {
   local parsed key value
   parsed="$(mktemp)"
@@ -1113,7 +1134,13 @@ else
 fi
 write_state inspected
 printf '\nPreparing vLLM image...\n'
-if [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
+if [[ "${MODEL_PROFILE}" == orcarouter && "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]; then
+  # Claim only missing installer-created stages before construction, then bind
+  # each successful image ID into the cumulative ownership registry afterwards.
+  asset_track_h38_image_chain
+  bash "${ROOT_DIR}/scripts/runtime/prepare-h38-image.sh" build
+  asset_track_h38_image_chain
+elif [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.skinny-gemm" "${ROOT_DIR}/scripts"
   fi

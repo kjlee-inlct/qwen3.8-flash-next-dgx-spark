@@ -2,6 +2,57 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## H38 managed-service integration
+
+The managed H38 candidate is tracked separately from the historical H38
+experiment-runtime closure and from the R9-R32 RM allocator investigation.
+
+- plan: `orcarouter-h38-managed-integration-plan-20261007.md`
+- static result: `orcarouter-h38-managed-integration-static-result-20261007.md`
+- live Gate A attempt 01: `orcarouter-h38-managed-gate-a-attempt01-20261007.md`
+- live Gate A attempt 02: `orcarouter-h38-managed-gate-a-attempt02-20261007.md`
+- live Gate A attempt 03: `orcarouter-h38-managed-gate-a-attempt03-20261007.md`
+- live Gate A attempt 04: `orcarouter-h38-managed-gate-a-attempt04-20261007.md`
+- Gate A matched base-main control: `orcarouter-h38-managed-gate-a-base-control-20261007.md`
+- atomic cross-release transaction implementation: `orcarouter-h38-managed-atomic-refresh-implementation-20261007.md`
+- first atomic live migration attempt: `orcarouter-h38-managed-atomic-gate-attempt01-20261007.md`
+- production-shape allocator/protection discriminator plan: `orcarouter-h38-allocator-protection-discriminator-plan-20261008.md` (unchanged protection; static CI `37713578855` PASS / 595 tests)
+- production-shape allocator/protection attempt 01: `orcarouter-h38-allocator-protection-discriminator-attempt01-20261008.md` (**VALID PROTECTED_STOP** at 11:06:47 KST; exact MTP k2 identity; last pre-event shard 14/18; strict RM 0; NOT_REACHED / INCONCLUSIVE); runner summary fix CI `37718076547` SUCCESS, 596/596
+- **completed full-history offline finding**: `orcarouter-h38-allocator-protection-offline-analysis-20261008.md` (archive SHA256 recorded; corrected R21/R22-equivalent physical-page residual **+74,761.516 MiB** over 5 s, **SwapFree delta 0**, 40 fast/8 slow post-event samples excluded; 15/18 phase line actually AFTER protected stop)
+- **R11/R23–R32-to-H38 mechanism transfer and stop-conditions review**: `orcarouter-h38-r23-r32-allocator-mechanism-transfer-20261008.md` (R23 direct RM endpoint versus H38 physically observed burst, 400/800 MiB evidence, exact-R28 versus H38 image scope, NO R33/live run authorized)
+- **H38 CT meta-w13 source prerequisites — actual DGX PASS**: `orcarouter-h38-ct-meta-w13-source-prerequisites-result-20261009.md` (exact checkout `ac58309620ace2213df68ebf06b2c18b9592f394`, H38 image ID unchanged, native layerwise source functions present, CT `uses_meta_device` declaration NO; **not** CT meta implementation or RM memory mitigation).
+- Original M1-to-H38 feasibility plan: `orcarouter-h38-ct-meta-w13-feasibility-plan-20261008.md`; scanner `scripts/benchmark/check-h38-ct-meta-prerequisites.sh`, `inspect-h38-ct-meta-prerequisites.py`, tests `tests/test_h38_ct_meta_prerequisites.py`, CI `37778807130` / `37779107553` SUCCESS, 613/613.
+- **H38 historical Attempt 04 launch configuration — actual DGX archive PASS (2026-10-09)**: `orcarouter-h38-preserved-loader-config-result-20261009.md`. Guarded offline inspection at clean `1bc76cb12cc8df9d9512de0d0cd29e49120c1233` matched preserved image tag/ID, `candidate-inspect.json` versus `candidate-cmd.json`, H38 env lineage and model mount. Explicit CLI `load_format=safetensors`, `executor=mp`, `tensor_parallel_size=1`. Loader strategy, model-loader-extra, prefetch/thread details, EP and pipeline parallel flag all `NOT_EXPLICIT`. **Same Attempt 04 startup log** contained `Auto-prefetch is disabled`. PASS is archived launch flags only, **not resolved vLLM config, runtime loader iterator or CT buffer lifetime**.
+- **H38 archived candidate launch configuration — implementation/source CI qualified (DGX actual result above)** (implementation `0a71beb7fdd64ed06e9879c4349acb681e11f99f`; CI `37892699414` **SUCCESS, 641/641 tests**): `orcarouter-h38-preserved-loader-config-plan-20261009.md`. Offline `scripts/benchmark/inspect-h38-preserved-loader-config.py`, read-only exact-SHA runner `scripts/benchmark/check-h38-preserved-loader-config.sh`, regressions `tests/test_h38_preserved_loader_config.py`. Reads preserved Attempt 04 `candidate-inspect.json` / `candidate-cmd.json` and optional startup-phase only, rejects mismatched image/command, redacts secrets, treats missing flags as `NOT_EXPLICIT`; cannot prove effective vLLM defaults or actual tensor delivery.
+- **H38 exact-installed loader source contract — actual DGX PASS (2026-10-09)**: `orcarouter-h38-installed-loader-source-contract-result-20261009.md` (clean checkout `b85f506a4f3f6e7a1272f6e5b37a137a5f57a5f9`; pinned H38 image ID unchanged; eight installed source hashes; default safetensors sorting and get_tensor-before-model-mapper, Qwen4Exp MTP name drop, layerwise numel/replay and H11/H12 CT aliases all SOURCE_PRESENT; selected runtime load path and packed-scale completion **NOT proven**).
+- **H38 exact-installed loader source audit — implementation CI green, DGX PASS now independently recorded** (implementation `1e4aadaa029937a61007e225c173239079481a16`, CI `37889474895` **SUCCESS, 633/633 tests**): `orcarouter-h38-installed-loader-source-contract-plan-20261009.md`; CPU-only inspector `scripts/benchmark/inspect-h38-installed-loader-source.py`, guarded runner `scripts/benchmark/check-h38-installed-loader-source.sh`, unit tests `tests/test_h38_installed_loader_source.py`. Audits upstream-v0.29-derived index/natural safetensors iterator, Qwen4Exp MTP name mapper, layerwise buffer/replay and CT alias contract **on exact H38 installed source**; may not infer selected runtime config, skipped I/O, or safe memory peak from a source-only PASS.
+- **H38 checkpoint metadata attempt 03 — DGX observed, correct exit 3, strict ORDER_GATE FAIL**: `orcarouter-h38-checkpoint-metadata-order-attempt03-revisit-ownership-20261009.md` (layer 0 revisit is distinct MTP layer 0 in `model-mtp.safetensors`; independent numbered-model shard layer 8 splits 4→5 and layer 11 splits 5→6; `base_model_only_revisited_layers_diagnostic=[8,11]`; 17 numbered shards + MTP, max overlap 3; all 48 routed layers present; no runtime memory or loader equivalence verified).
+- **H38 checkpoint gate-classification / bounded revisit-diagnostic fix**: commit `51850e28230c760dadac8fd86268d949b7623345`; GitHub Actions `37883805274` SUCCESS, **624/624 tests**. New exact-file revisit evidence **not yet collected** from DGX; original full-order FAIL remains intact.
+- **H38 checkpoint metadata attempt 02 — VALID ORDER GATE FAIL**: `orcarouter-h38-checkpoint-metadata-order-attempt02-gate-fail-20261009.md` (actual H38 image, index PASS; 17 numbered model shards + `model-mtp.safetensors`; 223,046 total / 221,186 routed tensor keys, 48 layers; revisits **0,8,11**, max overlap **3**; routed disk 72,981,184,512 bytes; two hypothetical peaks 6,448,748,544 bytes). Completed metadata output's `ORDER_GATE=FAIL` is authoritative; old outer `PREFLIGHT=INVALID` was an exit-code classification bug. New narrowly scoped diagnostic tool reports bounded revisit shard positions; **no CT meta experiment authorized**.
+- **H38 18-shard checkpoint metadata attempt 01 — INVALID before scan (2026-10-09)**: `orcarouter-h38-checkpoint-metadata-order-attempt01-invalid-tempfile-20261009.md` (actual H38 image/checkout confirmed; no usable Python tempdir under UID 65534 + read-only root; no 18-shard/layer/buffer result). Corrected runner supplies only isolated 64 MiB /tmp tmpfs; **not yet live revalidated**. Fix commit `d3ff823d3b7c183bb84c53079e25984e321a23e0`, CI `37882840040` SUCCESS, 622/622 tests.
+- **H38 18-shard checkpoint metadata-order source gate (actual checkpoint not measured)** (implementation commit `b476441899d07d04e9db3669ccd881f4351ef15e`; CI `37822913604` SUCCESS, 620/620 tests): `orcarouter-h38-checkpoint-metadata-order-plan-20261009.md`, analyzer `scripts/benchmark/inspect-h38-checkpoint-metadata-order.py`, safe CPU-only read-only runner `scripts/benchmark/check-h38-checkpoint-metadata-order.sh`, regression `tests/test_h38_checkpoint_metadata_order.py`. Reads only safetensors headers and safe_open key names; strict 18-shard index/48-layer checks and two hypothetical routed-byte buffer scenarios. Even a PASS is not an exact H38 loader-semantics or live-memory safety result.
+- **H38 exact-image source contract — DGX observed PASS**: `orcarouter-h38-exact-image-source-contract-result-20261008.md` (original checkout `1a4416581f4064baa110fc83947c442c360c4689`, H38 image ID `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`, `source_check_rc=0`, H11 packed `torch.empty` retained, H12 aliases PASS, H38 Humming/Marlin PASS, R32 precreate direct syntax 0 on actual H38 installed source; **not a host/RM mitigation PASS**)
+- exact-image source preflight plan: `orcarouter-h38-exact-image-source-contract-plan-20261008.md`; guarded runner `scripts/benchmark/check-h38-exact-image-source.sh`, inspector `scripts/benchmark/inspect-h38-exact-image-source.py`, regression `tests/test_h38_exact_image_source.py`; static CI `37747053983` and `37747347746` SUCCESS, 606/606. CPU-only transient runc inspector, no GPU/model.
+- archived-evidence offline analyzer: `scripts/benchmark/analyze-h38-allocator-attempt-archive.py` (read-only tar parser, meminfo+buddy accounting, phase/event strict alignment); regression: `tests/test_h38_allocator_attempt_archive.py`; CI `37744164668` SUCCESS, 599/599 tests
+
+- allocator observer runner: `scripts/benchmark/run-h38-allocator-protection-discriminator.sh` (production SPEC=mtp k=2, same protect thresholds)
+- trajectory analyzer: `scripts/benchmark/analyze-h38-allocator-protection-trajectory.py` (pre-event-only T-60/T-30/T-10/T-5/T-1/T0 samples, optional strict-RM reference; no post-failure rollback contamination or inferred threshold); pre-event hardening CI `37713396361` SUCCESS (595/595)
+- MTP startup discriminator plan: `orcarouter-h38-managed-mtp-startup-discriminator-plan-20261007.md`
+- MTP startup discriminator attempt 01 (setup invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt01-20261008.md`
+- MTP startup discriminator attempt 02 (setup invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt02-20261008.md`
+- MTP startup discriminator attempt 03 (harness invalid): `orcarouter-h38-managed-mtp-startup-discriminator-attempt03-20261008.md`
+- MTP startup discriminator attempt 04 (valid PROTECTED_STOP): `orcarouter-h38-managed-mtp-startup-discriminator-attempt04-20261008.md`
+- MTP startup discriminator runner: `scripts/benchmark/run-h38-mtp-startup-discriminator.sh` (repository-relative); valid live closure is attempt 04 = `PROTECTED_STOP`, exact identity PASS, `rm_oom_count=0`, `protected_stop=1`; removing MTP is not sufficient to avoid the H38 protection boundary
+- guarded atomic migration runner: `scripts/benchmark/run-h38-managed-migration-gate.sh` (repository-relative)
+- implementation branch: `feat/h38-managed-integration`
+- state: earlier H38 implementation/static CI passed, while attempts 01/02 fixed host-dependent qualification fixtures and attempt 03 fixed the branch file-mode regression; attempt 04 plus matched base-main control `d75c24ca496286e0b62db5e8f1d88480ed30e137` reproduced the same protected legacy CPU-offload restart with `rm_oom_count=0`, proving that intermediate READY requirement is a pre-existing base-main compatibility boundary; the branch now contains a dedicated atomic release + same-profile H38 manifest refresh transaction that avoids starting that legacy intermediate and preserves the previous runtime rollback container until the outer lifecycle commit; the first live run through that atomic path on `05748a9c9a2b206a536b454dc5d662d7750913db` reached the H38 candidate but protection stopped it before READY, yielding `FUNCTIONAL=NOT_REACHED`, `HOST_STABILITY=INCONCLUSIVE`, `rm_oom_count=0`, and `protected_stop=1`; recovered monitor samples show non-CMA available rising from `27111 MiB` to `29909 MiB` while low free + swap growth accumulated, classifying the stop as a monitor-heuristic collision rather than a strict RM failure or a host-stability pass; valid SPEC=none attempt 04 reproduced the protected-stop boundary with exact identity and no strict RM event, formally closing MTP as an insufficient explanation for that boundary; follow-up managed determinism/performance/restart gates remain unauthorized until a migration run passes
+- promotion rule: do not merge the runtime-impacting default change until
+  managed lifecycle/restart/doctor, determinism, performance, and strict RM
+  host-stability gates are recorded.
+
+The existing H38 experimental/runtime results remain historical evidence; this
+work does not rewrite those measured results.
+
 ## Current host-stability / RM allocator chain
 
 Read the current closure in this order:
@@ -374,3 +425,89 @@ Model-prefix/component localization is now closed. Do not add more model-prefix,
 R33 is optional and is **not** automatically authorized. A new live allocator-focused discriminator is justified only if an actionable mitigation requires identifying the exact lower-level transition responsible for the 800 MiB request.
 
 PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26fa6` on 2026-10-06. The R9–R32 allocator/localization chain above is therefore the post-merge canonical repository state. The unqualified M1 mitigation prototype was intentionally excluded from that merge and remains a separate follow-up track.
+
+## H38 CT per-parameter layerwise accounting — 2026-10-09 (source discriminator staged)
+
+- [H38 CT packed/scale layerwise source-only accounting plan](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — pins the H11/H12/installed-source contract, adds a guarded source-only checker plus synthetic regressions, and explicitly retains CT completion, shard-split buffer peak and host stability as unverified. This is a plan and tool implementation, **not an executed DGX result**.
+
+
+### H38 CT layerwise accounting counterexamples — 2026-10-09
+
+- [H38 CT accounting source-only plan and synthetic counterexamples](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — updated AST inspector now pins all eight CT shapes/dtypes and partial/finalizer paths; the offline synthetic suite demonstrates an aggregate element-count false-completion possibility without asserting it happened in the H38 runtime.
+- Tools: scripts/benchmark/inspect-h38-ct-layerwise-accounting.py, scripts/benchmark/simulate-h38-ct-layerwise-completion.py; tests/test_h38_ct_layerwise_accounting.py and tests/test_h38_ct_layerwise_completion_cases.py.
+- Test-only evidence (intermediate commit 511bef4c01268e7a4745fad8eae6843a7d1ca3e9): Actions run 37911091805 **SUCCESS / 662 tests** plus syntax/ShellCheck/compile/whitespace. CI and exact SHA must be checked again at the final documentation HEAD.
+- Distinction: **SYNTHETIC_ONLY**; exact-image CPU-only inspector execution **PENDING**; real CT completion, shard 8/11 buffer lifetime, actual peak and host stability **UNVERIFIED**. PR #259 stays Draft/Open and is not mergeable under current qualification rules.
+
+
+### H38 RoutedExperts mixed scale-write syntax — 2026-10-09
+
+- [CT layerwise-accounting source plan and routed dispatch contract](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md) — source-only inspector now checks a fifth pinned installed H38 source (RoutedExperts), including expert ID remapping/nonlocal rejection, GROUP/TENSOR/packed loader paths, explicit w13/w2 copy helpers and indexed scale assignment sites.
+- Relevant source-only code/test implementation CI: run 37914943450, SUCCESS / 666 unit tests, shell syntax/ShellCheck/Python compile/whitespace PASS. The final canonical docs HEAD requires a fresh CI check.
+- Observation is **UPSTREAM SOURCE / CODE CONTRACT ONLY**, not actual pinned-image execution and not a TorchDispatchMode trace. Indexed assignment is not automatically equivalent to counted aten.copy_; actual CT scale copy credit, unique expert coverage and layer 8/11 buffering remain UNVERIFIED. PR #259 is Draft/Open, merge forbidden.
+
+
+### H38 exact-image accounting Attempt 01 — checker INVALID, 2026-10-09
+
+- [Actual operator source-only Attempt 01 result](orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md) — clean checkout b9db2c901676ebc974c22f5ee65b37bc6c208c72, exact pinned H38 image ID preflight, CT AST rejected an installed PerTensorScaleParameter initializer: source_check_rc=2; no PASS claim.
+- This is a **source-inspector class allowlist mismatch**. The wrapper never reached the success footer; do NOT call it an H38 model/scale-loading defect or an image identity-unchanged after-check result.
+- Remediation on PR #259 extends the inspector to allow scale-specific vLLM wrappers under strict symbolic shape/dtype/weight_loader rules; adds negative synthetic regressions. Exact-image rerun is **PENDING** after CI-qualified HEAD.
+- No model/GPU, service or host-protection change. All H38 functional/memory/stability qualification remains blocked and UNVERIFIED.
+
+
+### H38 CT source checker diagnostic fallback (repo-only, 2026-10-09)
+
+- [CT source plan, current staged fallback contract](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md): the exact-image AST checker now prints bounded **all-eight registration source diagnostics** on INVALID, after rechecking all five pinned installed-source SHA256 digests. It preserves original exit code 2; it cannot convert a mismatch into PASS or certify loaded tensors.
+- [Attempt 01 original user-provided DGX result](orcarouter-h38-ct-layerwise-accounting-attempt01-invalid-20261009.md): only observed installed-image run so far, INVALID on unsupported PerTensorScaleParameter; unchanged historical result. **Attempt 02 has not been observed**.
+- The H38 image, model/checkpoint, GPU, managed service and host protection remain untouched. The branch's CI-tested synthetics do not substitute for DGX operator evidence; retain all CT completeness, scale CopyCounter credit and buffer-lifetime statuses as UNVERIFIED.
+
+
+### Exact H38 CT Attempt 02 source checker INVALID — 2026-10-10
+
+- [Attempt 02 actual DGX source-only diagnostic](orcarouter-h38-ct-layerwise-accounting-attempt02-invalid-20261010.md): exact H38 image/source SHA-pinned fallback reports **8/8 expected CT names**, but the previous AST checker rejects w13_weight_scale:ModelWeightParameter as an unexpected group-scale constructor (source_check_rc=2).
+- The exact installed H38 constructors are **4 ModelWeightParameter** (two packed weights plus two group scales), **2 PerTensorScaleParameter** (global weight scales), and **2 torch.nn.Parameter** (input scales). Preserve original shapes, dtype, sharding keywords and source-only limitations.
+- [CT source-plan correction](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md): stage a narrowly corrected eight-name constructor contract and positive/negative synthetic regression suite. A corrected code/CI pass is not an actual image source PASS.
+- Only operator Attempt 01 and Attempt 02 source-only INVALID runs are established. No H38 model/GPU run and no authorization to alter image, host protection, PR readiness or merge. Unique copy/scale coverage and memory peak remain UNVERIFIED.
+
+
+### H38 CT installed-source Attempt 03 — **PASS_SOURCE_CONTRACT_ONLY**, 2026-10-11
+
+- [**Real DGX Spark pinned-source audit PASS — Attempt 03**](orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md): clean exact local HEAD 5fa4265d394255744f8886b857804a28c433cf3f after fast-forward, fixed H38 image ID, five pinned source SHA256 checks, eight parameter constructor/shape/dtype contracts, H12 same-object alias, 21 Layerwise/meta accounting anchors and 14 RoutedExperts AST anchors; source_check_rc=0 and image_identity_unchanged=YES.
+- The H38 source checker printed H38_CT_ACCOUNTING_SOURCE=PASS_SOURCE_CONTRACT_ONLY and H38_CT_ACCOUNTING_PREFLIGHT=PASS_SOURCE_CONTRACT_ONLY. The reported CPU-only/no-checkpoint/no-GPU/no-network execution did **not** change the installed image, host protection or managed service.
+- **Current authoritative qualification is only source syntax.** The older Attempt 01/02 INVALID records are immutable historical checker mismatches (not H38 runtime failures). Current input-scale post-construction loader binding, live TorchDispatchMode scale copy credit, 512-expert unique loading, layer 8/11 completion and peak buffer ownership remain UNVERIFIED. H38 model/GPU testing and PR #259 Ready/Merge remain BLOCKED.
+- Next source-only work: trace plain input-scale post-construction set_weight_attrs/loader path, then design only bounded, separately-qualified CPU synthetic dispatcher checks where justified. [Reconciled source plan](orcarouter-h38-ct-layerwise-accounting-source-plan-20261009.md).
+
+
+### H38 CT input-scale weight_loader postconstruction attribute provenance — next source gate, 2026-10-11
+
+- [New source-only input-scale postconstruction attribute plan](orcarouter-h38-ct-scale-attr-source-plan-20261011.md): after the successful exact-image CT registration/Layerwise Attempt 03, the separate checker examines w13/w2 input-scale set_weight_attrs calls and TENSOR quant-method tag, H11 loader argument origin, RoutedExperts loader export, layerwise wrapping and the source syntax of the common guarded setattr helper. Read-only unprivileged runc with exact clean SHA/image ID, no network/GPU/checkpoint/model.
+- New inspector, wrapper and tests are repository-only pending CI and **operator exact-image execution**. The common utils.py helper digest is currently **not a preapproved source SHA pin**; a future wrapper will capture it under the pinned image ID. Do not label this as a completed DGX run or claim real callback execution.
+- Existing [Attempt 03 source contract PASS](orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md) remains qualified. CT CopyCounter scale credit, unique expert/scale coverage, shard 8/11 lifetime, finite buffer peak and host stability remain UNVERIFIED; PR #259 Draft/Open and Merge BLOCKED.
+
+
+### Exact H38 CT input-scale postconstruction attribute audit — **PASS_SOURCE_SITES_ONLY**, 2026-10-11
+
+- [**Actual DGX operator source-only Attempt 01 PASS**](orcarouter-h38-ct-scale-attr-attempt01-source-pass-20261011.md): clean exact HEAD 1865521c2ff58add7bddeed6735c76803a3e3637 after fast-forward, pinned H38 image ID, preverified 3 source SHA256 digests, both input-global-scale registration→TENSOR attribute update→post-construction set_weight_attrs source sites, H11 loader-origin, RoutedExperts exported loader, layerwise wrapper, and source helper guarded setattr syntax. source_check_rc=0; image_identity_unchanged=YES; no GPU/model/checkpoint payload or host changes.
+- **New helper digest:** vllm/model_executor/utils.py = f208310647a012797e0b0e9631d3498135c7f9aef831e35e42e96eceb7623f89. This was an **image-ID-guarded new observation**, not independently pre-pinned before Attempt 01.
+- Earlier [CT packed/group/global source audit Attempt 03 PASS](orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md) remains a separate source-only success. Effective runtime callback, aten.copy_ scale credit, unique 512-expert loaded coverage, shard 8/11 buffer lifetime, and GB10 host memory safety **remain unverified**; do not promote AST syntax to runtime evidence.
+- [Next safe proof plan](orcarouter-h38-ct-scale-attr-source-plan-20261011.md): separately study a strictly bounded external CPU-only toy TorchDispatchMode trace, explicitly label its torch version/environment, then determine which exact H38 runtime evidence would be required. No image rebuild, H38 GPU/model startup, host-protection changes or PR Ready/Merge.
+
+
+### External CPU TorchDispatchMode indexed-write toy — NOT installed-H38 evidence (2026-10-11)
+
+- [**External isolated CPU PyTorch 2.10.0+cpu indexed assignment trace**](h38-ct-copycounter-indexed-write-external-cpu-toy-20261011.md) — source-independent tiny Tensor operations observed that nested index and row assignments can emit aten.copy_.default. Four writes credited 6 destination elements despite covering only 5 unique slots in a 3x2 synthetic destination; repeated copies must not be conflated with complete unique destination coverage.
+- **Provenance distinction:** conducted in the assistant's external CPU Python runtime, not on DGX, not inside H38 pinned Docker image, not with H38 checkpoint/vLLM loader. This toy does not qualify installed-H38 CopyCounter events, actual 512-expert loading, shard 8/11 lifetime, memory peak, function or host stability.
+- Preserve the separate real-DGX [CT source Attempt 03 PASS](orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md) and [input-scale attribute source Attempt 01 PASS](orcarouter-h38-ct-scale-attr-attempt01-source-pass-20261011.md). H38 GPU/model experiments, image/host-protection changes and PR Ready/Merge stay prohibited.
+
+
+### H38 CT expert/shard possible destination-map source audit — staging (2026-10-11)
+
+- [Expert/shard source-only map and next pinned-image acceptance criteria](orcarouter-h38-ct-expert-destination-source-plan-20261011.md): new guarded Python stdlib AST inspector and independent regression suite map **conditional** sources of CT w1/w3 packed/group projections, w2, per-tensor global scales, input-scale generic row writes versus ModelOpt-specific index writes, fused checkpoints, global/local expert mapping and optional global-scale handling. Four existing installed source SHA256 pins are mandatory.
+- Repo CI on implementation commit [38107569683](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38107569683) **SUCCESS, 702/702 tests**; the separate operator DGX source-image inspection is NOT yet performed. Any later PASS_SOURCE_BRANCHES_ONLY proves source predicates, **not** real checkpoint names, actual EP/TP configuration, destination coverage, CopyCounter credit, shard 8/11 buffering or memory safety.
+- Prior operator [eight-parameter CT Attempt 03 source PASS](orcarouter-h38-ct-layerwise-accounting-attempt03-source-pass-20261011.md) and [input-scale attribute Attempt 01 source PASS](orcarouter-h38-ct-scale-attr-attempt01-source-pass-20261011.md) remain independently qualified. H38 image/GPU/model/host protections are unchanged; PR #259 Draft/Open, Merge BLOCKED.
+
+
+### Pinned H38 CT expert/shard destination — **actual DGX Attempt 01 PASS_SOURCE_BRANCHES_ONLY** (2026-10-11)
+
+- [**Actual pinned-image source audit PASS — 29/29 expert/shard source anchors**](orcarouter-h38-ct-expert-destination-attempt01-source-pass-20261011.md) at clean exact operator HEAD fd4221b5bdb2b95ad83f94255ee2740cea842c9e (after 1865521..fd4221b fast-forward), fixed image sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc and four pre-pinned installed source hashes; source_check_rc=0 and image_identity_unchanged=YES. No model/GPU/checkpoint payload read, service or host protection change.
+- 11 expert routing/fused callbacks, 7 packed/group first-/second-half writes and 11 tensor/input scale branch predicates checked. The 8-family destination map lists conditional **source branch possibilities**, NOT observed OrcaRouter checkpoint name/expert/scale copies, loaded unique bytes or destination indices. Real input-scale values, expert-ID mapping, copy-counter dispatch, layer 8/11 lifetime, peak buffer, function and host safety remain UNVERIFIED.
+- [Source plan updated with observed PASS and next safe metadata-only gate](orcarouter-h38-ct-expert-destination-source-plan-20261011.md). The independent prior CT registration source Attempt 03 and input-attribute source Attempt 01 PASS records remain unmodified. PR #259 remains Draft/Open and merge BLOCKED.

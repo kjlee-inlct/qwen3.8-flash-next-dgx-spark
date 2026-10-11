@@ -54,6 +54,34 @@ def nonempty_text(value: str) -> bool:
 
 
 SCHEMAS: dict[str, dict[str, Validator]] = {
+    "release-profile-refresh": {
+        "RELEASE_PROFILE_REFRESH_SCHEMA_VERSION": exact("1"),
+        "RELEASE_PROFILE_REFRESH_STATE": one_of(
+            "preparing",
+            "assets_ready",
+            "candidate_prepared",
+            "activating",
+            "activated",
+            "runtime_validating",
+            "runtime_committed",
+            "committing",
+            "rolling_back",
+        ),
+        "TARGET_RELEASE": matches(HEX_RELEASE),
+        "OLD_CURRENT_RELEASE": matches(HEX_RELEASE),
+        "OLD_PREVIOUS_RELEASE": optional(matches(HEX_RELEASE)),
+        "RELEASE_MANIFEST_SHA256": matches(SHA256),
+        "BACKUP_MANIFEST": absolute_path,
+        "BACKUP_SHA256": matches(SHA256),
+        "TARGET_MANIFEST": absolute_path,
+        "TARGET_MANIFEST_SHA256": optional(matches(SHA256)),
+        "PROFILE": exact("orcarouter"),
+        "OLD_CONTAINER_ID": matches(HEX_CONTAINER),
+        "OLD_IMAGE": nonempty_text,
+        "TARGET_IMAGE": exact("vllm-orcarouter-v029-h38-decoder-scope:v1"),
+        "SERVED_NAME": exact("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4"),
+        "UPDATED_AT": matches(TIMESTAMP),
+    },
     "profile-switch": {
         "PROFILE_SWITCH_SCHEMA_VERSION": exact("1"),
         "PROFILE_SWITCH_STATE": one_of("preparing", "activated", "runtime_committed", "committing"),
@@ -106,6 +134,15 @@ SCHEMAS: dict[str, dict[str, Validator]] = {
         "RUNTIME_CONTAINER_NAME": matches(SAFE_NAME),
         "RUNTIME_CONTAINER_ID": matches(HEX_CONTAINER),
         "COMMITTED_AT": matches(TIMESTAMP),
+    },
+    "runtime-adopt": {
+        "RUNTIME_ADOPT_SCHEMA_VERSION": exact("1"),
+        "RUNTIME_ROOT": absolute_path,
+        "RUNTIME_CONTAINER_NAME": exact("qwen38-flash-next"),
+        "RUNTIME_CONTAINER_ID": matches(HEX_CONTAINER),
+        "EXPECTED_IMAGE": nonempty_text,
+        "SERVED_NAME": nonempty_text,
+        "CREATED_AT": matches(TIMESTAMP),
     },
 }
 

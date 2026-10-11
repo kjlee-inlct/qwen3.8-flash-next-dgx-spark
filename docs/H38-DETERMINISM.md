@@ -110,54 +110,73 @@ Therefore the H38 determinism repair is closed for the validated
 does not include the transactional installer/systemd managed-service path,
 which remains a separate integration and lifecycle-qualification phase.
 
-## Managed-service integration gap
+## Managed-service integration — candidate implemented, live qualification pending
 
 > **Naming boundary:** installer profile `orcarouter-hybrid` is the generated
 > H6 ModelOpt W4A16 checkpoint from the earlier checkpoint-isolation track. It
-> is not the H38 decoder-only runtime repair and does not close the H38
-> managed-service integration gap described below.
+> is not the H38 decoder-only runtime repair.
 
-The H38 runtime qualification above is for
-`scripts/runtime/orcarouter-v029.sh`.
+The H38 runtime qualification above remains the historical qualification for
+`scripts/runtime/orcarouter-v029.sh`. The current feature branch now wires the
+same decoder-scope H38 image into the transactional `orcarouter` managed path,
+but that managed promotion is **not qualified or complete yet**.
 
-The transactional managed-service path is still separate:
+The candidate implementation covers:
 
-- `install.sh`
-- `scripts/model/model-profiles.sh`
-- installation manifest image defaults
-- `scripts/serve.sh`
-- `scripts/runtime/service-runner.sh`
-- systemd replacement / rollback / runtime attestation
+- `scripts/model/model-profiles.sh`: the OrcaRouter profile default selects
+  `vllm-orcarouter-v029-h38-decoder-scope:v1`;
+- `scripts/runtime/prepare-h38-image.sh`: clean-host/reuse construction of the
+  v0.29 -> H9 -> H10 -> H11 -> H12 -> H38 image chain with fail-closed label
+  verification;
+- `install.sh`: H38 image preparation and explicit
+  `--refresh-profile-defaults` migration;
+- `scripts/serve.sh`: H38 PLE-mmap, exact-QSA, decoder canonicalization and
+  isolated compile-cache controls while retaining the managed 16 GiB KV
+  resilience value;
+- `scripts/runtime/preflight-runtime.sh` and `scripts/doctor.sh`: H38 image
+  provenance/runtime-control checks;
+- `scripts/model-assets.sh`: H38 managed image inventory;
+- the existing service-runner/runtime-transition path remains the transactional
+  replacement and attestation mechanism.
 
-That path currently does not select the H38 decoder image as its OrcaRouter
-default. Do not describe the installer-managed service as H38 production until
-that integration is implemented and requalified through its lifecycle,
-rollback, doctor, determinism, and performance gates.
+Existing OrcaRouter installs now use one explicit **atomic cross-release
+same-profile refresh**. The retired sequence
 
-This gap is intentionally documented rather than silently changing the managed
-runtime based only on the experimental-runtime qualification.
+`new immutable code -> persisted legacy CPU-offload READY -> H38 refresh`
 
+must not be used: the matched PR-base-main control reproduced the same protected
+legacy restart, so that intermediate is not a valid H38 discriminator.
 
-Before managed-service H38 promotion is complete, the following must be updated
-and requalified together:
+The supported operator route is:
 
-- `scripts/model/model-profiles.sh`: OrcaRouter managed runtime image/defaults;
-- `install.sh`: clean-host image build path and profile-default migration;
-- `scripts/serve.sh`: H38 decoder patch/runtime environment and cache policy;
-- `scripts/runtime/service-runner.sh`: managed readiness/attestation behavior
-  against the H38 served runtime;
-- `scripts/model-assets.sh`: H38 image/container inventory and retirement
-  dependencies;
-- lifecycle/service/update tests covering installation, replacement, rollback,
-  restart, uninstall, and profile-default refresh;
-- doctor and qualification checks for the H38 image label, canonical scope, and
-  served-model identity;
-- a managed-service determinism/performance qualification run after the
-  integration.
+```bash
+scripts/update-release.sh RELEASE_ID --refresh-profile-defaults
+```
 
-`scripts/model-assets.sh` is also commonly modified locally during asset
-cleanup work. Reconcile those local changes before changing its H38 inventory;
-do not overwrite operator-owned edits merely to make the registry look current.
+For live qualification, use the guarded exact-SHA migration wrapper documented in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`.
+Only after that migration gate passes should
+`scripts/run-h38-managed-followup-gates.sh` run the managed-alias determinism,
+matched >=90% decode-performance, managed restart/attestation, and strict RM follow-up
+window against the same migration evidence baseline.
+
+The transaction first qualifies the exact immutable target release and prepares the
+H38 image, then activates the target release pointer plus H38 `service_ready`
+manifest before the single managed-service replacement. Target READY/attestation does
+not destroy the previous runtime immediately: the runtime rollback container remains
+available until the outer release/profile transaction commits. Failure recovery binds
+the exact predecessor container ID, release pointers, install manifest, service
+attachment, and restored-release monitor policy. It does not require a new-code +
+legacy-image READY state and does not unconditionally cold-start the legacy runtime.
+
+Do not describe installer/systemd OrcaRouter as H38 production until the live
+acceptance in
+`scripts/benchmark/evidence/orcarouter-h38-managed-integration-plan-20261007.md`
+passes lifecycle/restart/doctor, managed-alias determinism, performance, and
+strict NVIDIA RM host-stability gates. FUNCTIONAL and HOST-STABILITY results
+must be recorded separately.
+
+Historical H38 runtime evidence and failed/superseded attempts remain unchanged.
 
 ## Remaining limitations
 

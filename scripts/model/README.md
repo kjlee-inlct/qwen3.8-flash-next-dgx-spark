@@ -40,7 +40,7 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 
 | Profile | Status | Installable |
 |---|---|---:|
-| `orcarouter` | stable/default; 16 GiB managed KV resilience default | yes |
+| `orcarouter` | stable/default checkpoint; H38 decoder-scope managed runtime candidate; 16 GiB managed KV resilience default | yes |
 | `nvidia` | experimental | yes |
 | `mazinb` | experimental; live managed activation exercised; current 16 GiB managed KV reaches functional readiness but strict RM host-stability remains FAIL | yes |
 | `orcarouter-hybrid` | experimental, generated H6; warm/reuse + round-trip functional PASS; R23–R32 allocator/localization closure complete; strict host-stability FAIL remains | yes |

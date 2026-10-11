@@ -17,7 +17,7 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("NV_ERR_NO_MEMORY", text)
         self.assertIn("R9–R32 allocator/localization closure", text)
         self.assertIn("not a proven discriminator for RM failure", text)
-        self.assertIn("Last synchronized: 2026-10-06", text)
+        self.assertIn("Last synchronized: 2026-10-07", text)
         self.assertIn("The version on `main` is authoritative", text)
         self.assertIn("would make that marker stale as soon as it is merged", text)
 
@@ -70,6 +70,15 @@ class DocumentationCurrentStateTests(unittest.TestCase):
         self.assertIn("post-merge canonical repository state", text)
         self.assertNotIn("PR #244 remains intentionally open", text)
         self.assertNotIn("must not be merged before mitigation", text)
+
+    def test_h38_operational_doc_uses_atomic_managed_migration(self) -> None:
+        text = read("docs/H38-DETERMINISM.md")
+        self.assertIn("atomic cross-release", text.lower())
+        self.assertIn("scripts/update-release.sh RELEASE_ID --refresh-profile-defaults", text)
+        self.assertIn("runtime rollback container remains", text)
+        self.assertIn("restored-release monitor policy", text)
+        self.assertNotIn("Existing OrcaRouter installs use an explicit two-stage migration", text)
+        self.assertNotIn("Only a subsequent", text)
 
     def test_operations_describes_monitor_as_heuristic_not_host_classifier(self) -> None:
         text = read("OPERATIONS.md")
