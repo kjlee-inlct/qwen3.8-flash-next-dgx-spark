@@ -46,3 +46,17 @@ MERGE=BLOCKED
 ```
 
 No checkpoint payload, torch/vLLM import, GPU/model rerun, H38 image rebuild, host defense/service change, PR Ready or Merge.
+
+## Actual installed-H38 DGX source inspection — Attempt 01 PASS (2026-10-11)
+
+**This observed result supersedes the staged/PENDING status in the original plan above, while retaining SOURCE_ONLY qualification.** On the exact clean branch checkout 5456809ab701dd38ef947afdc15bc88a32b22a13, the operator ran the guarded read-only AST inspector on fixed H38 image sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc. Four previously pinned CT/layerwise/meta/reload-utils SHA256 checks matched. Output: H38_CT_INPUT_SCALE_LIFECYCLE=PASS_SOURCE_ONLY; H38_CT_INPUT_SCALE_LIFECYCLE_PREFLIGHT=PASS_SOURCE_ONLY; source_check_rc=0; image_identity_unchanged=YES; model/GPU/checkpoint payload read NO; image/service/host-protection mutations NO.
+
+Source observations for w13_input_global_scale: ctor torch.nn.Parameter(torch.empty(...)) line 179, register line 183, set_weight_attrs line 187, CT postload reciprocal 1.0 / layer.w13_input_global_scale line 238. For w2_input_global_scale: ctor line 189, register line 192, setter line 196, reciprocal line 242. Neither constructor explicitly supplies device or fill. Real postload invocation, loaded values, default mechanism and write origin are still UNVERIFIED; source_or_runtime_default_proven=NO is an absence of proof, not proof of runtime invalid initialization.
+
+Installed Layerwise make_online_process_loader at line 149 passed all five source checks: buffered arguments, original-loader get_numel_loaded, load_numel accumulation, >= threshold, and processing call. This verifies aggregate-count source syntax, NOT actual TorchDispatch copy counts or uniqueness. The separate real index-only checkpoint Attempt02 already reported zero index key names with input_scale substring; that evidence is not conflated with this source-only AST scan.
+
+Canonical actual-console evidence: [operator Attempt 01 input-scale lifecycle source PASS](orcarouter-h38-ct-input-scale-lifecycle-attempt01-source-pass-20261011.md). The reported original /tmp/h38-ct-input-scale-lifecycle-attempt01-20261011.txt was not independently retrieved or hashed. Never describe the inspection as an actual loaded-value check.
+
+**Next bounded question:** identify whether the exact installed H38 source supplies deterministic input-global-scale defaults or loads those Parameters through an alternative checkpoint name or loader path *before* inverse consumption; separately characterize whether total copied numel can exceed unique destination completion under this loader. Start from source-only and synthetic fixtures with immutable source pins. Do not repeat this completed source inspection to claim runtime correctness; no torch/model/GPU, checkpoint tensor payload, host protection/service change, image rebuild, CT meta patch or PR Ready/Merge.
+
+CHECKPOINT_METADATA_ORDER_GATE=FAIL; CT_INPUT_SCALE_EFFECTIVE_VALUES=UNVERIFIED; CT_COPYCOUNTER_CREDIT=UNVERIFIED; CT_WEIGHT_COMPLETENESS=UNVERIFIED; HOST_STABILITY=INCONCLUSIVE; GPU_MODEL_RERUN=BLOCKED; PR_259=DRAFT_OPEN / MERGE=BLOCKED remain.
