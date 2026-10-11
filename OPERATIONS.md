@@ -458,3 +458,18 @@ curl -fsS http://127.0.0.1:8888/v1/models
 ```
 
 Do not consider an operation complete while any update, runtime, or profile-switch transaction state is non-idle.
+
+## Managed lifecycle acceptance: read-only snapshot before live operations (2026-10-12)
+
+The staged lifecycle acceptance matrix is [docs/MANAGED-LIFECYCLE-ACCEPTANCE.md](docs/MANAGED-LIFECYCLE-ACCEPTANCE.md). **Implementation/CI and synthetic dry-run PASS are not complete live installation, uninstall, or profile-switch qualification**. The H38 managed runtime remains blocked independently of read-only state collection.
+
+After synchronizing to a clean **exact CI-qualified** commit, inspect the current DGX host using:
+
+```bash
+QWEN38_LIFECYCLE_AUDIT_TARGET_SHA="$(git rev-parse HEAD)" \
+  bash scripts/lifecycle/inspect-readonly-lifecycle.sh
+```
+
+The helper itself checks for a clean checkout and SHA equality. It only runs `install.sh --list-models`, `install.sh --list-backends`, `profile-switch-transition.sh status`, `runtime-transition.sh status`, `update-transition.sh status`, `release-profile-refresh-transition.sh status`, and `scripts/doctor.sh`. It **does not** invoke installation, uninstallation, purge, model/GPU launch, service restart or protection changes. `COLLECTED_READ_ONLY` means all seven snapshot commands returned success, **not** that live end-to-end has passed. A failed Doctor or state check is reported as `PARTIAL_CHECK_FAILURE` and should be reviewed without forcibly clearing transaction state.
+
+Bilingual uninstall preview regression coverage runs against disposable manifests in `tests/test_uninstall_wizard_preview.py`. The uninstaller's `--dry-run` preview exits **before** its real destructive operation-lock and transaction checks; an attractive dry-run output is **not authorization to execute** `--purge-all`, `--purge-model`, `--purge-image` or `--purge-swap` on the active DGX. Full destructive acceptance must use an independently disposable host and explicitly preserved external user assets. Never run full-purge lifecycle validation on the sole Spark merely to close a checklist item.
