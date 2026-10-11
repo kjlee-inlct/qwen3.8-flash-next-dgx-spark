@@ -206,9 +206,18 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         synthetic SWAP_OWNED=1 solely to exercise its confirmation path.
         """
         manifest_text = self.manifest.read_text(encoding="utf-8")
+        self.assertIn("MODEL_OWNED=0", manifest_text)
         self.assertIn("SWAP_OWNED=0", manifest_text)
         self.manifest.write_text(
-            manifest_text.replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            manifest_text.replace("MODEL_OWNED=0", "MODEL_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            encoding="utf-8",
+        )
+        # An evidence-backed owned model forces bootstrap-install to create the
+        # cumulative registry in the old code *before* DELETE confirmation.
+        (self.model / ".qwen38-model-manifest.json").write_text(
+            '{"status":"complete","repository":"synthetic/test","revision":"'
+            + "a" * 40 + '"}\n',
             encoding="utf-8",
         )
         self.assertFalse((self.state / "asset-ownership.json").exists())
