@@ -65,10 +65,54 @@ class H38CTCheckpointKeyMapTests(unittest.TestCase):
             "w13_weight_scale",
         )
         self.assertEqual(
-            mapper.COMPONENT_PARAMETERS[("down_proj", "weight")],
+            mapper.COMPONENT_PARAMETERS[("down_proj", "weight_packed")],
             "w2_weight_packed",
         )
         self.assertEqual(len(mapper.COMPONENT_PARAMETERS), 9)
+
+
+    def test_production_size_synthetic_nine_slot_grid(self) -> None:
+        # Synthetic grid modeled on index-only cardinalities, NOT the H38 checkpoint.
+        output = mapper.analyze(generate(layers=48, experts=512),
+                                layers=48, experts=512)
+        self.assertEqual(output["status"], "PASS_BASE_KEY_SCHEMA_ONLY")
+        self.assertEqual(output["base_routed_key_candidates"], 221184)
+        self.assertEqual(output["missing_canonical_slot_count"], 0)
+        self.assertEqual(output["incomplete_expert_grid_count"], 0)
+        self.assertEqual(output["checkpoint_key_names_with_input_scale_substring"],
+                         0)
+        self.assertEqual(output["per_CT_parameter_key_counts"], {
+            "w13_weight_packed": 49152,
+            "w2_weight_packed": 24576,
+            "w13_weight_scale": 49152,
+            "w2_weight_scale": 24576,
+            "w13_weight_global_scale": 49152,
+            "w2_weight_global_scale": 24576,
+        })
+        self.assertEqual(output["ct_input_scale_initialization_or_loading"],
+                         "UNVERIFIED")
+        self.assertEqual(output["unique_destination_element_coverage"],
+                         "UNVERIFIED")
+
+    def test_weight_packed_suffix_required_legacy_bare_weight_fails(self) -> None:
+        manifest = generate()
+        packed = "model.language_model.layers.0.mlp.experts.0.gate_proj.weight_packed"
+        bare = packed.removesuffix("_packed")
+        manifest[bare] = manifest.pop(packed)
+        output = mapper.analyze(manifest, layers=2, experts=3)
+        self.assertEqual(output["status"], "FAIL_KEY_SCHEMA")
+        self.assertEqual(output["unclassified_base_routed_key_samples"], [bare])
+        self.assertEqual(output["missing_canonical_slot_count"], 1)
+        self.assertIn("gate_proj.weight_packed",
+                      output["missing_expert_slot_samples"][0]["missing_slots"])
+
+    def test_no_input_scale_key_does_not_establish_initialized_scales(self) -> None:
+        output = mapper.analyze(generate(), layers=2, experts=3)
+        self.assertEqual(output["checkpoint_key_names_with_input_scale_substring"], 0)
+        self.assertEqual(output["ct_input_scale_parameters_not_in_nine_slot_schema"],
+                         ["w13_input_global_scale", "w2_input_global_scale"])
+        self.assertEqual(output["ct_input_scale_initialization_or_loading"],
+                         "UNVERIFIED")
 
     def test_one_missing_scale_flags_incomplete_grid(self) -> None:
         manifest = generate()
@@ -83,7 +127,7 @@ class H38CTCheckpointKeyMapTests(unittest.TestCase):
 
     def test_duplicate_semantic_slot_rejected_even_if_index_keys_distinct(self) -> None:
         manifest = generate()
-        key = "model.language_model.layers.0.mlp.experts.0.gate_proj.weight"
+        key = "model.language_model.layers.0.mlp.experts.0.gate_proj.weight_packed"
         manifest[key.replace(".experts.0.", ".experts.00.")] = manifest[key]
         output = mapper.analyze(manifest, layers=2, experts=3)
         self.assertEqual(output["status"], "FAIL_KEY_SCHEMA")
@@ -101,14 +145,14 @@ class H38CTCheckpointKeyMapTests(unittest.TestCase):
     def test_out_of_range_expert_rejected(self) -> None:
         manifest = generate()
         manifest["model.language_model.layers.0.mlp.experts.512."
-                 "up_proj.weight"] = "model-00002-of-00018.safetensors"
+                 "up_proj.weight_packed"] = "model-00002-of-00018.safetensors"
         output = mapper.analyze(manifest, layers=2, experts=3)
         self.assertEqual(output["status"], "FAIL_KEY_SCHEMA")
         self.assertEqual(len(output["out_of_range_base_routed_key_samples"]), 1)
 
     def test_cross_shard_expert_is_metadata_only(self) -> None:
         manifest = generate()
-        key = "model.language_model.layers.0.mlp.experts.0.up_proj.weight"
+        key = "model.language_model.layers.0.mlp.experts.0.up_proj.weight_packed"
         manifest[key] = "model-00002-of-00018.safetensors"
         output = mapper.analyze(manifest, layers=2, experts=3)
         self.assertEqual(output["status"], "PASS_BASE_KEY_SCHEMA_ONLY")
