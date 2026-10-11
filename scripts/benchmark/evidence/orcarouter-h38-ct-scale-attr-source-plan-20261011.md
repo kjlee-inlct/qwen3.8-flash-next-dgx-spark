@@ -28,3 +28,17 @@ A future `H38_CT_SCALE_ATTR_PREFLIGHT=PASS_SOURCE_SITES_ONLY` is **only** eviden
 3. Study loader callback mapping and shard 8/11 buffering without unqualified H38 GPU/model runs. Quantify true buffer peaks only with suitable bounded evidence, not a toy logical counterexample.
 
 Unchanged: `CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY`, `CT_WEIGHT_COMPLETENESS=UNVERIFIED`, `COPYCOUNTER_SCALE_CREDIT=UNVERIFIED`, `SHARD_8_11_COMPLETENESS=UNVERIFIED`, `HOST_STABILITY=INCONCLUSIVE`, `RM_MITIGATION=UNPROVEN`, `GPU_MODEL_RERUN=BLOCKED`, `HOST_PROTECTION=UNCHANGED`, `PR_259=DRAFT_OPEN`, `MERGE=BLOCKED`.
+
+
+## Actual pinned-image input-scale attribute source check — Attempt 01 PASS (2026-10-11)
+
+**This supersedes the original STAGED/EXECUTION PENDING assertions above.** The DGX operator cleanly fast-forwarded to SHA 1865521c2ff58add7bddeed6735c76803a3e3637 and ran the guarded source-only wrapper on the fixed H38 image. Reported H38_CT_SCALE_ATTR_SOURCE=PASS_SOURCE_SITES_ONLY; H38_CT_SCALE_ATTR_PREFLIGHT=PASS_SOURCE_SITES_ONLY; source_check_rc=0; image_identity_unchanged=YES; GPU/model and checkpoint payload read NO.
+
+Qualified static source sites:
+- w13_input_global_scale: register_parameter line 183, quant_method=TENSOR source update line 184, set_weight_attrs(w13_input_scale, extra_weight_attrs) line 187.
+- w2_input_global_scale: register_parameter line 192, quant_method=TENSOR source update line 193, set_weight_attrs(w2_input_scale, extra_weight_attrs) line 196.
+- H11 source loader origin extra_weight_attrs.get('weight_loader'), RoutedExperts self.weight_loader export source, layerwise original loader retrieval/reassignment, and common helper guarded setattr AST anchors are present.
+- CT SHA256 d7b47e442cee1a333753143cbd727eac857c6bbdb27d6cd8107bd6210e98e9d2, layerwise SHA256 9f37db893446d1f8ddc654a3bbcc3addf4b3020565920c56ef0c1ae29fd32a4a, routed SHA256 5206219da6b78315d6b35bee89fd0caa783681846affbf6917f430ef7f2481b5 are previously pinned and matched.
+- The helper source (vllm/model_executor/utils.py) SHA256 f208310647a012797e0b0e9631d3498135c7f9aef831e35e42e96eceb7623f89 is a NEW image-ID-guarded observation, not a pre-approved pin for this first run. Do not conflate helper syntax checks with observed attribute execution.
+
+Canonical [actual H38 CT scale-attr Attempt 01 PASS evidence](orcarouter-h38-ct-scale-attr-attempt01-source-pass-20261011.md). Prior CT source Attempt 03 PASS remains independent. No result certifies the effective runtime loader, TorchDispatchMode count, unique 512-expert loaded coverage, layer 8/11 buffering, or host stability; these remain UNVERIFIED. Next use is a separate isolated CPU-only dispatcher witness with strictly explicit provenance and resource safety, not repetitive CT AST inspection or model/GPU execution. PR #259 Draft/Open, merge blocked.
