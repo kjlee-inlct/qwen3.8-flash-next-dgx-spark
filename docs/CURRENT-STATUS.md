@@ -656,3 +656,20 @@ New repository tools:
 - Canonical stage plan: scripts/benchmark/evidence/orcarouter-h38-ct-scale-attr-source-plan-20261011.md.
 
 **Current result is STAGED / not yet executed on DGX**; no PASS of this new attribute-site inspector has been claimed. The existing CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY still applies only to the 2026-10-11 Attempt 03 source audit. A future attribute-site source PASS cannot establish effective runtime callback, actual aten.copy_ counting on indexed scales, expert-completeness, shard 8/11 buffer release, inference correctness or host memory stability. GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; PR_259=DRAFT_OPEN; MERGE=BLOCKED.
+
+
+## H38 input-scale postconstruction source audit — operator Attempt 01 PASS (2026-10-11)
+
+**This newer confirmed result supersedes the preceding STAGED/PENDING entry for the attribute-site inspector, without enlarging its source-only qualification.** The operator fetched and fast-forwarded the clean branch to exact HEAD 1865521c2ff58add7bddeed6735c76803a3e3637 and executed scripts/benchmark/check-h38-ct-scale-attr-provenance.sh against the original, unchanged H38 pinned image sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc.
+
+Reported verdict: H38_CT_SCALE_ATTR_SOURCE=PASS_SOURCE_SITES_ONLY; H38_CT_SCALE_ATTR_PREFLIGHT=PASS_SOURCE_SITES_ONLY; source_check_rc=0; image_identity_unchanged=YES; gpu_or_model_load=NO; checkpoint_payload_read=NO; managed_service_mutation=NO; host_protection_changed=NO; ct_meta_patch_implemented=NO.
+
+Both CT input-scale registration→quant_method=TENSOR source update→postconstruction set_weight_attrs(variable, extra_weight_attrs) source sequences are verified: w13_input_global_scale registration line 183, TENSOR update 184, setter 187; w2_input_global_scale registration line 192, TENSOR update 193, setter 196. H11 extra_weight_attrs.get('weight_loader') and RoutedExperts loader export, layerwise original-loader reference/reassignment, and the helper guarded setattr source syntax also passed AST source checks.
+
+The image-ID-guarded **newly observed** vllm/model_executor/utils.py source SHA256 is f208310647a012797e0b0e9631d3498135c7f9aef831e35e42e96eceb7623f89. This was NOT pre-pinned or independently preapproved before the run and must NOT be retroactively reported as preverified. The three other source SHA256 values (CT, RoutedExperts, layerwise) matched their earlier independently pinned values. The operator-reported logfile /tmp/h38-ct-scale-attrs-attempt01-20261011.txt was not independently materialized or hashed.
+
+This is evidence that **source setter sites and helper code exist**, not evidence of the actual runtime value of a weight_loader attribute, a callback invocation, real scale copy counter credit, all 512 experts loaded, shard 8/11 ownership completion or finite peak memory. Canonical record: scripts/benchmark/evidence/orcarouter-h38-ct-scale-attr-attempt01-source-pass-20261011.md. The earlier source-audit Attempt 03 PASS_SOURCE_CONTRACT_ONLY remains a separate qualified result.
+
+Current gates: CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY; CT_SCALE_ATTR_SOURCE_SITES=PASS_SOURCE_SITES_ONLY; CT_EFFECTIVE_LOADER_RUNTIME=UNVERIFIED; CT_COPYCOUNTER_SCALE_CREDIT=UNVERIFIED; CT_WEIGHT_COMPLETENESS=UNVERIFIED; SHARD_8_11_COMPLETENESS=UNVERIFIED; PEAK_BUFFER_BYTES=UNVERIFIED; CHECKPOINT_METADATA_ORDER_GATE=FAIL; FUNCTIONAL=NOT_REACHED; HOST_STABILITY=INCONCLUSIVE; RM_MITIGATION=UNPROVEN; GPU_MODEL_RERUN=BLOCKED; CT_META_IMPLEMENTATION=BLOCKED; HOST_PROTECTION=UNCHANGED; PR_259=DRAFT_OPEN / MERGE=BLOCKED.
+
+Next engineering decision is a separately provenance-labeled, tightly scoped tiny CPU-only PyTorch TorchDispatchMode indexed-assignment vs explicit copy_ experiment (only in a safe, bounded environment), followed by genuinely checkpoint-aware shard/expert source mapping. Neither requires or authorizes an H38 GPU/model run.
