@@ -488,3 +488,18 @@ QWEN38_OFFLINE_DIAGNOSTIC_TARGET_SHA="$(git rev-parse HEAD)" \
 `MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY` certifies successful **metadata collection**, not health or readiness. If it reports `PARTIAL_READ_FAILURE`, preserve per-command exit codes and report the missing metadata. `RUNTIME_STOP_REASON=NOT_YET_PROVEN` remains until grounded logs and state evidence resolve it.
 
 **Never clear or regenerate runtime-commit.env, remove runtime-stop.env, change monitor protection, force transaction recover/commit, or start/restart the legacy or H38 runtime merely to satisfy Doctor.** Inspect the current and previous immutable release/transaction ownership and stopped runtime cause first. No actual model/GPU, checkpoint payload, destructive uninstall, Docker/container mutation, or PR Ready/Merge is part of this diagnostic.
+
+## Actual stopped runtime Docker/systemd metadata and bounded journal window (2026-10-12)
+
+At actual DGX offline inspection HEAD `6ce45561640f4069d534cbe04f5064a39095a88a`, the current legacy OrcaRouter Docker container was `exited` with `ExitCode=0`, `OOMKilled=false`, `State.Error=""`. Docker **declared** port binding `8888/tcp → 127.0.0.1:8888` is correct; `NetworkSettings.Ports={}` on the exited runtime explains why a `docker port` read can report none. Systemd was `inactive/dead` but reported `Result=success`, `ExecMainCode=1` (process exited class), `ExecMainStatus=0`. Docker finished **2026-10-07 22:08:34 KST**. Systemd entered active at **22:08:29 KST** and inactive at **22:18:17 KST**. The transient `runtime-commit.env`, `runtime-stop.env` and `monitor.pid` files were all absent when observed. [Canonical evidence](scripts/benchmark/evidence/managed-runtime-offline-attempt01-exit0-no-oom-20261012.md). The actual stop requester, protective-monitor action, and earlier cleanup history remain UNKNOWN; no explicit reason was present in the metadata.
+
+As a **final bounded, non-mutating discriminator**, after an exact clean CI-qualified checkout, run:
+
+```bash
+QWEN38_STOP_JOURNAL_TARGET_SHA="$(git rev-parse HEAD)" \
+  bash scripts/lifecycle/inspect-readonly-runtime-stop-journal.sh
+```
+
+The script requires the checkout pin and host `+0900` timezone. It retrieves **only** `qwen38-flash-next.service` unit entries for **2026-10-07 21:55:00–22:25:00 KST**, capped at **160 lines**. Output is historical journal evidence, not current service activation. It reports `COLLECTED_READ_ONLY` if lines were read, or `INCONCLUSIVE_OR_READ_FAILURE` if no lines/permission/error; its `RUNTIME_STOP_CAUSE=NOT_YET_CLASSIFIED` is deliberately **not** an assessment of the messages. Historical log content may contain identifiers or sensitive values: inspect/redact secret values before sharing.
+
+**Do not restart/start the service or Docker container, fabricate runtime-commit attestation, remove stop markers, change monitor/protection settings, or run `--refresh-profile-defaults` based on the existing Doctor FAIL.** An exited container with exit0 is not enough to call the runtime stable, and an empty port mapping in the exited state is not enough to call port configuration wrong. M1 healthy LIVE E2E remains NOT_QUALIFIED.
