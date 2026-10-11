@@ -473,3 +473,18 @@ QWEN38_LIFECYCLE_AUDIT_TARGET_SHA="$(git rev-parse HEAD)" \
 The helper itself checks for a clean checkout and SHA equality. It only runs `install.sh --list-models`, `install.sh --list-backends`, `profile-switch-transition.sh status`, `runtime-transition.sh status`, `update-transition.sh status`, `release-profile-refresh-transition.sh status`, and `scripts/doctor.sh`. It **does not** invoke installation, uninstallation, purge, model/GPU launch, service restart or protection changes. `COLLECTED_READ_ONLY` means all seven snapshot commands returned success, **not** that live end-to-end has passed. A failed Doctor or state check is reported as `PARTIAL_CHECK_FAILURE` and should be reviewed without forcibly clearing transaction state.
 
 Bilingual uninstall preview regression coverage runs against disposable manifests in `tests/test_uninstall_wizard_preview.py`. The uninstaller's `--dry-run` preview exits **before** its real destructive operation-lock and transaction checks; an attractive dry-run output is **not authorization to execute** `--purge-all`, `--purge-model`, `--purge-image` or `--purge-swap` on the active DGX. Full destructive acceptance must use an independently disposable host and explicitly preserved external user assets. Never run full-purge lifecycle validation on the sole Spark merely to close a checklist item.
+
+## Runtime-exited read-only triage after a partial Doctor (2026-10-12)
+
+The actual DGX M1 snapshot in [managed lifecycle Attempt 01 evidence](scripts/benchmark/evidence/managed-lifecycle-readonly-attempt01-doctor-partial-20261012.md) reported `PARTIAL_CHECK_FAILURE`: all four profile/runtime/update/refresh transaction states idle, valid installed checkpoints/releases/asset registry, but Doctor **five FAIL / two WARN**. An **exited** legacy OrcaRouter container, **inactive** systemd service, missing/unsafe runtime-commit attestation, missing monitor PID, no Docker published port and failed health endpoint were observed. A correctly parsed manifest or healthy memory/swap reserve does **not** authorize a restart or prove a stable serving runtime.
+
+A further **non-mutating** discriminator is available at `scripts/lifecycle/inspect-readonly-runtime-offline.sh`. After explicit clean exact SHA validation it reads **only** `docker inspect` state/ExitCode/OOMKilled/timestamps and declared port mappings, `systemctl show` state/result/status properties, and file type/size/timestamps (not contents) of the three state files `runtime-commit.env`, `runtime-stop.env`, `monitor.pid`. Use it with a CI-qualified branch HEAD:
+
+```bash
+QWEN38_OFFLINE_DIAGNOSTIC_TARGET_SHA="$(git rev-parse HEAD)" \
+  bash scripts/lifecycle/inspect-readonly-runtime-offline.sh
+```
+
+`MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY` certifies successful **metadata collection**, not health or readiness. If it reports `PARTIAL_READ_FAILURE`, preserve per-command exit codes and report the missing metadata. `RUNTIME_STOP_REASON=NOT_YET_PROVEN` remains until grounded logs and state evidence resolve it.
+
+**Never clear or regenerate runtime-commit.env, remove runtime-stop.env, change monitor protection, force transaction recover/commit, or start/restart the legacy or H38 runtime merely to satisfy Doctor.** Inspect the current and previous immutable release/transaction ownership and stopped runtime cause first. No actual model/GPU, checkpoint payload, destructive uninstall, Docker/container mutation, or PR Ready/Merge is part of this diagnostic.
