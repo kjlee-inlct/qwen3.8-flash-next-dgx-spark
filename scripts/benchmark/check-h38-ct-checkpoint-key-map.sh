@@ -17,7 +17,7 @@ fail() {
 }
 
 [[ "$#" == 0 ]] || fail 'unexpected_arguments'
-[[ "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]] || fail 'missing_exact_checkout_sha'
+[[ "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]] || fail 'exact_checkout_sha_required'
 [[ -n "${MODEL_DIR}" && "${MODEL_DIR}" == /* ]] ||
   fail 'absolute_checkpoint_directory_required'
 [[ -r "${INSPECTOR}" && -r "${ORDER_INSPECTOR}" ]] || fail 'source_inspectors_missing'
@@ -65,7 +65,7 @@ after="$(docker image inspect --format '{{.Id}}' "${IMAGE}")"
 printf 'image_identity_unchanged=YES\n'
 if [[ "${inspect_rc}" -eq 3 ]]; then
   # The analyzer completed its metadata output and deliberately
-  # rejected the layer-order acceptance gate; NOT a preflight INVALID.
+  # rejected the CT index-key schema gate; NOT a preflight INVALID.
   printf 'H38_CKPT_CT_KEY_MAP_PREFLIGHT=KEY_SCHEMA_FAIL\n'
   exit 3
 fi
