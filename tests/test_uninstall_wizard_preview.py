@@ -135,7 +135,7 @@ class UninstallWizardPreviewTests(unittest.TestCase):
     def test_full_purge_preview_preserves_everything(self) -> None:
         result = self.run_preview("--lang", "en", "--yes", "--purge-all")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Cumulative installer-owned assets selected by --purge-all", result.stdout)
+        self.assertIn("No cumulative ownership registry exists yet", result.stdout)
         self.assertIn("releases : purge", result.stdout)
         self.assertIn("DRY-RUN complete", result.stdout)
         self.assert_readonly()
