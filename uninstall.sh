@@ -220,6 +220,17 @@ if [[ "${PURGE_SWAP}" == 1 ]]; then
   [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
 fi
 
+# Confirm before creating the operation lock or bootstrapping cumulative ownership.
+# Cancellation and EOF must leave the manifest, registry and installer data intact.
+# --yes bypasses this prompt only; post-lock transaction/ownership preflights remain.
+if [[ "${YES}" != 1 ]]; then
+  [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '
+  if ! IFS= read -r -p "${prompt}" answer; then
+    die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
+  fi
+  [[ "${answer}" == DELETE ]] || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
+fi
+
 [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
 # shellcheck source=scripts/lib/operation-lock.sh
 source "${OPERATION_LOCK_LIB}"
@@ -273,11 +284,6 @@ fi
 
 if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
-fi
-if [[ "${YES}" != 1 ]]; then
-  [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '
-  read -r -p "${prompt}" answer
-  [[ "${answer}" == DELETE ]] || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
 fi
 if [[ -r "${MONITOR_PID_FILE}" ]]; then
   monitor_pid="$(<"${MONITOR_PID_FILE}")"

@@ -533,3 +533,8 @@ The following service journal recorded **22:18:16** protected-candidate abort an
 ## Destructive uninstall swap ownership preflight (2026-10-12)
 
 For `--purge-swap` and `--purge-all`, `SWAP_OWNED=1` is required **before any destructive step**. An unowned swap refuses real uninstall without registry bootstrap, service/container teardown or partial model/release deletion. The dry-run preview intentionally exits before this real-operation preflight and **must not be interpreted as deletion approval**. The synthetic fixture regression in `tests/test_uninstall_wizard_preview.py` checks early refusal without executing host Docker/systemd/swap actions. Do not use the active single DGX for real purge validation.
+
+
+## Uninstall cancellation before ownership registry bootstrap (2026-10-12)
+
+The typed `DELETE` consent for a real uninstall now occurs before creating `operation.lock` or migrating the manifest into `asset-ownership.json`. Refusal or EOF is fail-closed without modifying install files or runtime assets. After consent, the uninstaller obtains the operation lock, rechecks active/stale lifecycle transactions, bootstraps registry and applies its usual destructive-eligibility checks. `--yes` skips only interactive consent, never safety preflights. Unowned swap remains rejected before the prompt; `--dry-run` remains preview-only. This is synthetic-regression coverage, NOT authorization to uninstall anything on the single active DGX Spark.

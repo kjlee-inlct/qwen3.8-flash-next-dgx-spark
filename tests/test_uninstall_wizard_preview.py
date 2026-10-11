@@ -199,5 +199,64 @@ class UninstallWizardPreviewTests(unittest.TestCase):
                 self.assertEqual(self.snapshot(), before)
 
 
+    def test_cancel_or_eof_preserves_ownership_and_install_state(self) -> None:
+        """Non-dry-run consent refusal leaves every fixture file intact.
+
+        Use disposable HOME/XDG and shadow host commands. --purge-all uses
+        synthetic SWAP_OWNED=1 solely to exercise its confirmation path.
+        """
+        manifest_text = self.manifest.read_text(encoding="utf-8")
+        self.assertIn("SWAP_OWNED=0", manifest_text)
+        self.manifest.write_text(
+            manifest_text.replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            encoding="utf-8",
+        )
+        self.assertFalse((self.state / "asset-ownership.json").exists())
+        self.assertFalse((self.state / "operation.lock").exists())
+
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        daemon_calls = self.home / "unexpected-host-commands.txt"
+        for command in ("docker", "sudo", "systemctl", "swapoff"):
+            stub = fake_bin / command
+            stub.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "{command}" >> "{daemon_calls}"\nexit 99\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+
+        expected = self.snapshot()
+        cases = (
+            ("default_english", "en", (), "n\nn\nn\nNO\n"),
+            ("selected_korean", "ko", ("--purge-model",), "취소\n"),
+            ("full_purge_rejected", "en", ("--purge-all",), "NO\n"),
+            ("full_purge_eof", "en", ("--purge-all",), ""),
+        )
+        for name, language, flags, answers in cases:
+            with self.subTest(case=name):
+                result = subprocess.run(
+                    ["bash", str(UNINSTALL), "--lang", language, *flags],
+                    cwd=REPO,
+                    env={
+                        **os.environ,
+                        "HOME": str(self.home),
+                        "XDG_STATE_HOME": str(self.home / "state"),
+                        "XDG_DATA_HOME": str(self.home / "data"),
+                        "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                    },
+                    input=answers,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=15,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("취소됨" if language == "ko" else "cancelled", result.stderr)
+                self.assertEqual(self.snapshot(), expected)
+                self.assertFalse(daemon_calls.exists())
+                self.assertFalse((self.state / "asset-ownership.json").exists())
+                self.assertFalse((self.state / "operation.lock").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
