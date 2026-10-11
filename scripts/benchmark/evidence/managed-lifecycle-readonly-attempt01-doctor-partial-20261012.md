@@ -5,7 +5,7 @@
 This is the **actual DGX Spark operator-pasted** read-only inventory/transaction status/Doctor stdout, not synthetic CI. The reported original operator logfile `/tmp/managed-lifecycle-readonly-attempt01-20261012.txt` was **not copied to GitHub byte-for-byte or independently SHA256-hashed**. This file transcribes only supported values from the supplied terminal output.
 
 - Branch `feat/h38-managed-integration`, fast-forward `956ee0c..bbeceaf`, clean exact execution HEAD **`bbeceaf16c0c4bba4385c38cfead32e5dc243769`**.
-- `QWEN38_LIFECYCLE_AUDIT_TARGET_SHA` bound to the checkout; `scripts/lifecycle/inspect-readonly-lifecycle.sh` executed seven read-only commands.
+- `QWEN38_LIFECYCLE_AUDIT_TARGET_SHA` bound to the checkout; the canonical read-only lifecycle inspector executed seven read-only commands (entry point documented in `OPERATIONS.md`).
 - `MANAGED_LIFECYCLE_READONLY_PREFLIGHT=BEGIN`, `scope=read_only_inventory_transaction_status_doctor_no_mutation`, `host_mutation=NO`, `model_or_gpu_launch=NO`, `no_install_uninstall_or_purge=YES`.
 - `MANAGED_LIFECYCLE_READONLY=PARTIAL_CHECK_FAILURE`, `MANAGED_LIFECYCLE_LIVE_E2E=NOT_QUALIFIED`, **`lifecycle_audit_rc=3`**.
 - The wrapper reached its final result. The **Doctor failed**; this is not a wrapper crash and must not be converted to `COLLECTED_READ_ONLY` or M1 host-healthy PASS.
