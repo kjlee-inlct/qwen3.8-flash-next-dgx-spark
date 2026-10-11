@@ -641,3 +641,18 @@ Canonical source result: scripts/benchmark/evidence/orcarouter-h38-ct-layerwise-
 Current gates: CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY; CT_WEIGHT_COMPLETENESS=UNVERIFIED; CT_COPYCOUNTER_SCALE_CREDIT=UNVERIFIED; CT_SCALE_PARAMETER_SEMANTICS=UNVERIFIED; SHARD_8_11_COMPLETENESS=UNVERIFIED; PEAK_BUFFER_BYTES=UNVERIFIED; CHECKPOINT_METADATA_ORDER_GATE=FAIL; FUNCTIONAL=NOT_REACHED; HOST_STABILITY=INCONCLUSIVE; RM_MITIGATION=UNPROVEN; CT_META_IMPLEMENTATION=BLOCKED; GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; PR_259=DRAFT_OPEN / MERGE=BLOCKED.
 
 Next bounded plan: inspect post-construction attribute binding of input scales, then consider a strictly isolated, tiny synthetic CPU TorchDispatchMode witness for indexed writes **only if resource and service safety are validated**, followed by source-driven shard 8/11 ownership analysis. No automatic model startup, image rebuild, host resource relaxation, or PR Ready/Merge.
+
+
+## H38 input-scale postconstruction loader attributes — source-only staging (2026-10-11)
+
+After the real installed-image CT source audit **Attempt 03 PASS_SOURCE_CONTRACT_ONLY**, a separate, read-only **CT scale attribute provenance** inspector, guarded launcher and stdlib synthetic regression tests were staged in the GitHub PR #259 branch. This does not change or rescind the earlier qualified pinned-image CT registration/source result.
+
+The narrow question is why w13_input_global_scale and w2_input_global_scale are constructed as plain torch.nn.Parameter without an explicit constructor weight_loader. Public upstream vLLM v0.29.0 source shows a later set_weight_attrs(variable, extra_weight_attrs) call and a TENSOR quant_method tag; the same upstream common helper sets attributes using setattr after an overwrite guard. A source expression in upstream does **not** by itself prove that the exact installed H38 image contains the same helper semantics or that its runtime assignment succeeds.
+
+New repository tools:
+- scripts/benchmark/inspect-h38-ct-scale-attr-provenance.py — stdlib-only AST reader, pins exact CT/RoutedExperts/layerwise installed-source hashes, captures the previously unpinned installed-image model_executor/utils.py helper digest, verifies both registered input-scale setter source sites, H11 extra attrs loader origin, RoutedExperts loader export and layerwise wrapper syntax. The utility digest is a new image-ID-guarded observation, NOT a preapproved SHA pin.
+- scripts/benchmark/check-h38-ct-scale-attr-provenance.sh — immutable image-ID/label verification, clean exact HEAD requirement, unprivileged no-network/no-GPU/read-only limited runc; no model/checkpoint read, Docker image edit, managed service or host protection change.
+- tests/test_h38_ct_scale_attr_provenance.py — synthetic AST success/fail-close regression only.
+- Canonical stage plan: scripts/benchmark/evidence/orcarouter-h38-ct-scale-attr-source-plan-20261011.md.
+
+**Current result is STAGED / not yet executed on DGX**; no PASS of this new attribute-site inspector has been claimed. The existing CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY still applies only to the 2026-10-11 Attempt 03 source audit. A future attribute-site source PASS cannot establish effective runtime callback, actual aten.copy_ counting on indexed scales, expert-completeness, shard 8/11 buffer release, inference correctness or host memory stability. GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; PR_259=DRAFT_OPEN; MERGE=BLOCKED.
