@@ -53,3 +53,20 @@ A real operator output from the exact clean CI-qualified HEAD, using the new gua
 The pass marker will be `H38_CT_EXPERT_DESTINATION_PREFLIGHT=PASS_SOURCE_BRANCHES_ONLY`. This is **not** a real checkpoint-to-parameter index map, not a verified 512-expert load trace, and not a new memory bound. An `INVALID` result requires preserving the exact first mismatching AST anchor; do not weaken source pins or start the model.
 
 **Do not run H38 GPU/model, patch CT meta, rebuild the image, scan checkpoint payload, alter host memory defenses/managed services, mark PR #259 Ready, or merge.** Existing `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `HOST_STABILITY=INCONCLUSIVE`, `RM_MITIGATION=UNPROVEN`, `CT_WEIGHT_COMPLETENESS=UNVERIFIED`, `COPYCOUNTER_SCALE_CREDIT=UNVERIFIED` are unchanged.
+
+
+## Actual installed-image DGX source audit — Attempt 01 PASS (2026-10-11)
+
+**This observed result supersedes the earlier staging/PENDING wording above; the source-branch scope remains unchanged.** The operator fast-forwarded the clean checkout to fd4221b5bdb2b95ad83f94255ee2740cea842c9e and executed the guarded H38 image-source inspector against immutable image sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc. All four previously pre-pinned installed H38 source SHA256 digests matched.
+
+- H38_CT_EXPERT_DESTINATION_SOURCE=PASS_SOURCE_BRANCHES_ONLY
+- H38_CT_EXPERT_DESTINATION_PREFLIGHT=PASS_SOURCE_BRANCHES_ONLY
+- source_check_rc=0, image_identity_unchanged=YES; no GPU/model/checkpoint payload read, image/host protection/managed service/CT meta mutation.
+- 11/11 expert name/fused/full/expert-ID mapping/callback predicates, 7/7 packed/group projection destination predicates, 11/11 TENSOR/input/global scale predicates all TRUE.
+- Eight-family source-conditioned destination table and method-line provenance captured in [actual operator Attempt 01 PASS evidence](orcarouter-h38-ct-expert-destination-attempt01-source-pass-20261011.md). The provided terminal transcript is preserved as the evidence origin, not a SHA256-audited byte-for-byte /tmp log.
+
+**The new source audit does not close real-loading gates.** The inspector prints the actual input scale values/conflict, real checkpoint name-to-parameter matches, actual expert-ID mapping, real dispatch copy counts, unique real destination coverage, and layer 8/11 buffer/lifetime as UNVERIFIED. A source AST can identify branches but not count actual destination writes, infer global/local expert cardinality or prove a finite memory bound.
+
+**Conditional branch concern:** the fixed-image RoutedExperts source (SHA identical to vLLM v0.29.0 upstream for this file) includes a generic compressed input-scale conflict check with a Python Boolean of a Tensor comparison. In a hypothetical execution with a multi-element w13 input row, that predicate may raise an ambiguous truth-value exception before writing. This is an identified conditional source hazard, **not** a reproduced H38 failure; see PR #259 comment 6105299781 and the canonical PASS evidence.
+
+Next gate is to review **existing** no-payload checkpoint metadata-only tools and qualified prior metadata evidence, then design a unique key/expert/shard reconciliation test on synthetic manifests. Do not start the H38 runtime, weaken host memory protection, scan checkpoint payload, modify the pinned image, implement CT meta, mark PR Ready or Merge. CHECKPOINT_METADATA_ORDER_GATE=FAIL remains unchanged.
