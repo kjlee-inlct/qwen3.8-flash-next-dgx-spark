@@ -28,13 +28,13 @@ BASE_PREFIX = "model.language_model.layers."
 BASE_EXPERT = re.compile(
     r"^model\.language_model\.layers\.(\d+)\.mlp\.experts\."
     r"(\d+)\.(gate_proj|up_proj|down_proj)\."
-    r"(weight|weight_scale|weight_global_scale)$"
+    r"(weight_packed|weight_scale|weight_global_scale)$"
 )
 PROJECTION_SHARDS = {"gate_proj": "w1", "up_proj": "w3", "down_proj": "w2"}
 COMPONENT_PARAMETERS = {
-    ("gate_proj", "weight"): "w13_weight_packed",
-    ("up_proj", "weight"): "w13_weight_packed",
-    ("down_proj", "weight"): "w2_weight_packed",
+    ("gate_proj", "weight_packed"): "w13_weight_packed",
+    ("up_proj", "weight_packed"): "w13_weight_packed",
+    ("down_proj", "weight_packed"): "w2_weight_packed",
     ("gate_proj", "weight_scale"): "w13_weight_scale",
     ("up_proj", "weight_scale"): "w13_weight_scale",
     ("down_proj", "weight_scale"): "w2_weight_scale",
@@ -180,7 +180,7 @@ def analyze(weight_map: Mapping[str, str], *, layers: int = DEFAULT_LAYERS,
         "expected_base_routed_keys": expected_total,
         "expected_base_keys_per_layer": expected_per_layer,
         "base_routed_key_candidates": base_candidate_total,
-        "base_routed_key_schema": "512_experts_x_gate/up/down_x_weight/group/global",
+        "base_routed_key_schema": "512_experts_x_gate/up/down_x_weight_packed/weight_scale/weight_global_scale",
         "layers_checked": layers, "experts_per_layer_checked": experts,
         "unclassified_base_routed_key_samples": unclassified,
         "out_of_range_base_routed_key_samples": unsupported,
