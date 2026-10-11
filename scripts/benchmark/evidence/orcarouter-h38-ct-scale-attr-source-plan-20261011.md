@@ -42,3 +42,12 @@ Qualified static source sites:
 - The helper source (vllm/model_executor/utils.py) SHA256 f208310647a012797e0b0e9631d3498135c7f9aef831e35e42e96eceb7623f89 is a NEW image-ID-guarded observation, not a pre-approved pin for this first run. Do not conflate helper syntax checks with observed attribute execution.
 
 Canonical [actual H38 CT scale-attr Attempt 01 PASS evidence](orcarouter-h38-ct-scale-attr-attempt01-source-pass-20261011.md). Prior CT source Attempt 03 PASS remains independent. No result certifies the effective runtime loader, TorchDispatchMode count, unique 512-expert loaded coverage, layer 8/11 buffering, or host stability; these remain UNVERIFIED. Next use is a separate isolated CPU-only dispatcher witness with strictly explicit provenance and resource safety, not repetitive CT AST inspection or model/GPU execution. PR #259 Draft/Open, merge blocked.
+
+
+## Separate external PyTorch CPU indexed-write observation — 2026-10-11
+
+An **assistant-side external Python 3.13 / torch 2.10.0+cpu** microprobe, NOT an H38-image execution, observed aten.copy_.default events under TorchDispatchMode for indexed scalar and row writes. In a tiny 3x2 toy, repeating one destination yielded aggregate per-call credit 6 while only 5 unique elements had been written. Source-labeled documentation and reproduction code: [External CPU indexed-write toy](h38-ct-copycounter-indexed-write-external-cpu-toy-20261011.md).
+
+This observation narrows the general *semantic possibility*: some PyTorch indexed assignments count as copy_ dispatches, so it is not correct to assume they are intrinsically invisible to CopyCounter. It does **not** close the installed H38 PyTorch-version/source-specific event question nor prove repeated writes actually happen under the H38 loader. The unverified layerwise numel/unique-coverage hazard remains conditional, not an established model defect.
+
+**Next prioritized inquiry:** determine how the exact loader maps all expected checkpoint expert/shard scale events to destination parameter slots and whether buffering and early completion can be bounded without real H38 inference. Source-only and tiny external CPU evidence should remain separate; no new H38 GPU/model, H38 container/host protection or PR Ready/Merge.
