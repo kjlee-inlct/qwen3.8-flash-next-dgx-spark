@@ -150,5 +150,54 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assert_readonly()
 
 
+    def test_unowned_swap_purge_fails_before_host_or_fixture_mutation(self) -> None:
+        """Both selected and full purge must fail closed before teardown.
+
+        A disposable HOME/XDG fixture and rejecting daemon-command stubs
+        ensure this test cannot touch a live Docker/systemd/swap resource.
+        """
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        daemon_calls = self.home / "unexpected-daemon-calls.txt"
+        for command in ("docker", "sudo", "systemctl", "swapoff"):
+            stub = fake_bin / command
+            stub.write_text(
+                '#!/bin/sh\nprintf "%s\n" "$0" >> "'
+                + str(daemon_calls)
+                + '"\nexit 99\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+        before = self.snapshot()
+
+        for purge_flag in ("--purge-swap", "--purge-all"):
+            with self.subTest(purge_flag=purge_flag):
+                result = subprocess.run(
+                    [
+                        "bash", str(UNINSTALL),
+                        "--lang", "en", "--yes", purge_flag,
+                    ],
+                    cwd=REPO,
+                    env={
+                        **os.environ,
+                        "HOME": str(self.home),
+                        "XDG_STATE_HOME": str(self.home / "state"),
+                        "XDG_DATA_HOME": str(self.home / "data"),
+                        "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                    },
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=15,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "refusing swap deletion: swap was not created by this installer",
+                    result.stderr,
+                )
+                self.assertFalse(daemon_calls.exists(), result.stderr)
+                self.assertEqual(self.snapshot(), before)
+
+
 if __name__ == "__main__":
     unittest.main()

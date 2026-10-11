@@ -213,6 +213,13 @@ if [[ "${DRY_RUN}" == 1 ]]; then
   exit 0
 fi
 
+# Refuse unowned swap before lock creation, ownership-registry bootstrap,
+# service/container teardown, or any model/image/release deletion. This also
+# covers --purge-all, which implies --purge-swap. Dry-run above stays a preview.
+if [[ "${PURGE_SWAP}" == 1 ]]; then
+  [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
+fi
+
 [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
 # shellcheck source=scripts/lib/operation-lock.sh
 source "${OPERATION_LOCK_LIB}"
@@ -299,7 +306,6 @@ elif [[ "${PURGE_MODEL}" == 1 ]]; then
   asset_forget model "${MODEL_DIR}"
 fi
 if [[ "${PURGE_SWAP}" == 1 ]]; then
-  [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
   if [[ -e "${SWAP_FILE}" ]]; then
     swap_args=(remove --file "${SWAP_FILE}"); [[ "${YES}" == 1 ]] && swap_args+=(--yes)
     sudo "${INSTALL_ROOT}/scripts/manage-swap.sh" "${swap_args[@]}"
