@@ -63,3 +63,13 @@ MERGE=BLOCKED
 ```
 
 No H38 runtime, checkpoint read or host mutation is authorized by this source-only gate.
+
+## Actual DGX installed-H38 source Attempt 01 — completed PASS_SOURCE_POTENTIAL_ONLY (2026-10-12)
+
+**Supersedes the staged/not-observed status in this original plan.** On clean exact operator HEAD `956ee0cd2db2a3ca607acd0516d6d35d62f09891` in immutable H38 image `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`, all four pinned source SHA256 values matched. The inspector returned `H38_CT_INPUT_TARGET_GAP=PASS_SOURCE_POTENTIAL_ONLY`, preflight `PASS_SOURCE_POTENTIAL_ONLY`, `source_check_rc=0`, and unchanged image identity. No GPU/model, checkpoint payload, managed service, host monitor protection or CT meta mutation was performed/reported.
+
+All nine source predicates for Layerwise input-scale potential count-target inclusion were true. Actual `SKIP_LOAD_TENSORS` line 27 had six other names and neither CT input-global-scale name. The source-registered shapes were `(num_experts,w13_num_shards)` and `(num_experts,)`. The report's 512-expert figures (1,536 per layer / 73,728 across 48 for two W13 shards; or 1,024 per layer / 49,152 for one W13 shard) are **conditional target arithmetic only**, not observed runtime expert rows, a measured missing-copy deficit, actual postload use or bytes resident.
+
+Canonical user-console-derived evidence: [actual pinned H38 input-scale target source Attempt 01 PASS](orcarouter-h38-ct-input-scale-numel-target-attempt01-source-pass-20261012.md). The user-reported original `/tmp/h38-ct-input-target-gap-attempt01-20261011.txt` was not separately copied/hashed. No new DGX run is required to reprove these same source facts.
+
+**Open question / transition decision:** source-only proof should next target deterministic input-global-scale write/alias/default branches and exact CopyCounter credit semantics, bounded to pinned source/synthetic fixtures, then freeze H38 run eligibility at BLOCKED until separately approved. Installer/uninstaller/profile-switch **non-destructive** tests and qualified historical E2E evidence can be advanced independently. Historical checkpoint metadata ORDER_GATE remains FAIL; H38 functional NOT_REACHED and host stability INCONCLUSIVE. PR #259 DRAFT/OPEN, MERGE BLOCKED.
