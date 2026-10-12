@@ -709,3 +709,8 @@ host or the protected DGX; M1–M4 and D1–D5 unchanged**.
 ### D0 on-host read-only policy cross-check — mocked GitHub CI (2026-10-12)
 
 - [**Read-only D0 crosscheck implementation, 12 fixture cases and first-failure correction**](d0-onhost-readonly-crosscheck-ci-20261012.md): first CI #38218386709 **FAIL 1/824** (fake Docker-outage exception type), corrected CI #38218663210 **SUCCESS 824/824 full and 77/77 bounded synthetic** with shell/Python/static PASS. No real disposable host collection, and none on the protected DGX. D0 live admission remains NOT_GRANTED; D1–D5 NOT_RUN.
+
+
+### D0 parent mount and Docker endpoint trust-boundary hardening (2026-10-12)
+
+- [**D0 parent-mount, Docker context/socket, and Git optional-lock refusal evidence**](d0-parent-mount-docker-endpoint-guards-20261012.md): source CI [#38266470002](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38266470002) **SUCCESS 828/828 full, 77/77 selected**, follow-up CI [#38267015272](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38267015272) **SUCCESS 829/829 full, 77/77 selected**; 17 D0 fixture methods in full CI only. No actual disposable host observed, no DGX source synchronization, and no M1–M4 promotion.
