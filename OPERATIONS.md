@@ -803,3 +803,33 @@ HEAD has **not** been pulled/tested on the DGX. Maintain
 PR #259 **DRAFT/OPEN, Ready/Merge BLOCKED**. Primary next engineering
 priority is **host-independent installer/uninstaller/profile-switch acceptance**,
 then independent disposable-host E2E. Do not restart or mutate the sole DGX.
+
+
+## Fail-closed uninstall plan, Docker dependency, and image absence (2026-10-12)
+
+GitHub source-only hardening captures an ownership `plan-purge` during staged
+preflight with an explicit successful producer exit; partially output
+nonzero plans cannot authorize teardown. External `docker ps` must succeed,
+not merely return zero results; `docker image inspect` must explicitly
+report `No such image/object` to authorize an absent image. Unexpected
+Docker command failures stop the purge, including at final image-forget.
+Fixture regressions exercise failures before registry publication and retain
+the preexisting canonical manifest/registry and unowned assets.
+
+Final qualifying CI for the code at
+[GitHub Actions #38196834096](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38196834096)
+**SUCCESS 792/792 Python, 60/60 bounded synthetic tests**, plus Bash,
+ShellCheck, Python compilation, whitespace. Two intermediate CI failures
+were test-stub representation problems, preserved in
+[specific evidence](scripts/benchmark/evidence/managed-uninstall-fail-closed-purge-plan-docker-20261012.md).
+The independent [disposable-host E2E plan](docs/DISPOSABLE-LIFECYCLE-E2E-PLAN.md)
+is an **acceptance plan, NOT an executed test**.
+
+Current sole DGX checkout was last operator-observed at `87fb463...`, with
+56/56 synthetic PASS and service/container intentionally stopped after the
+Oct 7 protection-abort sequence; new source not locally synchronized/tested.
+`M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`,
+`M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`,
+`HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`.
+Never run destructive lifecycle gates on the sole DGX. PR #259 Draft/Open,
+Ready/Merge BLOCKED.
