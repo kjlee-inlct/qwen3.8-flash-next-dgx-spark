@@ -19,7 +19,7 @@ if [[ "${EXPECTED}" == --help || "${EXPECTED}" == -h ]]; then
   exit 0
 fi
 
-[[ "$#" -ge 1 && "$#" -le 2 ]] || invalid 'expected_sha_and_optional_ci_only'
+[[ "$#" -ge 1 && "$#" -le 2 ]] || invalid 'exact_sha_required_or_too_many_arguments'
 [[ "${EXPECTED}" =~ ^[0-9a-f]{40}$ ]] || invalid 'exact_sha_required'
 [[ -z "${MODE}" || "${MODE}" == --ci ]] || invalid 'unknown_argument'
 if [[ "${MODE}" == --ci ]]; then
