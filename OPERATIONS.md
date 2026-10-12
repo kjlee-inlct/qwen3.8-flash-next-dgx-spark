@@ -764,17 +764,17 @@ Systemd `Result=success ExecMainCode=1 ExecMainStatus=0 inactive/dead`,
 ActiveEnter **22:08:29 KST**, InactiveEnter **22:18:17 KST**.
 `runtime-commit.env`, `runtime-stop.env`, and `monitor.pid` were **ABSENT**
 at observation. The repeated values match the older exact-DGX
-[offline Attempt 01](../scripts/benchmark/evidence/managed-runtime-offline-attempt01-exit0-no-oom-20261012.md)
+[offline Attempt 01](scripts/benchmark/evidence/managed-runtime-offline-attempt01-exit0-no-oom-20261012.md)
 recorded at a different checkout, not a new runtime or H38 test.
 
 **Resolve chronology using existing historic evidence, not an additional
 monitor experiment.** The already archived
-[service journal](../scripts/benchmark/evidence/managed-runtime-stop-journal-attempt01-protected-abort-20261012.md)
+[service journal](scripts/benchmark/evidence/managed-runtime-stop-journal-attempt01-protected-abort-20261012.md)
 explicitly records graceful stop of the **previous** container for candidate
 handover **22:08:30**, candidate monitor/start at **22:08:35**, and candidate
 abort by memory protection **22:18:16**, then **previous container restored
 but left STOPPED 22:18:17**. The separately archived
-[numeric monitor samples](../scripts/benchmark/evidence/managed-monitor-trigger-attempt01-low-free-swap-growth-pass-20261012.md)
+[numeric monitor samples](scripts/benchmark/evidence/managed-monitor-trigger-attempt01-low-free-swap-growth-pass-20261012.md)
 confirm low non-CMA free memory **below 2 GiB** together with swap growth
 **at least 256 MiB**, counted for **5 consecutive protection samples**
 and `PROTECT stopping` at **22:17:43**. Thus the stopped canonical container's
@@ -793,7 +793,7 @@ and numeric trigger branch are confirmed by earlier evidence**, while
 ultimate kernel/driver/model root cause and protective-policy appropriateness
 are still **UNVERIFIED**. No new H38 GPU rerun or additional journal hunt.
 
-Canonical new [repeat cross-check evidence](../scripts/benchmark/evidence/managed-runtime-offline-repeat-crosscheck-20261012.md)
+Canonical new [repeat cross-check evidence](scripts/benchmark/evidence/managed-runtime-offline-repeat-crosscheck-20261012.md)
 preserves source, timestamps and limits. `DGX_LOCAL_SYNTHETIC=PASS` only
 for the earlier 56/56 locally run at `87fb463`; the new docs-only GitHub
 HEAD has **not** been pulled/tested on the DGX. Maintain
