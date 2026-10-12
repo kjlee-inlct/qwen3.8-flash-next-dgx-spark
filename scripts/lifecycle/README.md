@@ -86,3 +86,17 @@ and temporary HOME/XDG, never a production profile switch. CI
 [#38204508012](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38204508012)
 PASS, **70/70 allowlisted synthetic tests**, but M3 actual all-pairs remains
 NOT_QUALIFIED.
+
+
+## Crash leftovers and false-idle refusal — 2026-10-12
+
+The profile-switch helper's `rollback`, `recover`,
+`service-recover` and `status` no longer claim a safe idle state if
+transaction state is a dangling symlink, or if a backup, candidate,
+staging state `.tmp`, or commit-complete `.tmp` remains without a
+transaction. The valid empty-idle path is preserved. Three isolated
+regressions raised the profile-switch selected module to **16 cases**
+and full allowlisted verifier to **76 cases**. GitHub CI
+[#38212223945](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38212223945)
+SUCCESS. No true production host startup/rollback or physical M3
+acceptance established.

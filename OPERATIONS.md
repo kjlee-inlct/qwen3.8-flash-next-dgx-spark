@@ -944,3 +944,32 @@ Neither result qualifies live M1, real D0–D5 M2, all-pairs service M3 or
 H38 M4. `HOST_STABILITY=INCONCLUSIVE`,
 `HOST_PROTECTION=UNCHANGED`. No model/service/swap/GPU change. PR #259
 must remain Draft/Open/Unmerged and Ready/Merge BLOCKED.
+
+## Actual DGX 73/73 and fail-closed profile-switch orphan-state hardening — 2026-10-12
+
+Operator-supplied real DGX output confirms a clean, exact guarded
+fast-forward `fb6e0ed → e18c56a` and **73/73 local isolated synthetic
+tests PASS**, including **13 profile-switch transaction tests**.
+`BASH_SYNTAX=PASS`, local `SHELLCHECK=SKIPPED_NOT_INSTALLED`,
+`LOCAL_SYNTHETIC_RESULT=PASS` and final
+`DGX_PROFILE_RECOVERY_SYNTHETIC_VALIDATION_COMPLETE` were observed.
+Latest actual DGX verified SHA is
+`e18c56aff008f717ad54ee787ab20c248e987e34`.
+
+Subsequent GitHub-source-only review found a **false-idle fail-open**:
+a dangling transition file link or orphan backup/candidate/staging
+artifact could be hidden by the no-state branch of `recover`,
+`rollback`, `service-recover` or `status`. The new code refuses to
+claim idle while any such file or link remains, preserving normal truly
+idle behavior. Three new fixture unittest methods exercise the
+dangling/orphan/valid-idle matrix. [Source CI #38212223945](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38212223945)
+**SUCCESS 802/802 full Python, 76/76 synthetic**, plus Bash,
+ShellCheck, compile and whitespace PASS. **This new source is not yet
+executed locally on the DGX.**
+
+[Evidence details](scripts/benchmark/evidence/dgx-73-and-profile-switch-false-idle-hardening-20261012.md).
+No live host E2E, Docker/systemd profile changes or H38 reruns.
+`M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`,
+`M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`,
+`HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`,
+PR #259 Draft/Open, Ready/Merge BLOCKED.

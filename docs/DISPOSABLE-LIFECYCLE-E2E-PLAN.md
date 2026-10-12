@@ -102,3 +102,14 @@ runtime-commit state) passed GitHub CI #38210907792, **799/799 full and
 73/73 synthetic**. The latest actual DGX local synthetic acceptance is
 separate: **70/70 at `fb6e0ed`**. These checks neither exercise real
 Docker/systemd transitions nor satisfy D0–D5 or M3 live qualifications.
+
+
+## Additional interrupted idle-state case — 2026-10-12
+
+The synthetic profile-switch helper now refuses a false idle state when
+transaction state is a dangling symlink or when backup/candidate and
+staging `.tmp` artifacts survive without a published transaction.
+GitHub CI #38212223945 passed 802/802 full, 76/76 synthetic.
+Extend any future independent disposable-host profile-switch
+interruption trial to check these stranded-file startup/status/rollback
+paths; they remain unqualified on real Docker/systemd.

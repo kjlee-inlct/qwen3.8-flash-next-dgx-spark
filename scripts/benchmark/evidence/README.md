@@ -627,3 +627,8 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 
 - [**Actual DGX `fb6e0ed` 70/70 synthetic acceptance**](dgx-synthetic-doc-head-pass-20261012.md): guarded clean fast-forward from `d2e9a1d`, Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED, exact final SHA. This is the latest operator-observed DGX local synthetic checkout.
 - [**GitHub-only three profile-switch fault cases**](managed-profile-switch-drift-attestation-synthetic-20261012.md): backup manifest digest mismatch, candidate digest mismatch, and runtime-commit attestation disappearance; **CI #38210907792 799/799 full, 73/73 synthetic PASS**. This latest source has NOT yet been locally run on the DGX. No actual runtime/service/protection change or physical M1/M2/M3/M4 qualification.
+
+
+### Actual DGX synthetic 73/73, and GitHub source fail-closed orphan-state fix — 2026-10-12
+
+- [**Exact DGX `e18c56a` operator synthetic 73/73 PASS and subsequent orphan-state safety analysis**](dgx-73-and-profile-switch-false-idle-hardening-20261012.md): operator source SHA confirmed, ShellCheck locally SKIPPED; source CI #38212223945 **802/802 full, 76/76 synthetic** for 3 additional valid-idle/orphan/dangling tests and production fail-closed checks. New code not yet tested on the actual DGX; neither synthetic success qualifies a live M1–M4.
