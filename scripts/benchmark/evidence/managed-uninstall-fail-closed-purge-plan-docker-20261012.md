@@ -16,7 +16,7 @@ single DGX Spark host.
   completion **before** treating any results as authoritative.
   A partial list with nonzero Docker exit is a refusal, both for
   `--purge-image` and `--purge-all`.
-- `scripts/lib/asset_ownership.py` treats only an explicit Docker
+- the asset-ownership Python helper (`asset_ownership.py`) treats only an explicit Docker
   `No such image` or `No such object` response as absence. Missing Docker
   executable, command timeout, daemon error, empty successful image-ID
   response, or other unexpected error is an ownership-check error.
