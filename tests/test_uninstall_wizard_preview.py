@@ -267,5 +267,56 @@ class UninstallWizardPreviewTests(unittest.TestCase):
                 self.assertFalse((self.state / "operation.lock").exists())
 
 
+    def test_cancel_preserves_existing_ownership_registry_bytes(self) -> None:
+        """Owned model migration must not rewrite a preexisting registry on cancel."""
+        content = self.manifest.read_text(encoding="utf-8")
+        self.assertIn("MODEL_OWNED=0", content)
+        self.manifest.write_text(
+            content.replace("MODEL_OWNED=0", "MODEL_OWNED=1"),
+            encoding="utf-8",
+        )
+        (self.model / ".qwen38-model-manifest.json").write_text(
+            '{"status":"complete","repository":"synthetic/test","revision":"'
+            + "b" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+        registry = self.state / "asset-ownership.json"
+        registry.write_text('{"schema_version":1,"assets":[]}\n', encoding="utf-8")
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        daemon_calls = self.home / "unexpected-host-commands.txt"
+        for command in ("docker", "sudo", "systemctl", "swapoff"):
+            stub = fake_bin / command
+            stub.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "{command}" >> "{daemon_calls}"\nexit 99\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+
+        expected = self.snapshot()
+        result = subprocess.run(
+            ["bash", str(UNINSTALL), "--lang", "en", "--purge-model"],
+            cwd=REPO,
+            env={
+                **os.environ,
+                "HOME": str(self.home),
+                "XDG_STATE_HOME": str(self.home / "state"),
+                "XDG_DATA_HOME": str(self.home / "data"),
+                "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+            },
+            input="NO\n",
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=15,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cancelled", result.stderr)
+        self.assertEqual(self.snapshot(), expected)
+        self.assertFalse(daemon_calls.exists())
+        self.assertFalse((self.state / "operation.lock").exists())
+        self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
+
+
 if __name__ == "__main__":
     unittest.main()
