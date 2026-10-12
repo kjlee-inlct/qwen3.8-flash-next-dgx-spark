@@ -318,5 +318,101 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
 
 
+    def test_approved_purge_preflight_failure_preserves_cumulative_registry(self) -> None:
+        """An owned base with a retained dependent must fail before registry publication.
+
+        This uses the REAL non-dry-run uninstaller, but HOME/XDG are disposable,
+        owned paths are synthetic, and host mutators are replaced with rejectors.
+        The preexisting unowned entry is promoted only in the *staged* registry.
+        """
+        import json
+
+        manifest = self.manifest.read_text(encoding="utf-8")
+        self.manifest.write_text(
+            manifest.replace("MODEL_OWNED=0", "MODEL_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            encoding="utf-8",
+        )
+        marker = self.model / ".qwen38-model-manifest.json"
+        marker.write_text(
+            '{"status":"complete","repository":"synthetic/base","revision":"'
+            + "c" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+        dependent = self.home / "models" / "retained-dependent"
+        dependent.mkdir()
+        (dependent / "keep-user.txt").write_text("KEEP DEPENDENT\n", encoding="utf-8")
+        registry = self.state / "asset-ownership.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "assets": [
+                        {
+                            "kind": "model",
+                            "locator": str(self.model),
+                            "root": str(self.model.parent),
+                            "owned": False,
+                            "state": "ready",
+                            "fingerprint": "",
+                            "depends_on": [],
+                        },
+                        {
+                            "kind": "model",
+                            "locator": str(dependent),
+                            "root": str(dependent.parent),
+                            "owned": False,
+                            "state": "claimed",
+                            "fingerprint": "",
+                            "depends_on": [str(self.model)],
+                        },
+                    ],
+                },
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        stub_bin = self.home / "stub-bin"
+        stub_bin.mkdir()
+        unexpected_calls = self.home / "unexpected-mutator-calls.txt"
+        for command in ("docker", "sudo", "systemctl", "swapoff"):
+            stub = stub_bin / command
+            stub.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "{command}" >> "{unexpected_calls}"\nexit 97\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+        expected = self.snapshot()
+
+        for flag in ("--purge-model", "--purge-all"):
+            with self.subTest(flag=flag):
+                result = subprocess.run(
+                    ["bash", str(UNINSTALL), "--lang", "en", "--yes", flag],
+                    cwd=REPO,
+                    env={
+                        **os.environ,
+                        "HOME": str(self.home),
+                        "XDG_STATE_HOME": str(self.home / "state"),
+                        "XDG_DATA_HOME": str(self.home / "data"),
+                        "PATH": str(stub_bin) + os.pathsep + os.environ.get("PATH", ""),
+                    },
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=20,
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("owned asset is required by a retained dependent", result.stderr)
+                self.assertFalse(unexpected_calls.exists(), result.stderr)
+                # A permitted operation.lock may be created by the preflight;
+                # no installation/asset data may change or remain staged.
+                actual = self.snapshot()
+                actual.pop("state/qwen38-spark/operation.lock", None)
+                self.assertEqual(actual, expected)
+                self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+                self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
+                self.assertTrue((dependent / "keep-user.txt").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

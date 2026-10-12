@@ -47,8 +47,37 @@ sudo_with_operation_lock() {
 }
 
 asset_bootstrap_install() {
+  local registry="${1:-${ASSET_OWNERSHIP_FILE}}"
   [[ -r "${ASSET_OWNERSHIP_TOOL}" ]] || die "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
-  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
+  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${registry}" "${STATE_FILE}" "${STATE_PARSER}"
+}
+
+# Stage legacy ownership migration in a private directory. Failed eligibility
+# checks must never publish a partially bootstrapped cumulative registry.
+asset_stage_uninstall_registry() {
+  [[ ! -L "${ASSET_OWNERSHIP_FILE}" ]] || die "refusing symlinked ownership registry"
+  [[ ! -e "${ASSET_OWNERSHIP_FILE}" || -f "${ASSET_OWNERSHIP_FILE}" ]] || \
+    die "ownership registry must be a regular file"
+  ASSET_PREFLIGHT_DIR="$(mktemp -d -- "${STATE_DIR}/.uninstall-preflight.XXXXXXXX")" || \
+    die "failed to create private ownership preflight directory"
+  ASSET_PREFLIGHT_FILE="${ASSET_PREFLIGHT_DIR}/asset-ownership.json"
+  trap 'rm -rf -- "${ASSET_PREFLIGHT_DIR}"' EXIT
+  if [[ -f "${ASSET_OWNERSHIP_FILE}" ]]; then
+    cp -p -- "${ASSET_OWNERSHIP_FILE}" "${ASSET_PREFLIGHT_FILE}"
+  fi
+  asset_bootstrap_install "${ASSET_PREFLIGHT_FILE}"
+}
+
+asset_publish_uninstall_registry() {
+  if [[ -f "${ASSET_PREFLIGHT_FILE}" ]] && \
+     { [[ ! -e "${ASSET_OWNERSHIP_FILE}" ]] || \
+       ! cmp -s -- "${ASSET_PREFLIGHT_FILE}" "${ASSET_OWNERSHIP_FILE}"; }; then
+    [[ ! -L "${ASSET_OWNERSHIP_FILE}" ]] || die "refusing symlinked ownership registry"
+    mv -fT -- "${ASSET_PREFLIGHT_FILE}" "${ASSET_OWNERSHIP_FILE}"
+  fi
+  rm -f -- "${ASSET_PREFLIGHT_FILE}"
+  rmdir -- "${ASSET_PREFLIGHT_DIR}"
+  trap - EXIT
 }
 asset_model_owned() {
   if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
@@ -77,8 +106,9 @@ image_referenced_by_external_container() {
 }
 
 asset_preflight_full_purge() {
-  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
-  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${ASSET_OWNERSHIP_FILE}" --kind all
+  local registry="${1:-${ASSET_OWNERSHIP_FILE}}"
+  [[ -f "${registry}" && ! -L "${registry}" ]] || return 0
+  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${registry}" --kind all
   local kind locator refs
   while IFS=$'\t' read -r kind locator; do
     [[ "${kind}" == image ]] || continue
@@ -86,7 +116,7 @@ asset_preflight_full_purge() {
     if [[ -n "${refs}" ]]; then
       die "refusing image purge; ${locator} is referenced by other containers: ${refs}"
     fi
-  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${registry}" --kind all)
 }
 
 asset_apply_full_purge() {
@@ -261,19 +291,20 @@ do
     die "settings transaction or stale settings artifact exists; recover settings before uninstalling: ${settings_artifact}"
 done
 
-# Migrate the current manifest's legacy single-asset ownership into the cumulative
-# registry before any destructive decision. This cannot infer assets whose
-# ownership was already lost by older profile switches.
-asset_bootstrap_install
+# Stage legacy ownership migration under the acquired operation lock.
+# The original registry is not published unless *all* destructive eligibility
+# preflights, including external-container and unowned-service checks, succeed.
+# Historical ownership lost by older profile switches is never inferred.
+asset_stage_uninstall_registry
 if [[ "${PURGE_ALL}" == 1 ]]; then
-  asset_preflight_full_purge
+  asset_preflight_full_purge "${ASSET_PREFLIGHT_FILE}"
 else
   if [[ "${PURGE_MODEL}" == 1 ]]; then
-    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" model "${MODEL_DIR}" || \
+    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_PREFLIGHT_FILE}" model "${MODEL_DIR}" || \
       die "refusing model deletion: active model is not safely recorded as installer-owned"
   fi
   if [[ "${PURGE_IMAGE}" == 1 ]]; then
-    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" image "${VLLM_IMAGE}" || \
+    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_PREFLIGHT_FILE}" image "${VLLM_IMAGE}" || \
       die "refusing image deletion: active image is not safely recorded as installer-owned"
     image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")"
     if [[ -n "${image_refs}" ]]; then
@@ -285,6 +316,10 @@ fi
 if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
 fi
+
+# Commit the staged registry only after every eligibility preflight succeeds;
+# any later failure during actual teardown is a distinct recovery obligation.
+asset_publish_uninstall_registry
 if [[ -r "${MONITOR_PID_FILE}" ]]; then
   monitor_pid="$(<"${MONITOR_PID_FILE}")"
   if [[ "${monitor_pid}" =~ ^[0-9]+$ && -r "/proc/${monitor_pid}/cmdline" ]] && \

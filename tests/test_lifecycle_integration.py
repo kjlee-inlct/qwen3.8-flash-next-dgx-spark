@@ -253,7 +253,9 @@ class LifecycleIntegrationTests(unittest.TestCase):
         ownership = (ROOT / "scripts" / "lib" / "asset_ownership.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn('preflight-one "${ASSET_OWNERSHIP_FILE}" model "${MODEL_DIR}"', uninstaller)
+        self.assertIn('preflight-one "${ASSET_PREFLIGHT_FILE}" model "${MODEL_DIR}"', uninstaller)
+        self.assertIn('asset_stage_uninstall_registry', uninstaller)
+        self.assertIn('asset_publish_uninstall_registry', uninstaller)
         self.assertIn(".qwen38-model-manifest.json", ownership)
         self.assertIn(".qwen38-hybrid-manifest.json", ownership)
         self.assertIn("owned model manifest drift detected", ownership)

@@ -538,3 +538,8 @@ For `--purge-swap` and `--purge-all`, `SWAP_OWNED=1` is required **before any de
 ## Uninstall cancellation before ownership registry bootstrap (2026-10-12)
 
 The typed `DELETE` consent for a real uninstall now occurs before creating `operation.lock` or migrating the manifest into `asset-ownership.json`. Refusal or EOF is fail-closed without modifying install files or runtime assets. After consent, the uninstaller obtains the operation lock, rechecks active/stale lifecycle transactions, bootstraps registry and applies its usual destructive-eligibility checks. `--yes` skips only interactive consent, never safety preflights. Unowned swap remains rejected before the prompt; `--dry-run` remains preview-only. This is synthetic-regression coverage, NOT authorization to uninstall anything on the single active DGX Spark.
+
+
+## Ownership preflight does not mutate canonical registry on refusal (2026-10-12)
+
+For real uninstall after `DELETE` or `--yes`, the uninstaller takes its existing operation lock and creates a private `.uninstall-preflight.*` stage in the lifecycle state directory. It copies the current cumulative registry (if any), bootstraps legacy ownership there and runs model/image/full-purge plus external-container and unowned-service checks **against the staged data**. Failure exits with the canonical `asset-ownership.json`, install manifest, service, model and image data unchanged; the staging directory is normally removed by an EXIT trap. The operation lock file may be created and retained. Only successful preflight allows registry publication and subsequent teardown. This does **not** promise atomic rollback if actual deletion subsequently fails or the host/process crashes. Do not run real purge on the active single DGX.
