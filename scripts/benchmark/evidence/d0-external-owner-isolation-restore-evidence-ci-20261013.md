@@ -14,7 +14,7 @@
 
 ## New offline reviewer and binding contract
 
-`scripts/lifecycle/disposable-d0-external-evidence-review.py` is a Python standard-library offline-only CLI. It validates the existing exact-byte policy/inventory/crosscheck receipt chain via the previous receipt-review module, parses a strict evidence manifest, then reads and hashes **three separate** bounded, non-symlink local external proof artifacts. All seven inputs stay **outside the repository**.
+`disposable-d0-external-evidence-review.py` (D0 lifecycle category) is a Python standard-library offline-only CLI. It validates the existing exact-byte policy/inventory/crosscheck receipt chain via the previous receipt-review module, parses a strict evidence manifest, then reads and hashes **three separate** bounded, non-symlink local external proof artifacts. All seven inputs stay **outside the repository**.
 
 Manifest version 1 requires exact source SHA, policy SHA-256, inventory SHA-256 and receipt SHA-256. There are three distinct **claimed** reviewer roles:
 
