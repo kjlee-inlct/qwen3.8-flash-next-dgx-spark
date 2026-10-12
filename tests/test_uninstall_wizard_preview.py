@@ -906,5 +906,56 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assertIn("PHASE=uninstalled", self.manifest.read_text(encoding="utf-8"))
         self.assertTrue((self.data / "keep-release").is_file())
 
+
+    def test_sigkill_at_swap_after_model_purge_can_resume(self) -> None:
+        """Completed synthetic model removal and surviving fake swap are retriable."""
+        import json
+
+        fake_bin = self._crash_test_stubs()
+        swap = self.home / "disposable-swap.img"
+        swap.write_bytes(b"NOT AN ACTIVE SWAP")
+        original = self.manifest.read_text(encoding="utf-8")
+        self.manifest.write_text(
+            original.replace("MODEL_OWNED=0", "MODEL_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1")
+            .replace("SWAP_FILE=/swap-ple.img", f"SWAP_FILE={swap}"),
+            encoding="utf-8",
+        )
+        (self.model / ".qwen38-model-manifest.json").write_text(
+            '{"status":"complete","repository":"synthetic","revision":"'
+            + "c" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+        kill_flag = self.home / "kill-during-swap"
+        kill_flag.write_text("yes\n", encoding="utf-8")
+        sudo = fake_bin / "sudo"
+        sudo.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "$*" == *"manage-swap.sh"* ]]; then\n'
+            f'  if [[ -e "{kill_flag}" ]]; then kill -KILL "$PPID"; exit 99; fi\n'
+            f'  /usr/bin/rm -f -- "{swap}"\n'
+            '  exit 0\n'
+            'fi\n'
+            'echo "blocked unexpected sudo" >&2\nexit 97\n',
+            encoding="utf-8",
+        )
+        sudo.chmod(0o700)
+
+        killed = self._run_crash_test(fake_bin, "--purge-all")
+        self.assertEqual(killed.returncode, -9, killed.stderr)
+        self.assertFalse(self.model.exists())
+        self.assertTrue(swap.is_file())
+        self.assertTrue((self.data / "keep-release").is_file())
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+        registry = self.state / "asset-ownership.json"
+        self.assertEqual(json.loads(registry.read_text(encoding="utf-8"))["assets"], [])
+
+        kill_flag.unlink()
+        retried = self._run_crash_test(fake_bin, "--purge-all")
+        self.assertEqual(retried.returncode, 0, retried.stderr)
+        self.assertFalse(swap.exists())
+        self.assertFalse(self.data.exists())
+        self.assertFalse(self.manifest.exists())
+
 if __name__ == "__main__":
     unittest.main()
