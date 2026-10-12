@@ -631,5 +631,122 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assertTrue((self.model / "keep-model.bin").exists())
         self.assertTrue((self.data / "keep-release").exists())
 
+
+    def test_full_purge_swap_failure_after_owned_asset_removal_retries(self) -> None:
+        """Full purge partially succeeds, then fails swap, then safely resumes.
+
+        All files, model data and the fake swap are inside disposable HOME.
+        PATH intercepts every sudo/Docker/systemctl/swapoff invocation.
+        """
+        import json
+
+        root = self.home / "synthetic-installer"
+        (root / "scripts").mkdir(parents=True)
+        model_marker = self.model / ".qwen38-model-manifest.json"
+        model_marker.write_text(
+            '{"status":"complete","repository":"synthetic/owned","revision":"'
+            + "f" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+        swap = self.home / "synthetic-swap.img"
+        swap.write_bytes(b"DISPOSABLE FAKE SWAP")
+        current = self.manifest.read_text(encoding="utf-8")
+        self.manifest.write_text(
+            current.replace(f"INSTALL_ROOT={REPO}", f"INSTALL_ROOT={root}")
+            .replace("MODEL_OWNED=0", "MODEL_OWNED=1")
+            .replace("IMAGE_OWNED=0", "IMAGE_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1")
+            .replace("SWAP_FILE=/swap-ple.img", f"SWAP_FILE={swap}")
+            .replace("SERVICE_OWNED=0", "SERVICE_OWNED=1"),
+            encoding="utf-8",
+        )
+
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        calls = self.home / "simulated-full-purge.log"
+        image_exists = self.home / "fake-image-exists"
+        swap_fault = self.home / "fail-swap-removal"
+        image_exists.write_text("fake\n", encoding="utf-8")
+        swap_fault.write_text("fault\n", encoding="utf-8")
+
+        docker = fake_bin / "docker"
+        docker.write_text(
+            "#!/usr/bin/env bash\n"
+            f'printf "docker %s\\n" "$*" >> "{calls}"\n'
+            'if [[ "$1" == rm && "$2" == -f ]]; then exit 0; fi\n'
+            'if [[ "$1" == ps ]]; then exit 0; fi\n'
+            'if [[ "$1" == image && "$2" == inspect ]]; then\n'
+            f'  if [[ ! -f "{image_exists}" ]]; then exit 1; fi\n'
+            '  if [[ "$3" == --format ]]; then\n'
+            '    printf "sha256:%s\\n" "'
+            + "a" * 64
+            + '"\n  fi\n  exit 0\nfi\n'
+            'if [[ "$1" == image && "$2" == rm ]]; then\n'
+            f'  rm -f -- "{image_exists}"\n  exit 0\nfi\n'
+            "exit 97\n",
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        sudo = fake_bin / "sudo"
+        sudo.write_text(
+            "#!/usr/bin/env bash\n"
+            f'printf "sudo %s\\n" "$*" >> "{calls}"\n'
+            'if [[ "$*" == *"manage-swap.sh"* ]]; then\n'
+            f'  if [[ -f "{swap_fault}" ]]; then\n'
+            '    echo "synthetic swap removal failure" >&2\n    exit 88\n'
+            '  fi\n'
+            f'  rm -f -- "{swap}"\n'
+            '  exit 0\n'
+            'fi\n'
+            'if [[ "$*" == *"manage-service.sh"* ]]; then exit 0; fi\n'
+            "exit 97\n",
+            encoding="utf-8",
+        )
+        sudo.chmod(0o700)
+        for name in ("systemctl", "swapoff"):
+            command = fake_bin / name
+            command.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+            command.chmod(0o700)
+
+        def invoke() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["bash", str(UNINSTALL), "--lang", "en", "--yes", "--purge-all"],
+                cwd=REPO,
+                env={
+                    **os.environ,
+                    "HOME": str(self.home),
+                    "XDG_STATE_HOME": str(self.home / "state"),
+                    "XDG_DATA_HOME": str(self.home / "data"),
+                    "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=30,
+            )
+
+        first = invoke()
+        self.assertNotEqual(first.returncode, 0, first.stdout)
+        self.assertIn("synthetic swap removal failure", first.stderr)
+        self.assertFalse(self.model.exists())
+        self.assertFalse(image_exists.exists())
+        self.assertTrue(swap.exists())
+        self.assertTrue((self.data / "keep-release").exists())
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+        entries = json.loads(
+            (self.state / "asset-ownership.json").read_text(encoding="utf-8")
+        )["assets"]
+        self.assertEqual(entries, [])
+        self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+
+        swap_fault.unlink()
+        second = invoke()
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertFalse(swap.exists())
+        self.assertFalse(self.manifest.exists())
+        self.assertFalse(self.data.exists())
+        self.assertFalse((self.state / "asset-ownership.json").exists())
+        self.assertIn("Full uninstall completed", second.stdout)
+
 if __name__ == "__main__":
     unittest.main()
