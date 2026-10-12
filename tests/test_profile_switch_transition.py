@@ -79,6 +79,8 @@ esac
         repo = {
             "orcarouter": "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
             "nvidia": "nvidia/Qwen3.8-Flash-Next-NVFP4",
+            "mazinb": "mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "orcarouter-hybrid": "local/orcarouter-mazinb-h6-w4a16",
         }[profile]
         revision = "a" * 40
         path.write_text(
@@ -125,10 +127,10 @@ esac
             encoding="utf-8",
         )
 
-    def write_target_candidate(self) -> None:
+    def write_target_candidate(self, profile: str = "nvidia") -> None:
         self.write_manifest(
             self.candidate,
-            profile="nvidia",
+            profile=profile,
             phase="service_ready",
             model_dir=self.target_model,
             image="target-image",
@@ -273,6 +275,98 @@ esac
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("deferred", result.stdout)
         self.assertTrue(self.transition.is_file())
+
+
+    PROFILES = ("orcarouter", "nvidia", "mazinb", "orcarouter-hybrid")
+
+    def _reset_pair_fixture(self, source: str) -> None:
+        """Reset only this test's disposable state between ordered-pair cases."""
+        for path in (self.transition, self.candidate, self.backup, self.runtime_commit):
+            path.unlink(missing_ok=True)
+        self.write_manifest(
+            self.install,
+            profile=source,
+            phase="complete",
+            model_dir=self.old_model,
+            image="old-image",
+            served="old/model",
+        )
+
+    def test_all_twelve_ordered_pairs_recover_uncommitted_to_previous(self) -> None:
+        """No target attestation: activated pair must recover only the provable old runtime."""
+        for source in self.PROFILES:
+            for target in self.PROFILES:
+                if source == target:
+                    continue
+                with self.subTest(source=source, target=target):
+                    self._reset_pair_fixture(source)
+                    original = self.install.read_bytes()
+                    prepared = self.run_helper("prepare", source, target)
+                    self.assertEqual(prepared.returncode, 0, prepared.stderr)
+                    self.write_target_candidate(target)
+                    activated = self.run_helper("activate")
+                    self.assertEqual(activated.returncode, 0, activated.stderr)
+                    self.assertIn(
+                        f"MODEL_PROFILE={target}", self.install.read_text(encoding="utf-8")
+                    )
+
+                    # The read-only Docker stub proves the predecessor's
+                    # image/mount/served identity. No host commands run.
+                    recovered = self.run_helper("recover", profile="old")
+                    self.assertEqual(recovered.returncode, 0, recovered.stderr)
+                    self.assertEqual(self.install.read_bytes(), original)
+                    self.assertFalse(self.transition.exists())
+                    self.assertFalse(self.backup.exists())
+                    self.assertFalse(self.candidate.exists())
+
+    def test_all_twelve_ordered_pairs_commit_only_attested_target(self) -> None:
+        """A valid target identity/commit can finalize each ordered profile pair."""
+        for source in self.PROFILES:
+            for target in self.PROFILES:
+                if source == target:
+                    continue
+                with self.subTest(source=source, target=target):
+                    self._reset_pair_fixture(source)
+                    prepared = self.run_helper("prepare", source, target)
+                    self.assertEqual(prepared.returncode, 0, prepared.stderr)
+                    self.write_target_candidate(target)
+                    activated = self.run_helper("activate")
+                    self.assertEqual(activated.returncode, 0, activated.stderr)
+                    self.write_target_attestation()
+
+                    committed = self.run_helper("runtime-committed", profile="target")
+                    self.assertEqual(committed.returncode, 0, committed.stderr)
+                    self.assertIn(
+                        "PROFILE_SWITCH_STATE=runtime_committed",
+                        self.transition.read_text(encoding="utf-8"),
+                    )
+                    recovered = self.run_helper("recover", profile="target")
+                    self.assertEqual(recovered.returncode, 0, recovered.stderr)
+                    live = self.install.read_text(encoding="utf-8")
+                    self.assertIn(f"MODEL_PROFILE={target}", live)
+                    self.assertIn("PHASE=complete", live)
+                    self.assertFalse(self.transition.exists())
+                    self.assertFalse(self.backup.exists())
+                    self.assertFalse(self.candidate.exists())
+
+    def test_same_profile_and_wrong_source_refuse_before_transaction_creation(self) -> None:
+        """Every registered profile rejects no-op and incorrect-source transitions."""
+        for source in self.PROFILES:
+            with self.subTest(source=source):
+                self._reset_pair_fixture(source)
+                original = self.install.read_bytes()
+                same = self.run_helper("prepare", source, source)
+                self.assertNotEqual(same.returncode, 0)
+                self.assertIn("must differ", same.stderr)
+                self.assertFalse(self.transition.exists())
+                self.assertEqual(self.install.read_bytes(), original)
+
+                wrong_source = next(x for x in self.PROFILES if x != source)
+                wrong = self.run_helper("prepare", wrong_source, source)
+                self.assertNotEqual(wrong.returncode, 0)
+                self.assertIn("FROM_PROFILE does not match", wrong.stderr)
+                self.assertFalse(self.transition.exists())
+                self.assertEqual(self.install.read_bytes(), original)
 
 
 if __name__ == "__main__":
