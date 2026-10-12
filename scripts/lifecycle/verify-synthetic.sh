@@ -87,6 +87,7 @@ for test_file in \
   test_asset_ownership.py \
   test_operation_lock.py \
   test_lifecycle_integration.py \
+  test_profile_switch_transition.py \
   test_selected_profile_readonly.py \
   test_managed_lifecycle_readonly_snapshot.py
 do
