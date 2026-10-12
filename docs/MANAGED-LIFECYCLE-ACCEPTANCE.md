@@ -301,3 +301,56 @@ results and do not reinterpret failure as stop-cause evidence.
 `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`,
 `M4_H38=BLOCKED`, `HOST_PROTECTION=UNCHANGED`; PR #259 Draft/Open,
 Ready/Merge BLOCKED.
+
+
+## Reconciled DGX offline repeat versus previously resolved Oct 7 protection stop (2026-10-12)
+
+The operator's latest **actual DGX** read-only `inspect-readonly-runtime-offline.sh`
+run at a clean exact checkout `87fb463984683f75435302eff5ffc3b3b9f941bf`
+completed all three queries (`rc=0`) and returned `MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY`.
+Docker `status=exited exit_code=0 oom_killed=false`, started **2026-10-07
+16:35:45.800732 KST**, finished **22:08:34.847185 KST**; correct declared
+loopback `127.0.0.1:8888` binding with no active port mapping while stopped.
+Systemd `Result=success ExecMainCode=1 ExecMainStatus=0 inactive/dead`,
+ActiveEnter **22:08:29 KST**, InactiveEnter **22:18:17 KST**.
+`runtime-commit.env`, `runtime-stop.env`, and `monitor.pid` were **ABSENT**
+at observation. The repeated values match the older exact-DGX
+[offline Attempt 01](../scripts/benchmark/evidence/managed-runtime-offline-attempt01-exit0-no-oom-20261012.md)
+recorded at a different checkout, not a new runtime or H38 test.
+
+**Resolve chronology using existing historic evidence, not an additional
+monitor experiment.** The already archived
+[service journal](../scripts/benchmark/evidence/managed-runtime-stop-journal-attempt01-protected-abort-20261012.md)
+explicitly records graceful stop of the **previous** container for candidate
+handover **22:08:30**, candidate monitor/start at **22:08:35**, and candidate
+abort by memory protection **22:18:16**, then **previous container restored
+but left STOPPED 22:18:17**. The separately archived
+[numeric monitor samples](../scripts/benchmark/evidence/managed-monitor-trigger-attempt01-low-free-swap-growth-pass-20261012.md)
+confirm low non-CMA free memory **below 2 GiB** together with swap growth
+**at least 256 MiB**, counted for **5 consecutive protection samples**
+and `PROTECT stopping` at **22:17:43**. Thus the stopped canonical container's
+`exit_code=0 oom_killed=false` correlates with the previous container's
+handover/rollback, **not** with the candidate's unobserved Docker exit.
+There is no candidate immutable ID or attestation proof in the new snippet;
+no kernel OOM/NVIDIA RM failure, false positive, safe memory peak or
+candidate READY may be inferred.
+
+This reconciliation supersedes earlier **intermediate** lines stating the
+Oct 7 *managed transition's* stop cause or protection threshold branch were
+still wholly undetermined. The inspector itself intentionally emits the
+literal `RUNTIME_STOP_REASON=NOT_YET_PROVEN` as a collection marker, and
+must remain unchanged. The **managed-service protection-abort sequence
+and numeric trigger branch are confirmed by earlier evidence**, while
+ultimate kernel/driver/model root cause and protective-policy appropriateness
+are still **UNVERIFIED**. No new H38 GPU rerun or additional journal hunt.
+
+Canonical new [repeat cross-check evidence](../scripts/benchmark/evidence/managed-runtime-offline-repeat-crosscheck-20261012.md)
+preserves source, timestamps and limits. `DGX_LOCAL_SYNTHETIC=PASS` only
+for the earlier 56/56 locally run at `87fb463`; the new docs-only GitHub
+HEAD has **not** been pulled/tested on the DGX. Maintain
+`M1_HOST_HEALTH=NOT_QUALIFIED`,
+`M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`,
+`M4_H38=BLOCKED`, `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`,
+PR #259 **DRAFT/OPEN, Ready/Merge BLOCKED**. Primary next engineering
+priority is **host-independent installer/uninstaller/profile-switch acceptance**,
+then independent disposable-host E2E. Do not restart or mutate the sole DGX.
