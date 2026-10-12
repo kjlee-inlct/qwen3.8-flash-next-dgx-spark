@@ -714,3 +714,8 @@ host or the protected DGX; M1–M4 and D1–D5 unchanged**.
 ### D0 parent mount and Docker endpoint trust-boundary hardening (2026-10-12)
 
 - [**D0 parent-mount, Docker context/socket, and Git optional-lock refusal evidence**](d0-parent-mount-docker-endpoint-guards-20261012.md): source CI [#38266470002](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38266470002) **SUCCESS 828/828 full, 77/77 selected**, follow-up CI [#38267015272](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38267015272) **SUCCESS 829/829 full, 77/77 selected**; 17 D0 fixture methods in full CI only. No actual disposable host observed, no DGX source synchronization, and no M1–M4 promotion.
+
+
+### Git/Systemd environment and Docker socket D0 trust boundaries — 2026-10-13
+
+- [**Source-only D0 observation redirection and protected-socket refusal evidence**](d0-env-redirection-and-socket-boundaries-20261013.md): [GitHub CI #38315552300](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38315552300) **SUCCESS 834/834 full, 77/77 selected**, 22/22 D0 fixture methods, shell/compile/whitespace PASS. Does not qualify D0 on a real independent disposable host or the single protected DGX.
