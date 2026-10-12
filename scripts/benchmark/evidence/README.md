@@ -734,3 +734,8 @@ host or the protected DGX; M1–M4 and D1–D5 unchanged**.
 ## DGX stage A source-only expanded synthetic evidence — 2026-10-13
 
 - [Expanded DGX synthetic selection and staged-gate source CI](dgx-stage-a-expanded-synthetic-ci-20261013.md): code CI #38319314520 SUCCESS 862/862 full, 77/77 selected; #38319566009 SUCCESS 863/863 full, **134/134 selected**. Latest **actual** DGX local remains 77/77 at 1283b1a. No real D0 or H38 qualification.
+
+
+### Actual 134-case sole-DGX PASS and B1 stopped-state snapshot (2026-10-13)
+
+- [Physical DGX operator log: 134/134 selected fixture PASS and real-HOME OrcaRouter status](dgx-local-134-pass-readonly-snapshot-20261013.md). Source b35d0f3; Bash PASS; local ShellCheck SKIPPED; Docker EXITED, service INACTIVE, monitor/protection enabled, all transactions IDLE and runtime attestation MISSING. B2 full Doctor pending, no M1/M2/M3/M4 promotion.

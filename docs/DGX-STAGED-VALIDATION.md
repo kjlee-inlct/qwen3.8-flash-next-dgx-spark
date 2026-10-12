@@ -84,3 +84,18 @@ MERGE=BLOCKED
 ```
 
 Update each status only from scoped evidence at the exact source SHA; this document itself grants no runtime authorization.
+
+
+## Actual DGX 134/134 PASS and solo-owner test authorization boundary (2026-10-13)
+
+User-supplied terminal evidence establishes **actual local 134/134 bounded synthetic PASS at exact b35d0f3d7840d00c55f4c633813e88ac367c6373** (Bash PASS; ShellCheck SKIPPED_NOT_INSTALLED). The immediately following real-HOME selected-profile snapshot showed a VALID complete OrcaRouter manifest, four transactions IDLE, no stale artifacts, monitor/protection both `1`, Docker container EXITED, service INACTIVE and runtime attestation MISSING. This is **A=PASS and B1=COLLECTED**, not M1 health or H38 acceptance. [Actual operator evidence](../scripts/benchmark/evidence/dgx-local-134-pass-readonly-snapshot-20261013.md).
+
+The sole DGX owner reports testing can occur at any time without disrupting other human users. **Bounded, reversible, owner-approved live runtime tests on this one DGX may be considered after B2 full read-only Doctor and recovery review**; a second physical DGX is not mandatory for every runtime test. This revises the former blanket schedule restriction but does **not** approve deleting resources, assume Docker exclusivity, upgrade independent disposable D0 admission, run destructive D1-D5 on the only host, or launch H38 against the unresolved checkpoint/RM gates. Immediate B2: use the existing read-only lifecycle inspector at the **already checked out b35d0f3**; do not sync Git merely to run it. PR #259 remains Draft/Open/Unmerged; Ready/Merge BLOCKED.
+
+### Risk-tier clarification
+
+- **Stage A**: DONE on DGX, 134/134 fixture PASS at b35d0f3.
+- **Stage B1**: DONE, compact real-host profile snapshot; not health-qualified. **B2** full read-only Doctor is next.
+- **Owner-scoped reversible tests**: may use the actual solo-owned DGX after B2 checks, saved baseline, unchanged memory protection, explicit stop and rollback criteria; any downtime is acceptable to the owner. This is not D0 admission.
+- **Destructive fresh-install / purge / true D1-D5**: demand independent disposable semantics or demonstrably restorable separate data/release state and distinct explicit authorization. The present host is not independently disposable simply because the owner is alone.
+- **Live H38**: remains blocked by checkpoint metadata/order FAIL and historical strict RM/monitor-stop evidence until a bounded recovery/stop plan and host stability prerequisites are established.
