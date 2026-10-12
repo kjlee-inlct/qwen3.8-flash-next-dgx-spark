@@ -37,3 +37,16 @@ Top-level compatibility paths such as `scripts/qualify-release.sh`,
 `scripts/release-profile-refresh-transition.sh` should remain
 thin delegators. Operator-facing transaction recovery/status commands use those stable
 paths; new internal code should target the canonical implementation here.
+
+## Exact-SHA isolated local tests
+
+After an independently reviewed **clean, fast-forward-only Git synchronization**, use
+`bash scripts/lifecycle/verify-synthetic.sh <exact-40-character-GitHub-HEAD>` on
+a checked-out `feat/h38-managed-integration` branch. This helper **never fetches,
+pulls, switches branches, installs, uninstalls, invokes host Doctor, launches models
+or touches the running service**. It rejects branch/SHA/upstream mismatches and a
+dirty worktree; it runs a narrow allowlist of synthetic lifecycle unit tests using
+temporary HOME/XDG/TMPDIR and DENY wrappers for Docker/sudo/systemctl/swapoff.
+`--ci` is reserved for GitHub Actions detached checkout validation only.
+Success does not qualify M1 live host health, M2 destructive E2E, M3 all-pairs,
+or H38. See `OPERATIONS.md` for the separate guarded sync commands.
