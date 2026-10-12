@@ -474,6 +474,77 @@ esac
         self.assertFalse(self.backup.exists())
         self.assertFalse(self.candidate.exists())
 
+
+    def test_idle_without_transaction_or_orphans_remains_successful(self) -> None:
+        """Pristine idle paths preserve their previous benign behavior."""
+        for action in ("rollback", "recover", "service-recover", "status"):
+            with self.subTest(action=action):
+                result = self.run_helper(action)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                if action in ("recover", "status"):
+                    self.assertIn("PROFILE_SWITCH_STATE=idle", result.stdout)
+        self.assertFalse(self.transition.exists())
+
+    def test_orphan_profile_switch_files_refuse_all_idle_actions(self) -> None:
+        """Missing state plus leftover backup/candidate/temporary is never idle."""
+        artifacts = (
+            self.backup,
+            self.candidate,
+            Path(str(self.transition) + ".tmp"),
+            Path(str(self.backup) + ".tmp"),
+            Path(str(self.candidate) + ".tmp"),
+            Path(str(self.install) + ".profile-switch-complete.tmp"),
+        )
+        original = self.install.read_bytes()
+        for artifact in artifacts:
+            for action in ("rollback", "recover", "service-recover", "status"):
+                with self.subTest(artifact=artifact.name, action=action):
+                    artifact.write_text("orphan fixture", encoding="utf-8")
+                    try:
+                        result = self.run_helper(action)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(
+                            "artifacts exist without transaction state",
+                            result.stderr,
+                        )
+                        self.assertNotIn("PROFILE_SWITCH_STATE=idle", result.stdout)
+                        self.assertTrue(artifact.exists())
+                        self.assertEqual(self.install.read_bytes(), original)
+                    finally:
+                        artifact.unlink(missing_ok=True)
+
+    def test_dangling_symlink_state_and_orphans_never_claim_idle(self) -> None:
+        """Bash -e misses dangling links: all idle-like actions must reject them."""
+        original = self.install.read_bytes()
+        missing = self.home / "nonexistent-transaction-state"
+        self.transition.symlink_to(missing)
+        try:
+            for action in ("rollback", "recover", "service-recover", "status"):
+                with self.subTest(action=action):
+                    result = self.run_helper(action)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertNotIn("PROFILE_SWITCH_STATE=idle", result.stdout)
+                    self.assertEqual(self.install.read_bytes(), original)
+                    self.assertTrue(self.transition.is_symlink())
+        finally:
+            self.transition.unlink(missing_ok=True)
+
+        # A dangling candidate is also a retained artifact, not absence.
+        self.candidate.symlink_to(missing)
+        try:
+            for action in ("rollback", "recover", "service-recover", "status"):
+                with self.subTest(artifact="candidate_symlink", action=action):
+                    result = self.run_helper(action)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        "artifacts exist without transaction state",
+                        result.stderr,
+                    )
+                    self.assertTrue(self.candidate.is_symlink())
+                    self.assertEqual(self.install.read_bytes(), original)
+        finally:
+            self.candidate.unlink(missing_ok=True)
+
     def test_same_profile_and_wrong_source_refuse_before_transaction_creation(self) -> None:
         """Every registered profile rejects no-op and incorrect-source transitions."""
         for source in self.PROFILES:
