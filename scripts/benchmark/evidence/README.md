@@ -719,3 +719,8 @@ host or the protected DGX; M1–M4 and D1–D5 unchanged**.
 ### Git/Systemd environment and Docker socket D0 trust boundaries — 2026-10-13
 
 - [**Source-only D0 observation redirection and protected-socket refusal evidence**](d0-env-redirection-and-socket-boundaries-20261013.md): [GitHub CI #38315552300](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38315552300) **SUCCESS 834/834 full, 77/77 selected**, 22/22 D0 fixture methods, shell/compile/whitespace PASS. Does not qualify D0 on a real independent disposable host or the single protected DGX.
+
+
+### D0 exact JSON receipt binding — 2026-10-13
+
+- [**D0 receipt SHA256 binding, no-follow parser and explicit replay limitations**](d0-receipt-input-binding-ci-20261013.md): [GitHub source CI #38316973840](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38316973840) **SUCCESS 845/845 full Python, 77/77 selected synthetic**; 11 new offline fixture tests. No real-host identity attestation, signed approval, DGX run or D1–D5 E2E.
