@@ -748,5 +748,163 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assertFalse((self.state / "asset-ownership.json").exists())
         self.assertIn("Full uninstall completed", second.stdout)
 
+
+    def _crash_test_stubs(self) -> Path:
+        """Create an isolated fake installer and block all real host commands."""
+        root = self.home / "synthetic-installer"
+        (root / "scripts").mkdir(parents=True)
+        service = root / "scripts" / "manage-service.sh"
+        service.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        service.chmod(0o700)
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8").replace(
+                f"INSTALL_ROOT={REPO}", f"INSTALL_ROOT={root}"
+            ),
+            encoding="utf-8",
+        )
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        docker = fake_bin / "docker"
+        docker.write_text(
+            '#!/bin/sh\n'
+            'if [ "$1" = rm ] && [ "$2" = -f ]; then exit 0; fi\n'
+            'echo "unexpected Docker command" >&2\nexit 98\n',
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        for name in ("sudo", "systemctl", "swapoff"):
+            stub = fake_bin / name
+            stub.write_text(
+                '#!/bin/sh\necho "blocked privileged call" >&2\nexit 99\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+        return fake_bin
+
+    def _run_crash_test(
+        self, fake_bin: Path, *args: str
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(UNINSTALL), "--lang", "en", "--yes", *args],
+            cwd=REPO,
+            env={
+                **os.environ,
+                "HOME": str(self.home),
+                "XDG_STATE_HOME": str(self.home / "state"),
+                "XDG_DATA_HOME": str(self.home / "data"),
+                "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+
+    def test_sigkill_during_stage_requires_manual_stale_recovery(self) -> None:
+        """SIGKILL preserves the canonical registry and blocks stale-stage retry."""
+        import shutil
+
+        fake_bin = self._crash_test_stubs()
+        registry = self.state / "asset-ownership.json"
+        registry.write_text('{"schema_version":1,"assets":[]}\n', encoding="utf-8")
+        original = registry.read_bytes()
+        kill_flag = self.home / "kill-during-cp"
+        kill_flag.write_text("yes\n", encoding="utf-8")
+        cp = fake_bin / "cp"
+        cp.write_text(
+            "#!/usr/bin/env bash\n"
+            '/usr/bin/cp "$@" || exit $?\n'
+            f'if [[ -e "{kill_flag}" ]]; then\n'
+            '  kill -KILL "$PPID"\n'
+            'fi\n',
+            encoding="utf-8",
+        )
+        cp.chmod(0o700)
+
+        killed = self._run_crash_test(fake_bin)
+        self.assertEqual(killed.returncode, -9, killed.stderr)
+        self.assertEqual(registry.read_bytes(), original)
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+        self.assertEqual((self.model / "keep-model.bin").read_bytes(), b"KEEP MODEL")
+        stale = list(self.state.glob(".uninstall-preflight.*"))
+        self.assertEqual(len(stale), 1)
+        self.assertTrue((stale[0] / "asset-ownership.json").is_file())
+
+        kill_flag.unlink()
+        refused = self._run_crash_test(fake_bin)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("stale uninstall preflight artifact exists", refused.stderr)
+        self.assertEqual(registry.read_bytes(), original)
+        self.assertTrue((self.model / "keep-model.bin").is_file())
+
+        # A known temporary directory is inspected and cleared in THIS TEST ONLY.
+        self.assertEqual(
+            (stale[0] / "asset-ownership.json").read_bytes(), original
+        )
+        shutil.rmtree(stale[0])
+        retried = self._run_crash_test(fake_bin)
+        self.assertEqual(retried.returncode, 0, retried.stderr)
+        self.assertIn("PHASE=uninstalled", self.manifest.read_text(encoding="utf-8"))
+        self.assertTrue((self.model / "keep-model.bin").is_file())
+
+    def test_sigkill_partway_through_model_delete_requires_verified_recovery(self) -> None:
+        """Interrupted deletion without an ownership marker must not be retried blindly."""
+        import json
+
+        fake_bin = self._crash_test_stubs()
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8").replace(
+                "MODEL_OWNED=0", "MODEL_OWNED=1"
+            ),
+            encoding="utf-8",
+        )
+        marker = self.model / ".qwen38-model-manifest.json"
+        marker.write_text(
+            '{"status":"complete","repository":"synthetic","revision":"'
+            + "b" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+        trusted_copy = marker.read_bytes()
+        kill_flag = self.home / "kill-during-rm"
+        kill_flag.write_text("yes\n", encoding="utf-8")
+        rm = fake_bin / "rm"
+        rm.write_text(
+            "#!/usr/bin/env bash\n"
+            f'if [[ "$1" == -rf && "$2" == --one-file-system && "$4" == "{self.model}" && -e "{kill_flag}" ]]; then\n'
+            f'  /usr/bin/rm -f -- "{marker}"\n'
+            '  kill -KILL "$PPID"\n'
+            'fi\n'
+            'exec /usr/bin/rm "$@"\n',
+            encoding="utf-8",
+        )
+        rm.chmod(0o700)
+
+        killed = self._run_crash_test(fake_bin, "--purge-model")
+        self.assertEqual(killed.returncode, -9, killed.stderr)
+        self.assertFalse(marker.exists())
+        self.assertEqual((self.model / "keep-model.bin").read_bytes(), b"KEEP MODEL")
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+        registry = self.state / "asset-ownership.json"
+        entries = json.loads(registry.read_text(encoding="utf-8"))["assets"]
+        self.assertTrue(any(
+            x["locator"] == str(self.model) and x["owned"] for x in entries
+        ))
+        original = registry.read_bytes()
+
+        kill_flag.unlink()
+        refused = self._run_crash_test(fake_bin, "--purge-model")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("owned model path has no managed manifest", refused.stderr)
+        self.assertEqual(registry.read_bytes(), original)
+        self.assertTrue((self.model / "keep-model.bin").is_file())
+
+        # Only simulated restoration from verified, byte-identical test fixture.
+        marker.write_bytes(trusted_copy)
+        resumed = self._run_crash_test(fake_bin, "--purge-model")
+        self.assertEqual(resumed.returncode, 0, resumed.stderr)
+        self.assertFalse(self.model.exists())
+        self.assertIn("PHASE=uninstalled", self.manifest.read_text(encoding="utf-8"))
+        self.assertTrue((self.data / "keep-release").is_file())
+
 if __name__ == "__main__":
     unittest.main()
