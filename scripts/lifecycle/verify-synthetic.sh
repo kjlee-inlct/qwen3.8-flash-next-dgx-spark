@@ -65,6 +65,10 @@ if [[ "$MODE" != --ci ]]; then
   printf 'LOCAL_SYNTHETIC_ORIGIN=CANONICAL_GITHUB_REPOSITORY\n'
 fi
 
+# The four D0 modules below use fake machine IDs, fake Docker/systemd
+# readers, and temporary files ONLY. Their on-host disposable collector
+# is never invoked with --ack-independent-disposable-host. Counted total:
+# 77 previously selected fixtures + 57 D0 fixtures = 134 fixture cases.
 # No host state is read or modified. Even accidental host-command calls in a
 # regression test are denied by PATH, while tests may create higher-priority
 # stub commands under their own disposable fixture trees.
@@ -109,7 +113,11 @@ for test_file in \
   test_lifecycle_integration.py \
   test_profile_switch_transition.py \
   test_selected_profile_readonly.py \
-  test_managed_lifecycle_readonly_snapshot.py
+  test_managed_lifecycle_readonly_snapshot.py \
+  test_disposable_d0_preflight.py \
+  test_disposable_d0_readonly_crosscheck.py \
+  test_disposable_d0_receipt_review.py \
+  test_disposable_d0_external_evidence.py
 do
   printf '\n=== SYNTHETIC_TEST=%s ===\n' "$test_file"
   python3 -m unittest discover -s tests -p "$test_file" -v

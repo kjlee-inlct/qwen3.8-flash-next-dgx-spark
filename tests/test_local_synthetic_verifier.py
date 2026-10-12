@@ -80,6 +80,12 @@ class LocalSyntheticVerifierTests(unittest.TestCase):
         self.assertIn("LOCAL_SYNTHETIC_ORIGIN=CANONICAL_GITHUB_REPOSITORY", body)
         self.assertIn("GIT_OPTIONAL_LOCKS=0", body)
 
+    def test_d0_real_host_probe_is_never_invoked(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("77 previously selected fixtures + 57 D0 fixtures", script)
+        self.assertIn("test_disposable_d0_readonly_crosscheck.py", script)
+        self.assertNotIn("python3 scripts/lifecycle/disposable-d0-readonly-crosscheck.py", script)
+
     def test_runtime_mutators_are_denied_and_only_synthetic_tests_selected(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
         for required in (
@@ -98,6 +104,10 @@ class LocalSyntheticVerifierTests(unittest.TestCase):
             "test_profile_switch_transition.py",
             "test_selected_profile_readonly.py",
             "test_managed_lifecycle_readonly_snapshot.py",
+            "test_disposable_d0_preflight.py",
+            "test_disposable_d0_readonly_crosscheck.py",
+            "test_disposable_d0_receipt_review.py",
+            "test_disposable_d0_external_evidence.py",
             "LOCAL_SYNTHETIC_HOST_COMMANDS=PATH_DENY_STUBS",
             "LOCAL_SYNTHETIC_RESULT=PASS",
             "MANAGED_LIFECYCLE_LIVE_E2E=NOT_QUALIFIED",
