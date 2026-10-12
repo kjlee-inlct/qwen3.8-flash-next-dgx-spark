@@ -676,7 +676,7 @@ class UninstallWizardPreviewTests(unittest.TestCase):
             'if [[ "$1" == rm && "$2" == -f ]]; then exit 0; fi\n'
             'if [[ "$1" == ps ]]; then exit 0; fi\n'
             'if [[ "$1" == image && "$2" == inspect ]]; then\n'
-            f'  if [[ ! -f "{image_exists}" ]]; then printf "Error: No such image: %s\\n" "${@: -1}" >&2; exit 1; fi\n'
+            f'  if [[ ! -f "{image_exists}" ]]; then printf "Error: No such image: %s\\n" "${{@: -1}}" >&2; exit 1; fi\n'
             '  if [[ "$3" == --format ]]; then\n'
             '    printf "sha256:%s\\n" "'
             + "a" * 64
