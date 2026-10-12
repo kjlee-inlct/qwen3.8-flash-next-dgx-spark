@@ -334,7 +334,17 @@ fi
 if [[ "${PROXY_OWNED}" == 1 ]]; then
   sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes
 fi
-docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+# A daemon or permission error cannot be treated as successful container removal.
+# Only an exact "No such container" result is an idempotent absent-container case.
+container_rm_error=""
+if container_rm_error="$(docker rm -f "${CONTAINER_NAME}" 2>&1)"; then
+  :
+elif [[ "${container_rm_error}" == "Error response from daemon: No such container: ${CONTAINER_NAME}" ||
+        "${container_rm_error}" == "Error: No such container: ${CONTAINER_NAME}" ]]; then
+  printf 'Container already absent: %s\n' "${CONTAINER_NAME}"
+else
+  die "managed container removal failed; model/image/release purge was not started: ${container_rm_error}"
+fi
 rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp" "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
 
 if [[ "${PURGE_ALL}" == 1 ]]; then
