@@ -63,6 +63,20 @@ def base_inventory() -> dict:
 
 
 class DisposableD0PreflightTests(unittest.TestCase):
+    def test_same_validated_bytes_have_stable_sha256_digest(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("d0_offline_test", SCRIPT)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "policy.json"
+            data = json.dumps(base_policy()).encode("utf-8")
+            file.write_bytes(data)
+            parsed, actual_hash = module.read_json_with_digest(file)
+            self.assertEqual(parsed, base_policy())
+            self.assertEqual(actual_hash, module.hashlib.sha256(data).hexdigest())
+
     def run_check(
         self, policy: dict | None = None, inventory: dict | None = None,
         *, raw_policy: str | None = None, as_symlink: bool = False,

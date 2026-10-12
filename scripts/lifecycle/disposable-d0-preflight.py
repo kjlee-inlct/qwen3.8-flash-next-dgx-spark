@@ -9,6 +9,7 @@ JSON is an untrusted assertion, not a signed machine identity attestation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -41,12 +42,23 @@ def unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def read_json(path: Path) -> dict[str, Any]:
+def read_json_with_digest(path: Path) -> tuple[dict[str, Any], str]:
+    """Parse and hash the SAME bounded bytes from a no-follow regular file.
+
+    lstat alone does not protect against a file swapped to a symlink between
+    lstat and open. Use a no-follow descriptor and compare its inode/device.
+    """
     try:
-        info = path.lstat()
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_JSON_BYTES:
+        before = path.lstat()
+        if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_JSON_BYTES:
             reject("unsafe_or_oversized_evidence_file")
-        with path.open("rb") as source:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as source:
+            info = os.fstat(source.fileno())
+            if (not stat.S_ISREG(info.st_mode)
+                    or (info.st_dev, info.st_ino) != (before.st_dev, before.st_ino)
+                    or info.st_size > MAX_JSON_BYTES):
+                reject("unsafe_or_oversized_evidence_file")
             data = source.read(MAX_JSON_BYTES + 1)
         if len(data) > MAX_JSON_BYTES:
             reject("oversized_evidence_file")
@@ -57,7 +69,12 @@ def read_json(path: Path) -> dict[str, Any]:
         reject("unreadable_or_invalid_json")
     if type(item) is not dict:
         reject("json_object_required")
-    return item
+    return item, hashlib.sha256(data).hexdigest()
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    """Compatibility reader with the same no-follow input rules."""
+    return read_json_with_digest(path)[0]
 
 
 def shape(value: Any, keys: tuple[str, ...], code: str) -> dict[str, Any]:

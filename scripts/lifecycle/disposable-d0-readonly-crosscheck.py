@@ -294,10 +294,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         require(args.ack_independent_disposable_host, "independent_host_ack_required")
         offline = load_policy_module()
-        policy = offline.read_json(args.policy)
-        inventory = offline.read_json(args.inventory)
+        policy, policy_sha256 = offline.read_json_with_digest(args.policy)
+        inventory, inventory_sha256 = offline.read_json_with_digest(args.inventory)
         offline.validate(policy, inventory)
         result = ReadonlyInspector().check(policy, inventory)
+        # Hash exactly the validated input bytes; never print their contents.
+        result["policy_sha256"] = policy_sha256
+        result["inventory_sha256"] = inventory_sha256
     except Refusal as exc:
         print("D0_READONLY_CROSSCHECK=REFUSED")
         print("D0_REASON=" + str(exc))
