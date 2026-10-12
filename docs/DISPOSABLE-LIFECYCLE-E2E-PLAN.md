@@ -120,3 +120,6 @@ paths; they remain unqualified on real Docker/systemd.
 The sole DGX's latest **isolated synthetic** operator evidence now shows **76/76 PASS at `9220624`**; GitHub CI #38212708550 separately passed 802/802 full, 76/76 synthetic. Neither qualifies D0–D5 or M3 live runtime transitions.
 
 A new source-level safety hardening makes profile-switch `prepare` reject orphan state/manifest staging `.tmp` files and dangling links, using the same fail-closed guard as recovery. The associated disposable fixture test must remain classified as synthetic. On a future independently qualified D0 host, explicitly inject orphan staging **before prepare** and verify it aborts without overwriting evidence; do not run that destructive trial on the protected Spark.
+
+
+**GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.

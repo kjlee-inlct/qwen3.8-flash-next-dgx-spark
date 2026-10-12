@@ -6922,3 +6922,6 @@ classification remain separate.
 ### Actual DGX synthetic 76/76 at 9220624, followed by prepare-stage orphan guard (2026-10-12)
 
 [New operator-provided local test and subsequent source-review evidence](evidence/dgx-76-and-prepare-orphan-guard-20261012.md): clean exact DGX 9220624 checkout, Bash syntax PASS, 76/76 isolated synthetic, local ShellCheck skipped; matching GitHub CI #38212708550 PASS 802/802 + 76/76. A later source hardening closes `prepare`'s orphan `.tmp` admission gap with a new seven-scenario regression method; this was **not** part of the observed DGX execution. No new live host/M1–M4 qualification or authorization to restart H38.
+
+
+**GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.

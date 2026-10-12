@@ -105,3 +105,6 @@ acceptance established.
 ## Prepare-stage orphan admission guard — 2026-10-12
 
 The actual protected DGX locally completed the previous source's **76/76 isolated synthetic** at exact `9220624` (ShellCheck locally skipped). A subsequent code review added a new pre-publication guard: `profile-switch-transition.sh prepare` now refuses orphan backup, candidate, state `.tmp`, manifest-stage `.tmp`, and commit-stage files/symlinks, rather than admitting a new transaction and overwriting retained interrupted evidence. The additional disposable-fixture test covers six file variants and one dangling link. This newer change is not included in that completed DGX run. Evidence: [DGX 76 and prepare admission](../benchmark/evidence/dgx-76-and-prepare-orphan-guard-20261012.md). Live Docker/systemd qualification remains blocked.
+
+
+**GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.
