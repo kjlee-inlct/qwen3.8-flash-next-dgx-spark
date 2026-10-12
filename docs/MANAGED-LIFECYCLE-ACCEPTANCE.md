@@ -229,3 +229,75 @@ execution is **NOT_RUN** until its operator-provided DGX output is supplied.
 M1 live host NOT_QUALIFIED, M2 destructive E2E NOT_RUN,
 M3 model all-pairs NOT_QUALIFIED, M4 H38 BLOCKED; PR #259 Draft/Open,
 Ready/Merge BLOCKED.
+
+
+## DGX actual selected-profile and isolated test evidence (2026-10-12)
+
+**Source:** operator-provided actual DGX transcript, fast-forward from \`0e910a7\`
+to exact feature HEAD \`87fb463984683f75435302eff5ffc3b3b9f941bf\` with clean
+post-test checkout and \`DGX_PROFILE_AND_SYNTHETIC_VALIDATION_COMPLETE\`.
+\`verify-synthetic.sh\` reported \`LOCAL_SYNTHETIC_RESULT=PASS\` with **56/56**
+disposable synthetic tests (16 uninstall, 6 ownership, 8 lock,
+14 integration, 8 selected-profile snapshot, 4 read-only snapshot).
+Local \`BASH_SYNTAX=PASS\`; \`SHELLCHECK=SKIPPED_NOT_INSTALLED\` (separately,
+[GitHub CI #38194619518](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38194619518)
+SUCCESS: 788/788 full unit tests and ShellCheck PASS). **DGX_LOCAL_SYNTHETIC=PASS at
+this exact SHA only.**
+
+Actual read-only DGX \`inspect-selected-profile.py\` reported:
+
+| Observed field | Reported value / qualification |
+|---|---|
+| \`MANIFEST_STATUS\` / \`INSTALL_PHASE\` | \`VALID\` / \`complete\` |
+| \`SELECTED_PROFILE\` | \`orcarouter\` (configuration intent) |
+| \`PROFILE_REPOSITORY\` | \`orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4\` |
+| \`EXPECTED_IMAGE\` and \`CONTAINER_IMAGE\` | \`vllm-skinny-tp1:v1\` (legacy installed tag; H38 not active) |
+| \`MODEL_PATH_STATUS\` | \`MARKER_PRESENT_NOT_VERIFIED\` (not checksum/integrity) |
+| \`MONITOR_PROTECT\` / \`MONITOR_ENABLED\` | \`1\` / \`1\` (configured, not verified running protection) |
+| \`PROFILE_SWITCH_STATE\`, \`RUNTIME_TRANSITION_STATE\`, \`UPDATE_STATE\`, \`RELEASE_PROFILE_REFRESH_STATE\` | all \`IDLE\` |
+| \`STALE_TRANSACTION_ARTIFACTS\` | \`NONE\` (only the configured tracked subset) |
+| \`CONTAINER_STATE\` / \`SERVICE_STATE\` | \`EXITED\` / \`INACTIVE\` |
+| \`RUNTIME_ATTESTATION\` | \`MISSING\`; do not manufacture it |
+| \`PROFILE_STATUS_SUMMARY\` | \`CONTAINER_NOT_RUNNING\` |
+| \`ACTUAL_SERVED_PROFILE\` | \`NOT_VERIFIED\` |
+| \`HOST_HEALTH_QUALIFICATION\` | \`NOT_ESTABLISHED_BY_THIS_SNAPSHOT\` |
+
+**Interpretation and next priority:** Git code/tests are synchronized and the
+selected profile is \`orcarouter\`, but the runtime is stopped. Its stop cause
+is **NOT YET DETERMINED** by this newly submitted output: an exited container
+plus inactive service does not prove OOM, a protection-triggered stop,
+deliberate administrative shutdown or a runtime error. Runtime commit
+attestation is absent; never reconstruct an attestation without verified
+provenance. H38 code is not an installed/serving H38 model. Retain host
+monitor/protection and all stopped services as observed: **NO restart, H38 GPU
+rerun, swap cleanup, reinstall, profile-switch or uninstall**.
+
+**Next existing read-only tool (no new script or additional Git pull is
+required at verified SHA \`87fb463...\`):**
+\`\`\`bash
+(
+  set -Eeuo pipefail
+  cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
+  TARGET=87fb463984683f75435302eff5ffc3b3b9f941bf
+  test "$(git rev-parse HEAD)" = "$TARGET"
+  test -z "$(git status --porcelain=v1 --untracked-files=all)"
+  QWEN38_OFFLINE_DIAGNOSTIC_TARGET_SHA="$TARGET" \
+    bash scripts/lifecycle/inspect-readonly-runtime-offline.sh
+)
+\`\`\`
+This existing exact-SHA helper reads \`docker inspect\` (container exit
+code, OOMKilled, start/finish timestamp, state error, declared ports),
+\`systemctl show\` (ActiveState/Result/ExecMainCode/ExecMainStatus/timestamps),
+and \`stat\` file metadata for \`runtime-commit.env\`, \`runtime-stop.env\` and
+\`monitor.pid\`. It prints \`RUNTIME_STOP_REASON=NOT_YET_PROVEN\`; the output
+is **evidence for triage**, not authorization to restart or proof of cause.
+Historical Oct-07 journal/monitor scripts are time-window bound, so only use
+them after checking whether the observed \`FinishedAt\` falls in their
+documented window. If the offline command returns 3, preserve its partial
+results and do not reinterpret failure as stop-cause evidence.
+
+**Gates:** \`DGX_LOCAL_SYNTHETIC=PASS\` at specified SHA, but
+\`M1_HOST_HEALTH=NOT_QUALIFIED\`, \`HOST_STABILITY=INCONCLUSIVE\`,
+\`M2_DESTRUCTIVE_E2E=NOT_RUN\`, \`M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED\`,
+\`M4_H38=BLOCKED\`, \`HOST_PROTECTION=UNCHANGED\`; PR #259 Draft/Open,
+Ready/Merge BLOCKED.
