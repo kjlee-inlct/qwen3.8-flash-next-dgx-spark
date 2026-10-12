@@ -729,3 +729,8 @@ host or the protected DGX; M1–M4 and D1–D5 unchanged**.
 ### D0 external owner/isolation/restore assertion chain — 2026-10-13
 
 - [**Source-only D0 owner, Docker exclusivity and restore proof hash-review evidence**](d0-external-owner-isolation-restore-evidence-ci-20261013.md): [GitHub CI #38317915217](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38317915217) **SUCCESS 860/860 full, 77/77 bounded synthetic**; 15 new external-evidence fixture tests. Identity authenticity, independent daemon isolation and actual restore remain unverified, no live D0 approval.
+
+
+## DGX stage A source-only expanded synthetic evidence — 2026-10-13
+
+- [Expanded DGX synthetic selection and staged-gate source CI](dgx-stage-a-expanded-synthetic-ci-20261013.md): code CI #38319314520 SUCCESS 862/862 full, 77/77 selected; #38319566009 SUCCESS 863/863 full, **134/134 selected**. Latest **actual** DGX local remains 77/77 at 1283b1a. No real D0 or H38 qualification.
