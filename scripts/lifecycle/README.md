@@ -52,3 +52,24 @@ Success does not qualify M1 live host health, M2 destructive E2E, M3 all-pairs,
 or H38. See `OPERATIONS.md` for the separate guarded sync commands.
 
 The local result marker `LOCAL_SYNTHETIC_HOST_COMMANDS=PATH_DENY_STUBS` denotes PATH interception only, **not** privileged OS sandbox enforcement. Full operator commands are in `OPERATIONS.md`.
+
+
+## Compact read-only selected profile (first status item)
+
+After an exact-SHA clean Git fast-forward, **before** running isolated tests, use
+\`python3 scripts/lifecycle/inspect-selected-profile.py\` with the normal
+operator HOME/XDG environment. This reports the currently selected manifest
+\`MODEL_PROFILE\`, install \`PHASE\`, checkpoint-path marker presence,
+monitor-protection configuration, pending profile/runtime/update/refresh
+transactions, optional read-only Docker container configuration and systemd
+service state. \`SELECTED_PROFILE\` is the intended configured profile, **not**
+proof that it is running or healthy. \`ACTUAL_SERVED_PROFILE=NOT_VERIFIED\`
+remains until independent readiness evidence. Docker/systemd probe errors are
+UNKNOWN, not falsely 'absent'.
+
+The synthetic verifier runs in a temporary HOME/XDG and **must not** be used
+to infer the DGX's selected profile. Its test allowlist includes isolated
+\`test_selected_profile_readonly.py\` fixtures only. The broader
+\`inspect-readonly-lifecycle.sh\` places the compact summary before inventory,
+transaction details and read-only Doctor; Doctor can report existing
+host-health failures without mutating the host.
