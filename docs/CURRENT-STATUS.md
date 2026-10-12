@@ -1166,3 +1166,31 @@ Oct 7 protection-abort sequence; new source not locally synchronized/tested.
 `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`.
 Never run destructive lifecycle gates on the sole DGX. PR #259 Draft/Open,
 Ready/Merge BLOCKED.
+
+
+## DGX local synthetic acceptance at exact uninstall-hardening SHA (2026-10-12)
+
+An actual operator-provided DGX terminal log confirms a clean guarded
+fast-forward `87fb463 → 02e9c61`, exact checkout
+`02e9c61d90c7f15484b0605dc872bbbb21ec253b`, final SHA/worktree
+checks, and `DGX_SYNTHETIC_VALIDATION_COMPLETE`. The isolated
+`verify-synthetic.sh` tests passed **60/60**:
+19 uninstall, 7 asset-ownership, 8 operation-lock, 14 lifecycle integration,
+8 selected-profile-readonly and 4 full-readonly-snapshot tests.
+`LOCAL_SYNTHETIC_RESULT=PASS`, `BASH_SYNTAX=PASS`,
+`LOCAL_SYNTHETIC_SCOPE=DISPOSABLE_FIXTURES_ONLY`, and
+`LOCAL_SYNTHETIC_HOST_COMMANDS=PATH_DENY_STUBS` were observed.
+Local `SHELLCHECK=SKIPPED_NOT_INSTALLED`; separately
+[CI #38197243631](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38197243631)
+was **SUCCESS, 792/792 full tests**, **60/60 synthetic**, ShellCheck PASS.
+This explicitly upgrades the earlier statement that the uninstall-hardening
+code had not been synchronized/tested on the DGX.
+
+See [actual DGX synthetic acceptance evidence](../scripts/benchmark/evidence/dgx-synthetic-uninstall-hardening-pass-20261012.md).
+The DGX log **does not contain a new live service/Doctor inspection**;
+the prior `orcarouter` selected profile and stopped runtime observation
+remain historical, not a new readiness claim. Keep
+`M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`,
+`M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`,
+`HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`,
+PR #259 Draft/Open and Ready/Merge BLOCKED.

@@ -606,3 +606,8 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 
 - [**CI-verified source and fixture evidence**](managed-uninstall-fail-closed-purge-plan-docker-20261012.md): partial plan stdout error, partial Docker `ps` error, Docker image inspect daemon outage and explicit image absence semantics. Final **CI #38196834096 SUCCESS 792/792 full and 60/60 synthetic tests**; no DGX local sync at this newer SHA. Prior intermediate CI failures and fixture corrections are recorded.
 - [**Independent disposable-host acceptance plan**](../../../docs/DISPOSABLE-LIFECYCLE-E2E-PLAN.md): D0 independent-host guard and D1–D5 full lifecycle and failure/recovery matrix; **NOT_RUN**, no destructive actions on the sole protected DGX.
+
+
+### Actual DGX operator synthetic uninstall hardening PASS (2026-10-12)
+
+- [**Actual DGX guarded fast-forward and 60/60 synthetic PASS at `02e9c61`**](dgx-synthetic-uninstall-hardening-pass-20261012.md): local Bash syntax PASS; ShellCheck SKIPPED_NOT_INSTALLED; exact SHA and worktree checked. GitHub CI #38197243631 separately PASS 792/792 + ShellCheck. **No live host/service/monitor/installer E2E performed.** The previously reported `87fb463` local baseline is superseded as latest operator-proven local synthetic checkout, but it remains the last actual read-only runtime snapshot.
