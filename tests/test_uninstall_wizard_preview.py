@@ -873,6 +873,7 @@ class UninstallWizardPreviewTests(unittest.TestCase):
             f'if [[ "$1" == -rf && "$2" == --one-file-system && "$4" == "{self.model}" && -e "{kill_flag}" ]]; then\n'
             f'  /usr/bin/rm -f -- "{marker}"\n'
             '  kill -KILL "$PPID"\n'
+            '  exit 99\n'
             'fi\n'
             'exec /usr/bin/rm "$@"\n',
             encoding="utf-8",
