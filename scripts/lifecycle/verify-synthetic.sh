@@ -7,6 +7,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 EXPECTED="${1:-}"
 MODE="${2:-}"
 BRANCH="feat/h38-managed-integration"
+CANONICAL_REPO="kjlee-inlct/qwen3.8-flash-next-dgx-spark"
 
 invalid() {
   printf 'LOCAL_SYNTHETIC_PREFLIGHT=INVALID reason=%s\n' "$*" >&2
@@ -26,6 +27,15 @@ if [[ "${MODE}" == --ci ]]; then
   [[ "${GITHUB_ACTIONS:-}" == true ]] || invalid 'ci_flag_requires_github_actions'
 fi
 
+# Git variables can redirect rev-parse/status to a different repository.
+# Refuse before Git probes and disable optional index-refresh writes.
+for unsafe_git_var in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
+  GIT_NAMESPACE GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT \
+  GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES; do
+  [[ -z "${!unsafe_git_var:-}" ]] || invalid 'git_environment_override'
+done
+export GIT_OPTIONAL_LOCKS=0
+
 for command in git bash python3 mktemp; do
   command -v "$command" >/dev/null 2>&1 || invalid "required_command_missing:$command"
 done
@@ -35,6 +45,12 @@ done
   invalid 'checkout_sha_mismatch'
 
 if [[ "$MODE" != --ci ]]; then
+  ORIGIN="$(git -C "$ROOT" remote get-url origin 2>/dev/null)" ||
+    invalid 'origin_url_unavailable'
+  case "$ORIGIN" in
+    "https://github.com/$CANONICAL_REPO"|"https://github.com/$CANONICAL_REPO.git"|"git@github.com:$CANONICAL_REPO"|"git@github.com:$CANONICAL_REPO.git"|"ssh://git@github.com/$CANONICAL_REPO"|"ssh://git@github.com/$CANONICAL_REPO.git") ;;
+    *) invalid 'unexpected_origin_repository' ;;
+  esac
   [[ "$(git -C "$ROOT" branch --show-current)" == "$BRANCH" ]] ||
     invalid 'unexpected_branch'
   TRACKING="$(git -C "$ROOT" rev-parse --verify "refs/remotes/origin/$BRANCH" 2>/dev/null)" ||
@@ -44,6 +60,10 @@ fi
 
 [[ -z "$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)" ]] ||
   invalid 'dirty_checkout'
+
+if [[ "$MODE" != --ci ]]; then
+  printf 'LOCAL_SYNTHETIC_ORIGIN=CANONICAL_GITHUB_REPOSITORY\n'
+fi
 
 # No host state is read or modified. Even accidental host-command calls in a
 # regression test are denied by PATH, while tests may create higher-priority

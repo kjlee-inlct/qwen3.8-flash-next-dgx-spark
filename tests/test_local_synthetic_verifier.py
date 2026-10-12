@@ -51,6 +51,35 @@ class LocalSyntheticVerifierTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("ci_flag_requires_github_actions", result.stderr)
 
+    def test_git_environment_override_refused_before_any_tests(self) -> None:
+        sha = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+        ).strip()
+        for name, value in (
+            ("GIT_DIR", "/tmp/not-this-repository/.git"),
+            ("GIT_WORK_TREE", "/tmp/not-this-repository"),
+            ("GIT_INDEX_FILE", "/tmp/unrelated-index"),
+            ("GIT_CONFIG_COUNT", "1"),
+            ("GIT_OBJECT_DIRECTORY", "/tmp/foreign-objects"),
+        ):
+            with self.subTest(name=name):
+                env = {**os.environ, "GITHUB_ACTIONS": "false", name: value}
+                result = subprocess.run(
+                    ["bash", str(SCRIPT), sha], cwd=ROOT, env=env,
+                    capture_output=True, text=True, check=False, timeout=10,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("git_environment_override", result.stderr)
+                self.assertNotIn("SYNTHETIC_TEST=", result.stdout)
+
+    def test_local_origin_is_pinned_to_canonical_repository(self) -> None:
+        body = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('CANONICAL_REPO="kjlee-inlct/qwen3.8-flash-next-dgx-spark"', body)
+        self.assertIn("remote get-url origin", body)
+        self.assertIn("unexpected_origin_repository", body)
+        self.assertIn("LOCAL_SYNTHETIC_ORIGIN=CANONICAL_GITHUB_REPOSITORY", body)
+        self.assertIn("GIT_OPTIONAL_LOCKS=0", body)
+
     def test_runtime_mutators_are_denied_and_only_synthetic_tests_selected(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
         for required in (
