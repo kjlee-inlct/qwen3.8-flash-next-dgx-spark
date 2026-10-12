@@ -50,3 +50,5 @@ temporary HOME/XDG/TMPDIR and DENY wrappers for Docker/sudo/systemctl/swapoff.
 `--ci` is reserved for GitHub Actions detached checkout validation only.
 Success does not qualify M1 live host health, M2 destructive E2E, M3 all-pairs,
 or H38. See `OPERATIONS.md` for the separate guarded sync commands.
+
+The local result marker `LOCAL_SYNTHETIC_HOST_COMMANDS=PATH_DENY_STUBS` denotes PATH interception only, **not** privileged OS sandbox enforcement. Full operator commands are in `OPERATIONS.md`.

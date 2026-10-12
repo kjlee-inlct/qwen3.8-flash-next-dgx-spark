@@ -588,3 +588,40 @@ Synthetic `test_sigkill_during_stage_requires_manual_stale_recovery`, `test_sigk
 The previous 775/775 GitHub Actions result was **CI**, not evidence that the operator's single DGX had fetched the latest branch or run any tests locally. To close this handoff gap without touching live host resources, `scripts/lifecycle/verify-synthetic.sh` now validates an explicitly supplied 40-character checkout SHA, clean Git worktree, exact `feat/h38-managed-integration` branch and matching `origin/feat/h38-managed-integration` tracking ref **without any Git mutation**. It then runs bounded Python synthetic lifecycle suites inside a disposable HOME/XDG_STATE_HOME/XDG_DATA_HOME/TMPDIR, with a first-in-PATH deny wrapper for Docker, sudo, systemctl, swapoff/swapon, mount/umount and nvidia-smi. Tests are restricted to installer/uninstaller preview, ownership, operation lock, lifecycle integration and non-mutating lifecycle snapshot tests; no actual install/uninstall, Docker, service change, runtime startup, model download or host Doctor is invoked. The test wrapper is itself exercised on GitHub Actions in `--ci` mode and refuses `--ci` outside `GITHUB_ACTIONS=true`.
 
 **Operator sync procedure, not executed by ChatGPT:** on the actual DGX working checkout, require `git status --porcelain=v1 --untracked-files=all` empty and the expected feature branch already selected; `git fetch --prune origin`; confirm `origin/feat/h38-managed-integration` equals the **exact tested target SHA**; then `git merge --ff-only origin/feat/h38-managed-integration`, confirm HEAD and worktree, and invoke the new verifier with that SHA. No `git reset --hard`, stash/pop, force merge or automatic checkout switching. Sync/test modifies the local Git checkout and disposable test files only; no remote host access or DGX test was performed from ChatGPT. **Report DGX_LOCAL_SYNTHETIC=NOT_RUN until the operator supplies actual local output.** Keep `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, PR #259 Draft/Open; Ready/Merge BLOCKED.
+
+
+### Verified safe Git sync and synthetic-only DGX test handoff (2026-10-12)
+
+[CI #38192014751](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38192014751) **SUCCESS** for code commit `c915f805b7fe7abbc8a260379df69148ef5f54e6`: **780/780** full unit tests, Bash syntax, ShellCheck, Python compilation, whitespace, plus an actual execution of `scripts/lifecycle/verify-synthetic.sh` in the GitHub PR checkout with **48/48** bounded synthetic tests (16 uninstall wizard, 6 asset ownership, 8 operation lock, 14 lifecycle integration, 4 snapshot tests). The GitHub Actions checkout may be a PR merge SHA rather than the feature branch HEAD; the verifier checks the exact SHA **of the checkout it is given**. An earlier [CI #38191976973](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38191976973) failure was a missing-SHA message/test mismatch; corrected in `c915f80` with tests passing.
+
+**DGX operator-only sync/test, not run by ChatGPT**: choose the latest verified GitHub branch head SHA as `TARGET`. Start on branch `feat/h38-managed-integration` with a clean worktree. Confirm remote `origin` points to the expected GitHub repository, fetch only the branch without tags, assert `origin/feat/h38-managed-integration` equals the pinned SHA, and fast-forward only with Git hooks disabled. Never reset/stash/force-overwrite local edits. Then run `bash scripts/lifecycle/verify-synthetic.sh "$TARGET"` to verify the exact local checkout. This tool **does not run fetch/merge**, Docker, service manager, install, uninstall, runtime/host Doctor or any model; it runs only the five synthetic test modules under disposable HOME/XDG/TMPDIR and intercepts host commands through PATH stubs. **PATH interception is not an OS-level sandbox**; tests are allowlisted after source review and GitHub CI qualification. If remote advanced beyond the pinned target or any preflight fails, stop without changing the checkout and reassess the SHA.
+
+`DGX_LOCAL_SYNTHETIC=NOT_RUN` until the operator sends the **actual DGX output** (including exact SHA and `LOCAL_SYNTHETIC_RESULT=PASS`). `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, PR #259 Draft/Open and Ready/Merge BLOCKED.
+
+```bash
+# Pin TARGET to the exact SHA verified in PR #259 before starting.
+(
+  set -Eeuo pipefail
+  cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
+  BRANCH="feat/h38-managed-integration"
+  TARGET="<approved-40-character-GitHub-head-sha>"
+
+  [[ "$TARGET" =~ ^[0-9a-f]{40}$ ]]
+  [[ "$(git branch --show-current)" == "$BRANCH" ]]
+  [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]]
+  ORIGIN="$(git remote get-url origin)"
+  case "${ORIGIN%.git}" in
+    https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark|git@github.com:kjlee-inlct/qwen3.8-flash-next-dgx-spark) ;;
+    *) printf 'Wrong GitHub origin: %s\n' "$ORIGIN" >&2; exit 2 ;;
+  esac
+  git -c core.hooksPath=/dev/null fetch --no-tags origin \
+    "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+  [[ "$(git rev-parse "refs/remotes/origin/$BRANCH")" == "$TARGET" ]]
+  git -c core.hooksPath=/dev/null merge --ff-only "refs/remotes/origin/$BRANCH"
+  [[ "$(git rev-parse HEAD)" == "$TARGET" ]]
+  [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]]
+  bash scripts/lifecycle/verify-synthetic.sh "$TARGET"
+)
+```
+
+This updates **only the operator's Git worktree** (fast-forward, if verified) and disposable synthetic test fixtures. It is **not** a real install/uninstall, actual runtime check or E2E acceptance. Preserve the command output for evidence and do not run on a dirty checkout.
