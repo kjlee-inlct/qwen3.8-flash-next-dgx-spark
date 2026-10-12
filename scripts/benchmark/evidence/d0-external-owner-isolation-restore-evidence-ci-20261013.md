@@ -87,3 +87,12 @@ MERGE=BLOCKED
 ```
 
 The later documentation commit embedding this evidence is a **different SHA** and requires its own CI; do not attribute this exact-source CI to new docs without checking them.
+
+
+## Documentation CI regression and correction record (append-only, 2026-10-13)
+
+- Documentation commit `bc47c3dcc34a9c2fe5379f2688ae456e3f65b5c7`: [CI #38318327651](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38318327651) **FAILED 1/860**, at `test_script_layout.ScriptLayoutTests.test_canonical_category_dependencies_follow_allowed_directions`. The benchmark evidence document contained a literal cross-category code path that violated the benchmark no-dependency layout rule. This failure did **not** invalidate the source-only [CI #38317915217](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38317915217), which remains **SUCCESS 860/860 full and 77/77 selected**.
+- Minimal documentation correction `7f1938f91fe8fc02b9b06f4a21b6c94462d3d152`: rephrased one cross-category code path to the bare source file name without changing the executable, 15 added fixtures, original evidence claims or safety gates.
+- This note documents failure and remediation; it is **not** a statement that the correction's own CI passed. Verify the eventual documentation HEAD CI independently.
+
+No D0 admission, D1–D5, M1–M4, host protection or PR Ready/Merge gate is promoted by fixing a documentation test.
