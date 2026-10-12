@@ -395,6 +395,85 @@ esac
                     self.assertFalse(self.backup.exists())
                     self.assertFalse(self.candidate.exists())
 
+
+    def test_modified_backup_manifest_refuses_rollback_and_preserves_transaction(self) -> None:
+        """Even a valid but changed backup must never overwrite the live manifest."""
+        self.prepare_and_activate()
+        live_before = self.install.read_bytes()
+        state_before = self.transition.read_bytes()
+        candidate_before = self.candidate.read_bytes()
+
+        original_backup = self.backup.read_bytes()
+        # UI language is not used by the fake Docker identity check, so
+        # this isolates the recorded backup SHA256 guard.
+        self.backup.write_bytes(original_backup.replace(b"UI_LANG=en", b"UI_LANG=ko"))
+        self.assertNotEqual(original_backup, self.backup.read_bytes())
+
+        result = self.run_helper("recover", profile="old")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("backup digest mismatch", result.stderr)
+        self.assertEqual(self.install.read_bytes(), live_before)
+        self.assertEqual(self.transition.read_bytes(), state_before)
+        self.assertEqual(self.candidate.read_bytes(), candidate_before)
+        self.assertTrue(self.backup.exists())
+
+    def test_candidate_drift_blocks_commit_before_rollback_recovery(self) -> None:
+        """After activation, target manifest drift must not qualify a target commit."""
+        self.prepare_and_activate()
+        self.write_target_attestation()
+        original_candidate = self.candidate.read_bytes()
+        self.candidate.write_bytes(
+            original_candidate.replace(b"UI_LANG=en", b"UI_LANG=ko")
+        )
+        self.assertNotEqual(original_candidate, self.candidate.read_bytes())
+
+        result = self.run_helper("runtime-committed", profile="target")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime commit attestation", result.stderr)
+        self.assertIn(
+            "PROFILE_SWITCH_STATE=activated",
+            self.transition.read_text(encoding="utf-8"),
+        )
+        self.assertIn("MODEL_PROFILE=nvidia", self.install.read_text(encoding="utf-8"))
+
+        # A provable predecessor is permitted to restore the exact original
+        # manifest, without treating the damaged target as committed.
+        recovered = self.run_helper("recover", profile="old")
+        self.assertEqual(recovered.returncode, 0, recovered.stderr)
+        self.assertIn(
+            "MODEL_PROFILE=orcarouter", self.install.read_text(encoding="utf-8")
+        )
+        self.assertFalse(self.transition.exists())
+        self.assertFalse(self.backup.exists())
+        self.assertFalse(self.candidate.exists())
+
+    def test_missing_attestation_after_runtime_committed_blocks_finalization(self) -> None:
+        """Do not accept an earlier state marker as substitute for live proof."""
+        self.prepare_and_activate()
+        self.write_target_attestation()
+        marked = self.run_helper("runtime-committed", profile="target")
+        self.assertEqual(marked.returncode, 0, marked.stderr)
+        committed_state = self.transition.read_bytes()
+        live_before = self.install.read_bytes()
+        self.runtime_commit.unlink()
+
+        failed = self.run_helper("recover", profile="target")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("target runtime commit cannot be proven", failed.stderr)
+        self.assertEqual(self.transition.read_bytes(), committed_state)
+        self.assertEqual(self.install.read_bytes(), live_before)
+        self.assertTrue(self.backup.is_file())
+        self.assertTrue(self.candidate.is_file())
+
+        self.write_target_attestation()
+        recovered = self.run_helper("recover", profile="target")
+        self.assertEqual(recovered.returncode, 0, recovered.stderr)
+        self.assertIn("MODEL_PROFILE=nvidia", self.install.read_text(encoding="utf-8"))
+        self.assertIn("PHASE=complete", self.install.read_text(encoding="utf-8"))
+        self.assertFalse(self.transition.exists())
+        self.assertFalse(self.backup.exists())
+        self.assertFalse(self.candidate.exists())
+
     def test_same_profile_and_wrong_source_refuse_before_transaction_creation(self) -> None:
         """Every registered profile rejects no-op and incorrect-source transitions."""
         for source in self.PROFILES:
