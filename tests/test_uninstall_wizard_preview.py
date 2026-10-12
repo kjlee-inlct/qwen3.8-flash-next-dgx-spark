@@ -1050,5 +1050,45 @@ class UninstallWizardPreviewTests(unittest.TestCase):
                 observed.pop("state/qwen38-spark/operation.lock", None)
                 self.assertEqual(observed, expected)
 
+
+    def test_docker_image_probe_outage_refuses_before_registry_publication(self) -> None:
+        """Do not forget an image when Docker cannot establish its existence."""
+        fake_bin = self._crash_test_stubs()
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8")
+            .replace("IMAGE_OWNED=0", "IMAGE_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            encoding="utf-8",
+        )
+        registry = self.state / "asset-ownership.json"
+        registry.write_text('{"schema_version":1,"assets":[]}\n', encoding="utf-8")
+        docker = fake_bin / "docker"
+        docker.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "$1" == image && "$2" == inspect ]]; then\n'
+            '  echo "Cannot connect to the Docker daemon" >&2\n'
+            '  exit 78\n'
+            'fi\n'
+            'if [[ "$1" == ps ]]; then exit 0; fi\n'
+            'echo "unexpected Docker mutation" >&2\n'
+            'exit 97\n',
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        expected = self.snapshot()
+        for flag in ("--purge-image", "--purge-all"):
+            with self.subTest(flag=flag):
+                result = self._run_crash_test(fake_bin, flag)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("cannot establish Docker image presence or absence", result.stderr)
+                self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+                self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
+                self.assertTrue((self.model / "keep-model.bin").is_file())
+                self.assertTrue((self.data / "keep-release").is_file())
+                self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+                observed = self.snapshot()
+                observed.pop("state/qwen38-spark/operation.lock", None)
+                self.assertEqual(observed, expected)
+
 if __name__ == "__main__":
     unittest.main()

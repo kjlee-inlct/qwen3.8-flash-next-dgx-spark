@@ -96,6 +96,24 @@ asset_image_owned() {
 asset_forget() {
   python3 "${ASSET_OWNERSHIP_TOOL}" forget "${ASSET_OWNERSHIP_FILE}" "$1" "$2"
 }
+# Image removal may proceed past the ownership preflight only when the
+# image is known to exist or Docker explicitly reports this exact tag missing.
+# API/permission/timeout errors are NOT evidence that removal is complete.
+image_known_present() {
+  local image="$1" detail
+  if detail="$(docker image inspect "${image}" 2>&1)"; then
+    return 0
+  fi
+  case "${detail}" in
+    "Error: No such image: ${image}"|"Error response from daemon: No such image: ${image}"|\
+    "Error: No such object: ${image}"|"Error response from daemon: No such object: ${image}")
+      return 1
+      ;;
+    *)
+      die "refusing to forget owned image; cannot establish Docker image absence for ${image}: ${detail}"
+      ;;
+  esac
+}
 image_referenced_by_external_container() {
   local image="$1" name names
   # Unlike process substitution, command substitution permits explicit
@@ -129,6 +147,7 @@ asset_preflight_full_purge() {
     [[ -n "${locator}" && ( "${kind}" == model || "${kind}" == image ) ]] || \
       die "refusing malformed ownership purge plan entry"
     [[ "${kind}" == image ]] || continue
+    if image_known_present "${locator}"; then :; fi
     refs="$(image_referenced_by_external_container "${locator}")" || \
       die "refusing full purge: Docker external-container inspection failed"
     if [[ -n "${refs}" ]]; then
@@ -152,7 +171,7 @@ asset_apply_full_purge() {
         asset_forget model "${locator}"
         ;;
       image)
-        if docker image inspect "${locator}" >/dev/null 2>&1; then
+        if image_known_present "${locator}"; then
           docker image rm "${locator}" || die "owned image is still in use: ${locator}"
           printf 'Removed owned image asset: %s\n' "${locator}"
         fi
@@ -336,6 +355,7 @@ else
   if [[ "${PURGE_IMAGE}" == 1 ]]; then
     python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_PREFLIGHT_FILE}" image "${VLLM_IMAGE}" || \
       die "refusing image deletion: active image is not safely recorded as installer-owned"
+    if image_known_present "${VLLM_IMAGE}"; then :; fi
     image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")" || \
       die "refusing image deletion: Docker external-container inspection failed"
     if [[ -n "${image_refs}" ]]; then
@@ -394,7 +414,7 @@ if [[ "${PURGE_SWAP}" == 1 ]]; then
   fi
 fi
 if [[ "${PURGE_ALL}" != 1 && "${PURGE_IMAGE}" == 1 ]]; then
-  if docker image inspect "${VLLM_IMAGE}" >/dev/null 2>&1; then
+  if image_known_present "${VLLM_IMAGE}"; then
     docker image rm "${VLLM_IMAGE}" || die "image is still in use"
   fi
   asset_forget image "${VLLM_IMAGE}"

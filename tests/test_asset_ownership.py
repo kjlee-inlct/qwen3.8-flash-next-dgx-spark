@@ -29,6 +29,7 @@ class AssetOwnershipTests(unittest.TestCase):
 set -euo pipefail
 if [[ "${1:-}" == image && "${2:-}" == inspect ]]; then
   if [[ -z "${FAKE_IMAGE_ID:-}" ]]; then
+    printf 'Error: No such image: %s\\n' "${@: -1}" >&2
     exit 1
   fi
   printf '%s\\n' "${FAKE_IMAGE_ID}"
@@ -264,6 +265,27 @@ exit 1
             0,
         )
 
+
+
+    def test_docker_daemon_failure_cannot_be_treated_as_missing_owned_image(self) -> None:
+        """Fail before registry changes when Docker image lookup is unavailable."""
+        docker = self.bin_dir / "docker"
+        docker.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "$1" == image && "$2" == inspect ]]; then\n'
+            '  echo "Cannot connect to the Docker daemon" >&2\n'
+            '  exit 71\n'
+            'fi\n'
+            'exit 97\n',
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        attempt = self.run_tool(
+            "track-image", str(self.registry), "synthetic:owned", "--owned", "1"
+        )
+        self.assertNotEqual(attempt.returncode, 0)
+        self.assertIn("cannot establish Docker image presence or absence", attempt.stderr)
+        self.assertFalse(self.registry.exists())
 
 if __name__ == "__main__":
     unittest.main()

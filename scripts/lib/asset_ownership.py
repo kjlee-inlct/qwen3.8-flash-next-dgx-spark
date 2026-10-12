@@ -58,6 +58,7 @@ def _sha256(path: Path) -> str:
 
 
 def _docker_image_id(name: str) -> str:
+    """Treat only explicit Docker not-found as absence; API failures are unsafe."""
     try:
         result = subprocess.run(
             ["docker", "image", "inspect", "--format", "{{.Id}}", name],
@@ -66,9 +67,22 @@ def _docker_image_id(name: str) -> str:
             check=False,
             timeout=30,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise RegistryError(f"cannot inspect Docker image, command unavailable or timed out: {name}") from exc
+    if result.returncode:
+        missing = {
+            f"Error: No such image: {name}",
+            f"Error response from daemon: No such image: {name}",
+            f"Error: No such object: {name}",
+            f"Error response from daemon: No such object: {name}",
+        }
+        if result.stderr.strip() in missing:
+            return ""
+        raise RegistryError(f"cannot establish Docker image presence or absence: {name}")
+    image_id = result.stdout.strip()
+    if not image_id:
+        raise RegistryError(f"empty Docker image identity response: {name}")
+    return image_id
 
 
 def _empty_registry() -> dict[str, Any]:
