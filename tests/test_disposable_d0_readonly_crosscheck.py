@@ -43,7 +43,7 @@ class FakeHost:
     def run(self, args, **kwargs):
         self.events.append(tuple(args))
         if tuple(args) not in self.answers:
-            raise AssertionError("unexpected host probe")
+            raise OSError("simulated executable or daemon unavailable")
         return subprocess.CompletedProcess(args, 0, self.answers[tuple(args)], "")
 
 
