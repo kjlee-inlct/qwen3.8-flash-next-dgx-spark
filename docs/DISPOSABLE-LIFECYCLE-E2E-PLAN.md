@@ -80,3 +80,15 @@ Maintain `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`,
 `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `HOST_STABILITY=INCONCLUSIVE`,
 `HOST_PROTECTION=UNCHANGED`. PR #259 remains Draft/Open and never Ready/Merged
 while gates remain unmet.
+
+
+## Synthetic M3 coverage versus remaining disposable-host admission
+
+The four-profile **12 directed pair** synthetic transaction matrix has now
+passed [CI #38204508012](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38204508012)
+(796/796 full, 70/70 allowlisted tests). It checks uncommitted rollback,
+attested target finalize, incorrect attestation refusal, and same/wrong
+source guards using fake Docker identity. These do **not** satisfy
+D0-D5 or live M3: every actual service transition, model readiness,
+release handover and stop/rollback on an independent disposable host
+remains **NOT_RUN**.

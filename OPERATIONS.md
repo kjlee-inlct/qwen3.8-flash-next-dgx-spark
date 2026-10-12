@@ -861,3 +861,30 @@ remain historical, not a new readiness claim. Keep
 `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`,
 `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`,
 PR #259 Draft/Open and Ready/Merge BLOCKED.
+
+## Full ordered profile-switch pair matrix — synthetic CI (2026-10-12)
+
+Four state-schema profiles (`orcarouter`, `nvidia`, `mazinb`,
+`orcarouter-hybrid`) yield **12 distinct ordered profile switches**. The
+synthetic transaction suite now checks all 12 for (1) uncommitted
+activation recovering exact source manifest, (2) attested target runtime
+finalizing target manifest, and (3) mismatched candidate container-ID
+attestation refusing commit then allowing provable source rollback.
+Same-profile and wrong-source prepares are also refused for all four
+starting profiles. Existing interrupted-state and lock fixtures remain.
+
+[CI #38204508012](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38204508012)
+**SUCCESS, 796/796 full tests, 70/70 allowlisted synthetic tests** and
+Bash, ShellCheck, Python compile and whitespace PASS. The exact-SHA local
+synthetic runner now includes the mocked profile-switch test module
+(**10 tests**). [Pair matrix evidence](scripts/benchmark/evidence/managed-profile-switch-pair-matrix-synthetic-20261012.md)
+records subtest coverage and evidence boundaries. It is **NOT** a true
+Docker/systemd profile-switch E2E, and does not qualify M3.
+
+The operator's last actual DGX synthetic run was **60/60 at `02e9c61`**;
+this newer pair-matrix source has not been synchronized/run locally on
+the DGX. Preserve the stopped runtime/protection, do not run live
+profile switches or model starts. `M1_HOST_HEALTH=NOT_QUALIFIED`,
+`M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`,
+`M4_H38=BLOCKED`, `HOST_STABILITY=INCONCLUSIVE`,
+`HOST_PROTECTION=UNCHANGED`; PR #259 Draft/Open and Merge BLOCKED.

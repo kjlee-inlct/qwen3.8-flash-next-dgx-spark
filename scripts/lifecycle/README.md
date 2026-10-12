@@ -73,3 +73,16 @@ to infer the DGX's selected profile. Its test allowlist includes isolated
 \`inspect-readonly-lifecycle.sh\` places the compact summary before inventory,
 transaction details and read-only Doctor; Doctor can report existing
 host-health failures without mutating the host.
+
+
+## Profile-switch pair coverage in the isolated verifier (2026-10-12)
+
+The exact-SHA disposable synthetic verifier now includes
+`test_profile_switch_transition.py` in addition to the earlier six
+modules. That fixture exercises all 12 directed pairs among four accepted
+state-schema profiles, with committed, uncommitted-rollback, and
+wrong-container-ID refusal/rollback outcomes. It uses fake Docker inspect
+and temporary HOME/XDG, never a production profile switch. CI
+[#38204508012](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38204508012)
+PASS, **70/70 allowlisted synthetic tests**, but M3 actual all-pairs remains
+NOT_QUALIFIED.

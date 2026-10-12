@@ -611,3 +611,8 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 ### Actual DGX operator synthetic uninstall hardening PASS (2026-10-12)
 
 - [**Actual DGX guarded fast-forward and 60/60 synthetic PASS at `02e9c61`**](dgx-synthetic-uninstall-hardening-pass-20261012.md): local Bash syntax PASS; ShellCheck SKIPPED_NOT_INSTALLED; exact SHA and worktree checked. GitHub CI #38197243631 separately PASS 792/792 + ShellCheck. **No live host/service/monitor/installer E2E performed.** The previously reported `87fb463` local baseline is superseded as latest operator-proven local synthetic checkout, but it remains the last actual read-only runtime snapshot.
+
+
+### Mocked ordered profile-pair switch and rollback matrix — CI only (2026-10-12)
+
+- [**Four-profile 12-ordered-pair transaction matrix**](managed-profile-switch-pair-matrix-synthetic-20261012.md): each pair's noncommitted rollback, correctly attested target finalize, incorrect candidate container-ID refusal then provable previous rollback; identity/no-op and wrong-source rejects. **CI #38204508012 SUCCESS 796/796 full, 70/70 synthetic** including 10 profile-switch methods. **No actual DGX pairwise runtime E2E; M3 NOT_QUALIFIED.**
