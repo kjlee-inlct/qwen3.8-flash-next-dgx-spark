@@ -6917,3 +6917,8 @@ the only intended new observability is the four narrow RM/UVM entry/return
 probe pairs above. Do not add an RM watchdog: if `NV_ERR_NO_MEMORY` appears,
 allow normal startup/READY/soak behavior to continue so functional and host
 classification remain separate.
+
+
+### Actual DGX synthetic 76/76 at 9220624, followed by prepare-stage orphan guard (2026-10-12)
+
+[New operator-provided local test and subsequent source-review evidence](evidence/dgx-76-and-prepare-orphan-guard-20261012.md): clean exact DGX 9220624 checkout, Bash syntax PASS, 76/76 isolated synthetic, local ShellCheck skipped; matching GitHub CI #38212708550 PASS 802/802 + 76/76. A later source hardening closes `prepare`'s orphan `.tmp` admission gap with a new seven-scenario regression method; this was **not** part of the observed DGX execution. No new live host/M1–M4 qualification or authorization to restart H38.

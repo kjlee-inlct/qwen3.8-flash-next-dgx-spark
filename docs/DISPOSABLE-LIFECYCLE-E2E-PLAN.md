@@ -113,3 +113,10 @@ GitHub CI #38212223945 passed 802/802 full, 76/76 synthetic.
 Extend any future independent disposable-host profile-switch
 interruption trial to check these stranded-file startup/status/rollback
 paths; they remain unqualified on real Docker/systemd.
+
+
+## DGX bounded synthetic source parity and prepare-stage admission — 2026-10-12
+
+The sole DGX's latest **isolated synthetic** operator evidence now shows **76/76 PASS at `9220624`**; GitHub CI #38212708550 separately passed 802/802 full, 76/76 synthetic. Neither qualifies D0–D5 or M3 live runtime transitions.
+
+A new source-level safety hardening makes profile-switch `prepare` reject orphan state/manifest staging `.tmp` files and dangling links, using the same fail-closed guard as recovery. The associated disposable fixture test must remain classified as synthetic. On a future independently qualified D0 host, explicitly inject orphan staging **before prepare** and verify it aborts without overwriting evidence; do not run that destructive trial on the protected Spark.

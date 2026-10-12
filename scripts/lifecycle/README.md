@@ -100,3 +100,8 @@ and full allowlisted verifier to **76 cases**. GitHub CI
 [#38212223945](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38212223945)
 SUCCESS. No true production host startup/rollback or physical M3
 acceptance established.
+
+
+## Prepare-stage orphan admission guard — 2026-10-12
+
+The actual protected DGX locally completed the previous source's **76/76 isolated synthetic** at exact `9220624` (ShellCheck locally skipped). A subsequent code review added a new pre-publication guard: `profile-switch-transition.sh prepare` now refuses orphan backup, candidate, state `.tmp`, manifest-stage `.tmp`, and commit-stage files/symlinks, rather than admitting a new transaction and overwriting retained interrupted evidence. The additional disposable-fixture test covers six file variants and one dangling link. This newer change is not included in that completed DGX run. Evidence: [DGX 76 and prepare admission](../benchmark/evidence/dgx-76-and-prepare-orphan-guard-20261012.md). Live Docker/systemd qualification remains blocked.

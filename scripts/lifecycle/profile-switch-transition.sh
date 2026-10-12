@@ -299,8 +299,8 @@ case "${action}" in
     [[ $# -eq 2 ]] || { usage >&2; exit 2; }
     acquire_transition_lock "profile switch prepare"
     [[ ! -e "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die 'a profile-switch transition is already active; recover it first'
-    [[ ! -e "${BACKUP_MANIFEST_DEFAULT}" && ! -L "${BACKUP_MANIFEST_DEFAULT}" ]] || die "stale profile-switch backup exists: ${BACKUP_MANIFEST_DEFAULT}"
-    [[ ! -e "${TARGET_MANIFEST_DEFAULT}" && ! -L "${TARGET_MANIFEST_DEFAULT}" ]] || die "stale profile-switch candidate exists: ${TARGET_MANIFEST_DEFAULT}"
+    # A new transaction must not overwrite staging left by an interrupted one.
+    assert_no_orphan_profile_switch_artifacts
     parse_manifest_maintenance "${INSTALL_STATE_FILE}" CURRENT || die 'installation manifest failed strict maintenance parsing'
     [[ "${CURRENT_MODEL_PROFILE}" == "$1" ]] || die "FROM_PROFILE does not match live manifest: $1"
     [[ "${CURRENT_PHASE}" == complete ]] || die "profile switch requires a complete live installation manifest (found ${CURRENT_PHASE})"

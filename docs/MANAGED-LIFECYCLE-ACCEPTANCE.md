@@ -524,3 +524,12 @@ No live host E2E, Docker/systemd profile changes or H38 reruns.
 `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`,
 `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`,
 PR #259 Draft/Open, Ready/Merge BLOCKED.
+
+
+## New actual DGX 76/76 synthetic acceptance and prepare fail-closed check — 2026-10-12
+
+A newly supplied DGX console transcript confirms exact guarded fast-forward `e18c56a → 9220624` and **76/76 local isolated synthetic methods PASS** on `922062436b71353760c2323103e749ed6eaf6240`, including 16 profile-switch methods. `BASH_SYNTAX=PASS`, local `SHELLCHECK=SKIPPED_NOT_INSTALLED`, clean exact HEAD and worktree, `LOCAL_SYNTHETIC_RESULT=PASS` and final `DGX_PROFILE_IDLE_SAFETY_SYNTHETIC_COMPLETE` were observed. The matching GitHub [CI #38212708550](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38212708550) passed 802/802 full and 76/76 synthetic tests plus ShellCheck. This **supersedes 73/73 as the latest actual DGX local synthetic**, not as any live host qualification.
+
+A subsequent safety review found that `prepare` did not apply the existing orphan `.tmp` fail-closed check used by idle/recovery actions. The source now applies the shared guard before publishing a new transaction, with a new seven-scenario (six artifacts and one dangling symlink) fixture regression method. **This new source change is not part of the completed DGX 76/76 execution; new CI results must be verified separately.**
+
+[New DGX and source review evidence ](../scripts/benchmark/evidence/dgx-76-and-prepare-orphan-guard-20261012.md). Actual Docker/systemd E2E, M1/M2/M3/M4 gates and host protection are unchanged: `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`; PR #259 stays Draft/Open, Ready/Merge BLOCKED.

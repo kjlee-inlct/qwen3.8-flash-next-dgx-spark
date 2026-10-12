@@ -632,3 +632,8 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 ### Actual DGX synthetic 73/73, and GitHub source fail-closed orphan-state fix — 2026-10-12
 
 - [**Exact DGX `e18c56a` operator synthetic 73/73 PASS and subsequent orphan-state safety analysis**](dgx-73-and-profile-switch-false-idle-hardening-20261012.md): operator source SHA confirmed, ShellCheck locally SKIPPED; source CI #38212223945 **802/802 full, 76/76 synthetic** for 3 additional valid-idle/orphan/dangling tests and production fail-closed checks. New code not yet tested on the actual DGX; neither synthetic success qualifies a live M1–M4.
+
+
+### Actual DGX 76/76 local synthetic and prepare-stage artifact preservation (2026-10-12)
+
+- [**Operator exact-SHA DGX `9220624` 76/76 isolated synthetic PASS, followed by source-only fail-closed prepare orphan check**](dgx-76-and-prepare-orphan-guard-20261012.md): guarded clean fast-forward from `e18c56a`, all seven allowlisted modules passed (16 profile-switch methods), Bash syntax PASS, local ShellCheck SKIPPED; exact HEAD/worktree verified. Matching source [CI #38212708550](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38212708550) SUCCESS, 802/802 full + 76/76 synthetic. Subsequent `prepare` guard/test change is **not** part of that actual DGX run and needs separate CI and local verification. No model, service, host protection or live E2E change.

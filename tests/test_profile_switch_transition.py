@@ -475,6 +475,47 @@ esac
         self.assertFalse(self.candidate.exists())
 
 
+    def test_prepare_refuses_orphans_before_new_transaction(self) -> None:
+        """Do not overwrite leftover staging during a fresh profile switch."""
+        original = self.install.read_bytes()
+        artifacts = (
+            self.backup,
+            self.candidate,
+            Path(str(self.transition) + ".tmp"),
+            Path(str(self.backup) + ".tmp"),
+            Path(str(self.candidate) + ".tmp"),
+            Path(str(self.install) + ".profile-switch-complete.tmp"),
+        )
+        for artifact in artifacts:
+            with self.subTest(artifact=artifact.name):
+                artifact.write_bytes(b"preserve interrupted transaction evidence\n")
+                try:
+                    result = self.run_helper("prepare", "orcarouter", "nvidia")
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        "artifacts exist without transaction state", result.stderr
+                    )
+                    self.assertFalse(self.transition.exists())
+                    self.assertEqual(
+                        artifact.read_bytes(),
+                        b"preserve interrupted transaction evidence\n",
+                    )
+                    self.assertEqual(self.install.read_bytes(), original)
+                finally:
+                    artifact.unlink(missing_ok=True)
+
+        staged = Path(str(self.transition) + ".tmp")
+        staged.symlink_to(self.home / "missing-stage-target")
+        try:
+            rejected = self.run_helper("prepare", "orcarouter", "nvidia")
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("artifacts exist without transaction state", rejected.stderr)
+            self.assertTrue(staged.is_symlink())
+            self.assertFalse(self.transition.exists())
+            self.assertEqual(self.install.read_bytes(), original)
+        finally:
+            staged.unlink(missing_ok=True)
+
     def test_idle_without_transaction_or_orphans_remains_successful(self) -> None:
         """Pristine idle paths preserve their previous benign behavior."""
         for action in ("rollback", "recover", "service-recover", "status"):
