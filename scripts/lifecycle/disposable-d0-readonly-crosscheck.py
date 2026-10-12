@@ -15,14 +15,21 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 ROOT = Path(__file__).resolve().parents[2]
 D0_PARSER = Path(__file__).with_name("disposable-d0-preflight.py")
 MAX_OUTPUT = 8192
 MAX_MOUNTINFO = 1024 * 1024
+DOCKER_ENDPOINT_FORMAT = '{{ (index .Endpoints "docker").Host }}'
+DOCKER_OVERRIDE_KEYS = (
+    "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY",
+    "DOCKER_CERT_PATH", "DOCKER_CONFIG", "DOCKER_API_VERSION",
+)
+DEFAULT_DOCKER_SOCKETS = frozenset(("/var/run/docker.sock", "/run/docker.sock"))
 
 
 class Refusal(Exception):
@@ -53,7 +60,13 @@ class ReadonlyInspector:
         mount_file: Path = Path("/proc/self/mountinfo"),
         path_is_dir: Callable[[str], bool] = os.path.isdir,
         path_real: Callable[[str], str] = os.path.realpath,
+        socket_is_socket: Callable[[str], bool] | None = None,
+        docker_env: Mapping[str, str] | None = None,
     ) -> None:
+        self.socket_is_socket = socket_is_socket or (
+            lambda path: stat.S_ISSOCK(os.stat(path).st_mode)
+        )
+        self.docker_env = dict(os.environ if docker_env is None else docker_env)
         self.run = run
         self.machine_file = machine_file
         self.mount_file = mount_file
@@ -70,10 +83,24 @@ class ReadonlyInspector:
             ("docker", "info", "--format", "{{.ID}}"),
             ("docker", "ps", "-a", "--format", "{{.ID}}"),
         }
-        if args not in allowed and not (
+        context_inspect = (
+            len(args) == 6 and args[:3] == ("docker", "context", "inspect")
+            and args[4:] == ("--format", DOCKER_ENDPOINT_FORMAT)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", args[3]) is not None
+        )
+        bound_info = (
+            len(args) in (6, 7) and args[:2] == ("docker", "--context")
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", args[2]) is not None
+            and args[3:] in (
+                ("info", "--format", "{{.ID}}"),
+                ("ps", "-a", "--format", "{{.ID}}"),
+            )
+        )
+        service_show = (
             len(args) == 6 and args[:2] == ("systemctl", "show")
             and args[3:] == ("--property=LoadState", "--value", "--no-pager")
-        ):
+        )
+        if args not in allowed and not (context_inspect or bound_info or service_show):
             raise Refusal("unsupported_host_probe")
         try:
             result = self.run(
@@ -144,18 +171,49 @@ class ReadonlyInspector:
             require(self.path_is_dir(root), "disposable_root_missing")
             require(self.path_real(root) == root, "disposable_root_realpath_drift")
             require(
-                not any(point == root or point.startswith(root + "/") for point in points),
-                "mount_within_disposable_root",
+                not any(
+                    point != "/" and (
+                        point == root
+                        or point.startswith(root + "/")
+                        or root.startswith(point.rstrip("/") + "/")
+                    )
+                    for point in points
+                ),
+                "mount_overlapping_disposable_root",
             )
 
+        require(
+            not any(self.docker_env.get(key) for key in DOCKER_OVERRIDE_KEYS),
+            "docker_environment_override",
+        )
         context = self.command("docker", "context", "show")
         require(context == inventory["docker"]["context"], "docker_context_mismatch")
-        daemon = self.command("docker", "info", "--format", "{{.ID}}")
+        require(
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", context) is not None,
+            "unsupported_docker_context_name",
+        )
+        endpoint = self.command(
+            "docker", "context", "inspect", context,
+            "--format", DOCKER_ENDPOINT_FORMAT,
+        )
+        require(endpoint.startswith("unix:///"), "remote_or_unknown_docker_endpoint")
+        socket_path = endpoint.removeprefix("unix://")
+        require(
+            socket_path not in DEFAULT_DOCKER_SOCKETS
+            and os.path.normpath(socket_path) == socket_path
+            and self.path_real(socket_path) == socket_path,
+            "shared_or_aliased_docker_socket",
+        )
+        try:
+            require(self.socket_is_socket(socket_path), "docker_socket_unavailable")
+        except OSError:
+            raise Refusal("docker_socket_unavailable") from None
+        daemon = self.command("docker", "--context", context, "info", "--format", "{{.ID}}")
         require(bool(daemon), "docker_daemon_unknown")
         require(daemon not in policy["protected_docker_daemon_ids"], "protected_docker_daemon")
         require(daemon == inventory["docker"]["daemon_id"], "docker_daemon_mismatch")
         require(
-            self.command("docker", "ps", "-a", "--format", "{{.ID}}") == "",
+            self.command("docker", "--context", context, "ps", "-a", "--format", "{{.ID}}") == "",
             "docker_has_existing_containers",
         )
 

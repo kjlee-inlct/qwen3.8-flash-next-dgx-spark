@@ -32,8 +32,11 @@ class FakeHost:
             ("git", "remote", "get-url", "origin"): fixtures.base_inventory()["git"]["origin"],
             ("git", "status", "--porcelain=v1", "--untracked-files=all"): "",
             ("docker", "context", "show"): "isolated-fixture",
-            ("docker", "info", "--format", "{{.ID}}"): "disposable-daemon",
-            ("docker", "ps", "-a", "--format", "{{.ID}}"): "",
+            ("docker", "context", "inspect", "isolated-fixture", "--format", mod.DOCKER_ENDPOINT_FORMAT):
+                "unix:///srv/d0-docker/isolated.sock",
+            ("docker", "--context", "isolated-fixture", "info", "--format", "{{.ID}}"):
+                "disposable-daemon",
+            ("docker", "--context", "isolated-fixture", "ps", "-a", "--format", "{{.ID}}"): "",
             (
                 "systemctl", "show", "qwen38-d0-fixture.service",
                 "--property=LoadState", "--value", "--no-pager",
@@ -68,6 +71,8 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
             mount_file=self.mounts,
             path_is_dir=lambda path: True,
             path_real=lambda path: path,
+            socket_is_socket=lambda path: True,
+            docker_env={},
         )
 
     def test_consistent_observations_never_authorize_d0(self):
@@ -75,7 +80,11 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
         self.assertEqual(report["d0_admission"], "NOT_GRANTED")
         self.assertEqual(report["d1_d5"], "NOT_AUTHORIZED")
         self.assertEqual(report["independence"], "NOT_ATTESTED")
-        self.assertEqual(len(self.host.events), 7)
+        self.assertEqual(len(self.host.events), 8)
+        self.assertIn(
+            ("docker", "--context", "isolated-fixture", "info", "--format", "{{.ID}}"),
+            self.host.events,
+        )
 
     def test_protected_machine_refuses_before_host_commands(self):
         self.policy["protected_machine_id_hashes"].append(
@@ -115,9 +124,55 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
             "2 1 8:2 / /srv/d0-model/shared rw - ext4 /dev/foreign rw\n",
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(mod.Refusal, "mount_within_disposable_root"):
+        with self.assertRaisesRegex(mod.Refusal, "mount_overlapping_disposable_root"):
             self.inspector.check(self.policy, self.inventory)
         self.assertFalse(any(x[0] == "docker" for x in self.host.events))
+
+    def test_parent_bind_mount_refuses_before_docker(self):
+        self.mounts.write_text(
+            "1 0 8:1 / / rw - ext4 /dev/fake rw\n"
+            "2 1 8:2 / /srv rw - ext4 /dev/shared rw\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(mod.Refusal, "mount_overlapping_disposable_root"):
+            self.inspector.check(self.policy, self.inventory)
+        self.assertFalse(any(x[0] == "docker" for x in self.host.events))
+
+    def test_docker_environment_override_refuses_before_docker(self):
+        for key in mod.DOCKER_OVERRIDE_KEYS:
+            with self.subTest(key=key):
+                self.host.events.clear()
+                self.inspector.docker_env = {key: "tcp://foreign:2375"}
+                with self.assertRaisesRegex(mod.Refusal, "docker_environment_override"):
+                    self.inspector.check(self.policy, self.inventory)
+                self.assertFalse(any(x[0] == "docker" for x in self.host.events))
+
+    def test_nonunix_or_default_socket_endpoint_refuses(self):
+        key = ("docker", "context", "inspect", "isolated-fixture", "--format", mod.DOCKER_ENDPOINT_FORMAT)
+        for endpoint, reason in (
+            ("tcp://elsewhere:2375", "remote_or_unknown_docker_endpoint"),
+            ("ssh://elsewhere", "remote_or_unknown_docker_endpoint"),
+            ("unix:///var/run/docker.sock", "shared_or_aliased_docker_socket"),
+            ("unix:///run/docker.sock", "shared_or_aliased_docker_socket"),
+            ("unix:///srv/other/../d0-docker/isolated.sock", "shared_or_aliased_docker_socket"),
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.host.events.clear()
+                self.host.answers[key] = endpoint
+                with self.assertRaisesRegex(mod.Refusal, reason):
+                    self.inspector.check(self.policy, self.inventory)
+                self.assertFalse(any(x[:3] == ("docker", "--context", "isolated-fixture") for x in self.host.events))
+
+    def test_socket_alias_or_missing_socket_refuses(self):
+        key = ("docker", "context", "inspect", "isolated-fixture", "--format", mod.DOCKER_ENDPOINT_FORMAT)
+        self.host.answers[key] = "unix:///srv/d0-docker/isolated.sock"
+        self.inspector.path_real = lambda path: "/run/docker.sock" if path.endswith("isolated.sock") else path
+        with self.assertRaisesRegex(mod.Refusal, "shared_or_aliased_docker_socket"):
+            self.inspector.check(self.policy, self.inventory)
+        self.inspector.path_real = lambda path: path
+        self.inspector.socket_is_socket = lambda path: False
+        with self.assertRaisesRegex(mod.Refusal, "docker_socket_unavailable"):
+            self.inspector.check(self.policy, self.inventory)
 
     def test_protected_daemon_refuses_after_docker_info(self):
         self.policy["protected_docker_daemon_ids"].append("disposable-daemon")
@@ -126,7 +181,7 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
         self.assertFalse(any(x[0] == "systemctl" for x in self.host.events))
 
     def test_existing_docker_container_refuses(self):
-        self.host.answers[("docker", "ps", "-a", "--format", "{{.ID}}")] = "abc"
+        self.host.answers[("docker", "--context", "isolated-fixture", "ps", "-a", "--format", "{{.ID}}")] = "abc"
         with self.assertRaisesRegex(mod.Refusal, "docker_has_existing_containers"):
             self.inspector.check(self.policy, self.inventory)
 
@@ -137,7 +192,7 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
             self.inspector.check(self.policy, self.inventory)
 
     def test_docker_outage_fails_closed(self):
-        self.host.answers.pop(("docker", "info", "--format", "{{.ID}}"))
+        self.host.answers.pop(("docker", "--context", "isolated-fixture", "info", "--format", "{{.ID}}"))
         with self.assertRaisesRegex(mod.Refusal, "read_only_probe_unavailable"):
             self.inspector.check(self.policy, self.inventory)
 
