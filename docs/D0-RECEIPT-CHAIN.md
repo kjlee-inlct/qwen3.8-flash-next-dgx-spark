@@ -72,3 +72,10 @@ claims. This is no proof of signature authenticity or anti-replay freshness.
 Latest DGX-local isolated synthetic acceptance remains **77/77 at
 `1283b1a9252f1ff53d51659049ca42f9449e5ccd`**. New D0 receipt
 code has only GitHub fixture CI, not live host validation.
+
+
+## D0 external owner/isolation/restore evidence-chain consistency (2026-10-13)
+
+Source `a52ae7f2985ce0f415134b848b6caeb6aefec348` adds `disposable-d0-external-evidence-review.py`, a strictly offline, read-only and fail-closed review of the previous exact-input D0 receipt and **three separately provided artifacts** for independent-owner consent claims, Docker isolation claims and controlled restore-drill claims. It requires the exact policy, inventory, receipt SHA256, host/daemon identifiers and restore point to match; refused evidence includes missing/overlapping role IDs, altered/missing/empty/symlink proofs, overlapping proof digests, contradictory scopes and forged admission. The artifact contents and claimed reviewer actor IDs are **not authenticated or independently witnessed**; success only reports `STRUCTURALLY_CONSISTENT_UNTRUSTED` and always `D0_ADMISSION=NOT_GRANTED`, `D1_D5=NOT_AUTHORIZED`.
+
+[Exact-source GitHub CI #38317915217](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38317915217) **SUCCESS: 860/860 full Python (15 new external proof methods), 77/77 existing bounded synthetic, Bash/ShellCheck/Python compile/whitespace PASS**. See [permanent evidence](../scripts/benchmark/evidence/d0-external-owner-isolation-restore-evidence-ci-20261013.md) and [external review schema and workflow](D0-EXTERNAL-EVIDENCE-REVIEW.md). The latest **actual DGX-local** fixture acceptance remains `1283b1a` 77/77, not this source; no actual independent disposable host D0 verification or D1–D5 has occurred. M1/M2/M3/M4 and PR #259 Draft/Open/Unmerged gates unchanged.

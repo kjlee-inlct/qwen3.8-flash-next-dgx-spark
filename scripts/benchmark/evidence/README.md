@@ -724,3 +724,8 @@ host or the protected DGX; M1–M4 and D1–D5 unchanged**.
 ### D0 exact JSON receipt binding — 2026-10-13
 
 - [**D0 receipt SHA256 binding, no-follow parser and explicit replay limitations**](d0-receipt-input-binding-ci-20261013.md): [GitHub source CI #38316973840](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38316973840) **SUCCESS 845/845 full Python, 77/77 selected synthetic**; 11 new offline fixture tests. No real-host identity attestation, signed approval, DGX run or D1–D5 E2E.
+
+
+### D0 external owner/isolation/restore assertion chain — 2026-10-13
+
+- [**Source-only D0 owner, Docker exclusivity and restore proof hash-review evidence**](d0-external-owner-isolation-restore-evidence-ci-20261013.md): [GitHub CI #38317915217](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38317915217) **SUCCESS 860/860 full, 77/77 bounded synthetic**; 15 new external-evidence fixture tests. Identity authenticity, independent daemon isolation and actual restore remain unverified, no live D0 approval.
