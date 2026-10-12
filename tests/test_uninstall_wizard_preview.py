@@ -414,5 +414,66 @@ class UninstallWizardPreviewTests(unittest.TestCase):
                 self.assertTrue((dependent / "keep-user.txt").is_file())
 
 
+    def test_external_container_image_refusal_preserves_registry(self) -> None:
+        """An externally referenced image refuses purge before registry publication."""
+        manifest = self.manifest.read_text(encoding="utf-8")
+        self.manifest.write_text(
+            manifest.replace("IMAGE_OWNED=0", "IMAGE_OWNED=1"),
+            encoding="utf-8",
+        )
+        registry = self.state / "asset-ownership.json"
+        registry.write_text('{"schema_version":1,"assets":[]}\n', encoding="utf-8")
+        stub_bin = self.home / "stub-bin"
+        stub_bin.mkdir()
+        unexpected = self.home / "unexpected-mutator.txt"
+        docker = stub_bin / "docker"
+        docker.write_text(
+            '#!/usr/bin/env bash\n'
+            'if [[ "$1" == image && "$2" == inspect ]]; then\n'
+            '  printf "sha256:%s\\n" "'
+            + "d" * 64
+            + '"\n  exit 0\nfi\n'
+            'if [[ "$1" == ps ]]; then\n'
+            '  printf "external-owner\\n"\n  exit 0\nfi\n'
+            'printf "%s\\n" "$*" >> "'
+            + str(unexpected)
+            + '"\nexit 99\n',
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        for command in ("sudo", "systemctl", "swapoff"):
+            stub = stub_bin / command
+            stub.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "{command}" >> "{unexpected}"\nexit 99\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+        expected = self.snapshot()
+
+        result = subprocess.run(
+            ["bash", str(UNINSTALL), "--lang", "en", "--yes", "--purge-image"],
+            cwd=REPO,
+            env={
+                **os.environ,
+                "HOME": str(self.home),
+                "XDG_STATE_HOME": str(self.home / "state"),
+                "XDG_DATA_HOME": str(self.home / "data"),
+                "PATH": str(stub_bin) + os.pathsep + os.environ.get("PATH", ""),
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("referenced by other containers: external-owner", result.stderr)
+        self.assertFalse(unexpected.exists(), result.stderr)
+        actual = self.snapshot()
+        actual.pop("state/qwen38-spark/operation.lock", None)
+        self.assertEqual(actual, expected)
+        self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+        self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
+
+
 if __name__ == "__main__":
     unittest.main()
