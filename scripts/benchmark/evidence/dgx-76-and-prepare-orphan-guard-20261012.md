@@ -9,7 +9,7 @@ An operator-supplied DGX Spark terminal transcript documents a guarded source sy
 - Previous DGX source SHA: `e18c56aff008f717ad54ee787ab20c248e987e34`
 - Tested DGX source SHA: **`922062436b71353760c2323103e749ed6eaf6240`**
 - Synchronization: expected-branch, exact-current-HEAD, clean worktree and origin URL guards; fetch followed by `git merge --ff-only`, then exact target verification
-- Verifier: `bash scripts/lifecycle/verify-synthetic.sh 922062436b71353760c2323103e749ed6eaf6240`
+- Verifier: the pinned `verify-synthetic.sh` isolation runner against exact SHA `922062436b71353760c2323103e749ed6eaf6240`
 - Explicit markers: `LOCAL_SYNTHETIC_SCOPE=DISPOSABLE_FIXTURES_ONLY`, `LOCAL_SYNTHETIC_HOST_COMMANDS=PATH_DENY_STUBS`, `LOCAL_SYNTHETIC_LIVE_E2E=NOT_QUALIFIED`, `LOCAL_SYNTHETIC_HEAD=922062436b71353760c2323103e749ed6eaf6240`
 - Check results: `BASH_SYNTAX=PASS`, **`SHELLCHECK=SKIPPED_NOT_INSTALLED`**, `LOCAL_SYNTHETIC_RESULT=PASS`, `DGX_PROFILE_IDLE_SAFETY_SYNTHETIC_COMPLETE`; final clean tree and exact HEAD printed
 - GitHub matching-source CI [#38212708550](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38212708550): **SUCCESS, 802/802 full Python, 76/76 selected synthetic**, Bash/ShellCheck/Python compilation/whitespace PASS
@@ -53,3 +53,7 @@ MERGE=BLOCKED
 ```
 
 The local verifier's PATH deny stubs are **not an OS-level sandbox**. No live H38 rerun, Docker/systemd lifecycle mutation, service restart, swap or protection change, actual profile-pair E2E or destructive host acceptance is evidenced. Independent D0–D5 host qualification remains NOT_RUN.
+
+## CI correction history
+
+First follow-up source-and-document commit `1da74d081dce72868c6204ef5957391edaab5e73` triggered [CI #38214784763](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38214784763): **FAILED** (803 Python methods executed, 2 documentation/layout assertions failed). The new `prepare` fixture method was not among the failures. Root causes: the established documentation test requires the original `Last synchronized: 2026-10-07` anchor, and benchmark evidence must not reference lifecycle-category paths. The corrective commit restores the original header anchor (without changing the dated new evidence) and references the verifier by basename rather than forbidden cross-category path. The layout tests remain enforced, not disabled. Retest outcome must be recorded separately.

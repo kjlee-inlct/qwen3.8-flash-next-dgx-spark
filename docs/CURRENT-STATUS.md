@@ -5,7 +5,7 @@ Dated benchmark/evidence documents preserve what was known at the time of each r
 use this file plus `scripts/benchmark/evidence/README.md` when deciding what is true
 **now**.
 
-Last synchronized: 2026-10-12. The version on `main` is authoritative; do not encode a
+Last synchronized: 2026-10-07. The version on `main` is authoritative; do not encode a
 specific "last documentation PR" or commit SHA here because the synchronization change
 itself would make that marker stale as soon as it is merged.
 
@@ -1314,4 +1314,4 @@ A newly supplied DGX console transcript confirms exact guarded fast-forward `e18
 
 A subsequent safety review found that `prepare` did not apply the existing orphan `.tmp` fail-closed check used by idle/recovery actions. The source now applies the shared guard before publishing a new transaction, with a new seven-scenario (six artifacts and one dangling symlink) fixture regression method. **This new source change is not part of the completed DGX 76/76 execution; new CI results must be verified separately.**
 
-[New DGX and source review evidence ](../scripts/benchmark/evidence/dgx-76-and-prepare-orphan-guard-20261012.md). Actual Docker/systemd E2E, M1/M2/M3/M4 gates and host protection are unchanged: `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`; PR #259 stays Draft/Open, Ready/Merge BLOCKED.
+[New DGX and source review evidence](../scripts/benchmark/evidence/dgx-76-and-prepare-orphan-guard-20261012.md). Actual Docker/systemd E2E, M1/M2/M3/M4 gates and host protection are unchanged: `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`; PR #259 stays Draft/Open, Ready/Merge BLOCKED.
