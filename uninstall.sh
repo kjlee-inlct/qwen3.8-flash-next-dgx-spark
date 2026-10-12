@@ -291,6 +291,15 @@ do
     die "settings transaction or stale settings artifact exists; recover settings before uninstalling: ${settings_artifact}"
 done
 
+# SIGKILL/power loss skips EXIT traps. Refuse staged ownership snapshots
+# left by interrupted preflights, including unsafe symlink artifacts.
+# Check under the operation lock and before any service or asset teardown.
+for stale_preflight in "${STATE_DIR}"/.uninstall-preflight.*; do
+  if [[ -e "${stale_preflight}" || -L "${stale_preflight}" ]]; then
+    die "stale uninstall preflight artifact exists; inspect and safely clear it before retry: ${stale_preflight}"
+  fi
+done
+
 # Stage legacy ownership migration under the acquired operation lock.
 # The original registry is not published unless *all* destructive eligibility
 # preflights, including external-container and unowned-service checks, succeed.
