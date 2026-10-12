@@ -15,6 +15,12 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## Physical DGX stage B2: read-only Doctor collected, stopped baseline (2026-10-13)
+
+Operator-supplied exact-SHA `b35d0f3d7840d00c55f4c633813e88ac367c6373` lifecycle inventory found **7 successful read-only sections** and Doctor **5 FAIL / 2 WARN** (`doctor_readonly rc=1`; final `PARTIAL_CHECK_FAILURE`). Manifest complete, OrcaRouter selected, four transaction states idle, 18 checkpoint shards complete and memory protection enabled. Container remained EXITED, systemd INACTIVE, attestation MISSING, monitor PID absent and health unreachable. Non-CMA available **118 GiB**, free **79,620 MiB**, swap free **143 GiB**, model filesystem free **104 GiB**. This is **B2=COLLECTED_PARTIAL**, not M1 live health. The missing published port was observed on an exited container; it is not on its own a host-bind configuration failure. [Full exact-source B2 operator evidence](../scripts/benchmark/evidence/dgx-b2-readonly-lifecycle-doctor-partial-20261013.md).
+
+The existing October 7 managed candidate protected abort / stopped-predecessor lineage remains relevant, but a new healthy live runtime, an intentional current stop, and strict RM stability are **not** proven by B2. First review installed immutable release and service identity, rollback/stop bounds, and historical protection evidence; only then consider a reversible **legacy OrcaRouter** baseline using the existing managed service path with protection unchanged. Do not use a raw Docker start, rewrite attestation, silently refresh image defaults, or conflate this with H38. M1/M3 remain NOT_QUALIFIED, M2/D1-D5 NOT_RUN, H38/M4 BLOCKED, D0 NOT_GRANTED and PR #259 Draft/Unmerged.
+
 ## Managed model profiles
 
 | Profile | Registry status | Managed state | Current host-stability interpretation |

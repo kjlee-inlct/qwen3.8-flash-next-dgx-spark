@@ -2,6 +2,10 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## Actual DGX stage B2 read-only Doctor (2026-10-13)
+
+- [**Actual B2 lifecycle inventory / Doctor 5 FAIL and 2 WARN**](dgx-b2-readonly-lifecycle-doctor-partial-20261013.md): exact physical DGX checkout `b35d0f3`, seven inventory/status sections rc=0, Doctor rc=1, overall `PARTIAL_CHECK_FAILURE`. Full checkpoint/host-reserve/transaction evidence with EXITED runtime and missing live attestation; no model launch, M1/M3 still unqualified, H38 blocked. See the operator runbook for next-stage guards.
+
 ## H38 managed-service integration
 
 The managed H38 candidate is tracked separately from the historical H38
