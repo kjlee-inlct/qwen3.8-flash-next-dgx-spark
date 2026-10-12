@@ -62,11 +62,13 @@ class ReadonlyInspector:
         path_real: Callable[[str], str] = os.path.realpath,
         socket_is_socket: Callable[[str], bool] | None = None,
         docker_env: Mapping[str, str] | None = None,
+        host_env: Mapping[str, str] | None = None,
     ) -> None:
         self.socket_is_socket = socket_is_socket or (
             lambda path: stat.S_ISSOCK(os.stat(path).st_mode)
         )
         self.docker_env = dict(os.environ if docker_env is None else docker_env)
+        self.host_env = dict(os.environ if host_env is None else host_env)
         self.run = run
         self.machine_file = machine_file
         self.mount_file = mount_file
@@ -80,8 +82,6 @@ class ReadonlyInspector:
             ("git", "remote", "get-url", "origin"),
             ("git", "status", "--porcelain=v1", "--untracked-files=all"),
             ("docker", "context", "show"),
-            ("docker", "info", "--format", "{{.ID}}"),
-            ("docker", "ps", "-a", "--format", "{{.ID}}"),
         }
         context_inspect = (
             len(args) == 6 and args[:3] == ("docker", "context", "inspect")
@@ -107,7 +107,7 @@ class ReadonlyInspector:
                 list(args), cwd=ROOT, text=True, capture_output=True,
                 check=False, timeout=5,
                 # 'git status' must not refresh/write the repository index.
-                env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+                env={**self.host_env, "GIT_OPTIONAL_LOCKS": "0"},
             )
             if result.returncode != 0 or len(result.stdout) > MAX_OUTPUT:
                 raise Refusal("read_only_probe_unavailable")
@@ -153,6 +153,22 @@ class ReadonlyInspector:
             raise Refusal("mount_inventory_unavailable") from None
 
     def check(self, policy: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
+        # Git environment and system bus selectors can re-target even read-only
+        # commands. Refuse before any Git/Docker/systemd probe; the only
+        # accepted Git setting is the explicitly enforced no-optional-locks flag.
+        require(
+            not any(
+                value and (
+                    (key.startswith("GIT_") and not (
+                        key == "GIT_OPTIONAL_LOCKS" and value == "0"
+                    ))
+                    or key.startswith("SYSTEMD_")
+                    or key in ("DBUS_SYSTEM_BUS_ADDRESS", "DBUS_SESSION_BUS_ADDRESS")
+                )
+                for key, value in self.host_env.items()
+            ),
+            "untrusted_git_or_systemd_environment",
+        )
         # Verify protected machine ID before contacting Docker/systemd.
         machine = self.machine_hash()
         require(machine not in policy["protected_machine_id_hashes"], "protected_machine_identity")
@@ -185,7 +201,10 @@ class ReadonlyInspector:
             )
 
         require(
-            not any(self.docker_env.get(key) for key in DOCKER_OVERRIDE_KEYS),
+            not any(
+                value for key, value in self.docker_env.items()
+                if key.startswith("DOCKER_")
+            ),
             "docker_environment_override",
         )
         context = self.command("docker", "context", "show")
@@ -205,6 +224,23 @@ class ReadonlyInspector:
             and os.path.normpath(socket_path) == socket_path
             and self.path_real(socket_path) == socket_path,
             "shared_or_aliased_docker_socket",
+        )
+        require(
+            not any(
+                os.path.commonpath((socket_path, root)) == root
+                for root in policy["forbidden_roots"]
+            ),
+            "docker_socket_in_protected_root",
+        )
+        require(
+            not any(
+                point != "/" and (
+                    point == socket_path
+                    or socket_path.startswith(point.rstrip("/") + "/")
+                )
+                for point in points
+            ),
+            "docker_socket_mount_overlap",
         )
         try:
             require(self.socket_is_socket(socket_path), "docker_socket_unavailable")

@@ -75,6 +75,7 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
             path_real=lambda path: path,
             socket_is_socket=lambda path: True,
             docker_env={},
+            host_env={},
         )
 
     def test_consistent_observations_never_authorize_d0(self):
@@ -87,6 +88,72 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
             ("docker", "--context", "isolated-fixture", "info", "--format", "{{.ID}}"),
             self.host.events,
         )
+
+    def test_git_environment_redirection_refuses_before_host_probes(self):
+        for key, value in (
+            ("GIT_DIR", "/tmp/foreign/.git"),
+            ("GIT_WORK_TREE", "/tmp/foreign"),
+            ("GIT_INDEX_FILE", "/tmp/foreign-index"),
+            ("GIT_CONFIG_GLOBAL", "/tmp/foreign-config"),
+            ("GIT_OPTIONAL_LOCKS", "1"),
+            ("SYSTEMD_HOST", "other-host"),
+            ("SYSTEMD_MACHINE", "foreign-machine"),
+            ("DBUS_SYSTEM_BUS_ADDRESS", "unix:path=/tmp/foreign-bus"),
+        ):
+            with self.subTest(key=key):
+                self.inspector.host_env = {key: value}
+                self.host.events.clear()
+                with self.assertRaisesRegex(mod.Refusal, "untrusted_git_or_systemd_environment"):
+                    self.inspector.check(self.policy, self.inventory)
+                self.assertEqual(self.host.events, [])
+        self.inspector.host_env = {"GIT_OPTIONAL_LOCKS": "0"}
+        self.assertEqual(
+            self.inspector.check(self.policy, self.inventory)["d0_admission"],
+            "NOT_GRANTED",
+        )
+
+    def test_unbound_docker_commands_are_not_allowlisted(self):
+        for args in (
+            ("docker", "info", "--format", "{{.ID}}"),
+            ("docker", "ps", "-a", "--format", "{{.ID}}"),
+        ):
+            with self.subTest(args=args):
+                self.host.events.clear()
+                with self.assertRaisesRegex(mod.Refusal, "unsupported_host_probe"):
+                    self.inspector.command(*args)
+                self.assertEqual(self.host.events, [])
+
+    def test_unlisted_docker_override_blocks_probing(self):
+        self.inspector.docker_env = {
+            "DOCKER_CLI_PLUGIN_EXTRA_DIRS": "/tmp/foreign-plugins"
+        }
+        with self.assertRaisesRegex(mod.Refusal, "docker_environment_override"):
+            self.inspector.check(self.policy, self.inventory)
+        self.assertFalse(any(x[0] == "docker" for x in self.host.events))
+
+    def test_socket_inside_protected_root_is_refused(self):
+        key = ("docker", "context", "inspect", "isolated-fixture", "--format", mod.DOCKER_ENDPOINT_FORMAT)
+        self.policy["forbidden_roots"].append("/srv/production-docker")
+        self.host.answers[key] = "unix:///srv/production-docker/test.sock"
+        with self.assertRaisesRegex(mod.Refusal, "docker_socket_in_protected_root"):
+            self.inspector.check(self.policy, self.inventory)
+        self.assertFalse(any(
+            x[:3] == ("docker", "--context", "isolated-fixture")
+            for x in self.host.events
+        ))
+
+    def test_socket_parent_mount_is_refused(self):
+        self.mounts.write_text(
+            "1 0 8:1 / / rw - ext4 /dev/fake rw\n"
+            "2 1 8:2 / /srv/d0-docker rw - ext4 /dev/foreign rw\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(mod.Refusal, "docker_socket_mount_overlap"):
+            self.inspector.check(self.policy, self.inventory)
+        self.assertFalse(any(
+            x[:3] == ("docker", "--context", "isolated-fixture")
+            for x in self.host.events
+        ))
 
     def test_git_optional_locks_disabled_for_all_readonly_probes(self):
         self.inspector.check(self.policy, self.inventory)
