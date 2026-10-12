@@ -439,3 +439,30 @@ profile switches or model starts. `M1_HOST_HEALTH=NOT_QUALIFIED`,
 `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`,
 `M4_H38=BLOCKED`, `HOST_STABILITY=INCONCLUSIVE`,
 `HOST_PROTECTION=UNCHANGED`; PR #259 Draft/Open and Merge BLOCKED.
+
+## Actual DGX 70/70 directed profile-pair synthetic acceptance — 2026-10-12
+
+The operator supplied a successful exact-SHA guarded DGX fast-forward
+`02e9c61 → d2e9a1d` and `verify-synthetic.sh` output proving **70/70
+selected synthetic tests PASS**, **Bash syntax PASS**, and final exact clean
+checkout `d2e9a1dc2b9759bc60915f2a7cda7b0cfd9d4914`. Breakdown:
+19 uninstall + 7 assets + 8 locks + 14 lifecycle integration +
+**10 profile-switch transaction** + 8 selected-profile snapshot +
+4 lifecycle snapshot. Profile-switch synthetic cases include all 12
+ordered pair directions with successful target attestation, uncommitted
+rollback, and incorrect container-ID rejection/rollback.
+
+DGX `SHELLCHECK=SKIPPED_NOT_INSTALLED`. Separately
+[CI #38204845533](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38204845533)
+**SUCCESS**, 796/796 full unit tests, 70/70 selected synthetic and
+ShellCheck/Bash/Python/whitespace PASS. The previous 60/60 actual-DGX
+local synthetic acceptance at `02e9c61` is superseded as **latest**
+local synthetic evidence. See the
+[actual-DGX 70/70 evidence](../scripts/benchmark/evidence/dgx-profile-pair-synthetic-pass-20261012.md).
+
+This proves neither physical Docker/systemd transition nor readiness,
+M1 host health, M2 destructive E2E, M3 actual all-pair qualification or
+M4 H38. Selected `orcarouter` and stopped runtime are **historical** read-only
+observations, not updated by this test. The current single DGX host's
+service/monitor/swap/protection remain untouched. `HOST_STABILITY=INCONCLUSIVE`,
+`HOST_PROTECTION=UNCHANGED`; PR #259 DRAFT/OPEN and Ready/Merge BLOCKED.

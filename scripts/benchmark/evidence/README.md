@@ -616,3 +616,8 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 ### Mocked ordered profile-pair switch and rollback matrix — CI only (2026-10-12)
 
 - [**Four-profile 12-ordered-pair transaction matrix**](managed-profile-switch-pair-matrix-synthetic-20261012.md): each pair's noncommitted rollback, correctly attested target finalize, incorrect candidate container-ID refusal then provable previous rollback; identity/no-op and wrong-source rejects. **CI #38204508012 SUCCESS 796/796 full, 70/70 synthetic** including 10 profile-switch methods. **No actual DGX pairwise runtime E2E; M3 NOT_QUALIFIED.**
+
+
+### Actual DGX profile-pair synthetic 70/70 accepted — 2026-10-12
+
+- [**Operator exact-SHA DGX PASS at `d2e9a1d`**](dgx-profile-pair-synthetic-pass-20261012.md): local 70/70 selected synthetic tests including 10 profile-switch methods and 12 directed profile-pair subtest coverage, with clean checkout and Bash syntax PASS; local ShellCheck SKIPPED_NOT_INSTALLED. Exact-source GitHub CI #38204845533 796/796 full, 70/70 synthetic, ShellCheck PASS. **No live runtime, profile switch or physical host E2E**. Replaces 60/60 `02e9c61` as latest local DGX synthetic acceptance only.
