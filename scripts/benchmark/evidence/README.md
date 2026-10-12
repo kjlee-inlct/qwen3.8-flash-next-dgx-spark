@@ -640,3 +640,8 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 
 
 **GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.
+
+
+### New actual DGX 77/77 profile-switch prepare-stage synthetic PASS (2026-10-12)
+
+- [**Operator guarded DGX `1283b1a` exact-SHA 77/77 isolated synthetic PASS**](dgx-77-prepare-orphan-synthetic-pass-20261012.md): actual clean fast-forward from `9220624`, seven selected modules including **17 profile-switch** tests with prepare-stage orphan evidence preservation, Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED, final `DGX_PREPARE_ORPHAN_SYNTHETIC_COMPLETE` and clean exact HEAD. Same-source CI #38215504822 SUCCESS 803/803 full, 77/77 synthetic plus ShellCheck. Supersedes prior local synthetic 76/76 as latest, **not** any real M1–M4 acceptance or host protection disposition.

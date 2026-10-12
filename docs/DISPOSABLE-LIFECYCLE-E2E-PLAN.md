@@ -123,3 +123,8 @@ A new source-level safety hardening makes profile-switch `prepare` reject orphan
 
 
 **GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.
+
+
+## Latest DGX local isolated-synthetic source confirmation (2026-10-12)
+
+The operator-provided DGX transcript now verifies exact checkout `1283b1a9252f1ff53d51659049ca42f9449e5ccd`: **77/77 selected synthetic tests PASS**, including 17 profile-switch fixture tests and the `prepare` orphan-artifact refusal; Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED. GitHub [CI #38215504822](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215504822) separately passed 803/803 full, 77/77 selected, ShellCheck and static checks. D0–D5 and actual 12-pair Docker/systemd live switching remain NOT_RUN or NOT_QUALIFIED. Do not execute destructive validation on the sole protected DGX. PR #259 remains Draft/Open/Unmerged.

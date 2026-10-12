@@ -6925,3 +6925,8 @@ classification remain separate.
 
 
 **GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.
+
+
+### Actual DGX 77/77 local isolated synthetic at `1283b1a` (2026-10-12)
+
+[New permanent DGX operator evidence](evidence/dgx-77-prepare-orphan-synthetic-pass-20261012.md) supersedes `9220624` 76/76 as the latest *DGX-local synthetic* result: source `1283b1a` passed 77/77 fixture tests including 17 profile-switch methods and the prepare-stage orphan guard. Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED. Matched GitHub CI #38215504822 passed 803/803 full and 77/77 synthetic. No new H38 GPU/model or live host-lifecycle qualification.

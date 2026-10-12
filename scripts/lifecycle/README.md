@@ -108,3 +108,8 @@ The actual protected DGX locally completed the previous source's **76/76 isolate
 
 
 **GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.
+
+
+## Actual DGX prepare-artifact guard synthetic acceptance (2026-10-12)
+
+The previously GitHub-only additional `prepare` regression has now passed on the actual DGX via the bounded fixture-only verifier at exact `1283b1a` (**77/77 total, 17/17 profile-switch tests**). The source was fast-forwarded from `9220624`; local Bash syntax PASS and ShellCheck SKIPPED_NOT_INSTALLED. Matching exact-source GitHub CI #38215504822 passed 803/803 full and 77/77 synthetic. [Permanent evidence](../benchmark/evidence/dgx-77-prepare-orphan-synthetic-pass-20261012.md). This is not real service/docker E2E and all host gates remain unchanged.
