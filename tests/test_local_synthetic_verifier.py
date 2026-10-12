@@ -66,6 +66,7 @@ class LocalSyntheticVerifierTests(unittest.TestCase):
             "test_asset_ownership.py",
             "test_operation_lock.py",
             "test_lifecycle_integration.py",
+            "test_selected_profile_readonly.py",
             "test_managed_lifecycle_readonly_snapshot.py",
             "LOCAL_SYNTHETIC_HOST_COMMANDS=PATH_DENY_STUBS",
             "LOCAL_SYNTHETIC_RESULT=PASS",
