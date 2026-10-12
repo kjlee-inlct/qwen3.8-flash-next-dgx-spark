@@ -87,6 +87,7 @@ for test_file in \
   test_asset_ownership.py \
   test_operation_lock.py \
   test_lifecycle_integration.py \
+  test_selected_profile_readonly.py \
   test_managed_lifecycle_readonly_snapshot.py
 do
   printf '\n=== SYNTHETIC_TEST=%s ===\n' "$test_file"
