@@ -625,3 +625,56 @@ The previous 775/775 GitHub Actions result was **CI**, not evidence that the ope
 ```
 
 This updates **only the operator's Git worktree** (fast-forward, if verified) and disposable synthetic test fixtures. It is **not** a real install/uninstall, actual runtime check or E2E acceptance. Preserve the command output for evidence and do not run on a dirty checkout.
+
+
+## Selected model profile first: DGX read-only status then synthetic regression (2026-10-12)
+
+The operator supplied actual **single-DGX** output from the earlier guarded
+fast-forward to \`0e910a7e0ab6246228857cc9432c19b5787eb812\`:
+\`LOCAL_SYNTHETIC_RESULT=PASS\`, **48/48 fixture tests PASS**,
+\`DGX_SYNTHETIC_VALIDATION_COMPLETE\`. Local ShellCheck was
+\`SKIPPED_NOT_INSTALLED\`; the same earlier GitHub CI passed ShellCheck.
+This qualifies only the local synthetic test handoff, **not** a live
+model/service, E2E uninstall or host stability check.
+
+For subsequent verified branch syncs, use the already documented exact-SHA,
+clean-worktree, expected-origin, fetch and \`git merge --ff-only\` guards.
+**Place the following status and test steps in this order after Git sync:**
+
+\`\`\`bash
+# Normal operator HOME/XDG: inspect the configured profile and observed status.
+python3 scripts/lifecycle/inspect-selected-profile.py
+
+# Target is the same verified GitHub feature-branch HEAD used in the sync.
+bash scripts/lifecycle/verify-synthetic.sh "$TARGET"
+
+# Optional expanded read-only inventory, transition statuses and Doctor.
+# Doctor may return a nonzero code because M1 live host is NOT_QUALIFIED.
+QWEN38_LIFECYCLE_AUDIT_TARGET_SHA="$TARGET" \
+  bash scripts/lifecycle/inspect-readonly-lifecycle.sh
+\`\`\`
+
+The first command is read-only: strictly parses \`install.env\`,
+transaction markers and optional \`docker inspect --type container\` /
+\`systemctl show\` observations. It does **not** call Docker run/start/stop,
+systemctl restart, sudo, uninstall, install, a model or GPU. It reports
+\`SELECTED_PROFILE\` (stored installation intent), \`INSTALL_PHASE\`,
+\`MODEL_PATH_STATUS\`, \`MONITOR_PROTECT\`, \`SERVICE_STATE\`,
+\`CONTAINER_STATE\`, four transition states, and the observed
+\`RUNTIME_CONFIGURATION\`. Even a matching running container is labeled
+\`MATCHED_NOT_READINESS\` with \`ACTUAL_SERVED_PROFILE=NOT_VERIFIED\`;
+the snapshot alone can never produce \`HOST_HEALTH=PASS\`.
+
+If the profile snapshot returns code **3**, a malformed install manifest or
+pending/unsafe transition artifact was detected: examine its output rather
+than proceeding blindly. Do not remove artifacts, fabricate attestation,
+relax monitor protection, or restart the runtime. An inactive service or
+stopped container is recorded honestly and does not itself require mutation.
+
+The synthetic verifier still uses disposable HOME/XDG and now tests the
+snapshot logic via fake Docker/systemctl fixture commands, **never the real
+host state**. As of this commit, the new DGX status snapshot has not been
+executed on the DGX; only the earlier local synthetic result above is
+operator-evidenced. PR #259 remains Draft/Open, M1 actual host
+NOT_QUALIFIED, M2 destructive E2E NOT_RUN, M3 all-pairs NOT_QUALIFIED,
+M4 H38 BLOCKED, Ready/Merge BLOCKED.
