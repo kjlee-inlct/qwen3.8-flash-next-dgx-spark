@@ -21,6 +21,7 @@ command -v git >/dev/null 2>&1 || invalid 'git_missing'
 
 declare -ra COMMANDS=(
   "${ROOT}/install.sh"
+  "${ROOT}/scripts/lifecycle/inspect-selected-profile.py"
   "${ROOT}/scripts/doctor.sh"
   "${ROOT}/scripts/profile-switch-transition.sh"
   "${ROOT}/scripts/runtime-transition.sh"
@@ -49,6 +50,7 @@ check() {
   fi
 }
 
+check selected_profile_snapshot python3 "${ROOT}/scripts/lifecycle/inspect-selected-profile.py"
 check model_inventory bash "${ROOT}/install.sh" --list-models
 check backend_registry bash "${ROOT}/install.sh" --list-backends
 check profile_switch_status bash "${ROOT}/scripts/profile-switch-transition.sh" status
