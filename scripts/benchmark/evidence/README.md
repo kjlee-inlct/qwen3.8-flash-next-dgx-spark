@@ -672,3 +672,8 @@ offline check is **not** permission for D1–D5; independent operator
 attestation, read-only on-host cross-check and explicit disposable-host
 authorization remain mandatory. Neither current DGX nor M1/M2/M3/M4
 qualification is changed.
+
+
+### D0 independent-host offline policy review — synthetic CI only (2026-10-12)
+
+- [**D0 offline preflight source and nine fail-closed fixture regressions**](disposable-d0-offline-preflight-ci-20261012.md): [CI #38217170909](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38217170909) **SUCCESS 812/812 full and 77/77 selected**, shell/Python/whitespace PASS. Reads only supplied JSON and **never grants live admission**. No disposable real-host D0 attestation or D1–D5 E2E has run; DGX protection and M1–M4 unchanged.
