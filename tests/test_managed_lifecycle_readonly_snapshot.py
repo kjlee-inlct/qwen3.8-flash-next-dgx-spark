@@ -30,6 +30,8 @@ class ManagedLifecycleReadonlySnapshotTests(unittest.TestCase):
         body = SCRIPT.read_text(encoding="utf-8")
         for required in (
             "QWEN38_LIFECYCLE_AUDIT_TARGET_SHA",
+            "selected_profile_snapshot",
+            "inspect-selected-profile.py",
             "checkout_sha_mismatch",
             "dirty_checkout",
             "git -C",
