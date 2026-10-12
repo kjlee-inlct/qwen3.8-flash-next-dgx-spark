@@ -46,15 +46,9 @@ The DGX owner reports being its sole human user and accepting testing at any tim
 
 Independently disposable-host D0 and destructive D1-D5 E2E remain NOT_QUALIFIED and NOT_RUN. Using the sole physical DGX cannot substitute for a recoverable disposable environment. Purges, swap removal, filesystem reinitialization and uncontrolled H38 memory experiments require separately scoped explicit approval plus verifiable recovery and stop conditions.
 
-## Immediate next command (no new Git sync required on existing tested checkout)
+## Immediate next step on the already-tested checkout
 
-```bash
-cd ~/Workspace/llm/qwen3.8-flash-next-dgx-spark
-TARGET="b35d0f3d7840d00c55f4c633813e88ac367c6373"
-test "$(git rev-parse HEAD)" = "$TARGET"
-QWEN38_LIFECYCLE_AUDIT_TARGET_SHA="$TARGET" \
-  bash scripts/lifecycle/inspect-readonly-lifecycle.sh
-```
+Run the **full read-only lifecycle inspector** using the exact SHA from this evidence. The executable command belongs in the operator-facing `docs/DGX-STAGED-VALIDATION.md` runbook; keep benchmark evidence free of references to other script categories. No new Git sync is required to inspect the operator's existing checked-out SHA.
 
 The inspector only collects state/Doctor; partial inspection exit code 3 must not trigger repair. Subsequent live OrcaRouter or H38 actions require separate decision after B2 review.
 
@@ -78,3 +72,8 @@ HOST_STABILITY=INCONCLUSIVE
 HOST_PROTECTION=UNCHANGED
 PR_259=DRAFT_OPEN_UNMERGED
 ```
+
+
+## CI failure and narrow documentation correction (2026-10-13)
+
+Initial docs SHA `c280ef0e62a2b0fd39097c6d57c8a8a8ed2d7399`, [CI #38322282587](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38322282587), **FAILED 1 full Python test** (`test_script_layout.ScriptLayoutTests.test_canonical_category_dependencies_follow_allowed_directions`) because this benchmark Evidence contained a cross-category executable path. The remedy only relocates the command text to the existing operator runbook; it does **not** alter the DGX 134 PASS, B1 observations, any runtime code, protections or gate classification. The corrected documentation HEAD must have a separately verified successful CI before being called green.
