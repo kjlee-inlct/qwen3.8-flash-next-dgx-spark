@@ -97,30 +97,50 @@ asset_forget() {
   python3 "${ASSET_OWNERSHIP_TOOL}" forget "${ASSET_OWNERSHIP_FILE}" "$1" "$2"
 }
 image_referenced_by_external_container() {
-  local image="$1" name
+  local image="$1" name names
+  # Unlike process substitution, command substitution permits explicit
+  # validation of docker ps status before accepting its output.
+  if ! names="$(docker ps -a --filter "ancestor=${image}" --format '{{.Names}}' 2>&1)"; then
+    printf 'ERROR: refusing image purge; external Docker reference query failed for %s: %s\n' \
+      "${image}" "${names}" >&2
+    return 1
+  fi
+  [[ -n "${names}" ]] || return 0
   while IFS= read -r name; do
     [[ -n "${name}" ]] || continue
     [[ "${name}" == "${CONTAINER_NAME}" ]] && continue
     printf '%s\n' "${name}"
-  done < <(docker ps -a --filter "ancestor=${image}" --format '{{.Names}}' 2>/dev/null)
+  done <<< "${names}"
 }
 
+# Capture one checked, ordered ownership plan while the private registry
+# stage is still active, before any real host teardown.
+ASSET_PURGE_PLAN=""
 asset_preflight_full_purge() {
   local registry="${1:-${ASSET_OWNERSHIP_FILE}}"
   [[ -f "${registry}" && ! -L "${registry}" ]] || return 0
-  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${registry}" --kind all
+  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${registry}" --kind all || \
+    die "refusing full purge: ownership eligibility check failed"
+  ASSET_PURGE_PLAN="$(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${registry}" --kind all)" || \
+    die "refusing full purge: ownership plan generation failed"
+  [[ -n "${ASSET_PURGE_PLAN}" ]] || return 0
   local kind locator refs
   while IFS=$'\t' read -r kind locator; do
+    [[ -n "${locator}" && ( "${kind}" == model || "${kind}" == image ) ]] || \
+      die "refusing malformed ownership purge plan entry"
     [[ "${kind}" == image ]] || continue
-    refs="$(image_referenced_by_external_container "${locator}")"
+    refs="$(image_referenced_by_external_container "${locator}")" || \
+      die "refusing full purge: Docker external-container inspection failed"
     if [[ -n "${refs}" ]]; then
       die "refusing image purge; ${locator} is referenced by other containers: ${refs}"
     fi
-  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${registry}" --kind all)
+  done <<< "${ASSET_PURGE_PLAN}"
 }
 
 asset_apply_full_purge() {
   [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
+  # Never regenerate the plan after partial per-asset registry updates.
+  [[ -n "${ASSET_PURGE_PLAN}" ]] || return 0
   local kind locator
   while IFS=$'\t' read -r kind locator; do
     case "${kind}" in
@@ -140,8 +160,9 @@ asset_apply_full_purge() {
         ;;
       *) die "invalid asset purge plan kind: ${kind}" ;;
     esac
-  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+  done <<< "${ASSET_PURGE_PLAN}"
 }
+
 mark_manifest_uninstalled() {
   python3 - "${STATE_FILE}" <<'PY'
 import os
@@ -315,7 +336,8 @@ else
   if [[ "${PURGE_IMAGE}" == 1 ]]; then
     python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_PREFLIGHT_FILE}" image "${VLLM_IMAGE}" || \
       die "refusing image deletion: active image is not safely recorded as installer-owned"
-    image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")"
+    image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")" || \
+      die "refusing image deletion: Docker external-container inspection failed"
     if [[ -n "${image_refs}" ]]; then
       die "refusing image deletion; ${VLLM_IMAGE} is referenced by other containers: ${image_refs}"
     fi
