@@ -1248,3 +1248,32 @@ M4 H38. Selected `orcarouter` and stopped runtime are **historical** read-only
 observations, not updated by this test. The current single DGX host's
 service/monitor/swap/protection remain untouched. `HOST_STABILITY=INCONCLUSIVE`,
 `HOST_PROTECTION=UNCHANGED`; PR #259 DRAFT/OPEN and Ready/Merge BLOCKED.
+
+## New actual DGX 70/70 confirmation and GitHub-only profile-switch drift gates — 2026-10-12
+
+The user-supplied **actual DGX** terminal log confirms exact-SHA
+fast-forward `d2e9a1d → fb6e0ed`, final clean checkout
+`fb6e0ed4075ac5fa8a3142137d068eb98d65e4bf` and
+`verify-synthetic.sh` **70/70 PASS** (7 allowlisted modules including
+10 profile-switch tests). The on-host `BASH_SYNTAX=PASS`; local
+`SHELLCHECK=SKIPPED_NOT_INSTALLED`. GitHub CI #38207710548 at this
+same source had **796/796 full and 70/70 selected PASS**, including
+CI ShellCheck, not on-host ShellCheck. This supersedes `d2e9a1d` as
+**latest actual DGX locally tested SHA**, without changing host readiness
+or previously observed runtime state.
+
+Additionally, GitHub-only source commit `8538c83` added **3
+disposable profile-switch fault regressions**: tampered backup SHA
+refuses rollback while preserving state; tampered candidate SHA refuses
+target commit and can roll back to a provable old runtime; removal of
+runtime attestation after a recorded commit refuses finalization until
+proof is restored. [CI #38210907792](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38210907792)
+**SUCCESS, 799/799 full Python tests, 73/73 synthetic, ShellCheck PASS**.
+These 3 cases have **not been run on the actual DGX**.
+
+Evidence: [actual DGX console](../scripts/benchmark/evidence/dgx-synthetic-doc-head-pass-20261012.md)
+and [manifest/attestation fault injection](../scripts/benchmark/evidence/managed-profile-switch-drift-attestation-synthetic-20261012.md).
+Neither result qualifies live M1, real D0–D5 M2, all-pairs service M3 or
+H38 M4. `HOST_STABILITY=INCONCLUSIVE`,
+`HOST_PROTECTION=UNCHANGED`. No model/service/swap/GPU change. PR #259
+must remain Draft/Open/Unmerged and Ready/Merge BLOCKED.

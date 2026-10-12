@@ -621,3 +621,9 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 ### Actual DGX profile-pair synthetic 70/70 accepted — 2026-10-12
 
 - [**Operator exact-SHA DGX PASS at `d2e9a1d`**](dgx-profile-pair-synthetic-pass-20261012.md): local 70/70 selected synthetic tests including 10 profile-switch methods and 12 directed profile-pair subtest coverage, with clean checkout and Bash syntax PASS; local ShellCheck SKIPPED_NOT_INSTALLED. Exact-source GitHub CI #38204845533 796/796 full, 70/70 synthetic, ShellCheck PASS. **No live runtime, profile switch or physical host E2E**. Replaces 60/60 `02e9c61` as latest local DGX synthetic acceptance only.
+
+
+### Actual DGX latest doc-head and profile-switch corruption regression — 2026-10-12
+
+- [**Actual DGX `fb6e0ed` 70/70 synthetic acceptance**](dgx-synthetic-doc-head-pass-20261012.md): guarded clean fast-forward from `d2e9a1d`, Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED, exact final SHA. This is the latest operator-observed DGX local synthetic checkout.
+- [**GitHub-only three profile-switch fault cases**](managed-profile-switch-drift-attestation-synthetic-20261012.md): backup manifest digest mismatch, candidate digest mismatch, and runtime-commit attestation disappearance; **CI #38210907792 799/799 full, 73/73 synthetic PASS**. This latest source has NOT yet been locally run on the DGX. No actual runtime/service/protection change or physical M1/M2/M3/M4 qualification.

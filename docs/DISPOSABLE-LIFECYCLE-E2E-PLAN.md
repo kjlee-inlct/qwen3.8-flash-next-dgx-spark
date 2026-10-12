@@ -92,3 +92,13 @@ source guards using fake Docker identity. These do **not** satisfy
 D0-D5 or live M3: every actual service transition, model readiness,
 release handover and stop/rollback on an independent disposable host
 remains **NOT_RUN**.
+
+
+## Synthetic boundary update — 2026-10-12
+
+Three further temporary-manifest transaction regression tests (backup
+SHA mismatch, target candidate drift and attestation loss after
+runtime-commit state) passed GitHub CI #38210907792, **799/799 full and
+73/73 synthetic**. The latest actual DGX local synthetic acceptance is
+separate: **70/70 at `fb6e0ed`**. These checks neither exercise real
+Docker/systemd transitions nor satisfy D0–D5 or M3 live qualifications.
