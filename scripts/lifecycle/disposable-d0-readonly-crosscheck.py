@@ -106,6 +106,8 @@ class ReadonlyInspector:
             result = self.run(
                 list(args), cwd=ROOT, text=True, capture_output=True,
                 check=False, timeout=5,
+                # 'git status' must not refresh/write the repository index.
+                env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
             )
             if result.returncode != 0 or len(result.stdout) > MAX_OUTPUT:
                 raise Refusal("read_only_probe_unavailable")

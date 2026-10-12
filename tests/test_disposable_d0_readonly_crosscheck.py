@@ -27,6 +27,7 @@ fixtures = load(ROOT / "tests" / "test_disposable_d0_preflight.py", "d0_fixture_
 class FakeHost:
     def __init__(self):
         self.events: list[tuple[str, ...]] = []
+        self.probe_environments: list[dict[str, str]] = []
         self.answers = {
             ("git", "rev-parse", "HEAD"): "a" * 40,
             ("git", "remote", "get-url", "origin"): fixtures.base_inventory()["git"]["origin"],
@@ -45,6 +46,7 @@ class FakeHost:
 
     def run(self, args, **kwargs):
         self.events.append(tuple(args))
+        self.probe_environments.append(kwargs.get("env", {}))
         if tuple(args) not in self.answers:
             raise OSError("simulated executable or daemon unavailable")
         return subprocess.CompletedProcess(args, 0, self.answers[tuple(args)], "")
@@ -85,6 +87,14 @@ class ReadonlyD0CrosscheckTests(unittest.TestCase):
             ("docker", "--context", "isolated-fixture", "info", "--format", "{{.ID}}"),
             self.host.events,
         )
+
+    def test_git_optional_locks_disabled_for_all_readonly_probes(self):
+        self.inspector.check(self.policy, self.inventory)
+        self.assertTrue(self.host.probe_environments)
+        self.assertTrue(all(
+            e.get("GIT_OPTIONAL_LOCKS") == "0"
+            for e in self.host.probe_environments
+        ))
 
     def test_protected_machine_refuses_before_host_commands(self):
         self.policy["protected_machine_id_hashes"].append(
