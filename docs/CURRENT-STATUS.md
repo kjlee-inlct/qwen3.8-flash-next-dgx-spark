@@ -973,3 +973,41 @@ The previous 775/775 GitHub Actions result was **CI**, not evidence that the ope
 **DGX operator-only sync/test, not run by ChatGPT**: choose the latest verified GitHub branch head SHA as `TARGET`. Start on branch `feat/h38-managed-integration` with a clean worktree. Confirm remote `origin` points to the expected GitHub repository, fetch only the branch without tags, assert `origin/feat/h38-managed-integration` equals the pinned SHA, and fast-forward only with Git hooks disabled. Never reset/stash/force-overwrite local edits. Then run `bash scripts/lifecycle/verify-synthetic.sh "$TARGET"` to verify the exact local checkout. This tool **does not run fetch/merge**, Docker, service manager, install, uninstall, runtime/host Doctor or any model; it runs only the five synthetic test modules under disposable HOME/XDG/TMPDIR and intercepts host commands through PATH stubs. **PATH interception is not an OS-level sandbox**; tests are allowlisted after source review and GitHub CI qualification. If remote advanced beyond the pinned target or any preflight fails, stop without changing the checkout and reassess the SHA.
 
 `DGX_LOCAL_SYNTHETIC=NOT_RUN` until the operator sends the **actual DGX output** (including exact SHA and `LOCAL_SYNTHETIC_RESULT=PASS`). `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, PR #259 Draft/Open and Ready/Merge BLOCKED.
+
+
+## DGX-selected profile read-only snapshot and ordered operator verification (2026-10-12)
+
+Operator-provided DGX log proves the earlier clean fast-forward through
+\`0e910a7e0ab6246228857cc9432c19b5787eb812\` and the local **48/48
+synthetic lifecycle tests PASS**, final \`DGX_SYNTHETIC_VALIDATION_COMPLETE\`.
+The local command printed \`SHELLCHECK=SKIPPED_NOT_INSTALLED\` (ShellCheck
+already passed GitHub CI), and did **not** qualify running model/runtime or
+the destructive host E2E. This is historical exact-SHA local evidence only.
+
+New \`scripts/lifecycle/inspect-selected-profile.py\` gives a compact,
+read-only actual-host snapshot separately from the synthetic verifier:
+strict \`install-maintenance\` manifest parsing reports selected model
+profile/phase/repository/path/expected image/served name and monitor
+protection; four strict transition status files and stale artifacts are
+reported; read-only Docker inspect and systemctl show report runtime and
+service observations. Docker/systemd probe errors remain UNKNOWN. A running
+container with matching image/mount/served command is labeled
+\`MATCHED_NOT_READINESS\`, **never actual serving/health qualified**.
+Corrupt manifest or pending transition causes fail-closed nonzero exit.
+Synthetic unit tests with temporary HOME/XDG and mocked host commands
+verify stopped, missing, uninstalled, invalid, transition pending and
+running-but-unqualified cases.
+
+The expanded \`inspect-readonly-lifecycle.sh\` now prints selected-profile
+snapshot **first**, before model inventory, other transitions and Doctor.
+Operator sequencing: (1) safe exact-SHA Git synchronization, (2) actual
+read-only selected-profile snapshot, (3) disposable synthetic tests, then
+(4) optional comprehensive read-only Doctor. The disposable verifier
+**must not be mistaken for an actual DGX runtime-status probe**.
+
+Do not invoke install/uninstall, Docker mutation, systemd restart, model/GPU,
+swap mutation, host monitor relaxation or H38. New actual-host snapshot
+execution is **NOT_RUN** until its operator-provided DGX output is supplied.
+M1 live host NOT_QUALIFIED, M2 destructive E2E NOT_RUN,
+M3 model all-pairs NOT_QUALIFIED, M4 H38 BLOCKED; PR #259 Draft/Open,
+Ready/Merge BLOCKED.
