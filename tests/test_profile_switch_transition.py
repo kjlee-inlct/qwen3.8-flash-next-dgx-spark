@@ -349,6 +349,52 @@ esac
                     self.assertFalse(self.backup.exists())
                     self.assertFalse(self.candidate.exists())
 
+    def test_all_twelve_pairs_reject_wrong_runtime_identity_and_recover(self) -> None:
+        """No target commit may be recorded with a mismatched container ID."""
+        for source in self.PROFILES:
+            for target in self.PROFILES:
+                if source == target:
+                    continue
+                with self.subTest(source=source, target=target):
+                    self._reset_pair_fixture(source)
+                    original = self.install.read_bytes()
+                    prepared = self.run_helper("prepare", source, target)
+                    self.assertEqual(prepared.returncode, 0, prepared.stderr)
+                    self.write_target_candidate(target)
+                    activated = self.run_helper("activate")
+                    self.assertEqual(activated.returncode, 0, activated.stderr)
+                    self.write_target_attestation()
+
+                    # The attestation is well formed, but it belongs to
+                    # another Docker container ID. Never finalize target.
+                    self.runtime_commit.write_text(
+                        self.runtime_commit.read_text(encoding="utf-8").replace(
+                            "RUNTIME_CONTAINER_ID=" + "a" * 64,
+                            "RUNTIME_CONTAINER_ID=" + "c" * 64,
+                        ),
+                        encoding="utf-8",
+                    )
+                    bad = self.run_helper("runtime-committed", profile="target")
+                    self.assertNotEqual(bad.returncode, 0)
+                    self.assertIn("runtime commit attestation", bad.stderr)
+                    self.assertIn(
+                        "PROFILE_SWITCH_STATE=activated",
+                        self.transition.read_text(encoding="utf-8"),
+                    )
+                    self.assertIn(
+                        f"MODEL_PROFILE={target}",
+                        self.install.read_text(encoding="utf-8"),
+                    )
+
+                    # Once a provable previous runtime is supplied, recovery
+                    # restores exact original manifest bytes and clears tx.
+                    restored = self.run_helper("recover", profile="old")
+                    self.assertEqual(restored.returncode, 0, restored.stderr)
+                    self.assertEqual(self.install.read_bytes(), original)
+                    self.assertFalse(self.transition.exists())
+                    self.assertFalse(self.backup.exists())
+                    self.assertFalse(self.candidate.exists())
+
     def test_same_profile_and_wrong_source_refuse_before_transaction_creation(self) -> None:
         """Every registered profile rejects no-op and incorrect-source transitions."""
         for source in self.PROFILES:
