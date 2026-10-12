@@ -475,5 +475,161 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
 
 
+
+    def test_post_service_failures_preserve_assets_and_can_retry(self) -> None:
+        """Real CLI with fake service/Docker commands, disposable owned model."""
+        import json
+
+        synthetic_root = self.home / "synthetic-installer"
+        (synthetic_root / "scripts").mkdir(parents=True)
+        service = synthetic_root / "scripts" / "manage-service.sh"
+        service.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        service.chmod(0o700)
+        manifest = self.manifest.read_text(encoding="utf-8")
+        self.manifest.write_text(
+            manifest.replace(f"INSTALL_ROOT={REPO}", f"INSTALL_ROOT={synthetic_root}")
+            .replace("MODEL_OWNED=0", "MODEL_OWNED=1")
+            .replace("SERVICE_OWNED=0", "SERVICE_OWNED=1"),
+            encoding="utf-8",
+        )
+        (self.model / ".qwen38-model-manifest.json").write_text(
+            '{"status":"complete","repository":"synthetic/only","revision":"'
+            + "a" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        calls = self.home / "simulated-commands.log"
+        service_fault = self.home / "service-fault.flag"
+        docker_fault = self.home / "docker-fault.flag"
+        service_fault.write_text("fail\n", encoding="utf-8")
+        docker_fault.write_text("fail\n", encoding="utf-8")
+        sudo = fake_bin / "sudo"
+        sudo.write_text(
+            "#!/usr/bin/env bash\n"
+            f'printf "sudo %s\\n" "$*" >> "{calls}"\n'
+            f'if [[ -e "{service_fault}" ]]; then\n'
+            '  echo "synthetic service failure" >&2\n  exit 81\nfi\n'
+            "exit 0\n",
+            encoding="utf-8",
+        )
+        sudo.chmod(0o700)
+        docker = fake_bin / "docker"
+        docker.write_text(
+            "#!/usr/bin/env bash\n"
+            f'printf "docker %s\\n" "$*" >> "{calls}"\n'
+            'if [[ "$1" == rm && "$2" == -f ]]; then\n'
+            f'  if [[ -e "{docker_fault}" ]]; then\n'
+            '    echo "Cannot connect to the Docker daemon" >&2\n    exit 82\n'
+            '  fi\n  exit 0\nfi\n'
+            "exit 97\n",
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        for name in ("systemctl", "swapoff"):
+            stub = fake_bin / name
+            stub.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+            stub.chmod(0o700)
+
+        def run_remove() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["bash", str(UNINSTALL), "--lang", "en", "--yes", "--purge-model"],
+                cwd=REPO,
+                env={
+                    **os.environ,
+                    "HOME": str(self.home),
+                    "XDG_STATE_HOME": str(self.home / "state"),
+                    "XDG_DATA_HOME": str(self.home / "data"),
+                    "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+            )
+
+        service_result = run_remove()
+        self.assertNotEqual(service_result.returncode, 0)
+        self.assertIn("synthetic service failure", service_result.stderr)
+        self.assertNotIn("docker rm -f", calls.read_text(encoding="utf-8"))
+        self.assertEqual((self.model / "keep-model.bin").read_bytes(), b"KEEP MODEL")
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+
+        service_fault.unlink()
+        docker_result = run_remove()
+        self.assertNotEqual(docker_result.returncode, 0)
+        self.assertIn("managed container removal failed", docker_result.stderr)
+        self.assertIn("docker rm -f qwen38-flash-next", calls.read_text(encoding="utf-8"))
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+        self.assertEqual((self.model / "keep-model.bin").read_bytes(), b"KEEP MODEL")
+        self.assertTrue((self.data / "keep-release").exists())
+        registry = json.loads((self.state / "asset-ownership.json").read_text(encoding="utf-8"))
+        self.assertTrue(any(
+            item["locator"] == str(self.model) and item["owned"]
+            for item in registry["assets"]
+        ))
+
+        docker_fault.unlink()
+        retry_result = run_remove()
+        self.assertEqual(retry_result.returncode, 0, retry_result.stderr)
+        self.assertIn("PHASE=uninstalled", self.manifest.read_text(encoding="utf-8"))
+        self.assertFalse(self.model.exists())
+        self.assertEqual(
+            (self.data / "keep-release").read_text(encoding="utf-8"), "KEEP RELEASE\n"
+        )
+        self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+
+    def test_docker_explicit_no_such_container_is_idempotent(self) -> None:
+        """Known absent container may complete without deleting retained assets."""
+        root = self.home / "synthetic-installer"
+        (root / "scripts").mkdir(parents=True)
+        service = root / "scripts" / "manage-service.sh"
+        service.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        service.chmod(0o700)
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8").replace(
+                f"INSTALL_ROOT={REPO}", f"INSTALL_ROOT={root}"
+            ),
+            encoding="utf-8",
+        )
+        fake_bin = self.home / "fake-bin"
+        fake_bin.mkdir()
+        docker = fake_bin / "docker"
+        docker.write_text(
+            '#!/usr/bin/env bash\n'
+            'if [[ "$1" == rm && "$2" == -f ]]; then\n'
+            '  echo "Error response from daemon: No such container: qwen38-flash-next" >&2\n'
+            '  exit 1\n'
+            'fi\nexit 99\n',
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        for name in ("sudo", "systemctl", "swapoff"):
+            stub = fake_bin / name
+            stub.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+            stub.chmod(0o700)
+
+        result = subprocess.run(
+            ["bash", str(UNINSTALL), "--lang", "en", "--yes"],
+            cwd=REPO,
+            env={
+                **os.environ,
+                "HOME": str(self.home),
+                "XDG_STATE_HOME": str(self.home / "state"),
+                "XDG_DATA_HOME": str(self.home / "data"),
+                "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Container already absent: qwen38-flash-next", result.stdout)
+        self.assertIn("PHASE=uninstalled", self.manifest.read_text(encoding="utf-8"))
+        self.assertTrue((self.model / "keep-model.bin").exists())
+        self.assertTrue((self.data / "keep-release").exists())
+
 if __name__ == "__main__":
     unittest.main()
