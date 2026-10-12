@@ -705,3 +705,7 @@ outside the selected roots, or restoration/snapshot viability. Independent
 D0 trust review and explicit authorization remain necessary. Current status:
 **source and fixture tests only; not executed on any physical disposable
 host or the protected DGX; M1–M4 and D1–D5 unchanged**.
+
+### D0 on-host read-only policy cross-check — mocked GitHub CI (2026-10-12)
+
+- [**Read-only D0 crosscheck implementation, 12 fixture cases and first-failure correction**](d0-onhost-readonly-crosscheck-ci-20261012.md): first CI #38218386709 **FAIL 1/824** (fake Docker-outage exception type), corrected CI #38218663210 **SUCCESS 824/824 full and 77/77 bounded synthetic** with shell/Python/static PASS. No real disposable host collection, and none on the protected DGX. D0 live admission remains NOT_GRANTED; D1–D5 NOT_RUN.
