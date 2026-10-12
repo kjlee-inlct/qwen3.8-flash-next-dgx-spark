@@ -145,3 +145,31 @@ qualification is changed.
 ### D0 offline evidence policy CI acceptance (2026-10-12)
 
 Source `7acd15cc5a2d8f5603bdb82b08b1cee49da7d18a` introduced a stdlib-only JSON D0 policy evaluator and nine fixture regressions. [GitHub CI #38217170909](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38217170909) **SUCCESS 812/812 full tests, 77/77 existing bounded synthetic**, Bash syntax, ShellCheck, Python compile, whitespace PASS. The D0 test methods are **not** yet in the bounded DGX verifier; latest DGX actual local run remains `1283b1a` **77/77**. A policy-consistent response is `D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` with `D0_ADMISSION=NOT_GRANTED`; it is not live host attestation or D0 acceptance. [Permanent source/limitation evidence](../benchmark/evidence/disposable-d0-offline-preflight-ci-20261012.md). M1/M2/M3/M4 remain NOT_QUALIFIED/NOT_RUN/BLOCKED and PR #259 stays Draft/Open/Unmerged.
+
+
+## D0 independent-host on-host read-only cross-check (source only; 2026-10-12)
+
+A new conservative `disposable-d0-readonly-crosscheck.py` requires the
+`--ack-independent-disposable-host` flag plus the existing strict
+`--policy` and `--inventory` JSON. The **sole protected DGX is not a
+permitted target**. It first validates the offline D0 policy and compares a
+hashed real machine identity against the inventory and protected denyset
+**before** any Docker/systemd calls. It then performs bounded read-only
+Git HEAD/origin/worktree, candidate path realpath and mountpoint, Docker
+context/daemon/empty-container, and dedicated disposable service-unit checks.
+
+The collector does not probe without the explicit independent-host
+acknowledgement, does not ask for sudo, does not modify files or host
+configuration, and never installs/uninstalls or starts models. Its JSON
+output excludes raw host identities, secrets, mounts and container IDs.
+The output is `ON_HOST_READ_ONLY_ASSERTION_CROSSCHECK`, with
+`d0_admission=NOT_GRANTED` and `d1_d5=NOT_AUTHORIZED` **even after
+all observed fields match**. A missing daemon, unknown service response,
+realpath/mount drift, protected identity or unclean Git state fails closed.
+
+This cross-check **does not independently prove** owner consent, absence of
+external Docker users, isolation of the underlying daemon, mount sources
+outside the selected roots, or restoration/snapshot viability. Independent
+D0 trust review and explicit authorization remain necessary. Current status:
+**source and fixture tests only; not executed on any physical disposable
+host or the protected DGX; M1–M4 and D1–D5 unchanged**.

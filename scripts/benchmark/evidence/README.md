@@ -677,3 +677,31 @@ qualification is changed.
 ### D0 independent-host offline policy review — synthetic CI only (2026-10-12)
 
 - [**D0 offline preflight source and nine fail-closed fixture regressions**](disposable-d0-offline-preflight-ci-20261012.md): [CI #38217170909](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38217170909) **SUCCESS 812/812 full and 77/77 selected**, shell/Python/whitespace PASS. Reads only supplied JSON and **never grants live admission**. No disposable real-host D0 attestation or D1–D5 E2E has run; DGX protection and M1–M4 unchanged.
+
+
+## D0 independent-host on-host read-only cross-check (source only; 2026-10-12)
+
+A new conservative `disposable-d0-readonly-crosscheck.py` requires the
+`--ack-independent-disposable-host` flag plus the existing strict
+`--policy` and `--inventory` JSON. The **sole protected DGX is not a
+permitted target**. It first validates the offline D0 policy and compares a
+hashed real machine identity against the inventory and protected denyset
+**before** any Docker/systemd calls. It then performs bounded read-only
+Git HEAD/origin/worktree, candidate path realpath and mountpoint, Docker
+context/daemon/empty-container, and dedicated disposable service-unit checks.
+
+The collector does not probe without the explicit independent-host
+acknowledgement, does not ask for sudo, does not modify files or host
+configuration, and never installs/uninstalls or starts models. Its JSON
+output excludes raw host identities, secrets, mounts and container IDs.
+The output is `ON_HOST_READ_ONLY_ASSERTION_CROSSCHECK`, with
+`d0_admission=NOT_GRANTED` and `d1_d5=NOT_AUTHORIZED` **even after
+all observed fields match**. A missing daemon, unknown service response,
+realpath/mount drift, protected identity or unclean Git state fails closed.
+
+This cross-check **does not independently prove** owner consent, absence of
+external Docker users, isolation of the underlying daemon, mount sources
+outside the selected roots, or restoration/snapshot viability. Independent
+D0 trust review and explicit authorization remain necessary. Current status:
+**source and fixture tests only; not executed on any physical disposable
+host or the protected DGX; M1–M4 and D1–D5 unchanged**.
