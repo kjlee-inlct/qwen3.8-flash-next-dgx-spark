@@ -958,5 +958,97 @@ class UninstallWizardPreviewTests(unittest.TestCase):
         self.assertFalse(self.data.exists())
         self.assertFalse(self.manifest.exists())
 
+
+    def test_full_purge_partial_plan_failure_preserves_registry_and_model(self) -> None:
+        """Nonzero plan-purge with partial stdout must stop before any teardown."""
+        import sys
+
+        fake_bin = self._crash_test_stubs()
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8")
+            .replace("MODEL_OWNED=0", "MODEL_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            encoding="utf-8",
+        )
+        marker = self.model / ".qwen38-model-manifest.json"
+        marker.write_text(
+            '{"status":"complete","repository":"synthetic/plan",'
+            '"revision":"' + "d" * 40 + '"}\n',
+            encoding="utf-8",
+        )
+        registry = self.state / "asset-ownership.json"
+        registry.write_text('{"schema_version":1,"assets":[]}\n', encoding="utf-8")
+        python_stub = fake_bin / "python3"
+        python_stub.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "${2:-}" == plan-purge ]]; then\n'
+            f'  printf "model\\t%s\\n" "{self.model}"\n'
+            '  echo "simulated partial plan failure" >&2\n'
+            '  exit 86\n'
+            'fi\n'
+            f'exec "{sys.executable}" "$@"\n',
+            encoding="utf-8",
+        )
+        python_stub.chmod(0o700)
+        expected = self.snapshot()
+
+        result = self._run_crash_test(fake_bin, "--purge-all")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ownership plan generation failed", result.stderr)
+        self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
+        self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+        self.assertTrue((self.model / "keep-model.bin").is_file())
+        self.assertTrue((self.data / "keep-release").is_file())
+        self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+        actual = self.snapshot()
+        actual.pop("state/qwen38-spark/operation.lock", None)
+        self.assertEqual(actual, expected)
+
+    def test_docker_ps_error_with_partial_output_refuses_all_image_purges(self) -> None:
+        """A failed Docker dependency scan is not proof of zero external users."""
+        fake_bin = self._crash_test_stubs()
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8")
+            .replace("IMAGE_OWNED=0", "IMAGE_OWNED=1")
+            .replace("SWAP_OWNED=0", "SWAP_OWNED=1"),
+            encoding="utf-8",
+        )
+        registry = self.state / "asset-ownership.json"
+        registry.write_text('{"schema_version":1,"assets":[]}\n', encoding="utf-8")
+        docker = fake_bin / "docker"
+        docker.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "$1" == image && "$2" == inspect ]]; then\n'
+            '  if [[ "${3:-}" == --format ]]; then\n'
+            '    printf "sha256:%s\\n" "' + "e" * 64 + '"\n'
+            '  fi\n'
+            '  exit 0\n'
+            'fi\n'
+            'if [[ "$1" == ps ]]; then\n'
+            '  printf "partial-external-user\\n"\n'
+            '  echo "simulated Docker daemon disconnect" >&2\n'
+            '  exit 78\n'
+            'fi\n'
+            'echo "unexpected Docker mutation" >&2\n'
+            'exit 97\n',
+            encoding="utf-8",
+        )
+        docker.chmod(0o700)
+        expected = self.snapshot()
+        for flag in ("--purge-image", "--purge-all"):
+            with self.subTest(flag=flag):
+                result = self._run_crash_test(fake_bin, flag)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("Docker external-container inspection failed", result.stderr)
+                self.assertIn("simulated Docker daemon disconnect", result.stderr)
+                self.assertIn("PHASE=complete", self.manifest.read_text(encoding="utf-8"))
+                self.assertTrue((self.model / "keep-model.bin").is_file())
+                self.assertTrue((self.data / "keep-release").is_file())
+                self.assertEqual(registry.read_bytes(), expected["state/qwen38-spark/asset-ownership.json"])
+                self.assertFalse(list(self.state.glob(".uninstall-preflight.*")))
+                observed = self.snapshot()
+                observed.pop("state/qwen38-spark/operation.lock", None)
+                self.assertEqual(observed, expected)
+
 if __name__ == "__main__":
     unittest.main()
