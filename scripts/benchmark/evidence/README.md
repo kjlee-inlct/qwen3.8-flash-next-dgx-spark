@@ -645,3 +645,30 @@ PR #244 was squash-merged into `main` as `5b6ba67eddf1902cdf2daa17ec30f6e043e26f
 ### New actual DGX 77/77 profile-switch prepare-stage synthetic PASS (2026-10-12)
 
 - [**Operator guarded DGX `1283b1a` exact-SHA 77/77 isolated synthetic PASS**](dgx-77-prepare-orphan-synthetic-pass-20261012.md): actual clean fast-forward from `9220624`, seven selected modules including **17 profile-switch** tests with prepare-stage orphan evidence preservation, Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED, final `DGX_PREPARE_ORPHAN_SYNTHETIC_COMPLETE` and clean exact HEAD. Same-source CI #38215504822 SUCCESS 803/803 full, 77/77 synthetic plus ShellCheck. Supersedes prior local synthetic 76/76 as latest, **not** any real M1–M4 acceptance or host protection disposition.
+
+
+## Disposable D0 offline evidence precheck — code staged, not host-qualified (2026-10-12)
+
+A new **offline-only** reviewer, `disposable-d0-preflight.py`, validates two
+explicit operator-provided JSON files using Python stdlib only. It never reads
+live Docker, systemd, host identity, Git or model state; it never runs commands
+on any host. Required policy: exact SHA and repository, **nonempty protected
+machine-id hash and Docker daemon denysets**, forbidden production roots.
+Required inventory: separately identified disposable machine/daemon, clean
+exact SHA + origin, owner disposable declaration, restore point, isolated
+non-default Docker context without external users, nonoverlapping throwaway
+model/log/work roots, bounded owned synthetic model, non-production service
+unit, and no pending lifecycle transactions.
+
+Run **only against an independently assembled, reviewed inventory**:
+`python3 disposable-d0-preflight.py --policy <policy.json> --inventory <inventory.json>`.
+No real protected machine IDs, daemon IDs, credentials or private mount
+inventories belong in Git history or CI logs. Inputs are treated as
+**untrusted assertions**: success prints
+`D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` but always
+`D0_ADMISSION=NOT_GRANTED` and `D0_LIVE_E2E=NOT_AUTHORIZED`.
+Any incomplete/mismatched evidence fails closed with exit 2. A passing
+offline check is **not** permission for D1–D5; independent operator
+attestation, read-only on-host cross-check and explicit disposable-host
+authorization remain mandatory. Neither current DGX nor M1/M2/M3/M4
+qualification is changed.

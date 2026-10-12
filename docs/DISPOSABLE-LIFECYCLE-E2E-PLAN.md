@@ -128,3 +128,30 @@ A new source-level safety hardening makes profile-switch `prepare` reject orphan
 ## Latest DGX local isolated-synthetic source confirmation (2026-10-12)
 
 The operator-provided DGX transcript now verifies exact checkout `1283b1a9252f1ff53d51659049ca42f9449e5ccd`: **77/77 selected synthetic tests PASS**, including 17 profile-switch fixture tests and the `prepare` orphan-artifact refusal; Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED. GitHub [CI #38215504822](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215504822) separately passed 803/803 full, 77/77 selected, ShellCheck and static checks. D0–D5 and actual 12-pair Docker/systemd live switching remain NOT_RUN or NOT_QUALIFIED. Do not execute destructive validation on the sole protected DGX. PR #259 remains Draft/Open/Unmerged.
+
+
+## Disposable D0 offline evidence precheck — code staged, not host-qualified (2026-10-12)
+
+A new **offline-only** reviewer, `disposable-d0-preflight.py`, validates two
+explicit operator-provided JSON files using Python stdlib only. It never reads
+live Docker, systemd, host identity, Git or model state; it never runs commands
+on any host. Required policy: exact SHA and repository, **nonempty protected
+machine-id hash and Docker daemon denysets**, forbidden production roots.
+Required inventory: separately identified disposable machine/daemon, clean
+exact SHA + origin, owner disposable declaration, restore point, isolated
+non-default Docker context without external users, nonoverlapping throwaway
+model/log/work roots, bounded owned synthetic model, non-production service
+unit, and no pending lifecycle transactions.
+
+Run **only against an independently assembled, reviewed inventory**:
+`python3 scripts/lifecycle/disposable-d0-preflight.py --policy <policy.json> --inventory <inventory.json>`.
+No real protected machine IDs, daemon IDs, credentials or private mount
+inventories belong in Git history or CI logs. Inputs are treated as
+**untrusted assertions**: success prints
+`D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` but always
+`D0_ADMISSION=NOT_GRANTED` and `D0_LIVE_E2E=NOT_AUTHORIZED`.
+Any incomplete/mismatched evidence fails closed with exit 2. A passing
+offline check is **not** permission for D1–D5; independent operator
+attestation, read-only on-host cross-check and explicit disposable-host
+authorization remain mandatory. Neither current DGX nor M1/M2/M3/M4
+qualification is changed.

@@ -989,3 +989,30 @@ A subsequent safety review found that `prepare` did not apply the existing orpha
 New operator-provided console evidence confirms guarded fast-forward `9220624 → 1283b1a` and **77/77 isolated local synthetic tests PASS** on exact DGX checkout `1283b1a9252f1ff53d51659049ca42f9449e5ccd`, including **17/17 profile-switch tests** and the new `prepare` orphan-staging preservation regression. Exact final HEAD, `LOCAL_SYNTHETIC_RESULT=PASS` and `DGX_PREPARE_ORPHAN_SYNTHETIC_COMPLETE` were observed. Bash syntax PASS; **local ShellCheck SKIPPED_NOT_INSTALLED**, distinct from [GitHub CI #38215504822](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215504822) **SUCCESS 803/803 full and 77/77 synthetic, ShellCheck PASS**.
 
 [Canonical 77/77 operator evidence](scripts/benchmark/evidence/dgx-77-prepare-orphan-synthetic-pass-20261012.md). This updates the latest *DGX-local isolated synthetic* source from `9220624` (76/76) to `1283b1a` (77/77), **not** any real Docker/systemd/model acceptance. `M1_HOST_HEALTH=NOT_QUALIFIED`, `M2_DESTRUCTIVE_E2E=NOT_RUN`, `M3_PROFILE_ALL_PAIRS=NOT_QUALIFIED`, `M4_H38=BLOCKED`, `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `HOST_STABILITY=INCONCLUSIVE`, `HOST_PROTECTION=UNCHANGED`. PR #259 remains Draft/Open/Unmerged and Ready/Merge BLOCKED; no protected DGX runtime mutation.
+
+
+## Disposable D0 offline evidence precheck — code staged, not host-qualified (2026-10-12)
+
+A new **offline-only** reviewer, `disposable-d0-preflight.py`, validates two
+explicit operator-provided JSON files using Python stdlib only. It never reads
+live Docker, systemd, host identity, Git or model state; it never runs commands
+on any host. Required policy: exact SHA and repository, **nonempty protected
+machine-id hash and Docker daemon denysets**, forbidden production roots.
+Required inventory: separately identified disposable machine/daemon, clean
+exact SHA + origin, owner disposable declaration, restore point, isolated
+non-default Docker context without external users, nonoverlapping throwaway
+model/log/work roots, bounded owned synthetic model, non-production service
+unit, and no pending lifecycle transactions.
+
+Run **only against an independently assembled, reviewed inventory**:
+`python3 scripts/lifecycle/disposable-d0-preflight.py --policy <policy.json> --inventory <inventory.json>`.
+No real protected machine IDs, daemon IDs, credentials or private mount
+inventories belong in Git history or CI logs. Inputs are treated as
+**untrusted assertions**: success prints
+`D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` but always
+`D0_ADMISSION=NOT_GRANTED` and `D0_LIVE_E2E=NOT_AUTHORIZED`.
+Any incomplete/mismatched evidence fails closed with exit 2. A passing
+offline check is **not** permission for D1–D5; independent operator
+attestation, read-only on-host cross-check and explicit disposable-host
+authorization remain mandatory. Neither current DGX nor M1/M2/M3/M4
+qualification is changed.

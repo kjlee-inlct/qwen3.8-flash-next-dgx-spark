@@ -6930,3 +6930,30 @@ classification remain separate.
 ### Actual DGX 77/77 local isolated synthetic at `1283b1a` (2026-10-12)
 
 [New permanent DGX operator evidence](evidence/dgx-77-prepare-orphan-synthetic-pass-20261012.md) supersedes `9220624` 76/76 as the latest *DGX-local synthetic* result: source `1283b1a` passed 77/77 fixture tests including 17 profile-switch methods and the prepare-stage orphan guard. Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED. Matched GitHub CI #38215504822 passed 803/803 full and 77/77 synthetic. No new H38 GPU/model or live host-lifecycle qualification.
+
+
+## Disposable D0 offline evidence precheck — code staged, not host-qualified (2026-10-12)
+
+A new **offline-only** reviewer, `disposable-d0-preflight.py`, validates two
+explicit operator-provided JSON files using Python stdlib only. It never reads
+live Docker, systemd, host identity, Git or model state; it never runs commands
+on any host. Required policy: exact SHA and repository, **nonempty protected
+machine-id hash and Docker daemon denysets**, forbidden production roots.
+Required inventory: separately identified disposable machine/daemon, clean
+exact SHA + origin, owner disposable declaration, restore point, isolated
+non-default Docker context without external users, nonoverlapping throwaway
+model/log/work roots, bounded owned synthetic model, non-production service
+unit, and no pending lifecycle transactions.
+
+Run **only against an independently assembled, reviewed inventory**:
+`python3 disposable-d0-preflight.py --policy <policy.json> --inventory <inventory.json>`.
+No real protected machine IDs, daemon IDs, credentials or private mount
+inventories belong in Git history or CI logs. Inputs are treated as
+**untrusted assertions**: success prints
+`D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` but always
+`D0_ADMISSION=NOT_GRANTED` and `D0_LIVE_E2E=NOT_AUTHORIZED`.
+Any incomplete/mismatched evidence fails closed with exit 2. A passing
+offline check is **not** permission for D1–D5; independent operator
+attestation, read-only on-host cross-check and explicit disposable-host
+authorization remain mandatory. Neither current DGX nor M1/M2/M3/M4
+qualification is changed.
