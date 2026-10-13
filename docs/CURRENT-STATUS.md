@@ -1,5 +1,10 @@
 # Current project status
 
+## Actual DGX S2 block accounting PASS — no reclaim clearance (2026-10-13)
+
+Operator-returned exact-SHA S2 at `14c67135f94b3c507a90c3a0702c83b9f3bfcda7` reported `RECLAIM_BLOCK_ACCOUNTING=COLLECTED_READ_ONLY`. Six model trees account for 515623661568 allocated bytes (480.212 GiB), with **zero multi-linked file entries** in this scope and **319 symlinks** (H3 13/H4 76/H5 91/H6 139). H3+H4 account for 145557426176 allocated bytes (135.561 GiB), **not** certified removable bytes. All six root directories have FS device 66306. Source-built symlinks can point to container-only mount aliases; host dangling resolution is not sufficient to declare breakage. The S2 runner did not enumerate actual target chains, safetensors index shard references or CoW shared extents. [Actual-DGX evidence](../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md). Next read-only gate **S3 runtime-alias/index mapping NOT_RUN**; all five llama-benchy reports remain `NOT_MEASURED`; all model/Docker deletes remain blocked; M1/M3/M4/M2/D0 gates unchanged. Exact old Docker ID and installed immutable release remain protected.
+
+
 This document is the canonical short-form status entry point for the repository.
 Dated benchmark/evidence documents preserve what was known at the time of each run;
 use this file plus `scripts/benchmark/evidence/README.md` when deciding what is true

@@ -1,5 +1,10 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
+## S2 is filesystem evidence, not llama-benchy throughput (2026-10-13)
+
+[Actual DGX S2](../../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md) measured allocation/hardlink/symlink counts only. It did **not** start the model API or generate a llama-benchy JSON. All five templates remain `NOT_MEASURED`; H3/H4 are intermediate artifacts, not independent selectable benchmark profiles. Do not infer permission to delete the parents from a future H6 throughput result.
+
+
 **Status 2026-10-13: templates created; NO NEW MODEL THROUGHPUT HAS BEEN MEASURED.**
 The only actual DGX observations currently relevant are A5 dry-run (PASS),
 lychee888 L0 pinned remote-index (PASS), and B5 stopped legacy prestart

@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## Actual DGX S2 block/inode audit PASS (2026-10-13)
+
+- [**S2 exact-SHA six-tree allocated-block and symlink audit**](dgx-hybrid-block-accounting-readonly-20261013.md): physical operator output at `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`, `RECLAIM_BLOCK_ACCOUNTING=COLLECTED_READ_ONLY`. Combined 515623661568 bytes / 480.212 GiB; H3+H4 145557426176 bytes / 135.561 GiB **not certified reclaimable**; no hardlink file entries, 319 symlinks (H3 13/H4 76/H5 91/H6 139), device 66306 across all six. No runtime start/delete/benchmark. Next: S3 actual symlink target / index-shard / container bind-mount dependency survey, followed by CoW/reflink review; five model reports `NOT_MEASURED`.
+
+
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
 ## Actual DGX S1 storage inventory PASS (2026-10-13)

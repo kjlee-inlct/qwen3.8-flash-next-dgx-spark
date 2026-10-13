@@ -1,5 +1,10 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
+## Actual S2 allocation and link results (2026-10-13)
+
+[Physical-DGX S2 exact-byte audit](../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md) **PASS_READ_ONLY** at SHA `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`. Combined six-tree `du` allocated blocks: `515623661568` bytes; H3+H4: `145557426176` bytes (135.561 GiB); 0 hardlink file entries and 319 symlinks (13/76/91/139 from H3/H4/H5/H6). Filesystem device 66306 for all six. **No deletions, model load or benchmark.** H3/H4 cannot yet be retired: H6's configured ancestor chain and container-only symlink targets require an S3 link/index/mount map, and extent sharing/CoW remain unknown. All five report templates remain `NOT_MEASURED`; exact ownership, verified off-host evidence copies, per-object dry-run and owner authorization are still mandatory. `du` is not a certificate of reclaimable bytes.
+
+
 Date: 2026-10-13. Operator preference: benchmark each available candidate
 before deleting its checkpoint, Docker image or important experiment artifact.
 

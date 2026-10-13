@@ -1,5 +1,12 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Latest S2 physical result and next safe gate (2026-10-13)
+
+An actual DGX operator returned **S2=PASS_READ_ONLY** from exact source `14c67135f94b3c507a90c3a0702c83b9f3bfcda7` after same-head GitHub CI [38347956896](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38347956896) SUCCESS. [Permanent scoped evidence](../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md): six model trees 515623661568 allocated bytes (480.212 GiB); H3+H4 145557426176 (135.561 GiB) **not proved reclaimable**; 0 hardlink file entries, 319 symlinks (H3 13/H4 76/H5 91/H6 139), all six directories device 66306. The H3-H6 builders use virtual Docker bind-mount aliases (`/base-model`, `/h3-model`, `/h4-all`, `/h5-parent`); a host-dangling symlink does not by itself prove missing runtime data.
+
+**Next priority S3:** safe, no-start, no-delete survey of actual symlink targets, per-stage safetensors index shard references and runtime mount topology, then reflink/snapshot caveats. Reuse existing audit scripts and model builders/validator/asset registry before adding a new tool. Do not interpret `du` as a deletion estimate, or infer that H6 runs without H3/H4/OrcaRouter. Five llama-benchy reports remain `NOT_MEASURED`; benchmark evidence and off-host verified copies are prerequisites for any separately authorized selective removal. S2 was **not** a live benchmark or host-stability acceptance. The exact predecessor Docker ID, immutable release, monitor/protect and PLE swap remain protected. PR #259 must stay Draft/Unmerged until explicit owner approval and actual gates. Older below paragraphs identifying S2 as next are **historical**, superseded by this block.
+
+
 > **Canonical, reusable prompt skeleton; not a dated acceptance certificate.**
 > Start a new ChatGPT conversation by linking this file and copying the section
 > **"Paste into a new conversation"** below. Read the repository before acting.

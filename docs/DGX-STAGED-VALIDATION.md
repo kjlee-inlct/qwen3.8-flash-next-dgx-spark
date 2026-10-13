@@ -1,5 +1,10 @@
 # DGX staged validation — operator runbook (2026-10-13)
 
+## S2 physical host allocation-block audit PASS (2026-10-13)
+
+At exact source `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`, actual DGX operator output returned **`RECLAIM_BLOCK_ACCOUNTING=COLLECTED_READ_ONLY`**. [Evidence](../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md): six model directories 515623661568 allocated bytes; H3+H4 145557426176 bytes, zero observed hardlink file entries and 319 symlinks. Next **S3 read-only container-alias/safetensors index dependency** survey is not run. No model was started, no benchmark was measured, no file/Docker asset was removed. Never claim real reclaimable capacity from `du` alone. This newer scoped S2 result supersedes previous S2 `NOT_RUN` labels but does not change M1/M2/M3/M4/D0 protections.
+
+
 > **Decision:** A is appropriate now on the sole DGX; B follows A; independent disposable-host D0 and D1–D5 must never run on the sole DGX; H38 live remains blocked.
 
 ## Evidence and distinction
