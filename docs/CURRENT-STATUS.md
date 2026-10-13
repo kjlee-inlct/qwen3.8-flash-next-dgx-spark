@@ -1,3 +1,10 @@
+> **2026-10-14 Wizard migration note (Phase 1, staged):** A separate
+> modular `./wizard.sh` operator entry now exposes read-only inventory,
+> diagnostics, preflight and safe preview paths. The installer-only refactor,
+> live profile switch, protected benchmark controller and storage deletion
+> are **NOT IMPLEMENTED** in this stage. See
+> [WIZARD-ARCHITECTURE.md](WIZARD-ARCHITECTURE.md) for exact scope.
+
 # Current project status
 
 ## 2026-10-13 17:59:36 KST — ACTUAL_DGX Legacy A protective stop CONFIRMED
