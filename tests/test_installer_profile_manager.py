@@ -73,7 +73,10 @@ class InstalledProfileWizardTests(unittest.TestCase):
         *,
         dry_run: bool = True,
     ) -> subprocess.CompletedProcess[str]:
-        args = [str(ROOT / "install.sh"), "--lang", "en", "--no-start"]
+        manifest = home / "state/qwen38-spark/install.env"
+        completed = manifest.exists() and "PHASE=complete" in manifest.read_text(encoding="utf-8")
+        args = [str(ROOT / "wizard.sh"), "--manage"] if completed else [str(ROOT / "install.sh")]
+        args.extend(["--lang", "en", "--no-start"])
         if dry_run:
             args.append("--dry-run")
         return subprocess.run(
@@ -110,6 +113,21 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("Input stream closed (EOF)", result.stderr)
             self.assertNotIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
+
+    def test_install_entry_refuses_complete_without_touching_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--dry-run", "--model", "mazinb"],
+                cwd=ROOT, env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("INSTALL_ALREADY_COMPLETE", result.stderr)
             self.assertEqual(manifest.read_bytes(), before)
             self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
 
@@ -202,7 +220,8 @@ class InstalledProfileWizardTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    str(ROOT / "install.sh"),
+                    str(ROOT / "wizard.sh"),
+                    "--manage",
                     "--lang",
                     "ko",
                     "--no-start",

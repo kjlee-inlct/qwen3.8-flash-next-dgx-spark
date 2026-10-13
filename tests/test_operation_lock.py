@@ -178,7 +178,7 @@ class OperationLockTests(unittest.TestCase):
         self.assertIn('current_gid="$(stat -c %g "${lock_file}")"', lock_helper)
 
     def test_installer_holds_outer_lock_before_manifest_read(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         lock_block = 'if [[ "${DRY_RUN}" != 1 ]]; then\n  ensure_operation_lock\nfi'
 
         self.assertIn('acquire_operation_lock "${STATE_DIR}" "install"', installer)
@@ -197,7 +197,7 @@ class OperationLockTests(unittest.TestCase):
         update_transition = (ROOT / "scripts" / "lifecycle" / "update-transition.sh").read_text(encoding="utf-8")
         manage_service = (ROOT / "scripts" / "manage-service.sh").read_text(encoding="utf-8")
         uninstall = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
 
         self.assertIn('status)\n    [[ $# -eq 0 ]]', release_manager)
         self.assertIn('status)\n    [[ $# -eq 0 ]]', update_transition)

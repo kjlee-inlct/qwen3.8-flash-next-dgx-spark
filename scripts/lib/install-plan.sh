@@ -73,6 +73,9 @@ install_plan_render_cli_preview() {
 
   local monitor_variant service_variant arg quoted rendered=""
   local -a args=("./install.sh")
+  if [[ "${PLAN_PROFILE_SWITCH:-0}" == 1 || "${QWEN38_WIZARD_MANAGEMENT:-0}" == 1 ]]; then
+    args=("./wizard.sh" "--manage")
+  fi
 
   args+=(
     "$(install_option_flag language)" "${PLAN_UI_LANG}"

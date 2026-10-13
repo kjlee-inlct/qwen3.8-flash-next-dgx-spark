@@ -36,8 +36,14 @@ class InstallerPlanParityTests(unittest.TestCase):
         args: list[str],
         answers: str = "",
     ) -> subprocess.CompletedProcess[str]:
+        manifest = home / "state/qwen38-spark/install.env"
+        completed = manifest.exists() and "PHASE=complete" in manifest.read_text(encoding="utf-8")
+        routed_args = list(args)
+        if completed and routed_args[:1] == ["--manage"]:
+            routed_args.pop(0)
+        program = [str(ROOT / "wizard.sh"), "--manage"] if completed else [str(ROOT / "install.sh")]
         return subprocess.run(
-            [str(ROOT / "install.sh"), *args],
+            [*program, *routed_args],
             cwd=ROOT,
             env={
                 **os.environ,
@@ -70,7 +76,9 @@ class InstallerPlanParityTests(unittest.TestCase):
             command = lines[index + 1].strip()
             argv = shlex.split(command)
             self.assertTrue(argv)
-            self.assertEqual(argv[0], "./install.sh")
+            self.assertIn(argv[0], ("./install.sh", "./wizard.sh"))
+            if argv[0] == "./wizard.sh":
+                self.assertEqual(argv[1], "--manage")
             return argv
         self.fail("equivalent CLI preview was not rendered")
 

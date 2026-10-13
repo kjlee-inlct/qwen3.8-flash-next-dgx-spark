@@ -12,7 +12,7 @@ ROOT = Path(__file__).parents[1]
 
 class LifecycleIntegrationTests(unittest.TestCase):
     def test_install_prepares_release_before_managed_service(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
 
         self.assertIn('DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"', installer)
         self.assertIn('baseline_revision="$(git -C "${ROOT_DIR}" rev-parse HEAD)"', installer)
@@ -32,7 +32,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         )
 
     def test_installer_strictly_parses_resume_and_migration_manifest(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
 
         self.assertIn('install-maintenance "${STATE_FILE}"', installer)
         self.assertIn("installation manifest failed strict maintenance parsing", installer)
@@ -42,7 +42,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn("would be migrated to schema 4", installer)
 
     def test_install_records_api_access_modes_and_legacy_fields(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
 
         self.assertIn("API_ACCESS_MODE", installer)
         self.assertIn("API_DOCKER_PORT", installer)
@@ -160,7 +160,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn("manifest is retained in the uninstalled state", uninstaller)
 
     def test_retained_uninstall_manifest_allows_fresh_profile_selection(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
 
         self.assertIn('manifest_phase="$(read_manifest_phase)"', installer)
@@ -261,7 +261,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn("owned model manifest drift detected", ownership)
 
     def test_installer_keeps_cumulative_asset_ownership_across_profile_switches(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         doctor = (ROOT / "scripts" / "doctor.sh").read_text(encoding="utf-8")
         diagnostics = (
             ROOT / "scripts" / "diagnostics" / "collect-diagnostics.sh"
@@ -276,7 +276,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         self.assertIn("asset-ownership.json", diagnostics)
 
     def test_profile_switch_uses_persisted_lifecycle_transaction(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         uninstaller = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
         diagnostics = (ROOT / "scripts" / "diagnostics" / "collect-diagnostics.sh").read_text(encoding="utf-8")
         parser = (ROOT / "scripts" / "lib" / "state_file.py").read_text(encoding="utf-8")
