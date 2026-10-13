@@ -1,3 +1,9 @@
+> **2026-10-14 mazinb timing/approval boundary:** Next DGX candidate is
+> mazinb. The first additional gate is read-only exact Docker-ID admission
+> (`scripts/wizard/mazinb-admission.sh`); M1 protected stay-READY lifecycle
+> and real llama-benchy remain **NOT IMPLEMENTED / NOT MEASURED**.
+> See [MAZINB-EXECUTION-GATE.md](MAZINB-EXECUTION-GATE.md).
+
 > **2026-10-14 Wizard migration note (Phase 1, staged):** A separate
 > modular `./wizard.sh` operator entry now exposes read-only inventory,
 > diagnostics, preflight and safe preview paths. The installer-only refactor,
