@@ -1,5 +1,12 @@
 # Current project status
 
+## ACTUAL DGX OrcaRouter installed-wizard preview PASS; live remains blocked (2026-10-13)
+
+**Physical wizard output** from exact detached source `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2`: existing installed setup management → select/switch profile → OrcaRouter → 6/6 plan → Continue Y **under `--dry-run`**, `WIZARD_DRY_RUN_RC=0`. The manifest-selected OrcaRouter revision is `c1209bda15a6bbc4c68b585e93d40c0d85f50306`, image **`vllm-skinny-tp1:v1` (NOT the separate `vllm-orcarouter-v029:v1` experiment)**, monitor/protection enabled (available warn 6 GiB, non-CMA free 2/10 GiB gate, SwapFree 8 GiB, five samples, 60s heartbeat), 128 GiB PLE, managed systemd service, Docker/LAN API access. Before/after comparison confirmed identical protected predecessor `Id|State.Status|Image` and `install.env` SHA256. Operator log `/home/inlc/dgx-orcarouter-wizard-20261013-152129.log`. [Real DGX evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-actual-dry-run-20261013.md).
+
+This PASS confirms the **wizard preview**, NOT a running API, live M1, host stability, actual Docker mount or benchmark. Full wizard-managed start must protect the old exact stopped Docker predecessor: normal runtime transition `commit` deletes the predecessor. **Next feature:** [safe isolated OrcaRouter trial inside the wizard](DGX-ORCAROUTER-WIZARD-TRIAL-DESIGN.md), dedicated monitor state and exact-ID stop; DESIGN ONLY, no owner-authorized live run. OrcaRouter deletion is held only during this test; later cleanup needs benchmark backup and separate approval. Five reports NOT_MEASURED, PR #259 Draft.
+
+
 ## Latest owner scope correction — OrcaRouter deletion HOLD only during this test (2026-10-13)
 
 **Corrected owner intent:** OrcaRouter remains the **first model** for

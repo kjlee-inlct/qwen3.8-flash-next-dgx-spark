@@ -1,5 +1,12 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Physical OrcaRouter wizard DRY-RUN PASS; next source priority (2026-10-13)
+
+Operator ran `./install.sh --dry-run` at exact source `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2` in a clean detached worktree. Selected existing management menu 1, OrcaRouter selection 1, approved final preview; `WIZARD_DRY_RUN_RC=0`, `OLD_DOCKER_UNCHANGED=YES`, `INSTALL_MANIFEST_UNCHANGED=YES`. Full physical log `/home/inlc/dgx-orcarouter-wizard-20261013-152129.log`. Actual plan uses the installed legacy `vllm-skinny-tp1:v1`, NOT the previously preflighted experimental `vllm-orcarouter-v029:v1`; monitor/protect=enabled, PLE swap=128 GiB, managed systemd service. [Canonical actual DGX evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-actual-dry-run-20261013.md).
+
+**Priority:** implement and synthetic-test a **wizard-contained isolated OrcaRouter trial option** with exact old Docker ID/installed immutable release/manifest preserved, independent non-CMA memory and RM monitor state, close startup-monitor gap and stop new trial by exact ID. See [live trial design](DGX-ORCAROUTER-WIZARD-TRIAL-DESIGN.md). The installed managed runner may delete or restart the stopped predecessor on normal commit/recovery, so do not tell operator to run plain `./install.sh`, direct experimental `start`, or `systemctl restart`. No actual model start approved yet; B terminal must remain idle, five llama-benchy reports NOT_MEASURED. OrcaRouter is first and deletion held only during this test, **not permanently**; all lifecycle mutations via wizard. PR #259 stays Draft/Open/Unmerged.
+
+
 ## Owner scope correction: OrcaRouter first; only temporarily hold deletion (2026-10-13)
 
 **Most recent owner clarification takes precedence over previous notes.**

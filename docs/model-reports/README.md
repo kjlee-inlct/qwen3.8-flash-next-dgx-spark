@@ -1,5 +1,10 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
+## Actual OrcaRouter wizard preview PASS; no llama-benchy result yet (2026-10-13)
+
+Real DGX interactive existing-install `--dry-run` successfully selected OrcaRouter and showed legacy image `vllm-skinny-tp1:v1`, monitor/protect enabled, `WIZARD_DRY_RUN_RC=0`, original Docker/manifest unchanged. [Exact physical evidence](../../scripts/benchmark/evidence/dgx-orcarouter-wizard-actual-dry-run-20261013.md). No v0.29 experimental or legacy model was started and the `active` registry label is manifest-only, NOT actual serving. Terminal B must wait for a safe approved wizard-contained isolated M1 live trial, served-model API identity and RM/host stability. All five model reports NOT_MEASURED; OrcaRouter checkpoint deletion held only during this test.
+
+
 ## OrcaRouter first; temporary no-delete during this measurement campaign (2026-10-13)
 
 Owner correction: measure OrcaRouter **first**, and do not

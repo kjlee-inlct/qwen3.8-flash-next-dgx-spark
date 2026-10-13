@@ -1,5 +1,10 @@
 # DGX two-terminal operation — wizard-managed lifecycle, separate benchmark
 
+## Physical OrcaRouter wizard preview completed; both-terminal safety boundary (2026-10-13)
+
+Real DGX `./install.sh --dry-run` on exact `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2` selected OrcaRouter in existing management, showed **legacy installed image** `vllm-skinny-tp1:v1` (different from independent experimental v0.29 image), enabled monitor/protect, immutable release systemd service; `WIZARD_DRY_RUN_RC=0` and protected old Docker/manifest unchanged. [Actual evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-actual-dry-run-20261013.md). Terminal A wizard preview is now PASS. Terminal B remains **BENCHMARK_BLOCKED** because no live API or host/RM stability was verified. Next implement/test [safe opt-in isolated OrcaRouter run inside the wizard](DGX-ORCAROUTER-WIZARD-TRIAL-DESIGN.md), not direct experimental start and not a blind managed service restart. Separate approval required before any live startup or cleanup.
+
+
 ## Corrected owner scope — OrcaRouter FIRST and hold deletion ONLY for this test (2026-10-13)
 
 The owner clarified that OrcaRouter is to be tested **first**;

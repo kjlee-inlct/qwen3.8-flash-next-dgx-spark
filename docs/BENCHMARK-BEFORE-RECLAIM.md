@@ -1,5 +1,10 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
+## OrcaRouter actual wizard DRY-RUN PASS; performance still unmeasured (2026-10-13)
+
+User's physical wizard session at exact SHA `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2` showed installed `orcarouter` and legacy `vllm-skinny-tp1:v1` image, monitor and protection enabled, final preview RC=0, original Docker/manifest unchanged. [Evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-actual-dry-run-20261013.md). This is NOT a model launch, functional qualification, RM stability or llama-benchy JSON. [Next safe wizard trial design](DGX-ORCAROUTER-WIZARD-TRIAL-DESIGN.md) remains unimplemented; B terminal idle. User holds OrcaRouter deletion for this test only, not forever. Real report + verified external backup, dependency/rollback review and explicit per-target cleanup approval remain prerequisites. Five reports NOT_MEASURED.
+
+
 ## Owner clarification — OrcaRouter hold limited to current test, not permanent (2026-10-13)
 
 **OrcaRouter goes first. During this test, do not remove OrcaRouter

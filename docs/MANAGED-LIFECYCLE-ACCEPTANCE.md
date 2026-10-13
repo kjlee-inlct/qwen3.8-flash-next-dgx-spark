@@ -1,5 +1,10 @@
 # Managed installer, uninstaller, and model-switch acceptance
 
+## Actual DGX OrcaRouter existing-install interactive wizard DRY-RUN PASS (2026-10-13)
+
+At exact source `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2`, operator entered existing wizard manager, selected OrcaRouter and accepted `--dry-run` plan; **RC=0**, original Docker `Id|Status|Image` and `install.env` SHA256 identical before/after. [Original physical output evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-actual-dry-run-20261013.md). Plan: OrcaRouter checkpoint revision pinned, installed legacy image `vllm-skinny-tp1:v1`, enabled monitor+protection, PLE swap=128 GiB, managed systemd/remote API configured. This is not a running/healthy API, model validation or wizard live acceptance. Next P0 needed: [wizard-contained isolated trial](DGX-ORCAROUTER-WIZARD-TRIAL-DESIGN.md) to preserve exact old stopped Docker object despite legacy transition commit/delete; monitor isolation and exact-ID abort. No live start/cleanup authorized. Bench 5/5 NOT_MEASURED.
+
+
 ## Owner clarification: OrcaRouter first, deletion freeze scoped to this test (2026-10-13)
 
 OrcaRouter is the initial wizard-selected performance target and

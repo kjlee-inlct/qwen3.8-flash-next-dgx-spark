@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## Physical OrcaRouter existing-install interactive wizard preview PASS (2026-10-13)
+
+- [**Actual DGX OrcaRouter wizard `--dry-run` PASS**](dgx-orcarouter-wizard-actual-dry-run-20261013.md): source `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2`, installed profile OrcaRouter, legacy image `vllm-skinny-tp1:v1`, monitor/protection enabled, RC=0, protected predecessor Docker identity/status/image and manifest file digest unchanged. No new Docker container, model start or throughput measured. The experimental v0.29 preflight used a **different** image, not the wizard's installed one. Next implement/test an isolated wizard trial retaining original stopped Docker ID; no blind managed restart, deletion or benchmark. Five reports NOT_MEASURED; OrcaRouter delete hold applies only during this test.
+
+
 ## Corrected owner OrcaRouter rule — first model, temporary test hold (2026-10-13)
 
 **OrcaRouter is first**, and its checkpoint is NOT to be deleted
