@@ -4,11 +4,32 @@
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.
 
+## P0 wizard objective and original target model scope
+
+The original target is **easy installation, removal and profile switching
+through the interactive terminal wizard**.
+Read the [project mission, original four models and added Hybrid](PROJECT-MISSION-AND-MODEL-SCOPE.md)
+before interpreting lifecycle milestones. Originally approved:
+`orcarouter`, `nvidia`, `mazinb`, `lychee888`.
+Later addition: `orcarouter-hybrid` H6. The registry has 3/4
+originally planned families installable, plus experimental Hybrid,
+while `lychee888` remains planned/non-installable. H38/M4 is a
+runtime rollout gate of OrcaRouter, not a sixth model.
+
+A P0 PASS requires successful actual wizard journeys (fresh install,
+existing installation/model switch, uninstall with previews, cancellation,
+ownership protection and recovery) within qualified environments.
+Passing mock/synthetic fixture tests alone or proving model runtimes
+does not mean the product wizard has passed real installation/switch/
+uninstall E2E. Safe wizard work is not blocked by H38 investigations;
+real destructive operations remain gated to independently disposable
+systems and risky live model startup remains separately gated.
+
 ## Current qualification matrix
 
 | Area | Implemented | Evidence available | Outstanding acceptance / classification |
 |---|---|---|---|
-| Fresh install wizard (ko/en, six steps, registry, model roots, runtime/API/service review) | YES | `tests/test_model_profiles.py`, `tests/test_installer_option_parity.py`, `tests/test_installer_plan_parity.py`, `tests/test_wizard_ui.py` synthetic/dry-run | Truly empty-host download→H38 image→service READY→doctor→restart NOT QUALIFIED |
+| Fresh install wizard (ko/en, six steps, registry, model roots, runtime/API/service review) | YES | `tests/test_model_profiles.py`, `tests/test_installer_option_parity.py`, `tests/test_installer_plan_parity.py`, `tests/test_wizard_ui.py` synthetic/dry-run | Truly empty-host selected-model download/build→supported backend→service READY→doctor→restart NOT QUALIFIED; H38 candidate separately blocked |
 | Existing-install wizard (active model, switch preview, settings/default refresh, resume) | YES | `tests/test_installer_profile_manager.py`, `tests/test_settings_transition.py`, `tests/test_model_profiles.py` synthetic preview/transaction | Full live supported-profile × configuration matrix NOT QUALIFIED |
 | Uninstall bilingual preview (normal, selected purge, all purge) | YES | `tests/test_uninstall_wizard_preview.py` runs real `uninstall.sh --dry-run` against disposable manifests; no live resources touched | Actual destructive default uninstall, preserve/reinstall, selected/full purge in disposable realistic host NOT QUALIFIED |
 | Asset ownership and dependent model safety | YES | `tests/test_asset_ownership.py`, `tests/test_lifecycle_integration.py` — ownership/fingerprint, unowned-dependent refusal, Hybrid H6→parent order | All combinations with imported older manifests/external containers during actual deletion NOT QUALIFIED |
@@ -196,27 +217,27 @@ The previous 775/775 GitHub Actions result was **CI**, not evidence that the ope
 ## DGX-selected profile read-only snapshot and ordered operator verification (2026-10-12)
 
 Operator-provided DGX log proves the earlier clean fast-forward through
-\`0e910a7e0ab6246228857cc9432c19b5787eb812\` and the local **48/48
-synthetic lifecycle tests PASS**, final \`DGX_SYNTHETIC_VALIDATION_COMPLETE\`.
-The local command printed \`SHELLCHECK=SKIPPED_NOT_INSTALLED\` (ShellCheck
+`0e910a7e0ab6246228857cc9432c19b5787eb812` and the local **48/48
+synthetic lifecycle tests PASS**, final `DGX_SYNTHETIC_VALIDATION_COMPLETE`.
+The local command printed `SHELLCHECK=SKIPPED_NOT_INSTALLED` (ShellCheck
 already passed GitHub CI), and did **not** qualify running model/runtime or
 the destructive host E2E. This is historical exact-SHA local evidence only.
 
-New \`scripts/lifecycle/inspect-selected-profile.py\` gives a compact,
+New `scripts/lifecycle/inspect-selected-profile.py` gives a compact,
 read-only actual-host snapshot separately from the synthetic verifier:
-strict \`install-maintenance\` manifest parsing reports selected model
+strict `install-maintenance` manifest parsing reports selected model
 profile/phase/repository/path/expected image/served name and monitor
 protection; four strict transition status files and stale artifacts are
 reported; read-only Docker inspect and systemctl show report runtime and
 service observations. Docker/systemd probe errors remain UNKNOWN. A running
 container with matching image/mount/served command is labeled
-\`MATCHED_NOT_READINESS\`, **never actual serving/health qualified**.
+`MATCHED_NOT_READINESS`, **never actual serving/health qualified**.
 Corrupt manifest or pending transition causes fail-closed nonzero exit.
 Synthetic unit tests with temporary HOME/XDG and mocked host commands
 verify stopped, missing, uninstalled, invalid, transition pending and
 running-but-unqualified cases.
 
-The expanded \`inspect-readonly-lifecycle.sh\` now prints selected-profile
+The expanded `inspect-readonly-lifecycle.sh` now prints selected-profile
 snapshot **first**, before model inventory, other transitions and Doctor.
 Operator sequencing: (1) safe exact-SHA Git synchronization, (2) actual
 read-only selected-profile snapshot, (3) disposable synthetic tests, then

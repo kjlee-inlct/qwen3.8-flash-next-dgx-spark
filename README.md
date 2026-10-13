@@ -1,5 +1,14 @@
 # Qwen3.8-Flash-Next on a single DGX Spark
 
+**Primary product goal:** easily install, uninstall and switch checkpoint
+models through the `./install.sh` and `./uninstall.sh` terminal wizards.
+Original four: OrcaRouter, NVIDIA, mazinb, lychee888; generated
+OrcaRouter Hybrid H6 added later. Only three originals plus H6
+are currently installable; lychee888 is planned. [Canonical product
+mission and exact model identities](docs/PROJECT-MISSION-AND-MODEL-SCOPE.md).
+H38 qualification supports this product; it is not its P0 objective.
+
+
 For recurring work and a **new ChatGPT session**, use the
 [canonical continuation-prompt skeleton](docs/SESSION-HANDOFF-PROMPT.md).
 It supplies the current-source lookup order, GitHub/host provenance rules,

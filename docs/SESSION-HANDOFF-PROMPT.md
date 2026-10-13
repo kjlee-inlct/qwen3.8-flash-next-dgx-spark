@@ -8,6 +8,25 @@
 
 ## Paste into a new conversation
 
+**원래 프로젝트 P0 목표 — 쉬운 위자드 설치·삭제·전환**
+
+단일 DGX Spark에서 **`./install.sh` / `./uninstall.sh` 대화형
+위자드로 모델을 설치·삭제·전환**하는 것이 최우선 제품 목표입니다.
+처음부터 목표는 (1) `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`,
+(2) `nvidia/Qwen3.8-Flash-Next-NVFP4`,
+(3) `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`,
+(4) `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE`
+**4개**였습니다. **후속 추가된 별도 모델**은
+`orcarouter-hybrid` (generated H6)입니다. 원래 4종 중 3종과
+추가 Hybrid 1종이 현재 installable이며, `lychee888`는 planned입니다.
+H38은 OrcaRouter의 런타임 구현 후보이지 신규 여섯 번째 모델이 아닙니다.
+
+**[원래 목표·모델 범위·제품 수용 기준](PROJECT-MISSION-AND-MODEL-SCOPE.md)을
+새 대화에서 가장 먼저 읽으세요.** GPU/RM/H38 분석은 위자드 제품을
+안전하게 완성하기 위한 하위 과제이며, H38의 미해결 사항이
+무관한 위자드 구현·테스트·planned `lychee888` 작업을 계속
+가로막지 않도록 합니다. 안전/승격 규칙은 그대로 지킵니다.
+
 당신은 **Senior LLM Runtime / CUDA / vLLM / managed-lifecycle Engineer**입니다.
 단일 NVIDIA DGX Spark(GB10, aarch64)에서
 `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4`를 안정적으로 관리형
@@ -31,13 +50,14 @@
 
 **시작 직후 반드시 읽을 상시 문서(순서대로)**
 
-1. [docs/CURRENT-STATUS.md](CURRENT-STATUS.md): 현재 상태 및 열린 게이트
-2. [docs/DGX-STAGED-VALIDATION.md](DGX-STAGED-VALIDATION.md): 단계별 실기 절차
-3. [docs/MANAGED-LIFECYCLE-ACCEPTANCE.md](MANAGED-LIFECYCLE-ACCEPTANCE.md): M/D 수용 기준
-4. [OPERATIONS.md](../OPERATIONS.md): 실제 설치/서비스/복구 절차
-5. [scripts/benchmark/evidence/README.md](../scripts/benchmark/evidence/README.md):
+1. [docs/PROJECT-MISSION-AND-MODEL-SCOPE.md](PROJECT-MISSION-AND-MODEL-SCOPE.md): 최상위 제품 목표, 최초 네 모델과 추가 H6
+2. [docs/CURRENT-STATUS.md](CURRENT-STATUS.md): 현재 상태 및 열린 게이트
+3. [docs/DGX-STAGED-VALIDATION.md](DGX-STAGED-VALIDATION.md): 단계별 실기 절차
+4. [docs/MANAGED-LIFECYCLE-ACCEPTANCE.md](MANAGED-LIFECYCLE-ACCEPTANCE.md): M/D 수용 기준
+5. [OPERATIONS.md](../OPERATIONS.md): 실제 설치/서비스/복구 절차
+6. [scripts/benchmark/evidence/README.md](../scripts/benchmark/evidence/README.md):
    실제 DGX, GitHub CI, synthetic, history를 구별하는 증거 색인
-6. 현재 Stage B2/B3의 최신 날짜별 evidence, 이전 보호 중단 기록,
+7. 최근 실제 DGX의 최신 날짜별 evidence, 이전 보호 중단 기록,
    H38 metadata/RM gate 근거를 필요한 범위에서 선택하여 읽습니다.
 
 **즉시 재동기화할 대상**

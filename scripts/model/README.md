@@ -2,6 +2,17 @@
 
 This directory contains canonical model-profile, checkpoint-inspection, and configuration-preparation helpers.
 
+## Original four target models versus later Hybrid
+
+The initial wizard target models were `orcarouter`, `nvidia`,
+`mazinb`, `lychee888`. Generated `orcarouter-hybrid` H6 was
+**added later**; it is not one of the original four. Current registry
+implementation: 3/4 original installable, 1 planned; plus H6
+installable/experimental = **5 tracked / 4 installable**. H38 is
+a separate OrcaRouter runtime candidate; Hybrid H3/H4/H5 are
+internal construction artifacts, not additional selectable models.
+[Primary wizard-first mission and acceptance](../../docs/PROJECT-MISSION-AND-MODEL-SCOPE.md).
+
 ## Responsibilities
 
 - Define supported model profiles and their static defaults.

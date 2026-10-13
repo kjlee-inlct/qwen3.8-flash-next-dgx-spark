@@ -1,5 +1,16 @@
 # Qwen3.8 Flash Next — Operations Guide
 
+## Project priority: wizard-first install, uninstall and switch
+
+Original DGX Spark goal: minimal-input interactive terminal wizard
+`./install.sh` / `./uninstall.sh` for installation, deletion and
+model switching. Originally approved `orcarouter`, `nvidia`, `mazinb`,
+`lychee888`, with generated `orcarouter-hybrid` H6 **added later**.
+Registry now enables three original models plus Hybrid; lychee888 is
+planned. See [canonical product mission](docs/PROJECT-MISSION-AND-MODEL-SCOPE.md)
+before starting an H38-only runtime detour. Manual Docker/service
+procedures support advanced diagnosis, not the everyday wizard user flow.
+
 ## B4 exact-host prestart decision and legacy rollback semantics
 
 [Actual DGX B4 evidence](scripts/benchmark/evidence/dgx-b4-m1-prestart-readonly-20261013.md)

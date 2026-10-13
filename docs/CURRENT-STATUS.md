@@ -15,6 +15,23 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## Primary P0 restored: original wizard goal and five tracked families
+
+**The product is an easy interactive terminal wizard for first install, uninstall
+and model/profile switch**, not primarily an H38 serving experiment.
+**Original targets:** `orcarouter`, `nvidia`, `mazinb`, `lychee888`;
+**later added:** generated `orcarouter-hybrid` H6. Exactly **3/4 original**
+are registry-installable, plus Hybrid, for **4/5 tracked**; `lychee888`
+remains planned/not-installable. H38 is an OrcaRouter runtime candidate,
+not another user-selectable model. [Canonical objective, model identities
+and acceptance](PROJECT-MISSION-AND-MODEL-SCOPE.md).
+
+Work on safe wizard UX/feature parity, missing planned original-model
+support and offline tests may proceed despite H38/M4 live blocking gates.
+All real-host safety, strict RM, D0 destructive-host and PR promotion rules
+remain unchanged. The prior B4 read-only observation does not imply live
+installer, service or model-switch E2E completion.
+
 ## Physical DGX B4: exact image/container and memory pre-start snapshot (2026-10-13)
 
 The operator completed a clean exact-SHA (`b35d0f3d7840d00c55f4c633813e88ac367c6373`) B4 **read-only** pre-start snapshot with `M1_PRESTART_READONLY=COLLECTED`. Immutable `current` still resolved to `ff67bab3`; legacy OrcaRouter `vllm-skinny-tp1:v1` image and retained Docker container matched; existing container ID `f6bfee5a4217...` was EXITED/exit0/non-OOM; rollback name absent; monitor/protect remained `1`; MemAvailable approximately **118.2 GiB**, SwapFree approximately **143.1 GiB**, PLE swap file active, systemd inactive/dead/success. This is **B4=COLLECTED_PRESTART_READONLY**, NOT a successful model start or strict RM host-stability measurement. [Exact operator B4 evidence and installed-release code review](../scripts/benchmark/evidence/dgx-b4-m1-prestart-readonly-20261013.md).
