@@ -112,6 +112,31 @@ class M1SafetyTests(unittest.TestCase):
             self.assertEqual(p.returncode, 2)
             self.assertIn("BENCH_M1=BLOCKED", p.stderr)
 
+    def test_memory_floor_and_active_swap_before_any_start(self) -> None:
+        sample = ("MemAvailable: 20000000 kB\nMemFree: 4000000 kB\n"
+                  "SwapFree: 9000000 kB\nCmaFree: 100000 kB\n")
+        manifest = {"SWAP_FILE": "/swap-ple.img"}
+        with mock.patch.object(M1.Path, "read_text", return_value=sample), \
+             mock.patch.object(M1, "call", return_value=mock.Mock(stdout="/swap-ple.img\n")):
+            M1.memory_admission(manifest)
+        low = sample.replace("MemAvailable: 20000000", "MemAvailable: 5000000")
+        with mock.patch.object(M1.Path, "read_text", return_value=low), \
+             mock.patch.object(M1, "call", side_effect=AssertionError("unexpected swapon")):
+            with self.assertRaisesRegex(M1.M1Error, "non-CMA available"):
+                M1.memory_admission(manifest)
+
+    def test_inference_smoke_requires_nonempty_assistant_output(self) -> None:
+        opener = mock.MagicMock()
+        opener.open.return_value.__enter__.return_value.status = 200
+        with mock.patch.object(M1.urllib.request, "build_opener", return_value=opener), \
+             mock.patch.object(M1.json, "load", return_value={
+                 "choices": [{"message": {"role": "assistant", "content": "OK"}}]}):
+            M1.inference_smoke()
+        with mock.patch.object(M1.urllib.request, "build_opener", return_value=opener), \
+             mock.patch.object(M1.json, "load", return_value={"choices": []}):
+            with self.assertRaisesRegex(M1.M1Error, "invalid completion"):
+                M1.inference_smoke()
+
     def test_source_enforces_create_before_armed_monitor_and_nonremoval(self) -> None:
         serve=(ROOT/"scripts/serve.sh").read_text()
         watchdog=(ROOT/"scripts/runtime/monitor-runtime.sh").read_text()
