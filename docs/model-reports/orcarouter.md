@@ -1,5 +1,10 @@
 # orcarouter — benchmark report
 
+## Legacy vs v0.29 images — BOTH NOT_MEASURED (2026-10-13)
+
+The owner will compare the same checkpoint under `vllm-skinny-tp1:v1` (legacy CPU-offload) and `vllm-orcarouter-v029:v1` (mmap) **sequentially**, initially with 16 GiB managed KV. No real A/B model startup or `llama-benchy` result has been captured. API health, TTFT, PP/TG, strict host stability and reproducibility are unknown. [Wizard-based A/B protocol](../DGX-ORCAROUTER-AB-BENCHMARK.md). The current source adds a **read-only plan menu only**, not live launch. Do not populate benchmark fields from historical unrelated runs.
+
+
 **BENCHMARK_STATUS: NOT_MEASURED**
 
 | Field | Status / value |

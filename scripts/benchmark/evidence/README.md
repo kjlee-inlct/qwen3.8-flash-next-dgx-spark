@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## OrcaRouter A/B implementation — SOURCE/CI only, NOT measured (2026-10-13)
+
+The owner selected separate Legacy `vllm-skinny-tp1:v1` and v0.29 `vllm-orcarouter-v029:v1` runs on the same pinned OrcaRouter checkpoint. New installer offers **L** for clean-host Legacy alongside provisional v0.29 default, and existing-installed manager **5** for read-only A/B plan preview. It does NOT launch models or qualify GPU/host health; canonical model results remain NOT_MEASURED. Actual frozen source `394805e62999186afd56d085f279d87f4e4742af`; CLI/wizard executable modes were restored after the first source-only CI failure, followed by CLI parity fixes. First CI #38359872526 failed (lost git executable bits + prohibited lib→benchmark reference + H38 test expectation), second #38360356229 failed 2/940 (legacy image selection overwritten after root reload + monitor default parity). Both are corrected in the latest implementation, with fresh CI validation separate from any real DGX acceptance. [Full A/B plan](../../../docs/DGX-ORCAROUTER-AB-BENCHMARK.md). No Docker/model deletion authorized.
+
+
 ## Physical OrcaRouter existing-install interactive wizard preview PASS (2026-10-13)
 
 - [**Actual DGX OrcaRouter wizard `--dry-run` PASS**](dgx-orcarouter-wizard-actual-dry-run-20261013.md): source `a61b4569c5a6865dbeb9aa4ba4b21aeea12424e2`, installed profile OrcaRouter, legacy image `vllm-skinny-tp1:v1`, monitor/protection enabled, RC=0, protected predecessor Docker identity/status/image and manifest file digest unchanged. No new Docker container, model start or throughput measured. The experimental v0.29 preflight used a **different** image, not the wizard's installed one. Next implement/test an isolated wizard trial retaining original stopped Docker ID; no blind managed restart, deletion or benchmark. Five reports NOT_MEASURED; OrcaRouter delete hold applies only during this test.
