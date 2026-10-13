@@ -15,6 +15,10 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## Actual DGX S1 storage inventory PASS (2026-10-13)
+
+Exact DGX source 513623243c12c204378a0e22bb965ff47542f4f9, 8/8 read-only commands rc0, final RECLAIM_READONLY=COLLECTED. Root filesystem 105G free/88% full. OrcaRouter 171G active, mazinb 174G present, H3 73G and H4 64G intermediates, H5 43M/H6 34M. H6 registry explicitly depends on H5/H4/H3/OrcaRouter: nominal 137G combined H3/H4 directory sizes are NOT certified independently reclaimable and NOT approved for deletion. Docker image table 47.22GB with 0B reclaimable due references/shared layers, but 6.239GB stopped-container writable layers potentially reclaimable after evidence/archive approval. Open WebUI and Portainer are running and excluded. Actual proof: [S1 physical-DGX storage log](../scripts/benchmark/evidence/dgx-storage-pre-reclaim-readonly-20261013.md). Follow-up guarded exact-SHA filesystem block/hardlink audit ready. No benchmark run, deletion, GPU start or cleanup; five reports remain NOT_MEASURED; M1/M3 NOT_QUALIFIED, H38 BLOCKED, M2 NOT_RUN, D0 NOT_GRANTED.
+
 ## BENCHMARK BEFORE SELECTIVE RECLAIM — new operator preference (2026-10-13)
 
 Some models/Docker assets may be considered for disk reclamation,
