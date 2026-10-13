@@ -1,5 +1,10 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Newly added source-only S4 follow-up gate (2026-10-13)
+
+The [S4 runbook](DGX-HYBRID-S4-LINK-CLOSURE.md) uses `scripts/diagnostics/inspect-hybrid-link-closure.py` plus `tests/test_hybrid_link_closure.py` to check **all** H3–H6 symlinks including non-index assets. It validates builder and `serve.sh` `:ro` mount contract in source, not live Docker; reports FS type/free bytes, **not** CoW extents or reclaimability. Run only after same-head CI SUCCESS from a separate clean worktree. **ACTUAL_DGX S4 NOT_RUN** until operator log. Do not start/reclaim any model or Docker asset. Five llama-benchy reports remain NOT_MEASURED.
+
+
 ## Newer physical S3 actual-DGX result (2026-10-13)
 
 Operator returned a clean exact-SHA `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY` at source `d14915549667e196356b8511526f9bfd4db42cd6`, with same-SHA GitHub CI [38349291372](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38349291372) SUCCESS. Log: `/home/inlc/dgx-hybrid-runtime-refs-20261013-141134.log`. `REFERENCE_GAPS=0`; direct/virtual shard counts base 18/0, mazinb 95/0, H3 63/3, H4 15/66, H5 48/33, **H6 0/81**. The tool classified 319 symlinks as expected parent aliases. [Immutable date-scoped evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md).

@@ -1,5 +1,15 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
+## S4 source read-only gate for non-index links (2026-10-13)
+
+After S3 successfully resolved all indexed shard names, S4
+[read-only operator check](DGX-HYBRID-S4-LINK-CLOSURE.md) extends
+closure to non-index symlink entries and source static bind mounts.
+This does not change benchmark-before-delete, exact ownership,
+reflink/CoW unknown, external evidence backup or owner approval
+requirements. ACTUAL_DGX S4 NOT_RUN pending the next qualified source.
+
+
 ## Actual S3 virtual-mount/shard-index reference result (2026-10-13)
 
 [Physical DGX S3 evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md) at `d14915549667e196356b8511526f9bfd4db42cd6`: all 81 H6 index shard filenames resolve to existing files through configured ancestor aliases (`VIRTUAL_CHAIN=81`); `REFERENCE_GAPS=0`; all 319 known stage symlinks have expected alias categories. **This is not a live Docker mount or tensor integrity check**. H3/H4's S2 135.561 GiB allocated size remains NOT certified reclaimable; neither H3/H4 nor mazinb is approved for deletion. Next: inspect all non-shard symlink targets/host filesystem capabilities and retain benchmark evidence before any individual dry-run or owner-approved reclaim. Five per-model reports remain NOT_MEASURED.

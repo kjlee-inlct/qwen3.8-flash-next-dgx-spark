@@ -1,5 +1,14 @@
 # DGX staged validation — operator runbook (2026-10-13)
 
+## S4 source implementation, physical NOT_RUN (2026-10-13)
+
+[Exact-SHA non-mutating S4 runbook](DGX-HYBRID-S4-LINK-CLOSURE.md)
+provides all-symlink source-alias checks and basic FS observations.
+A CI/synthetic pass does not establish real H6 serving, Docker bind-mount
+realization, extent-level allocation uniqueness, or live M1/M3 gates.
+**S4 ACTUAL_DGX NOT_RUN** until a new real operator log arrives.
+
+
 ## Physical S3 reference check completed without model start (2026-10-13)
 
 [Scoped ACTUAL_DGX S3 evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md) at source `d14915549667e196356b8511526f9bfd4db42cd6`: `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY`, 0 unmapped indexed references, all 81 H6 index shards via known virtual ancestor aliases. No payload reading, benchmark, Docker/container startup or deletion. Source review confirms the H6 ancestor :ro mounts declared in `serve.sh` but does not verify live Docker mount realization. S4 all symlink targets + physical FS characteristics is the next non-mutating review. Historical S2/S3 pending text below must not override this newer dated scope.
