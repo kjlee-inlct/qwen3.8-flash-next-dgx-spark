@@ -1,3 +1,12 @@
+> **2026-10-14 M1 ACTUAL DGX read-only preflight qualified:**
+> Wizard Benchmark 6 plan, 7 status `ABSENT` and 8 preflight
+> `M1_PREFLIGHT=PASS_READ_ONLY` executed at SHA `2dfa74d`;
+> exact protected Docker, immutable release and M1 image recorded.
+> Live model start was explicitly NOT_PERFORMED. Later source hardening
+> gives each M1 candidate independent HOME / vLLM / FlashInfer host
+> caches; newer commit SHA/CI must be verified before a new launch.
+> Detailed evidence in `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
 > **2026-10-14 M1 source stage:** Benchmark submenu now delegates
 > dedicated `mazinb-m1.py` plan/status/preflight and protected
 > explicitly approved new live run. The source uses create-only

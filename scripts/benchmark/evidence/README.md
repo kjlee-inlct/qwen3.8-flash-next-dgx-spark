@@ -1,3 +1,13 @@
+## ACTUAL DGX mazinb M1 read-only preflight (2026-10-14)
+
+See [`dgx-mazinb-m1-physical-readonly-preflight-20261014.md`](dgx-mazinb-m1-physical-readonly-preflight-20261014.md).
+Wizard plan/status and current-host M1 preflight passed at exact
+source SHA `2dfa74dacedfe50fe1c28ca309939ed9d61b8123` with old Docker,
+release and candidate image identity preserved; it printed
+`M1_CANDIDATE_START=NOT_PERFORMED`. No new M1 CUDA, READY, RM,
+or llama-benchy metrics. Cache-isolation source update is later and
+requires a separate CI/current-host recheck before actual startup.
+
 # Benchmark evidence index
 
 ## Actual Legacy A physical protection stop CONFIRMED (2026-10-13)

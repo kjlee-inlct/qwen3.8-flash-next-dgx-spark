@@ -24,9 +24,10 @@ historical case name. No cleanup will be performed or requested to
 bypass this gate. A new model launch needs a uniquely named, protected
 M1 candidate instance and lifecycle recovery.
 
-**Approved/qualified now:** read-only historical evidence review.
-**Not implemented:** live mazinb start, actual llama-benchy or Docker
-cleanup. The operator continues through `wizard.sh` only.
+**Physically qualified now:** historical evidence review AND M1 read-only
+preflight. M1 live-start is source-implemented but not physically
+qualified; actual llama-benchy NOT_MEASURED, Docker cleanup forbidden.
+The operator continues through `wizard.sh` only.
 
 ### Historical KV A/B evidence reviewed — 2026-10-14 (physical DGX)
 
@@ -59,6 +60,26 @@ OrcaRouter image `vllm-skinny-tp1:v1` remains unchanged.
 
 **Caution from pre-existing repository evidence:** [`mazinb-kv-ab-20261002.md`](../scripts/benchmark/evidence/mazinb-kv-ab-20261002.md) explicitly records two A-side NVIDIA RM `NV_ERR_NO_MEMORY` signals and the subsequent managed 16 GiB revalidation with one such RM event despite functional readiness. The fresh Wizard evidence menu's filtered kernel window being empty is not evidence that these archived RM findings did not occur. Historical isolated B PASS never guarantees strict future host RM PASS.
 
+### ACTUAL DGX M1 read-only admission — 2026-10-14 PASS
+
+On verified SHA `2dfa74dacedfe50fe1c28ca309939ed9d61b8123`,
+the owner used root Wizard Benchmark **6 plan**, **7 status**, and
+**8 read-only preflight**. Plan showed KV 16 GiB and localhost 18889;
+`M1_SESSION=ABSENT` preceded the preflight. The full old Docker ID
+was confirmed and sudo kernel log read access approved.
+
+Output: `M1_PREFLIGHT=PASS_READ_ONLY`, old container
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+immutable release `ff67bab3c94d6992f61b9535836df97f03b9c022`,
+image ID `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`,
+and `M1_CANDIDATE_START=NOT_PERFORMED`.
+
+Physical evidence: [M1 read-only preflight](../scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md).
+
+After this physical result, source was hardened to isolate each candidate's
+HOME and vLLM/FlashInfer caches; re-check the newer SHA and pass CI before
+an explicitly owner-approved live run. The preflight is not proof
+of M1 READY, post-ready soak, strict live RM stability or llama-benchy.
 ## Priority and sequencing (2026-10-14)
 
 The next **actual DGX model test** should be mazinb; finishing the entire
@@ -170,8 +191,9 @@ backed-up assets may be reclaimed. No deletion approval is implied.
 | Existing 2026-10-13 mazinb KV preflight | historical PASS |
 | Historical A/B status and evidence in Wizard | actual-DGX historical review completed; A protect-stop, B HTTP READY observed |
 | Legacy admission helper source | implemented; old B collision blocks this fixed-name path; new M1 has unique names |
-| M1 protected stay-READY controller | SOURCE IMPLEMENTED; CURRENT-DGX NOT QUALIFIED |
+| M1 protected stay-READY controller | SOURCE IMPLEMENTED; read-only DGX preflight PASS; live READY NOT_RUN |
 | Historical B API HTTP readiness | observed 2026-10-02; exact served-name JSON absent from pasted output |
+| ACTUAL DGX M1 read-only preflight | PASS_READ_ONLY on SHA 2dfa74d, no candidate started |
 | Fresh M1 mazinb READY / served identity | NOT_MEASURED |
 | Historical A/B filtered RM/monitor window | A protect-stop; B no protect stop, no matching RM lines; full current-host acceptance pending |
 | Fresh M1 strict RM host stability | NOT_MEASURED |

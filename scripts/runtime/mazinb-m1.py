@@ -382,6 +382,11 @@ def run_session(expected: str) -> None:
         name = "qwen38-mazinb-m1-" + now.strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(4)
         trial_dir = m1 / name
         trial_dir.mkdir(mode=0o700)
+        # Isolate caches and temporary files from the predecessor and every
+        # historical A/B run; serve.sh derives both vLLM and FlashInfer
+        # host cache mounts from HOME. Never reuse the operator's HOME.
+        trial_home = trial_dir / "home"
+        trial_home.mkdir(mode=0o700)
         monitor_dir = trial_dir / "monitor"
         monitor_dir.mkdir(mode=0o700)
         runner_state = trial_dir / "state"
@@ -391,10 +396,12 @@ def run_session(expected: str) -> None:
                   "image_id": snap["image_id"], "release": snap["release"],
                   "manifest_sha256": snap["manifest_sha256"],
                   "model": MODEL, "port": PORT, "kv_bytes": KV_BYTES,
-                  "monitor_dir": str(monitor_dir), "started_at": now.isoformat(),
+                  "monitor_dir": str(monitor_dir),
+                  "trial_home": str(trial_home), "started_at": now.isoformat(),
                   "kernel_since": now.astimezone().strftime("%Y-%m-%d %H:%M:%S")}
         env = dict(os.environ)
         env.update({
+            "HOME": str(trial_home),
             "MODEL_PROFILE": PROFILE, "MODEL_DIR": snap["model_path"],
             "SERVED_NAME": MODEL, "VLLM_IMAGE": IMAGE,
             "NAME": name, "PORT": str(PORT), "PUBLISH_HOST": "127.0.0.1",

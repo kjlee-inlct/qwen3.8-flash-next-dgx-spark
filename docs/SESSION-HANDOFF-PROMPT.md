@@ -1,3 +1,19 @@
+> **M1 NEXT-SESSION IMPORTANT 2026-10-14:** The owner physically
+> verified Wizard SHA `2dfa74dacedfe50fe1c28ca309939ed9d61b8123`
+> in detached worktree and performed Benchmark 6/7/8: new M1 plan
+> (16GiB, port 18889), absent session, read-only preflight PASS.
+> Existing protected Docker ID
+> `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`;
+> immutable release `ff67bab3c94d6992f61b9535836df97f03b9c022`;
+> image `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`.
+> `M1_CANDIDATE_START=NOT_PERFORMED`. Subsequent source hardening
+> adds dedicated M1 HOME/cache isolation to avoid mutating historical
+> experiment/canonical cache assets. Confirm newer exact commit,
+> CI and re-run Wizard 8 before separately authorizing Wizard 9.
+> Do not use internal runners directly or delete old A/B.
+> New GPU model READY/soak/smoke/llama-benchy all NOT_RUN.
+> Evidence: `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
 > **2026-10-14 NEXT: M1 code source stage:** New Wizard Benchmark
 > submenu 6 plan / 7 status / 8 read-only M1 preflight / 9
 > separately approved new M1 LIVE start. Source implements

@@ -1,3 +1,16 @@
+> **2026-10-14 M1 ACTUAL DGX READ-ONLY PREFLIGHT PASS:** Source
+> `2dfa74dacedfe50fe1c28ca309939ed9d61b8123` in isolated
+> worktree; Wizard Benchmark 6 plan (16 GiB / port 18889),
+> 7 `M1_SESSION=ABSENT`, 8 returned `M1_PREFLIGHT=PASS_READ_ONLY`.
+> Old Docker full ID
+> `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+> release `ff67bab3c94d6992f61b9535836df97f03b9c022`,
+> M1 image ID `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`.
+> Candidate start NOT_PERFORMED. Subsequent source change isolates each
+> new M1 HOME/vLLM/FlashInfer cache; needs updated SHA/CI physical check.
+> New M1 GPU start, READY, RM stability and llama-benchy NOT_RUN.
+> See `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
 > **2026-10-14 mazinb M1 source implementation:** Added an isolated
 > unique-name create-only `scripts/runtime/mazinb-m1.py` supervisor;
 > Wizard Benchmark 6/7/8/9 = plan/status/read-only physical preflight/
