@@ -340,7 +340,7 @@ class ModelProfileTests(unittest.TestCase):
             self.assertNotIn("[2/6] Model selection", result.stdout)
 
     def test_wizard_uses_vertical_model_and_api_menus(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         wizard = (ROOT / "scripts" / "lib" / "wizard-ui.sh").read_text(encoding="utf-8")
 
         profiles = (ROOT / "scripts" / "model" / "model-profiles.sh").read_text(
@@ -365,7 +365,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("wizard_yes_no()", wizard)
 
     def test_clean_host_gated_profiles_do_not_require_hf_cli(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         downloader = (ROOT / "scripts" / "download-weights.sh").read_text(encoding="utf-8")
 
         self.assertIn("discover_hf_token()", installer)
@@ -473,7 +473,7 @@ class ModelProfileTests(unittest.TestCase):
             self.assertIn("not pinned mazinb f2c21eb", bad.stdout)
 
     def test_hybrid_installer_reuses_pinned_h3_without_mazinb_download(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         preparer = (ROOT / "scripts" / "model" / "prepare-orcarouter-hybrid.sh").read_text(
             encoding="utf-8"
         )
@@ -490,7 +490,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn('MAZINB_REVISION = "f2c21eb"', validator)
 
     def test_hybrid_installer_checks_combined_source_disk_capacity(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         downloader = (ROOT / "scripts" / "download-weights.sh").read_text(encoding="utf-8")
 
         self.assertIn("--required-bytes", downloader)
@@ -513,7 +513,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("generated locally", result.stderr)
 
     def test_installer_wires_hybrid_build_orchestrator(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         self.assertIn("prepare-orcarouter-hybrid.sh", installer)
         self.assertIn("MODEL_PROFILE=orcarouter", installer)
         self.assertIn("MODEL_PROFILE=mazinb", installer)
@@ -523,7 +523,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn('HYBRID_MODEL_ROOT="${QWEN38_MODEL_ROOT:-$(dirname -- "${MODEL_DIR}")}"', serve)
 
     def test_installer_builds_local_v029_image_for_mazinb(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         self.assertIn('"${MODEL_PROFILE}" == mazinb', installer)
         self.assertIn('"${IMAGE}" == vllm-orcarouter-v029:v1', installer)
         self.assertIn("Dockerfile.v029-orcarouter", installer)
@@ -567,7 +567,7 @@ class ModelProfileTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = subprocess.run(
-                [str(ROOT / "install.sh"), "--model", "nvidia", "--lang", "en", "--yes", "--no-start", "--dry-run"],
+                [str(ROOT / "wizard.sh"), "--manage", "--model", "nvidia", "--lang", "en", "--yes", "--no-start", "--dry-run"],
                 cwd=ROOT,
                 env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
                 text=True,
@@ -580,7 +580,7 @@ class ModelProfileTests(unittest.TestCase):
             self.assertNotIn("Resuming installation", result.stdout)
 
     def test_profile_switch_uses_shadow_manifest_and_transactional_service(self) -> None:
-        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         service_runner = (ROOT / "scripts" / "runtime" / "service-runner.sh").read_text(
             encoding="utf-8"
         )
@@ -651,7 +651,7 @@ class ModelProfileTests(unittest.TestCase):
             )
             result = subprocess.run(
                 [
-                    str(ROOT / "install.sh"),
+                    str(ROOT / "wizard.sh"), "--manage",
                     "--model",
                     "orcarouter",
                     "--lang",
@@ -724,7 +724,7 @@ class ModelProfileTests(unittest.TestCase):
             before = (state / "install.env").read_bytes()
             result = subprocess.run(
                 [
-                    str(ROOT / "install.sh"),
+                    str(ROOT / "wizard.sh"), "--manage",
                     "--model", "orcarouter",
                     "--lang", "en",
                     "--yes",

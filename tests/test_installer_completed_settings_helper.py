@@ -27,7 +27,7 @@ class CompletedInstallSettingsHelperTests(unittest.TestCase):
 
     def test_wizard_loads_helper_only_for_installer(self) -> None:
         text = WIZARD.read_text(encoding="utf-8")
-        self.assertIn('if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then', text)
+        self.assertIn('"${BASH_SOURCE[1]:-}" == */scripts/install/engine.sh', text)
         self.assertIn("install-completed-manager.sh", text)
         self.assertIn("install_completed_manager_step_hook", text)
 

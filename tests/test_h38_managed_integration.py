@@ -52,7 +52,7 @@ class H38ManagedIntegrationTests(unittest.TestCase):
         self.assertIn("qwen38.h38scope", text)
 
     def test_installer_uses_h38_builder_instead_of_pulling_local_image(self) -> None:
-        text = (ROOT / "install.sh").read_text(encoding="utf-8")
+        text = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         self.assertIn(
             'if [[ "${MODEL_PROFILE}" == orcarouter && "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]',
             text,
@@ -93,7 +93,7 @@ class H38ManagedIntegrationTests(unittest.TestCase):
         self.assertIn("pending explicit --refresh-profile-defaults migration", preflight)
 
     def test_installer_tracks_h38_parent_image_ownership(self) -> None:
-        text = (ROOT / "install.sh").read_text(encoding="utf-8")
+        text = (ROOT / "scripts/install/engine.sh").read_text(encoding="utf-8")
         self.assertIn("asset_track_h38_image_chain()", text)
         for image in (
             "vllm-orcarouter-v029:v1",

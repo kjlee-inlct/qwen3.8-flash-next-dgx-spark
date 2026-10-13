@@ -116,6 +116,21 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertEqual(manifest.read_bytes(), before)
             self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
 
+    def test_install_entry_refuses_complete_without_touching_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+            result = subprocess.run(
+                [str(ROOT / "install.sh"), "--dry-run", "--model", "mazinb"],
+                cwd=ROOT, env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("INSTALL_ALREADY_COMPLETE", result.stderr)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
+
     def test_complete_install_wizard_can_preview_profile_switch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

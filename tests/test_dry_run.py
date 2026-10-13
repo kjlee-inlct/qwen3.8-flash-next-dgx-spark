@@ -151,7 +151,7 @@ class DryRunTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = subprocess.run(
-                [str(ROOT / "install.sh"), "--migrate-manifest", "--lang", "en"],
+                [str(ROOT / "wizard.sh"), "--manage", "--migrate-manifest", "--lang", "en"],
                 cwd=ROOT,
                 env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
                 text=True,
@@ -186,7 +186,7 @@ class DryRunTests(unittest.TestCase):
             )
             before = manifest.read_bytes()
             result = subprocess.run(
-                [str(ROOT / "install.sh"), "--migrate-manifest", "--lang", "en", "--dry-run"],
+                [str(ROOT / "wizard.sh"), "--manage", "--migrate-manifest", "--lang", "en", "--dry-run"],
                 cwd=ROOT,
                 env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
                 text=True,
@@ -239,7 +239,7 @@ class DryRunTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = subprocess.run(
-                [str(ROOT / "install.sh"), "--migrate-manifest", "--lang", "en"],
+                [str(ROOT / "wizard.sh"), "--manage", "--migrate-manifest", "--lang", "en"],
                 cwd=ROOT,
                 env={**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "state")},
                 text=True,
