@@ -217,7 +217,7 @@ class OrcaRouterTrialTests(unittest.TestCase):
                 '  elif [[ "${2:-}" == -f ]]; then printf "true\\n"; fi\n'
                 '  exit 0\n'
                 'fi\n'
-                'if [[ "$1" == stop && "$3" == "$AB_ID" ]]; then exit 0; fi\n'
+                'if [[ "$1" == stop && "$4" == "$AB_ID" ]]; then exit 0; fi\n'
                 'exit 73\n',
                 encoding="utf-8",
             )
