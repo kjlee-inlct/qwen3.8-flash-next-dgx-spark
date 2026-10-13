@@ -6,6 +6,94 @@
 > Do not infer any current Git SHA, CI result, live health or permission from an
 > older transcript or from the example status in this file.
 
+## Latest continuation priority and date-scoped physical host facts (2026-10-13)
+
+**Precedence rule:** The newer physical A5, B5 and S1 operator evidence
+supersedes earlier publication-time paragraphs that say A5/B2/B5
+"next" or "NOT_RUN"; do not silently edit historical runbooks.
+At the start of every new session, **re-read GitHub branch HEAD,
+same-HEAD CI and PR #259**, since any SHA copied here becomes
+historical once this file itself is committed.
+
+- **Mission remains wizard-first P0:** interactive bilingual
+  \`install.sh\`/\`uninstall.sh\`, original four model families
+  (OrcaRouter, NVIDIA, mazinb, planned/non-installable lychee888)
+  plus subsequently added Hybrid H6. H38 is only a runtime
+  candidate, not a sixth model.
+- **A5 ACTUAL_DGX=PASS:** exact source f2674f0..., 14/14
+  read-only wizard preview checks, 60/60 scoped fixtures,
+  manifest/ownership/current unchanged. No live model.
+- **lychee888 L0 REAL_HUB_JSON=PASS:** revision
+  \`1b3c3cedc14fb3bee4294dea5e3515af74b8268a\`,
+  223047 index keys, 128 PLE shards, ten FP8 PLE files,
+  one global scale, float8_e4m3fn; *metadata only*.
+  No tensors downloaded, tensor headers checked or FP8 TP1
+  runtime qualified.
+- **B5 ACTUAL_DGX=PASS:** source c2a7317...,
+  15/15 read-only installed-state checks, exact stopped
+  predecessor ID \`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24\`,
+  installed immutable current release
+  \`ff67bab3c94d6992f61b9535836df97f03b9c022\`,
+  original installed image \`vllm-skinny-tp1:v1\`,
+  Docker exited, systemd inactive/dead, monitor/protect both
+  1, /swap-ple.img active. No M1 live authorization.
+- **S1 ACTUAL_DGX=PASS:** exact source
+  \`513623243c12c204378a0e22bb965ff47542f4f9\`,
+  eight read-only storage sections rc0. Root disk 916G,
+  used 765G, free 105G (88%). Managed original OrcaRouter
+  171G active, mazinb 174G inactive, quant-layout H3 73G,
+  H4 orca-all 64G, H5 43M, H6 34M. **H6 explicitly
+  depends on H5/H4/H3/OrcaRouter** in asset registry;
+  individual 73G+64G values do not establish independent
+  reclaimable disk blocks. [S1 actual evidence](../scripts/benchmark/evidence/dgx-storage-pre-reclaim-readonly-20261013.md).
+  Docker 10 referenced images 47.22GB with 0B immediately
+  reclaimable; 6.239GB stopped-container writable layers
+  listed reclaimable. Shared v0.29 image layers ~22.05GB
+  each, so cannot add per-image logical 22.1GB. Open WebUI
+  and Portainer are running unrelated services.
+- **User's explicit order:** benchmark eligible models before
+  deleting selected models or Docker assets. Five user-facing
+  model reports are all \`NOT_MEASURED\`. The single-GPU
+  system is currently stopped. \`llama-benchy\` benchmark
+  load needs separately qualified M1 live and strict RM
+  stability and exact served-model identity.
+  Preserve raw JSON, derived Markdown, provenance,
+  container/image/release IDs and hashes **outside deletion
+  scope**, with verified independent copy. A NOT_MEASURED
+  model stays HOLD unless a later per-asset explicit waiver
+  is given. No automatic prune/purge, swap removal, active
+  checkpoint removal, unrelated Docker modification or
+  irreversible model deletion.
+- **Next permitted physical DGX action:** S2 non-mutating
+  allocated-block/inode/hardlink survey using
+  \`scripts/diagnostics/inspect-hybrid-reclaim-blocks.sh\`.
+  Needs \`QWEN38_RECLAIM_AUDIT_SHA\` = exact clean checkout
+  SHA with completed SUCCESS CI, and
+  \`QWEN38_RECLAIM_MODELS_ROOT\` =
+  \`$HOME/Workspace/llm/qwen3.8-flash-next-dgx-spark/models\`
+  (real original model directory, **not** detached audit
+  worktree). Capture log and do not infer a filesystem
+  extent-reclamation proof from \`du\`.
+- **Gates unchanged:** M1 actual managed live and strict
+  RM = NOT_QUALIFIED; M3 live pairs = NOT_QUALIFIED;
+  M2 real destructive = NOT_RUN; H38/M4 = BLOCKED;
+  independent disposable D0 = NOT_GRANTED.
+  PR #259 remains Draft/Open/Unmerged. An available GitHub
+  merge tool is a capability, **not** authorization to merge
+  until relevant gates, CI, owner approval and review policy
+  are met.
+
+**Permanent rule for continuation:** Every substantive new fact,
+failure, user constraint, technology reference, measured result,
+risk or idea should be updated in this handoff and the matching
+canonical mission/status/runbook/evidence/test source **during
+the same GitHub work unit**. Preserve history, label sources,
+keep command scripts reusable, avoid duplicate tool stacks.
+Prefer actual edits/commits/PR/CI via GitHub connector,
+without inventing DGX execution from source-only CI.
+GitHub API can create commits, PRs and supported merges;
+only run merge when specifically authorized and gates pass.
+
 ## Paste into a new conversation
 
 **원래 프로젝트 P0 목표 — 쉬운 위자드 설치·삭제·전환**
