@@ -1,3 +1,16 @@
+> **2026-10-14 mazinb ACTUAL_DGX historical A/B evidence review:**
+> The owner's Wizard 5 -> 5 -> 3 output shows A/24 GiB
+> `STOP_REASON=memory-protection` after five low-memory samples
+> (Docker exit 1, OOMKilled=false) and B/16 GiB healthy API
+> `/health` + `/v1/models` HTTP 200 at 20:57:42 KST, about
+> 180 s before orderly exit 0, with no displayed protect stop or
+> filtered RM/OOM events. B exact served ID JSON and historical
+> runner final RESULT line are not included in the pasted output;
+> **no new model run, no llama-benchy, no cleanup**. Both old case
+> objects must be preserved and a new isolated M1 candidate needs
+> a unique name. See
+> [physical A/B evidence review](../scripts/benchmark/evidence/dgx-mazinb-kv-ab-wizard-readonly-20261014.md).
+
 > **2026-10-14 ACTUAL DGX mazinb status:** Wizard verified that both
 > old KV trials still exist and are exited: A/24GiB exit 1, B/16GiB
 > exit 0; both OOMKilled=false. These are historical observations,

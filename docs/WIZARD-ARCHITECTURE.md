@@ -1,3 +1,12 @@
+> **2026-10-14 ACTUAL_DGX mazinb historical review:** Wizard
+> successfully displayed both old A/B evidence. A/24 GiB reached
+> `PROTECT stopping` after 5/5 samples; B/16 GiB served health/models
+> HTTP 200 followed by the 180s observation and orderly exit. These
+> are October 2 historical experiments, not a fresh Wizard live run.
+> Both old containers remain intact. M1 needs a new unique name,
+> durable pre-start exact-ID watchdog and full model lifecycle ownership.
+> See `scripts/benchmark/evidence/dgx-mazinb-kv-ab-wizard-readonly-20261014.md`.
+
 # Modular DGX Spark Wizard: architecture and migration ledger
 
 **Latest decision: 2026-10-14.** The future operator entry point is `./wizard.sh`.

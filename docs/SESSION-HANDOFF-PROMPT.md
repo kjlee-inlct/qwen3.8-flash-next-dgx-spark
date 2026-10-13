@@ -1,3 +1,18 @@
+> **2026-10-14 mazinb historical A/B complete read-only review:**
+> The user executed verified Wizard `b4c58750...`, Benchmark -> Evidence
+> -> Both. Old A (2026-10-02, 24 GiB) protected-stop CONFIRMED
+> (5/5 memory-low, runtime-stop marker, exit 1, OOMKilled=false).
+> Old B (16 GiB) API `/health` + `/v1/models` 200, 180s observation,
+> no recorded protection stop or matched filtered RM events, exit 0.
+> The pasted output lacks B served-ID JSON and final `RESULT` verdict;
+> never pretend either is present. These are **historical** tests;
+> all fresh M1/live benchmarks/llama-benchy NOT_PERFORMED. Preserve both
+> A/B Docker/evidence and the separate managed legacy OrcaRouter.
+> Next: implement new uniquely named exact-ID protected M1 Wizard
+> orchestration before any live start. No raw script-run workaround.
+> Physical evidence summary:
+> `scripts/benchmark/evidence/dgx-mazinb-kv-ab-wizard-readonly-20261014.md`.
+
 > **2026-10-14 mazinb Wizard-only operator rule:** Do not instruct
 > the user to invoke `mazinb-admission.sh` or `mazinb-kv-ab.sh run`
 > directly. Use verified `wizard.sh` -> Benchmark: historical trial
