@@ -115,12 +115,15 @@
 
 **이번 대화의 시작 작업**
 
-- 실제 호스트 관찰 최신 evidence부터 검토합니다:
-  `scripts/benchmark/evidence/dgx-b3-readonly-runtime-unit-complete-20261013.md`
-  (GitHub에 기록된 것이 확인된 경우에만 사용).
+- 실제 호스트 관찰의 **최신 날짜별 evidence**부터 찾아 검토합니다.
+  `docs/CURRENT-STATUS.md`와
+  `scripts/benchmark/evidence/README.md`의 최근 색인으로 결정하고
+  특정 단계(B3/B4 등)를 영구적인 최신 상태로 고정하지 않습니다.
 - 현재 실제 설치된 immutable release의 runtime lifecycle을 기준으로
-  **가역적 legacy OrcaRouter baseline (M1) 검증 전 안전성 리뷰**
-  를 진행합니다. Docker 기존 컨테이너를 수동 재시작하거나
+  **legacy OrcaRouter baseline (M1) 검증의 안전성·가역성 리뷰**
+  를 진행합니다. 정상 commit 시 이전 Docker 컨테이너 ID가
+  제거될 수 있는지와 rollback이 중지 컨테이너를 재시작할 수 있는지
+  반드시 분석합니다. Docker 기존 컨테이너를 수동 재시작하거나
   H38을 시험하는 단계로 건너뛰지 않습니다.
 - 필요 시 읽기 전용 정보만 추가 수집하고, 사용자의 실제 로그를
   받아 전제 조건/stop 기준을 만족할 때만 다음 명령을 제시합니다.

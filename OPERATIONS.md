@@ -1,5 +1,20 @@
 # Qwen3.8 Flash Next — Operations Guide
 
+## B4 exact-host prestart decision and legacy rollback semantics
+
+[Actual DGX B4 evidence](scripts/benchmark/evidence/dgx-b4-m1-prestart-readonly-20261013.md)
+at pinned clean checkout b35d0f3 confirmed installed immutable ff67bab3,
+legacy OrcaRouter image and exited predecessor identity, no rollback-name
+container, protect/enabled both 1, 118.2 GiB MemAvailable and 143.1 GiB
+SwapFree, with no runtime start. The installed code **renames** the old
+container before creating a candidate, **removes** that predecessor upon
+commit, and can **restart** the stopped predecessor on normal rollback.
+This is not a preservation guarantee for an exact old Docker object ID.
+Do not run a blind systemd restart to remedy inactive Doctor. Verify
+operational exclusivity, installed `SWAP_FILE` equality, protection
+policy and strict RM watch/stop criteria before any actual legacy M1
+test. The H38 M4 block remains independent and unchanged.
+
 ## Cross-session operations and current physical DGX read-only baseline
 
 Start every new project conversation with [the stable session-handoff

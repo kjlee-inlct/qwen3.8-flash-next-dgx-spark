@@ -150,3 +150,30 @@ Protect H38/M4 blocking gates unchanged.
 For a new chat or future session, start with
 [the reusable handoff prompt skeleton](SESSION-HANDOFF-PROMPT.md), then
 re-read this runbook, the current status and freshly queried PR/CI state.
+
+
+## Actual DGX B4 — M1 pre-start inventory collected, live decision not yet promoted (2026-10-13)
+
+Operator executed a bounded read-only pre-start command at clean checkout
+`b35d0f3`, checked immutable release `ff67bab3` and the canonical
+OrcaRouter `vllm-skinny-tp1:v1` image/retained container identity,
+`MONITOR_PROTECT=1`, `MONITOR_ENABLED=1`, and absence of the rollback
+container. The retained Docker ID `f6bfee5a4217...` was exited (exit0,
+OOMKilled=false), systemd was inactive/dead; MemAvailable 118.2 GiB,
+SwapFree 143.1 GiB; `/swap-ple.img` was active alongside `/swap.img`.
+The `M1_PRESTART_READONLY=COLLECTED` marker confirms collection only.
+[Actual B4 operator log and source-level hazard analysis](../scripts/benchmark/evidence/dgx-b4-m1-prestart-readonly-20261013.md).
+
+**Reversibility gate**: the installed old-release transaction replaces the
+canonical container and permanently removes the rollback predecessor on
+successful commit; the old container ID is **not preserved** by managed
+success. Normal rollback/recover may also actively restart a stopped
+predecessor. A general `systemctl restart` therefore crosses a topology
+change/identity boundary and is NOT an automatically safe next command.
+Clarify whether exact old-container preservation is required before any
+owner-scoped start. Missing checks include `SWAP_FILE` Manifest match,
+current transaction/lock and port exclusivity, last-mile model identity
+and disk/host headroom, and strict RM/kernel monitoring/stopping plan.
+The installed legacy monitor's source lacks the earlier H38 candidate
+swap-growth predicate; do not conflate those versions. No H38 model
+rerun, no protection relaxation, and no gate promotion from B4.

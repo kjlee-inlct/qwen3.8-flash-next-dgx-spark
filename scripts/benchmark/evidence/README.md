@@ -2,6 +2,10 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## Physical DGX B4 — legacy OrcaRouter pre-start metadata (2026-10-13)
+
+- [**B4 exact image/container and host-resource snapshot**](dgx-b4-m1-prestart-readonly-20261013.md): actual DGX b35d0f3, installed ff67bab3, image/old-container identity match, rollback name absent, image exists, monitor enabled/protect=1, approximately 118.2 GiB MemAvailable and 143.1 GiB swap free, no live model start. Exact installed source flags old-container ID loss after a successful managed replacement and restart-on-recovery paths; H38 blocked, M1 live health unqualified.
+
 ## Actual DGX B3 complete: read-only offline runtime and unit (2026-10-13)
 
 - [**B3 physical-DGX complete state, exact unit and all eight markers**](dgx-b3-readonly-runtime-unit-complete-20261013.md): operator checkout `b35d0f3`, all 3 offline probes rc=0, `MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY`, Docker predecessor exited/0/non-OOM, service inactive/success, loopback 8888 declared, historical direct Docker ExecStop, eight markers absent. Supersedes earlier **B3 partial collection** only. Installed `ff67bab3` release source review identifies ordinary rollback/recover restart risks; no M1 live READY, H38, disposable D0 or destructive-test acceptance. [Reusable session handoff template](../../../docs/SESSION-HANDOFF-PROMPT.md).
