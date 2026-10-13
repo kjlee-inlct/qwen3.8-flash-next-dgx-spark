@@ -146,9 +146,6 @@ asset_preflight_full_purge() {
   while IFS=$'\t' read -r kind locator; do
     [[ -n "${locator}" && ( "${kind}" == model || "${kind}" == image ) ]] || \
       die "refusing malformed ownership purge plan entry"
-    if [[ "${kind}" == model && "$(basename -- "$(realpath -m -- "${locator}")")" == qwen3.8-flash-next-orcarouter ]]; then
-      die "ORCAROUTER_PROTECTED: refusing OrcaRouter checkpoint in full purge plan"
-    fi
     [[ "${kind}" == image ]] || continue
     if image_known_present "${locator}"; then :; fi
     refs="$(image_referenced_by_external_container "${locator}")" || \
@@ -284,13 +281,6 @@ if [[ "${DRY_RUN}" == 1 ]]; then
     printf '\nDRY-RUN complete: no container, monitor, proxy, release, model, swap, image, or manifest changes were made.\n'
   fi
   exit 0
-fi
-
-# Owner policy: never delete permanent OrcaRouter checkpoint. Do not move
-# this below operation-lock setup or Docker/systemd teardown.
-if [[ "${PURGE_MODEL}" == 1 &&
-      "$(basename -- "$(realpath -m -- "${MODEL_DIR}")")" == qwen3.8-flash-next-orcarouter ]]; then
-  die "ORCAROUTER_PROTECTED: refusing permanent OrcaRouter checkpoint purge"
 fi
 
 # Refuse unowned swap before lock creation, ownership-registry bootstrap,

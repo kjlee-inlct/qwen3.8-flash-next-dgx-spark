@@ -1,18 +1,21 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
-## First measurement target: OrcaRouter, permanent checkpoint keeper (2026-10-13)
+## OrcaRouter first; temporary no-delete during this measurement campaign (2026-10-13)
 
-Owner chose **OrcaRouter as first candidate**. Its weights, manifest and
-needed dependencies MUST be preserved before/after benchmarking; no
-reclaim plan may name OrcaRouter. Do not benchmark a stopped model:
-wizard DRY-RUN followed by a separately admitted actual M1 start/API
-health and strict host-RM stability checks must occur first.
-Once READY, run pinned llama-benchy in Terminal B under the
-`with-wizard-lock.sh` wrapper so Terminal A cannot concurrently
-commit an installer/switch/uninstaller operation. This new wrapper
-does not start a model, install dependencies or prove readiness.
-All 5 model cards remain NOT_MEASURED until real raw JSON exists.
-
+Owner correction: measure OrcaRouter **first**, and do not
+delete its checkpoint **during this test**. This rule does
+not exclude the checkpoint from **future** selective
+reclamation once the experiment is completed, raw measured
+JSON/report/SHA256 plus separately verified backup are kept,
+dependencies and recovery are analyzed, and the owner
+explicitly approves a wizard-mediated cleanup. An
+unmeasurable model requires a documented authorized exception;
+missing measurements must never become invented numbers.
+All five profiles currently remain NOT_MEASURED.
+A successful stopped v0.29 preflight RC=0 does not mean
+API READY. Terminal A activates only through the
+qualified wizard, Terminal B benchmarks with
+`with-wizard-lock.sh` only after M1 host/RM acceptance.
 
 ## Two-terminal wizard activation prerequisite (2026-10-13)
 

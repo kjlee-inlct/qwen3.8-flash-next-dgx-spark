@@ -1,17 +1,22 @@
 # Benchmark evidence index
 
-## Owner OrcaRouter FIRST, permanent model keep, and two-terminal lock (2026-10-13)
+## Corrected owner OrcaRouter rule — first model, temporary test hold (2026-10-13)
 
-Owner explicitly selected OrcaRouter as first wizard-managed model
-and first future llama-benchy target; the OrcaRouter checkpoint
-must never be deleted during cleanup (including any wizard purge
-or full-purge). Old stopped Docker predecessor/immutable release
-remain protected. Physical v0.29 OrcaRouter preflight PASS is
-read-only, not live admission; all 5 reports remain NOT_MEASURED.
-New `with-wizard-lock.sh` (benchmark category) provides source/CI
-mutual-exclusion with wizard operation.lock for future measured
-workloads only; no DGX workload or runtime mutation yet.
-
+**OrcaRouter is first**, and its checkpoint is NOT to be deleted
+**during this test**. This is NOT permanent asset immunity:
+after benchmark evidence preservation and independently verified
+external backup (or approved exception), dependency/ownership
+review and separate owner authorization, OrcaRouter may be
+reconsidered as a selective wizard-managed cleanup candidate.
+The overbroad permanent `ORCAROUTER_PROTECTED` source guards
+were withdrawn; no actual deletion is authorized by their
+removal. Physical v0.29 M1 preflight was READ_ONLY RC=0,
+not a startup, benchmark or M1 host-stability PASS.
+Five model reports remain NOT_MEASURED.
+The separate stopped old Docker object remains protected
+pending an independent explicit disposition decision.
+Two-terminal wizard/bench mutual-exclusion helper remains
+source-only and must not be mistaken for live acceptance.
 
 ## Owner two-terminal wizard/bench split and actual M1 preflight (2026-10-13)
 

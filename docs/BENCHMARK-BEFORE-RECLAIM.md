@@ -1,19 +1,26 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
-## Permanent OrcaRouter keep rule — never reclaim (2026-10-13)
+## Owner clarification — OrcaRouter hold limited to current test, not permanent (2026-10-13)
 
-Owner decision: **start with OrcaRouter**, run it through the wizard and
-benchmark it first when functional and host-stability gates permit.
-**Do not delete the OrcaRouter model checkpoint, config or required
-dependencies under any candidate cleanup**, even after a successful
-llama-benchy report and backup. Nor does a report approve deleting the
-protected old managed container, active model-serving image or immutable
-release. The future deletion shortlist is other *separately approved*
-inactive assets only, after their evidence and dependent-model checks.
-Even wizard `--purge-model`/`--purge-all` is NOT PERMITTED if it
-would remove OrcaRouter. Actual uninstall remains blocked by the old
-Docker-object protection rule. Five profiles NOT_MEASURED.
+**OrcaRouter goes first. During this test, do not remove OrcaRouter
+checkpoint, its current needed configuration/dependencies, or
+sacrifice measurement/rollback evidence to reclaim disk space.**
+This is a **time- and workflow-scoped HOLD**, not a permanent
+exemption from future model cleanup. Prior `never delete` wording
+and hard-coded OrcaRouter-specific permanent rejection were
+incorrect and are superseded.
 
+When the OrcaRouter test is complete, it can become a **candidate**
+for owner-approved targeted cleanup only after its actual raw
+llama-benchy JSON, generated report, SHA256 and off-host verified
+backup (or a separately approved documented no-benchmark
+exception), dependency/ownership analysis, exact pre-deletion
+plan and old-container/release recovery impact review. Cleanup
+must be requested through the wizard; do not manually bypass it
+using raw Docker or manager delete commands. **No actual deletion
+is authorized**. The protected stopped predecessor Docker object,
+swap and immutable release are separately preserved until an
+independent explicit decision. All five reports NOT_MEASURED.
 
 ## Owner requires wizard-only lifecycle and separate bench terminal (2026-10-13)
 

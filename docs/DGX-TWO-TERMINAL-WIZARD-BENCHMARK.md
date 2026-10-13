@@ -1,41 +1,32 @@
 # DGX two-terminal operation — wizard-managed lifecycle, separate benchmark
 
-## Priority update: OrcaRouter FIRST, permanent model keep (2026-10-13)
+## Corrected owner scope — OrcaRouter FIRST and hold deletion ONLY for this test (2026-10-13)
 
-OrcaRouter is the **first** model in the future wizard-managed live and
-performance sequence. Owner states **never delete OrcaRouter**, even
-after benchmarks, in any model/image/Docker cleanup or full-purge plan.
-Existing old stopped Docker ID and immutable release protection remains
-a separate constraint. Do not run an actual wizard transition until the
-old-ID-safe path is reviewed. The safe next Terminal A action is the
-interactive `./install.sh --dry-run` with OrcaRouter selected; Terminal B
-stays idle because no qualified running model API has been demonstrated.
+The owner clarified that OrcaRouter is to be tested **first**;
+the "do not delete OrcaRouter" rule applies **during this test to
+avoid losing the model and benchmark opportunity**, NOT permanently.
+Earlier permanent-retention language and a hard-coded model
+delete refusal were overbroad and have been reversed. After the
+test, OrcaRouter can be **considered** for cleanup but there is
+no automatic permission: real benchmark evidence/raw JSON, MD
+report, SHA256, verified separate backup, affected profile
+dependencies, ownership, rollback identity and an approved
+target-specific wizard plan are prerequisites. No deletions now.
 
-New `scripts/benchmark/with-wizard-lock.sh -- COMMAND ARGS...` source
-helper holds the **existing** same-UID wizard operation.lock with
-nonblocking exclusive flock for the entire future benchmark child.
-Exit 3 on a busy lock, exit 2 on an absent/unsafe lock. Does not create
-a competing lock file, model, image, package, or host service.
-This is SOURCE/CI isolation only; direct Docker/systemctl use remains
-outside the advisory lock, and API identity/host stability/explicit
-approval remain required. Future usage, ONLY after qualified M1:
-`./scripts/benchmark/with-wizard-lock.sh -- llama-benchy ...`.
-Do not benchmark today merely because wrapper CI passes.
-
-
-**Owner operating rule (2026-10-13):** All model **installation,
-selection/switching and uninstall** must go through the interactive
-**terminal wizard**, not direct Docker or experimental runtime scripts.
-Use **two terminals** for (A) management/storage preparation and
-(B) benchmark/measurement. Two windows do **not** mean two concurrent
-operations on a one-GPU Spark.
-
-This supersedes any historical runbook implying that invoking a raw
-experimental script is the preferred way to switch or install a model.
-Existing experimental helpers are reference/diagnostic code and are
-NOT an alternative production wizard entry point. Keep canonical project
-goals and the five model-card identities unchanged; H38 is a runtime
-variant, not another model.
+Terminal A performs interactive wizard lifecycle and storage
+preview. Terminal B performs benchmarks only after approved
+wizard activation, real API identity and host/RM qualification.
+No lifecycle mutation while B measures. New source helper
+`scripts/benchmark/with-wizard-lock.sh -- COMMAND` acquires
+the **existing** wizard operation lock for the entire child
+and fails closed on absence/conflict (source/CI only, not
+live admission). The currently stopped canonical Docker
+predecessor and immutable release remain separately protected,
+because the installed managed runner's commit can delete the
+old object. The next safely admissible wizard step is
+**OrcaRouter-focused interactive `./install.sh --dry-run`**.
+Do not start a model or benchmark simply because a preflight
+at exact SHA returned 0.
 
 ## Separation and operational ownership
 

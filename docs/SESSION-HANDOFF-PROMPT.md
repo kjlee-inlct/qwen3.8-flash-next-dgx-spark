@@ -1,41 +1,37 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
-## OrcaRouter permanent keeper code enforcement (2026-10-13)
+## Owner scope correction: OrcaRouter first; only temporarily hold deletion (2026-10-13)
 
-In addition to the owner-level absolute checkpoint retention rule, new source guards in `uninstall.sh` and `scripts/manage-models.sh` reject real canonical OrcaRouter checkpoint purge and profile retire operations (even `--yes`), with synthetic tests. An uninstaller DRY-RUN is still hypothetical; real default uninstall can remove the canonical stopped Docker object and must NOT run without a separately reviewed safe pathway. OrcaRouter is first for wizard-managed model readiness and benchmark only, not cleanup. Distinct lifecycle-vs-benchmark lock helper is SOURCE/CI evidence, not host readiness. The currently stopped API remains NOT_QUALIFIED.
+**Most recent owner clarification takes precedence over previous notes.**
+Run OrcaRouter **first**, via the interactive installer/switch wizard,
+then perform bounded model/API and host-RM checks before any real
+llama-benchy in separate Terminal B. **Do not delete OrcaRouter during
+this specific test or before its evidence is preserved. This is
+NOT a permanent deletion ban.** We wrongly encoded an indefinite
+`ORCAROUTER_PROTECTED` guard in model management and uninstall paths;
+that code and the associated permanent-ban regression tests were
+reverted. Standard ownership/dependency/wizard confirmations remain.
 
+Once this test is concluded, OrcaRouter **can be reconsidered** as a
+selective cleanup candidate, never automatically deleted. Require
+owner-specific approval, benchmark preservation or documented
+exception, off-host verified SHA256 copies, dependency and
+recovery checks, and exact resource dry-run; no current cleanup
+permission. The historically stopped Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+and immutable release require their **own** explicit disposition
+decision before a live managed transition. The normal uninstall
+wizard may delete the old Docker object even without model purge.
 
-## Highest-priority owner instruction: OrcaRouter FIRST and NEVER delete it (2026-10-13)
-
-The owner explicitly requires OrcaRouter as the FIRST wizard-activated and
-benchmarked profile and **OrcaRouter checkpoint MUST NOT BE DELETED**, including
-as part of later space reclamation, generic model retirement, uninstall purge
-or full-purge planning. Protect the checkpoint's manifest, configuration and
-dependencies necessary to reuse it; also retain the separately protected
-exact old stopped Docker object, installed immutable release, active PLE swap,
-memory protection and any still-needed runtime images. No cleanup list may
-include OrcaRouter. The user will use TWO terminals: A for interactive
-wizard/lifecycle/cleanup preview and B for real pinned llama-benchy ONLY after
-OrcaRouter is wizard-activated, health/model-ID verified and host-stable.
-No concurrent wizard mutation and benchmark workload.
-
-An actual OrcaRouter v0.29 **read-only preflight RC=0** was recorded at
-source `5a14d169bbca93604b92e52dc1e548ed75cc5569`; image/weights ready
-and old Docker object preserved, but no live wizard activation or performance
-measurement occurred. The old managed runner may remove the stopped predecessor
-during switch/commit, so **do not blindly run a live install/switch/uninstall**.
-Next safe operator action: interactive `./install.sh --dry-run` selecting
-OrcaRouter in Terminal A; do not run `--yes` or actual activation until the
-exact identity-preserving wizard route is verified and explicitly approved.
-Terminal B stays idle until a qualified API exists; all five report cards
-remain NOT_MEASURED.
-
-A new source helper `scripts/benchmark/with-wizard-lock.sh` keeps the same
-existing wizard operation.lock for its benchmark child. It is only a future
-mutual-exclusion tool, **not** an M1 readiness certificate, load start, or
-permission to benchmark now. See `docs/DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md`.
+Terminal A = wizard lifecycle/cleanup previews; Terminal B =
+bench/report; do not overlap mutations and benchmark. New benchmark
+wrapper `with-wizard-lock.sh` holds the existing wizard operation
+lock only for runs using the wrapper; it does NOT start a model or
+prove host safety. Read-only OrcaRouter preflight at exact SHA
+`5a14d169bbca93604b92e52dc1e548ed75cc5569` returned RC=0;
+API still stopped, M1 live NOT_QUALIFIED and all five report cards
+NOT_MEASURED. [Runbook](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md).
 PR #259 remains Draft/Open/Unmerged.
-
 
 ## Owner rule: wizard-only lifecycle and separate management/benchmark terminals (2026-10-13)
 

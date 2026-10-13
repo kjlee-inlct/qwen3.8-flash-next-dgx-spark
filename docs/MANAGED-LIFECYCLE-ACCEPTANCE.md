@@ -1,20 +1,25 @@
 # Managed installer, uninstaller, and model-switch acceptance
 
-## OrcaRouter owner keep decision and first wizard qualification (2026-10-13)
+## Owner clarification: OrcaRouter first, deletion freeze scoped to this test (2026-10-13)
 
-OrcaRouter is the first profile for wizard-managed activation and pinned
-benchmark, and its checkpoint MUST NOT be deleted or included in wizard
-purge/cleanups. The historic stopped canonical Docker ID and immutable
-release are independently protected. On the actual DGX, v0.29
-OrcaRouter read-only preflight RC=0 confirmed image/weights ready, port
-free, old Docker object unchanged; M1 live and host stability are STILL
-NOT_QUALIFIED. Terminal A interactive install wizard `--dry-run` first;
-Terminal B benchmarks only after verified READY/served ID and host/RM
-admission. A full/selected delete path affecting OrcaRouter is
-disallowed despite presence of a wizard. Synthetic same-operation-lock
-bench wrapper prevents overlapping wizard work only when used by B;
-does not authorize runtime start or cleanup.
+OrcaRouter is the initial wizard-selected performance target and
+must be preserved **during this test and until evidence is safely
+stored**; it is NOT permanently ineligible for future deletion.
+The temporary absolute ban and associated source-level
+`ORCAROUTER_PROTECTED` checks were an overinterpretation and
+have been withdrawn. No current model/Docker deletion is allowed.
+Later cleanup can include OrcaRouter as an **owner-approved**
+candidate only after actual benchmark + archived proof (or an
+explicit approved exception), dependencies, storage ownership,
+exact Docker identity/recovery review and wizard plan.
 
+Managed default uninstall can remove the old canonical Docker
+object even without purging a model; M1 live requires a reviewed
+identity-preserving wizard route. Actual v0.29 OrcaRouter read-only
+preflight RC=0, checkpoint/image ready; API still stopped.
+No live wizard E2E, benchmark, M1/RM stability acceptance yet;
+five report templates remain NOT_MEASURED. Two-terminal
+management-vs-benchmark isolation remains required.
 
 ## Owner P0 workflow update: all model lifecycle via wizard, bench in second terminal (2026-10-13)
 
