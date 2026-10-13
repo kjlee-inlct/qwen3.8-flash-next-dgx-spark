@@ -1,5 +1,37 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Highest-priority owner instruction: OrcaRouter FIRST and NEVER delete it (2026-10-13)
+
+The owner explicitly requires OrcaRouter as the FIRST wizard-activated and
+benchmarked profile and **OrcaRouter checkpoint MUST NOT BE DELETED**, including
+as part of later space reclamation, generic model retirement, uninstall purge
+or full-purge planning. Protect the checkpoint's manifest, configuration and
+dependencies necessary to reuse it; also retain the separately protected
+exact old stopped Docker object, installed immutable release, active PLE swap,
+memory protection and any still-needed runtime images. No cleanup list may
+include OrcaRouter. The user will use TWO terminals: A for interactive
+wizard/lifecycle/cleanup preview and B for real pinned llama-benchy ONLY after
+OrcaRouter is wizard-activated, health/model-ID verified and host-stable.
+No concurrent wizard mutation and benchmark workload.
+
+An actual OrcaRouter v0.29 **read-only preflight RC=0** was recorded at
+source `5a14d169bbca93604b92e52dc1e548ed75cc5569`; image/weights ready
+and old Docker object preserved, but no live wizard activation or performance
+measurement occurred. The old managed runner may remove the stopped predecessor
+during switch/commit, so **do not blindly run a live install/switch/uninstall**.
+Next safe operator action: interactive `./install.sh --dry-run` selecting
+OrcaRouter in Terminal A; do not run `--yes` or actual activation until the
+exact identity-preserving wizard route is verified and explicitly approved.
+Terminal B stays idle until a qualified API exists; all five report cards
+remain NOT_MEASURED.
+
+A new source helper `scripts/benchmark/with-wizard-lock.sh` keeps the same
+existing wizard operation.lock for its benchmark child. It is only a future
+mutual-exclusion tool, **not** an M1 readiness certificate, load start, or
+permission to benchmark now. See `docs/DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md`.
+PR #259 remains Draft/Open/Unmerged.
+
+
 ## Owner rule: wizard-only lifecycle and separate management/benchmark terminals (2026-10-13)
 
 **Latest owner instruction (supersedes any prior experimental-start plan):**

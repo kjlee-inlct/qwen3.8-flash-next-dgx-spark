@@ -1,5 +1,21 @@
 # Managed installer, uninstaller, and model-switch acceptance
 
+## OrcaRouter owner keep decision and first wizard qualification (2026-10-13)
+
+OrcaRouter is the first profile for wizard-managed activation and pinned
+benchmark, and its checkpoint MUST NOT be deleted or included in wizard
+purge/cleanups. The historic stopped canonical Docker ID and immutable
+release are independently protected. On the actual DGX, v0.29
+OrcaRouter read-only preflight RC=0 confirmed image/weights ready, port
+free, old Docker object unchanged; M1 live and host stability are STILL
+NOT_QUALIFIED. Terminal A interactive install wizard `--dry-run` first;
+Terminal B benchmarks only after verified READY/served ID and host/RM
+admission. A full/selected delete path affecting OrcaRouter is
+disallowed despite presence of a wizard. Synthetic same-operation-lock
+bench wrapper prevents overlapping wizard work only when used by B;
+does not authorize runtime start or cleanup.
+
+
 ## Owner P0 workflow update: all model lifecycle via wizard, bench in second terminal (2026-10-13)
 
 [Two-terminal wizard/benchmark operating specification](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md):

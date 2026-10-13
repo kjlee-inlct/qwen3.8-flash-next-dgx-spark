@@ -1,5 +1,22 @@
 # Current project status
 
+## ORCAROUTER FIRST — protected permanent keeper / wizard and benchmark terminals (2026-10-13)
+
+Owner specifies **OrcaRouter is the first model to activate/benchmark through
+the interactive wizard**. OrcaRouter checkpoint is **NEVER A DELETION
+CANDIDATE**, including selective cleanup and wizard purge/full-purge. Its
+checkpoint, retained configuration and still-needed runtime/rollback assets
+must be preserved. Historical exact stopped Docker ID remains protected
+independently. The only permitted current next host workflow is an
+**OrcaRouter-focused interactive wizard DRY-RUN / source safety review**;
+no model start, install, switch, uninstall or cleanup consent is implied.
+Terminal A=wizard/admin, B=bench/reports after separately qualified API.
+Added synthetic benchmark-vs-wizard lock wrapper to hold existing wizard
+operation.lock while a future bench command runs. It does not solve managed
+old-container deletion or Nvidia RM stability. [Two-terminal contract](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md).
+All 5 reports NOT_MEASURED; zero deleted OrcaRouter assets.
+
+
 ## Wizard-only install/switch/uninstall + two terminals — latest owner requirement (2026-10-13)
 
 The owner requires that model installation, profile switching, and

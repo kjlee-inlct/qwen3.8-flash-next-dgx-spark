@@ -1,5 +1,20 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
+## Permanent OrcaRouter keep rule — never reclaim (2026-10-13)
+
+Owner decision: **start with OrcaRouter**, run it through the wizard and
+benchmark it first when functional and host-stability gates permit.
+**Do not delete the OrcaRouter model checkpoint, config or required
+dependencies under any candidate cleanup**, even after a successful
+llama-benchy report and backup. Nor does a report approve deleting the
+protected old managed container, active model-serving image or immutable
+release. The future deletion shortlist is other *separately approved*
+inactive assets only, after their evidence and dependent-model checks.
+Even wizard `--purge-model`/`--purge-all` is NOT PERMITTED if it
+would remove OrcaRouter. Actual uninstall remains blocked by the old
+Docker-object protection rule. Five profiles NOT_MEASURED.
+
+
 ## Owner requires wizard-only lifecycle and separate bench terminal (2026-10-13)
 
 [Two-terminal operating contract](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md):
