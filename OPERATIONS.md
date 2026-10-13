@@ -9,15 +9,15 @@ prompt](docs/SESSION-HANDOFF-PROMPT.md) and fresh
 [evidence index](scripts/benchmark/evidence/README.md). GitHub head/PR/CI and
 the host checkout/installed immutable release must be verified independently.
 
-Physical DGX \`b35d0f3\` B3 read-only collection now **completed**:
+Physical DGX `b35d0f3` B3 read-only collection now **completed**:
 exited predecessor (exit 0, no Docker OOM flag), systemd inactive,
 declared loopback 8888, eight transient markers absent, immutable
-\`current\` ExecStart and older direct-Docker ExecStop.
+`current` ExecStart and older direct-Docker ExecStop.
 [Date-scoped actual-host evidence](scripts/benchmark/evidence/dgx-b3-readonly-runtime-unit-complete-20261013.md).
 This is **not** an M1 READY or strict RM-stability pass. Do not blind-restart
-the legacy service: source at installed \`ff67bab3\` release shows ordinary
+the legacy service: source at installed `ff67bab3` release shows ordinary
 rollback/recover paths may start the safety-stopped predecessor, unlike
-\`abort-protected\`. Review exact topology/identity and protections before
+`abort-protected`. Review exact topology/identity and protections before
 a scoped reversible OrcaRouter baseline plan; M4 H38 remains blocked.
 
 
@@ -651,18 +651,18 @@ This updates **only the operator's Git worktree** (fast-forward, if verified) an
 ## Selected model profile first: DGX read-only status then synthetic regression (2026-10-12)
 
 The operator supplied actual **single-DGX** output from the earlier guarded
-fast-forward to \`0e910a7e0ab6246228857cc9432c19b5787eb812\`:
-\`LOCAL_SYNTHETIC_RESULT=PASS\`, **48/48 fixture tests PASS**,
-\`DGX_SYNTHETIC_VALIDATION_COMPLETE\`. Local ShellCheck was
-\`SKIPPED_NOT_INSTALLED\`; the same earlier GitHub CI passed ShellCheck.
+fast-forward to `0e910a7e0ab6246228857cc9432c19b5787eb812`:
+`LOCAL_SYNTHETIC_RESULT=PASS`, **48/48 fixture tests PASS**,
+`DGX_SYNTHETIC_VALIDATION_COMPLETE`. Local ShellCheck was
+`SKIPPED_NOT_INSTALLED`; the same earlier GitHub CI passed ShellCheck.
 This qualifies only the local synthetic test handoff, **not** a live
 model/service, E2E uninstall or host stability check.
 
 For subsequent verified branch syncs, use the already documented exact-SHA,
-clean-worktree, expected-origin, fetch and \`git merge --ff-only\` guards.
+clean-worktree, expected-origin, fetch and `git merge --ff-only` guards.
 **Place the following status and test steps in this order after Git sync:**
 
-\`\`\`bash
+```bash
 # Normal operator HOME/XDG: inspect the configured profile and observed status.
 python3 scripts/lifecycle/inspect-selected-profile.py
 
@@ -673,18 +673,18 @@ bash scripts/lifecycle/verify-synthetic.sh "$TARGET"
 # Doctor may return a nonzero code because M1 live host is NOT_QUALIFIED.
 QWEN38_LIFECYCLE_AUDIT_TARGET_SHA="$TARGET" \
   bash scripts/lifecycle/inspect-readonly-lifecycle.sh
-\`\`\`
+```
 
-The first command is read-only: strictly parses \`install.env\`,
-transaction markers and optional \`docker inspect --type container\` /
-\`systemctl show\` observations. It does **not** call Docker run/start/stop,
+The first command is read-only: strictly parses `install.env`,
+transaction markers and optional `docker inspect --type container` /
+`systemctl show` observations. It does **not** call Docker run/start/stop,
 systemctl restart, sudo, uninstall, install, a model or GPU. It reports
-\`SELECTED_PROFILE\` (stored installation intent), \`INSTALL_PHASE\`,
-\`MODEL_PATH_STATUS\`, \`MONITOR_PROTECT\`, \`SERVICE_STATE\`,
-\`CONTAINER_STATE\`, four transition states, and the observed
-\`RUNTIME_CONFIGURATION\`. Even a matching running container is labeled
-\`MATCHED_NOT_READINESS\` with \`ACTUAL_SERVED_PROFILE=NOT_VERIFIED\`;
-the snapshot alone can never produce \`HOST_HEALTH=PASS\`.
+`SELECTED_PROFILE` (stored installation intent), `INSTALL_PHASE`,
+`MODEL_PATH_STATUS`, `MONITOR_PROTECT`, `SERVICE_STATE`,
+`CONTAINER_STATE`, four transition states, and the observed
+`RUNTIME_CONFIGURATION`. Even a matching running container is labeled
+`MATCHED_NOT_READINESS` with `ACTUAL_SERVED_PROFILE=NOT_VERIFIED`;
+the snapshot alone can never produce `HOST_HEALTH=PASS`.
 
 If the profile snapshot returns code **3**, a malformed install manifest or
 pending/unsafe transition artifact was detected: examine its output rather

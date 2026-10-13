@@ -17,9 +17,9 @@ historical even when it contains then-current words such as `pending`, `next`, o
 
 ## Physical DGX B3 completed: exited managed runtime and all state markers absent (2026-10-13)
 
-On exact clean operator checkout \`b35d0f3d7840d00c55f4c633813e88ac367c6373\`, the **existing read-only runtime-offline collector completed all three probes rc=0** with final \`MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY\`; the subsequent full service unit and eight state-marker existence checks also reached \`IMMUTABLE_SERVICE_INSPECTION=COLLECTED_READ_ONLY\`. Docker predecessor EXITED/ExitCode=0/OOMKilled=false, configured \`127.0.0.1:8888\` bind exists but running port map empty, systemd loaded/inactive/dead with \`Result=success\`, service unit runs immutable \`current\`, and \`runtime-commit.env\`, \`runtime-stop.env\`, \`monitor.pid\` plus all four transition and adoption markers are ABSENT. This **supersedes only the B3 partial collection status** documented later below, not the earlier B2 Doctor failures. [Complete operator evidence and installed-release safety review](../scripts/benchmark/evidence/dgx-b3-readonly-runtime-unit-complete-20261013.md).
+On exact clean operator checkout `b35d0f3d7840d00c55f4c633813e88ac367c6373`, the **existing read-only runtime-offline collector completed all three probes rc=0** with final `MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY`; the subsequent full service unit and eight state-marker existence checks also reached `IMMUTABLE_SERVICE_INSPECTION=COLLECTED_READ_ONLY`. Docker predecessor EXITED/ExitCode=0/OOMKilled=false, configured `127.0.0.1:8888` bind exists but running port map empty, systemd loaded/inactive/dead with `Result=success`, service unit runs immutable `current`, and `runtime-commit.env`, `runtime-stop.env`, `monitor.pid` plus all four transition and adoption markers are ABSENT. This **supersedes only the B3 partial collection status** documented later below, not the earlier B2 Doctor failures. [Complete operator evidence and installed-release safety review](../scripts/benchmark/evidence/dgx-b3-readonly-runtime-unit-complete-20261013.md).
 
-The historical Oct 7 monitor-protected managed candidate abort / predecessor left stopped remains the best-supported lineage. Source of the **installed** immutable \`ff67bab3\` release confirms protected abort leaves a stopped predecessor, but **ordinary rollback/recover may start the predecessor** and its unit uses direct Docker-name \`ExecStop\` rather than newer attested stop helper. No blind legacy \`systemctl restart\` is authorized by B3. First review exact installed service identity, preflight, rollback/stop, container ownership and protection invariants; only then construct a bounded reversible legacy OrcaRouter M1 plan. **B3=COLLECTED_READ_ONLY; M1 NOT_QUALIFIED; M2 NOT_RUN; M3 NOT_QUALIFIED; M4 H38 BLOCKED; D0 NOT_GRANTED; PR #259 Draft/Unmerged.**
+The historical Oct 7 monitor-protected managed candidate abort / predecessor left stopped remains the best-supported lineage. Source of the **installed** immutable `ff67bab3` release confirms protected abort leaves a stopped predecessor, but **ordinary rollback/recover may start the predecessor** and its unit uses direct Docker-name `ExecStop` rather than newer attested stop helper. No blind legacy `systemctl restart` is authorized by B3. First review exact installed service identity, preflight, rollback/stop, container ownership and protection invariants; only then construct a bounded reversible legacy OrcaRouter M1 plan. **B3=COLLECTED_READ_ONLY; M1 NOT_QUALIFIED; M2 NOT_RUN; M3 NOT_QUALIFIED; M4 H38 BLOCKED; D0 NOT_GRANTED; PR #259 Draft/Unmerged.**
 
 **Cross-session continuity:** [stable handoff prompt template](SESSION-HANDOFF-PROMPT.md); at the start of every session read this status and fresh GitHub CI/PR metadata. Do not freeze a feature HEAD in the template.
 
@@ -758,7 +758,7 @@ Root cause is **a real checkpoint key naming mismatch against our analyzer's ori
 
 13 (layer, expert) metadata key groups have multiple shard owners, including layer 8/expert 235 shards 4→5 and layer 11/expert 409 shards 5→6. The earlier per-shard counts in this incomplete parser covered only **3,072 recognized scale keys/layer**, not complete 4,608-key distributions. Neither key indices nor source branch ASTs establish live callback count, copied numel, destination completeness, shard buffer release or host safety.
 
-The checker has been narrowly corrected to require the observed \`weight_packed\` suffix, and synthetic fail-closed tests now cover production-scale **hypothetical** 48×512×9 nine-slot grids, rejection of unsuffixed \`weight\`, scale omissions and unknown mappings. **Attempt 01 is permanently FAIL_KEY_SCHEMA**; real Attempt 02 against the new exact CI-qualified Git SHA is pending. Do not claim that new fixture PASS closes it. Canonical immutable result scripts/benchmark/evidence/orcarouter-h38-ct-checkpoint-key-map-attempt01-schema-fail-20261011.md. The original pre-correction operator /tmp log was not independently acquired or byte-hashed; provenance is the provided terminal transcript.
+The checker has been narrowly corrected to require the observed `weight_packed` suffix, and synthetic fail-closed tests now cover production-scale **hypothetical** 48×512×9 nine-slot grids, rejection of unsuffixed `weight`, scale omissions and unknown mappings. **Attempt 01 is permanently FAIL_KEY_SCHEMA**; real Attempt 02 against the new exact CI-qualified Git SHA is pending. Do not claim that new fixture PASS closes it. Canonical immutable result scripts/benchmark/evidence/orcarouter-h38-ct-checkpoint-key-map-attempt01-schema-fail-20261011.md. The original pre-correction operator /tmp log was not independently acquired or byte-hashed; provenance is the provided terminal transcript.
 
 Current gates: CT_CHECKPOINT_KEY_MAP_ATTEMPT01=FAIL_KEY_SCHEMA; CT_INSTALLED_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY; CT_SCALE_ATTR_SOURCE_SITES=PASS_SOURCE_SITES_ONLY; CT_EXPERT_DESTINATION_BRANCHES=PASS_SOURCE_BRANCHES_ONLY; REAL_CHECKPOINT_CT_KEY_GRID=UNVERIFIED; CT_INPUT_SCALE_DATA_SOURCE=UNVERIFIED; CT_WEIGHT_COMPLETENESS=UNVERIFIED; CT_COPYCOUNTER_CREDIT=UNVERIFIED; LAYER_8_11_BUFFER_LIFETIME=UNVERIFIED; CHECKPOINT_METADATA_ORDER_GATE=FAIL; FUNCTIONAL=NOT_REACHED; HOST_STABILITY=INCONCLUSIVE; RM_MITIGATION=UNPROVEN; GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; CT_META_PATCH=BLOCKED; PR_259=DRAFT_OPEN; MERGE=BLOCKED.
 
@@ -773,7 +773,7 @@ All **48 base routed layers × 512 experts × 9 index name slots = 221,184** are
 
 Full layer 8 index key file counts are shard4=2,119 and shard5=2,489 (4,608); layer 11 shard5=3,685 and shard6=923 (4,608). **13** candidate (layer, expert) pairs have indexed keys in multiple files; only **12** bounded samples were printed. Total index entries 223,046 across 18 files (17 numbered + 1 auxiliary MTP). The simple mtp. namespace count is **31**; that does not conflict with the previous independent analyzer's two MTP routed-classified keys, because the two counts use distinct predicates.
 
-**Critical qualification:** There are **ZERO** checkpoint index key names containing 'input_scale' or 'input_global_scale'. This provides no evidence that the two registered H38 CT input-global-scale parameters have valid initialization or values. The passed 9-key index grid corresponds conditionally to only **6 of 8 CT registered parameter families**. Real global→local expert mapping, \`weight_loader\` callbacks, TorchDispatchMode/CopyCounter credit, unique copied destination elements, input scales, shard 8/11 runtime replay/buffer release and peak bytes all remain UNVERIFIED. The earlier strict CHECKPOINT_METADATA_ORDER_GATE remains **FAIL**, not corrected by index-name completeness.
+**Critical qualification:** There are **ZERO** checkpoint index key names containing 'input_scale' or 'input_global_scale'. This provides no evidence that the two registered H38 CT input-global-scale parameters have valid initialization or values. The passed 9-key index grid corresponds conditionally to only **6 of 8 CT registered parameter families**. Real global→local expert mapping, `weight_loader` callbacks, TorchDispatchMode/CopyCounter credit, unique copied destination elements, input scales, shard 8/11 runtime replay/buffer release and peak bytes all remain UNVERIFIED. The earlier strict CHECKPOINT_METADATA_ORDER_GATE remains **FAIL**, not corrected by index-name completeness.
 
 Canonical genuine operator evidence: scripts/benchmark/evidence/orcarouter-h38-ct-checkpoint-key-map-attempt02-index-pass-20261011.md. The original /tmp logfile SHA256 is not independently established; provenance is the provided terminal transcript. Prior actual source-only gates (8 CT registrations, input-scale postconstruction source, 29 expert destination branch predicates) still have bounded SOURCE_ONLY PASS classifications. Prior external tiny PyTorch CPU toy is not H38 runtime qualification.
 
@@ -788,9 +788,9 @@ After the genuine index-only checkpoint key-map Attempt 02 PASS_BASE_KEY_SCHEMA_
 
 Staged source-only tools: scripts/benchmark/inspect-h38-ct-input-scale-lifecycle.py, scripts/benchmark/check-h38-ct-input-scale-lifecycle.sh, tests/test_h38_ct_input_scale_lifecycle.py; canonical plan scripts/benchmark/evidence/orcarouter-h38-ct-input-scale-lifecycle-source-plan-20261011.md. They verify four already pinned installed-H38 CT/layerwise/meta/reload-utils source digests; use AST-only Python stdlib; check two plain torch.nn.Parameter(torch.empty(...)) constructor call sites, postconstructor set_weight_attrs, input-global-scale references in CT process_weights_after_loading, and Layerwise make_online_process_loader count-buffer-threshold syntax, with actual source line references and (if present) inverse-divide uses. Guarded read-only unprivileged runc image at exact clean Git HEAD, no network, GPU, model or checkpoint reading; image ID and H11/H12/H38 label gates unchanged.
 
-**No installed-image run of this NEW source-lifecycle audit has occurred yet; repository code and synthetic tests are not a DGX PASS.** Public vLLM v0.29.0 CT has postload reciprocal use of w13/w2_input_global_scale, but public CT and exact installed-H38 CT hashes differ. A future verified source PASS may establish similar syntax in the actual installed image, not effective runtime values, safe defaults, completed CopyCounter events or successful model inference. The direct \`torch.empty\` allocations have **no explicit constructor fill values**; this is source syntax, not proof of reading undefined values in H38. The index source absence of input-scale keys remains independent actual DGX evidence.
+**No installed-image run of this NEW source-lifecycle audit has occurred yet; repository code and synthetic tests are not a DGX PASS.** Public vLLM v0.29.0 CT has postload reciprocal use of w13/w2_input_global_scale, but public CT and exact installed-H38 CT hashes differ. A future verified source PASS may establish similar syntax in the actual installed image, not effective runtime values, safe defaults, completed CopyCounter events or successful model inference. The direct `torch.empty` allocations have **no explicit constructor fill values**; this is source syntax, not proof of reading undefined values in H38. The index source absence of input-scale keys remains independent actual DGX evidence.
 
-**Layerwise accounting concern:** aggregate \`info.load_numel\` reaching \`info.load_numel_total\` is not a source guarantee of unique destination-element coverage if writes overlap or repeated callbacks occur. A bounded external CPU PyTorch synthetic witness established the logical possibility, not a real H38 event. Actual Layerwise closure/counter syntax is the scope of the new source gate, not a model load.
+**Layerwise accounting concern:** aggregate `info.load_numel` reaching `info.load_numel_total` is not a source guarantee of unique destination-element coverage if writes overlap or repeated callbacks occur. A bounded external CPU PyTorch synthetic witness established the logical possibility, not a real H38 event. Actual Layerwise closure/counter syntax is the scope of the new source gate, not a model load.
 
 States unchanged: CT_CHECKPOINT_KEY_MAP_ATTEMPT02=PASS_BASE_KEY_SCHEMA_ONLY; CT_INPUT_SCALE_SOURCE_LIFECYCLE=STAGED_NOT_OBSERVED; CT_INPUT_SCALE_EFFECTIVE_VALUES=UNVERIFIED; CT_WEIGHT_COMPLETENESS=UNVERIFIED; CT_COPYCOUNTER_CREDIT=UNVERIFIED; CT_UNIQUE_DESTINATION_COVERAGE=UNVERIFIED; CHECKPOINT_METADATA_ORDER_GATE=FAIL; SHARD_8_11_BUFFER_LIFETIME=UNVERIFIED; HOST_STABILITY=INCONCLUSIVE; RM_MITIGATION=UNPROVEN; GPU_MODEL_RERUN=BLOCKED; HOST_PROTECTION=UNCHANGED; CT_META_PATCH=BLOCKED; PR_259=DRAFT_OPEN; MERGE=BLOCKED.
 
@@ -998,27 +998,27 @@ The previous 775/775 GitHub Actions result was **CI**, not evidence that the ope
 ## DGX-selected profile read-only snapshot and ordered operator verification (2026-10-12)
 
 Operator-provided DGX log proves the earlier clean fast-forward through
-\`0e910a7e0ab6246228857cc9432c19b5787eb812\` and the local **48/48
-synthetic lifecycle tests PASS**, final \`DGX_SYNTHETIC_VALIDATION_COMPLETE\`.
-The local command printed \`SHELLCHECK=SKIPPED_NOT_INSTALLED\` (ShellCheck
+`0e910a7e0ab6246228857cc9432c19b5787eb812` and the local **48/48
+synthetic lifecycle tests PASS**, final `DGX_SYNTHETIC_VALIDATION_COMPLETE`.
+The local command printed `SHELLCHECK=SKIPPED_NOT_INSTALLED` (ShellCheck
 already passed GitHub CI), and did **not** qualify running model/runtime or
 the destructive host E2E. This is historical exact-SHA local evidence only.
 
-New \`scripts/lifecycle/inspect-selected-profile.py\` gives a compact,
+New `scripts/lifecycle/inspect-selected-profile.py` gives a compact,
 read-only actual-host snapshot separately from the synthetic verifier:
-strict \`install-maintenance\` manifest parsing reports selected model
+strict `install-maintenance` manifest parsing reports selected model
 profile/phase/repository/path/expected image/served name and monitor
 protection; four strict transition status files and stale artifacts are
 reported; read-only Docker inspect and systemctl show report runtime and
 service observations. Docker/systemd probe errors remain UNKNOWN. A running
 container with matching image/mount/served command is labeled
-\`MATCHED_NOT_READINESS\`, **never actual serving/health qualified**.
+`MATCHED_NOT_READINESS`, **never actual serving/health qualified**.
 Corrupt manifest or pending transition causes fail-closed nonzero exit.
 Synthetic unit tests with temporary HOME/XDG and mocked host commands
 verify stopped, missing, uninstalled, invalid, transition pending and
 running-but-unqualified cases.
 
-The expanded \`inspect-readonly-lifecycle.sh\` now prints selected-profile
+The expanded `inspect-readonly-lifecycle.sh` now prints selected-profile
 snapshot **first**, before model inventory, other transitions and Doctor.
 Operator sequencing: (1) safe exact-SHA Git synchronization, (2) actual
 read-only selected-profile snapshot, (3) disposable synthetic tests, then

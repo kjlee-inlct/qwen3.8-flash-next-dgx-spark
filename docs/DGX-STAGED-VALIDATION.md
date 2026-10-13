@@ -122,13 +122,13 @@ The operator's `systemctl show` entered a pager (`lines 1-6/6 (END)`), so the st
 ## Actual DGX B3 complete — stopped runtime/offline service metadata (2026-10-13)
 
 Following the pager-limited attempt, the operator reran the existing exact-SHA
-\`scripts/lifecycle/inspect-readonly-runtime-offline.sh\` at \`b35d0f3\`.
+`scripts/lifecycle/inspect-readonly-runtime-offline.sh` at `b35d0f3`.
 All three collector probes completed with rc=0 and final
-\`MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY\` and
-\`IMMUTABLE_SERVICE_INSPECTION=COLLECTED_READ_ONLY\`. Docker retained
+`MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY` and
+`IMMUTABLE_SERVICE_INSPECTION=COLLECTED_READ_ONLY`. Docker retained
 predecessor: exited, exit 0, OOMKilled=false, declared loopback
-\`127.0.0.1:8888\`, no runtime port map while exited. Systemd:
-loaded / inactive / dead / Result=success; immutable \`current\`
+`127.0.0.1:8888`, no runtime port map while exited. Systemd:
+loaded / inactive / dead / Result=success; immutable `current`
 ExecStart and legacy name-based Docker ExecStop, with restart-on-failure.
 All eight inspected adoption/stop/commit/monitor/transition markers absent.
 [Permanent evidence](../scripts/benchmark/evidence/dgx-b3-readonly-runtime-unit-complete-20261013.md).
@@ -137,11 +137,11 @@ All eight inspected adoption/stop/commit/monitor/transition markers absent.
 5 FAIL / 2 WARN.** The absence of a live attestation, live monitor
 or health service remains expected in this stopped state and M1 is **not**
 qualified by these metadata reads. Source-level inspection of installed
-immutable release \`ff67bab3\` reveals ordinary rollback/recover branches
+immutable release `ff67bab3` reveals ordinary rollback/recover branches
 can restart the preserved predecessor, whereas memory-protection abort
 deliberately leaves it stopped; service ExecStop is a legacy direct Docker
-command. Consequently, no generic manual \`docker start\` or blind
-\`sudo systemctl restart\` is the next automatically authorized step.
+command. Consequently, no generic manual `docker start` or blind
+`sudo systemctl restart` is the next automatically authorized step.
 The next **source-only planning task** is to specify and verify the exact
 preflight, container identity, reversible test boundary, monitor+strict-RM
 STOP criteria, and recovery plan for a future **legacy OrcaRouter M1** test.
