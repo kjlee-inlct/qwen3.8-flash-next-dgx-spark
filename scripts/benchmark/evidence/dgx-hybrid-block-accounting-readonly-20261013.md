@@ -6,7 +6,7 @@ Source detached worktree: `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`.
 Original model tree: `$HOME/Workspace/llm/qwen3.8-flash-next-dgx-spark/models`.
 Exact SHA GitHub Actions CI: [38347956896](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38347956896) — **SUCCESS** (separate `GITHUB_CI` evidence).
 
-The operator ran `scripts/diagnostics/inspect-hybrid-reclaim-blocks.sh` using
+The operator ran `inspect-hybrid-reclaim-blocks.sh` (diagnostic entry point) using
 `QWEN38_RECLAIM_AUDIT_SHA` and explicit `QWEN38_RECLAIM_MODELS_ROOT`.
 The posted terminal log includes both beginning and completion markers:
 
