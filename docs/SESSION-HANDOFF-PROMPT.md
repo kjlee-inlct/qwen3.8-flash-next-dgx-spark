@@ -1,5 +1,33 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## ACTUAL_DGX: both OrcaRouter images passed strict read-only A/B admission (2026-10-13 17:18 KST)
+
+The owner ran existing installed wizard `./install.sh --dry-run` on
+detached exact source `980e1001ed90ee0b08b14dfddcf26797909e10c0`,
+management **6**, then variant preflight **6 (Legacy A)** and
+**7 (v0.29 B)** with the same exact old stopped Docker identity.
+Both returned **`AB_PREFLIGHT=PASS_READ_ONLY`, RC=0**:
+Legacy `vllm-skinny-tp1:v1` image ID
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`;
+v0.29 `vllm-orcarouter-v029:v1` image ID
+`sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`.
+Both observed old ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+manifest digest
+`68d56e776214d8df25bd98c632d9749e5e174c3b9f5c671b2db080035d582f0f`,
+installed immutable release
+`ff67bab3c94d6992f61b9535836df97f03b9c022`, candidate API
+`127.0.0.1:18888`. A log path
+`/home/inlc/dgx-ab-preflight-6-20261013-171811.log`;
+owner-provided output ends before the B log filename was printed.
+This is **real physical read-only admission**, *not* model startup,
+API READY, strict NVIDIA RM window, benchmark or off-host backup.
+[Canonical physical evidence](../scripts/benchmark/evidence/dgx-orcarouter-ab-readonly-both-20261013.md).
+**No runtime launch is authorized by a preflight PASS.**
+Existing manifest/release/predecessor preservation remains mandatory;
+PR #259 Draft/Unmerged; both benchmarks NOT_MEASURED.
+
+
 ## OrcaRouter A/B trial wizard implementation — SOURCE ONLY (2026-10-13)
 
 **Progress since A/B preview:** A separate, experimental installed-setup

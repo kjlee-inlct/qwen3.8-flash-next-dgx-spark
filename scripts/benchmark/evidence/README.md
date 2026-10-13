@@ -1,5 +1,14 @@
 # Benchmark evidence index
 
+## Physical A/B preflight both PASS (2026-10-13 17:18 KST)
+
+[Physical OrcaRouter Legacy/v0.29 read-only A/B preflight](dgx-orcarouter-ab-readonly-both-20261013.md):
+Legacy A and v0.29 B each `AB_PREFLIGHT=PASS_READ_ONLY` and rc 0 at exact source `980e1001ed90ee0b08b14dfddcf26797909e10c0`;
+image IDs pinned, same original stopped Docker ID, manifest SHA and release.
+No Docker create/start, host stability, API or benchmark measured.
+Source review must still qualify watchdog exit/abort before live launch.
+
+
 ## Source-only A/B trial implementation is not physical evidence (2026-10-13)
 
 The installed wizard's **menu 6** now contains source code
