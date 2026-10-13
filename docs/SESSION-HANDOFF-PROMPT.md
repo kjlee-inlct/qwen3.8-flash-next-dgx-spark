@@ -245,3 +245,24 @@ old container ID 삭제 허용 또는 독립 격리 방식의 결정
   /swap-ple.img 활성, disk 105G free. **M1 LIVE 아직 BLOCKED**:
   기존 Docker object ID 교체/삭제 동의 및 old-release rollback/STOP
   계획이 없으며 H38 실기/RM 승격과 관계없습니다.
+
+
+## Evergreen owner rule — benchmarks before model/Docker space reclamation (2026-10-13)
+
+- The user intends to recover disk by eventually deleting SELECTED
+  models or Docker artifacts; archive model-specific quantitative
+  benchmarks **before deletion**. This is not authorization for
+  unconditional cleanup or sacrifice of the old stopped Docker ID.
+- Immediately before proposing candidates run the
+  read-only inventory documented at BENCHMARK-BEFORE-RECLAIM.md.
+  Existing storage/model manager status, recommend, plan and assets
+  commands are preferred; no second deletion implementation.
+- Each affected model needs true llama-benchy raw JSON, generated
+  Markdown, source/release/image/checkpoint identity, strict RM
+  outcome, hashes and an archived off-scope copy. Missing benchmark
+  is HOLD/NOT_MEASURED unless separately and explicitly waived.
+- Preserve Hybrid shared dependencies, Docker layer sharing, PLE
+  swap, active/current/previous state and the exact stopped OrcaRouter
+  container until full individually scoped safety/ownership approval.
+- For every new rule/idea/reference update this handoff and relevant
+  canonical docs together with project work (ongoing).

@@ -127,3 +127,14 @@ If any field differs, display the distinction rather than an
 unqualified winner. Prompt-processing PP is a derived estimate;
 TTFR is first response chunk, whereas E2E TTFT is first content
 token. No cross-model aggregate winner from missing data.
+
+
+## Bench evidence retention gate before disk cleanup
+
+User requests **benchmark before model/Docker deletion**.
+[Reclaim and archive protocol](../BENCHMARK-BEFORE-RECLAIM.md).
+Keep per-model raw upstream JSON and derived Markdown outside any
+planned cleanup directory; record their SHA256 and Docker image ID
+alongside model checkpoint/release/config. All five current
+templates are NOT_MEASURED. A future per-asset deletion requires
+owner-specific approval, not merely a passing read-only inventory.

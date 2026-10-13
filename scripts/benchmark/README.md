@@ -15,6 +15,14 @@ new Markdown report with identity/provenance and no synthetic
 performance values. The DGX model is stopped: **no actual bench run
 or package installation** at this point.
 
+## Reclaim policy
+
+Save and separately archive model-specific llama-benchy reports
+before selected model/Docker deletion. See
+[benchmark-before-reclaim](../../docs/BENCHMARK-BEFORE-RECLAIM.md).
+Do not use a benchmark to automatically restart a stopped service.
+No current model has new quantitative benchmark evidence.
+
 ## Responsibilities
 
 - Run read-only qualification and performance workloads against the already-running loopback API.

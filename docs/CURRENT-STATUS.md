@@ -15,6 +15,19 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## BENCHMARK BEFORE SELECTIVE RECLAIM — new operator preference (2026-10-13)
+
+Some models/Docker assets may be considered for disk reclamation,
+**but first preserve the per-model benchmark result and provenance**.
+All five llama-benchy report templates remain NOT_MEASURED and no
+real benchmark or deletion has yet been run.
+[Read-only inventory / retain-before-delete gate](BENCHMARK-BEFORE-RECLAIM.md)
+reuses existing storage/model managers, exact SHA, Docker reclaimable
+accounting and dependency protection. The stopped old OrcaRouter
+container ID, active checkpoint, swap and immutable releases remain
+protected. Current observed disk headroom ~105 GiB is less than the
+lychee888 model-card figure ~123.25 GiB before reserve.
+
 ## ACTUAL DGX B5 — legacy OrcaRouter read-only PASS (2026-10-13)
 
 The operator returned `B5_READONLY=COLLECTED_READ_ONLY` at
