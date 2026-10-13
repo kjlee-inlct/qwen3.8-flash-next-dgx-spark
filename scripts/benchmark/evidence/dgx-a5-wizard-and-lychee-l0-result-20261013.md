@@ -83,9 +83,8 @@ no other system process changed during the same interval.
 
 ## lychee888 L0 real-Hub JSON probe (independent, after A5)
 
-The user then executed
-`python3 -B scripts/model/inspect_lychee888_metadata.py` in the
-same exact source worktree. It performed network retrieval of the
+The user then executed the `inspect_lychee888_metadata.py` JSON-only
+probe using `python3 -B` in the same exact source worktree. It performed network retrieval of the
 Hub immutable revision's API, config and index JSON, **not** a
 model weight download.
 
