@@ -94,3 +94,24 @@ not a completed pinned-Hub API/config/index probe. Do not mark
 L0 real file/index verification PASS until the probe emits its
 metadata-only verdict from actual fetched JSON. Single-Spark loader
 and weight-file gates still remain unverified.
+
+
+## L0 actual Hub JSON execution — 2026-10-13
+
+The user executed the existing `inspect_lychee888_metadata.py`
+against the *actual Hub API* from the physical DGX detached
+worktree at `f2674f0`. The resolved pinned source revision was
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`. It returned
+`INDEX_STRUCTURE_PASS_METADATA_ONLY` with 223,047 index keys,
+128 numbered PLE shards, 10 referenced FP8 PLE files, one global
+scale key and `float8_e4m3fn` in the config.
+[Exact scope and output](../scripts/benchmark/evidence/dgx-a5-wizard-and-lychee-l0-result-20261013.md).
+
+**L0_INDEX_JSON_PASS** now has actual-Hub evidence, superseding
+the source-only and unexecuted descriptions above. **L0 tensor
+headers, scale dtype/shape, weight hash and complete content are
+still unverified**, as are the single-GB10 FP8 PLE runtime,
+accuracy and strict RM. The original-fourth profile remains
+`planned` and disabled. Next L1 is source/fixture adapter
+analysis using this immutable checkpoint identity; do not
+start a weight download or model load from this metadata PASS.

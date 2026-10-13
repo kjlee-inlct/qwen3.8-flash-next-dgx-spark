@@ -4,6 +4,23 @@
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.
 
+## Actual DGX A5+lychee888 L0 result (2026-10-13)
+
+The operator ran A5 from the verified exact source
+`f2674f0`, obtaining **14/14 read-only commands rc0**
+and 60/60 fixture tests, unchanged manifest/ownership SHA256,
+unchanged immutable `current`, and
+`WIZARD_DGX_READONLY=PREVIEW_AND_FIXTURES_PASS`.
+`A5_REAL_DGX_DRY_RUN=PASS`. Immediately afterward an
+actual remote-Hub L0 JSON call for `lychee888` returned pinned
+revision `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`
+and `INDEX_STRUCTURE_PASS_METADATA_ONLY`.
+[Scoped result](../scripts/benchmark/evidence/dgx-a5-wizard-and-lychee-l0-result-20261013.md).
+These do NOT count as actual installed-model start, live
+switching, destructive uninstallation, single-Spark FP8
+loader verification or strict host-stability. M1/M2/M3/M4/D0
+qualifications remain unchanged.
+
 ## Physical-DGX wizard A5 — now operator-ready, not yet observed (2026-10-13)
 
 [Explicit bounded A5 runbook](DGX-WIZARD-A5-READONLY.md) uses an

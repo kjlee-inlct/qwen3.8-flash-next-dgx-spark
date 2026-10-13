@@ -198,3 +198,15 @@ when the previous conversation is unavailable.
 호스트 로그 없이 A5 PASS로 표시하지 않습니다.
 이는 기존 B4와 독립된 새 위자드 검증이며 M1 라이브 전환의
 승인이나 오래된 Docker ID 삭제 동의가 아닙니다.
+
+
+**2026-10-13 실제 DGX 업데이트:** A5 정확한
+`f2674f0` source에서 14/14 preview/status rc0 및
+60/60 fixture tests, manifest/ownership/current 불변
+`PREVIEW_AND_FIXTURES_PASS`. `lychee888` 실제 Hub
+metadata `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`
+`INDEX_STRUCTURE_PASS_METADATA_ONLY`.
+[원본 근거](../scripts/benchmark/evidence/dgx-a5-wizard-and-lychee-l0-result-20261013.md).
+다음 실제 DGX 과제는 구형 OrcaRouter M1의 B5 읽기
+전용 go/no-go 및 기존 Docker ID 삭제·롤백/재시작 위험
+확정입니다. H38 / 실삭제는 여전히 금지된 단계입니다.

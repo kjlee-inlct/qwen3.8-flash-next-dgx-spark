@@ -2,6 +2,18 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## Physical DGX A5 wizard dry-run + lychee888 L0 real Hub JSON PASS (2026-10-13)
+
+- [**A5 actual-DGX 14/14 read-only checks and 60/60 fixtures;
+  lychee888 L0 pinned index JSON PASS**](dgx-a5-wizard-and-lychee-l0-result-20261013.md):
+  operator detached checkout `f2674f0`, unchanged manifest/
+  ownership/current, OrcaRouter stopped and protected, no service
+  actions. Live M1/M3, destructive M2, H38 M4 and disposable D0
+  remain unqualified/not authorized. Actual Hub revision
+  `1b3c3cedc14fb3bee4294dea5e3515af74b8268a` resolved with
+  `INDEX_STRUCTURE_PASS_METADATA_ONLY`, not FP8 tensor
+  dtype/loader or single-Spark stability.
+
 ## Physical DGX B4 — legacy OrcaRouter pre-start metadata (2026-10-13)
 
 - [**B4 exact image/container and host-resource snapshot**](dgx-b4-m1-prestart-readonly-20261013.md): actual DGX b35d0f3, installed ff67bab3, image/old-container identity match, rollback name absent, image exists, monitor enabled/protect=1, approximately 118.2 GiB MemAvailable and 143.1 GiB swap free, no live model start. Exact installed source flags old-container ID loss after a successful managed replacement and restart-on-recovery paths; H38 blocked, M1 live health unqualified.

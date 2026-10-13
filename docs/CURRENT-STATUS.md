@@ -15,6 +15,26 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## ACTUAL DGX A5 wizard previews PASS + lychee888 real L0 index JSON PASS (2026-10-13)
+
+The operator ran the exact `f2674f0a60682a62f6218c7bfbfc5e9e5d24e4b8`
+detached-worktree read-only wizard audit. **14/14 checks rc0**,
+**60/60 scoped fixture tests**, four profile installer dry-run
+plans, both uninstall previews; manifest and ownership file SHA256 and
+immutable `current=ff67bab3` unchanged. The saved selected-profile
+snapshot still reports stopped/EXITED OrcaRouter with no live
+attestation and monitor/protect=1; **no runtime was started**.
+The separate actual-network `lychee888` metadata probe resolved
+Hub revision `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`:
+223,047 index keys / 128 PLE shards / 10 FP8 PLE files /
+one global scale / `float8_e4m3fn`, verdict
+`INDEX_STRUCTURE_PASS_METADATA_ONLY`. **L0_INDEX_JSON=PASS**
+does NOT verify tensor dtype, weights, TP1 support or RM stability.
+[Canonical physical-DGX A5+L0 operator evidence](../scripts/benchmark/evidence/dgx-a5-wizard-and-lychee-l0-result-20261013.md).
+**M1 live NOT_QUALIFIED, M2 NOT_RUN, M3 live NOT_QUALIFIED,
+M4 H38 BLOCKED, D0 NOT_GRANTED.** Old Docker ID survival on
+managed service success remains a separate explicit safety gate.
+
 ## A5 real-DGX wizard preview gate — operator-ready, not yet run (2026-10-13)
 
 A new [exact-SHA physical-DGX wizard dry-run script](DGX-WIZARD-A5-READONLY.md)

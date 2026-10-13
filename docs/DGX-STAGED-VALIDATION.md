@@ -187,3 +187,19 @@ worktree to avoid altering the previously installed release or current
 operator source checkout. It is intended to run immediately once the
 corresponding GitHub CI has succeeded. It does not start models, restart
 systemd, remove resources, or promote M1/M2/M3/M4.
+
+
+## A5 physical execution and lychee888 metadata result — PASS (2026-10-13)
+
+Operator returned A5 `PREVIEW_AND_FIXTURES_PASS` with exact
+`f2674f0` checkout and unchanged hashes; 14/14 command rc0 and
+60/60 fixture tests. The same operator also returned
+`lychee888` `INDEX_STRUCTURE_PASS_METADATA_ONLY` from actual
+Hub revision `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`.
+[Scoped evidence](../scripts/benchmark/evidence/dgx-a5-wizard-and-lychee-l0-result-20261013.md).
+**A5=ACTUAL_DGX_DRY_RUN_PASS; L0_INDEX_JSON=PASS**.
+Earlier run instructions' `A5_NOT_RUN` text represents their
+publication-time state only. Next B5 is a version-matched,
+non-mutating preflight and preservation-decision gate for the
+stopped legacy OrcaRouter service. No live model test has yet
+been attempted or authorized by this result.
