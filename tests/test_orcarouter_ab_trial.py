@@ -291,7 +291,7 @@ class OrcaRouterTrialTests(unittest.TestCase):
             state.mkdir()
             data = root / "data"
             data.mkdir()
-            rel = data / "releases" / "a"*40
+            rel = data / "releases" / ("a"*40)
             rel.mkdir(parents=True)
             (data/"current").symlink_to(rel)
             trial = state/"experiment"
