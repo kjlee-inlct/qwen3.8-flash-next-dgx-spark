@@ -61,6 +61,72 @@ class ModularWizardTests(unittest.TestCase):
             self.assertIn("mazinb historical experiments", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_evidence_numeric_selection_is_not_an_invalid_trial(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            bin_dir = home / "bin"
+            bin_dir.mkdir()
+            mock_bash = bin_dir / "bash"
+            mock_bash.write_text(
+                '#!/bin/sh\n'
+                'if [ "$2" = evidence ]; then printf "MOCK_EVIDENCE=%s\\n" "$3"; exit 0; fi\n'
+                'exit 73\n', encoding="utf-8",
+            )
+            mock_bash.chmod(0o700)
+            env = {
+                **os.environ, "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "xdg"),
+                "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            for option, expected in (
+                ("1", ["A"]), ("2", ["B"]), ("3", ["A", "B"]),
+                ("B", ["B"]), ("0", []),
+            ):
+                with self.subTest(selection=option):
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                        cwd=ROOT, env=env, input=f"5\n5\n{option}\n0\n0\n",
+                        text=True, capture_output=True, timeout=20, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    reviewed = [
+                        line.split("=", 1)[1] for line in result.stdout.splitlines()
+                        if line.startswith("MOCK_EVIDENCE=")
+                    ]
+                    self.assertEqual(reviewed, expected)
+                    self.assertNotIn("Invalid trial", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_existing_historical_b_blocks_fresh_b_before_id_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            bin_dir = home / "bin"
+            bin_dir.mkdir()
+            mock_docker = bin_dir / "docker"
+            mock_docker.write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = inspect ] && [ "$4" = qwen38-mazinb-kv-b ]; then\n'
+                '  printf "%064d\\n" 1\n'
+                '  exit 0\n'
+                'fi\n'
+                'exit 77\n', encoding="utf-8",
+            )
+            mock_docker.chmod(0o700)
+            env = {
+                **os.environ, "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "xdg"),
+                "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            result = subprocess.run(
+                ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                cwd=ROOT, env=env, input="5\n2\n0\n0\n",
+                text=True, capture_output=True, timeout=20, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Historical B container already exists", result.stdout)
+            self.assertNotIn("Re-enter complete predecessor Docker ID", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
     def test_eof_aborts_before_default_choice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_case(Path(tmp), ["--lang", "en"])

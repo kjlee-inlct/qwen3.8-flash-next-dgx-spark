@@ -1,3 +1,11 @@
+> **2026-10-14 ACTUAL DGX mazinb status:** Wizard verified that both
+> old KV trials still exist and are exited: A/24GiB exit 1, B/16GiB
+> exit 0; both OOMKilled=false. These are historical observations,
+> NOT new READY or bench results. Evidence submenu now supports
+> 1=A, 2=B, 3=both; fresh-B admission explains old B name collision
+> before asking for predecessor ID. No Docker/state cleanup performed.
+> See `docs/MAZINB-EXECUTION-GATE.md`.
+
 > **2026-10-14 DGX mazinb M0 follow-up:** Real read-only admission
 > refused the existing historical `qwen38-mazinb-kv-a` container. It is
 > NOT proven running or safe to remove. Wizard Benchmark now exposes

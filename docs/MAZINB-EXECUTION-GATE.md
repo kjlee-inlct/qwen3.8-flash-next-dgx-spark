@@ -1,5 +1,33 @@
 # mazinb benchmark readiness: exact-ID admission before any live start
 
+## Physical DGX result — 2026-10-14 (A and B both historical)
+
+The owner entered Wizard -> Benchmark -> 4. Actual Docker status was:
+
+- `qwen38-mazinb-kv-a`: **exited**, exit **1**, OOMKilled **false**,
+  old start `2026-10-02T12:15:53Z`, KV **24 GiB**.
+- `qwen38-mazinb-kv-b`: **exited**, exit **0**, OOMKilled **false**,
+  old start `2026-10-02T11:45:40Z`, KV **16 GiB**.
+- Both used image tag `vllm-orcarouter-v029:v1`; managed service
+  inactive and original canonical container exited.
+
+This is historical metadata, **not** a new DGX model run and **not**
+proof that B reached READY or passed host stability. Review the real
+monitor/runtime-stop/kernel evidence before citing an outcome.
+
+The evidence UX initially rejected input `2` because it accepted
+only literal A/B. Corrected Wizard submenu **5: Evidence** now presents
+**1=A, 2=B, 3=both, 0=back** and still accepts A/B shortcuts.
+The corrected fresh-B admission menu **2** detects old B *before*
+requesting full predecessor ID and explains it cannot reuse the
+historical case name. No cleanup will be performed or requested to
+bypass this gate. A new model launch needs a uniquely named, protected
+M1 candidate instance and lifecycle recovery.
+
+**Approved/qualified now:** read-only historical evidence review.
+**Not implemented:** live mazinb start, actual llama-benchy or Docker
+cleanup. The operator continues through `wizard.sh` only.
+
 ## Priority and sequencing (2026-10-14)
 
 The next **actual DGX model test** should be mazinb; finishing the entire
@@ -10,9 +38,10 @@ historical read-only result, not current host acceptance.
 
 ### Stage M0 — new read-only identity/admission gate (implemented)
 
-**Operator entry point is only `./wizard.sh`** (Benchmark menu, choice 5).
-Use submenu **4: Historical A/B status**, **5: Historical evidence A/B**,
-then **2: Guarded mazinb B admission**. The wizard itself inspects and displays
+**Operator entry point is only `./wizard.sh`** (top-level menu 5: Benchmark).
+Use submenu **4: Historical A/B status**, **5: Historical evidence A/B**
+(1=A, 2=B, 3=both). Because historical B also exists, fresh-B submenu
+**2: Guarded admission** is blocked until a separately named M1 path exists. The wizard itself inspects and displays
 the original managed Docker ID, requires exact user acknowledgement, and
 requires explicit default-NO consent for evidence review and read-only admission.
 The script `scripts/wizard/mazinb-admission.sh` is an internal testable helper,
@@ -99,7 +128,8 @@ backed-up assets may be reclaimed. No deletion approval is implied.
 | Gate | Status |
 | --- | --- |
 | Existing 2026-10-13 mazinb KV preflight | historical PASS |
-| Historical A review in Wizard | source implemented; exact-DGX review pending |\n| New admission script source | implemented, needs current exact-DGX snapshot |
+| Historical A/B status in Wizard | actual-DGX read-only metadata observed; evidence not yet reviewed |
+| New admission script source | implemented; fresh B blocked by existing historical B |
 | M1 protected stay-READY controller | NOT_IMPLEMENTED |
 | Actual mazinb READY / served identity | NOT_MEASURED |
 | Actual RM host stability | NOT_MEASURED |

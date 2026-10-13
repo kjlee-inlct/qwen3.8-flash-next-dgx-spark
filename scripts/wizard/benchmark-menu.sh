@@ -10,15 +10,34 @@ wizard_mazinb_status() {
 }
 
 wizard_mazinb_evidence() {
-  local trial
-  wizard_input trial 'Review case A or B / 확인할 실험 A 또는 B' A
-  case "${trial}" in
-    A|a|B|b)
-      bash "${ROOT_DIR}/scripts/runtime/mazinb-kv-ab.sh" evidence "${trial^^}" ||
-        wizard_warning 'Evidence inspection failed; nothing was modified.'
-      ;;
-    *) wizard_warning 'Invalid trial: choose A or B.' ;;
+  local selection trial
+  wizard_header 'Past mazinb A/B evidence / 과거 A/B 실험 증거'
+  wizard_menu_option 1 'Case A — 24 GiB / 실험 A'
+  wizard_menu_option 2 'Case B — 16 GiB / 실험 B'
+  wizard_menu_option 3 'Both A and B / A와 B 모두 확인'
+  wizard_menu_option 0 'Back / 이전'
+  wizard_input selection 'Select evidence / 증거 선택' 0
+  case "${selection}" in
+    1|A|a) selection=A ;;
+    2|B|b) selection=B ;;
+    3|AB|ab|both|BOTH) selection=AB ;;
+    0|q|Q) return 0 ;;
+    *) wizard_warning 'Invalid trial: choose 1=A, 2=B, 3=both or 0=back.'; return 0 ;;
   esac
+
+  local -a cases=()
+  if [[ "${selection}" == AB ]]; then
+    cases=(A B)
+  else
+    cases=("${selection}")
+  fi
+  for trial in "${cases[@]}"; do
+    printf '\nMAZINB_EVIDENCE_REVIEW=CASE_%s (historical / read-only)\n' "${trial}"
+    if ! bash "${ROOT_DIR}/scripts/runtime/mazinb-kv-ab.sh" evidence "${trial}"; then
+      wizard_warning "Case ${trial} evidence inspection failed; nothing modified."
+    fi
+  done
+  wizard_info 'Docker exit=0 does not prove READY, protected host-stability or benchmark.'
 }
 
 wizard_mazinb_admission() {
@@ -28,6 +47,16 @@ wizard_mazinb_admission() {
   wizard_info 'The old managed container, prior A evidence and immutable releases remain untouched.'
   if ! command -v docker >/dev/null 2>&1; then
     wizard_warning 'Docker missing. Admission cancelled.'
+    return 0
+  fi
+
+  # The fixed B name belongs to the previous 2026-10-02 experiment on this host.
+  # Do not require a 64-character predecessor acknowledgement before detecting
+  # that fresh-B admission is impossible without a separately named M1 trial.
+  if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-b >/dev/null 2>&1; then
+    wizard_warning 'Historical B container already exists. Preserve its identity, logs, and state.'
+    wizard_warning 'Fresh B admission requires a DIFFERENT M1 candidate name; no deletion is authorized.'
+    wizard_info 'Review menu 4 (status) and 5 -> 2 (B evidence).'
     return 0
   fi
 
@@ -105,10 +134,10 @@ wizard_benchmark_menu() {
     wizard_header 'Benchmark / 벤치마크'
     wizard_info 'mazinb historical evidence and admission are read-only. Actual start awaits M1.'
     wizard_menu_option 1 'mazinb preflight (read-only) / 사전 점검'
-    wizard_menu_option 2 'mazinb B guarded admission (read-only) / 검증'
+    wizard_menu_option 2 'New mazinb B admission (read-only; blocked if B exists)'
     wizard_menu_option 3 'Report tools / 보고서 도구'
     wizard_menu_option 4 'Historical mazinb A/B status / 기존 실험 상태'
-    wizard_menu_option 5 'Historical A/B evidence / 기존 실험 증거'
+    wizard_menu_option 5 'Historical A/B evidence (1=A, 2=B, 3=both) / 기존 증거'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
