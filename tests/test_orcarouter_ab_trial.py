@@ -113,6 +113,85 @@ class OrcaRouterTrialTests(unittest.TestCase):
             with self.assertRaisesRegex(MOD.TrialError, "not cleanly stopped"):
                 MOD.check_candidates("v029")
 
+    def test_prearmed_monitor_times_out_without_start_and_no_docker_stop(self):
+        import tempfile
+        import stat
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            wd = root / "monitor"
+            wd.mkdir()
+            docker = bin_dir / "docker"
+            docker.write_text(
+                '#!/usr/bin/env bash\n'
+                'set -euo pipefail\n'
+                'if [[ "$1" == inspect ]]; then\n'
+                '  if [[ "${2:-}" == --format ]]; then printf "%s\\n" "$AB_FAKE_ID"; exit 0; fi\n'
+                '  if [[ "${2:-}" == -f ]]; then printf "false\\n"; exit 0; fi\n'
+                '  exit 0\n'
+                'fi\n'
+                'echo "unexpected Docker mutation: $*" >&2\n'
+                'exit 70\n',
+                encoding="utf-8",
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            argv = [
+                "bash", str(ROOT / "scripts/runtime/monitor-runtime.sh"),
+                "--container", "qwen38-ab-legacy", "--expected-id", "a" * 64,
+                "--wait-running", "1", "--state-dir", str(wd),
+                "--armed-file", str(wd / "armed"), "--heartbeat-file", str(wd / "heartbeat"),
+                "--protect",
+            ]
+            proc = subprocess.run(
+                argv, cwd=ROOT, text=True, capture_output=True, timeout=6,
+                env={**os.environ, "PATH": str(bin_dir) + ":" + os.environ.get("PATH", ""),
+                     "AB_FAKE_ID": "a" * 64}, check=False,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("AB_MONITOR_ARMED_ID=" + "a" * 64, proc.stdout)
+            self.assertEqual((wd / "armed").read_text().strip(), "a" * 64)
+            self.assertIn("trial never became running", proc.stderr)
+            self.assertFalse((wd / "heartbeat").exists())
+
+    def test_prearmed_monitor_refuses_wrong_id_before_creating_arm_file(self):
+        import tempfile
+        import stat
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            wd = root / "monitor"
+            wd.mkdir()
+            docker = bin_dir / "docker"
+            docker.write_text(
+                '#!/usr/bin/env bash\n'
+                'set -euo pipefail\n'
+                'if [[ "$1" == inspect ]]; then\n'
+                '  if [[ "${2:-}" == --format ]]; then printf "%s\\n" "$AB_FAKE_ID"; fi\n'
+                '  exit 0\n'
+                'fi\n'
+                'exit 70\n',
+                encoding="utf-8",
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            proc = subprocess.run([
+                "bash", str(ROOT / "scripts/runtime/monitor-runtime.sh"),
+                "--container", "qwen38-ab-v029",
+                "--expected-id", "a" * 64,
+                "--wait-running", "1", "--state-dir", str(wd),
+                "--armed-file", str(wd / "armed"),
+                "--heartbeat-file", str(wd / "heartbeat"), "--protect",
+            ], text=True, capture_output=True, timeout=6, cwd=ROOT,
+                env={**os.environ, "PATH": str(bin_dir) + ":" + os.environ.get("PATH", ""),
+                     "AB_FAKE_ID": "b" * 64},
+                check=False)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("trial container ID drift before arm", proc.stderr)
+            self.assertFalse((wd / "armed").exists())
+
     def test_source_isolation_honors_legacy_and_v029(self):
         script = (ROOT / "scripts/serve.sh").read_text()
         self.assertIn('DOCKER_LAUNCH=(create)', script)
