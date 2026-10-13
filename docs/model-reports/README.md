@@ -1,5 +1,10 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
+## Physical S3 is not a llama-benchy measurement (2026-10-13)
+
+[Actual DGX S3](../../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md) confirmed virtual shard-reference resolution only (`REFERENCE_GAPS=0`). It did not send API requests, load models or generate raw performance JSON. **All five per-model reports remain NOT_MEASURED**. Do not delete H3/H4 based on H6 index integrity; benchmark and dependency/ownership guards still apply.
+
+
 ## S2 is filesystem evidence, not llama-benchy throughput (2026-10-13)
 
 [Actual DGX S2](../../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md) measured allocation/hardlink/symlink counts only. It did **not** start the model API or generate a llama-benchy JSON. All five templates remain `NOT_MEASURED`; H3/H4 are intermediate artifacts, not independent selectable benchmark profiles. Do not infer permission to delete the parents from a future H6 throughput result.

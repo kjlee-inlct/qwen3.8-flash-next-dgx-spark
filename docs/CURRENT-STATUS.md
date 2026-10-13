@@ -1,5 +1,10 @@
 # Current project status
 
+## Actual DGX S3 link/index reference PASS — not runtime or reclaim clearance (2026-10-13)
+
+Physical operator log `dgx-hybrid-runtime-refs-20261013-141134.log` at exact source `d14915549667e196356b8511526f9bfd4db42cd6`: `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY`, `REFERENCE_GAPS=0`, no model start or tensor payload read. Six-stage index counts (base/mazinb/H3/H4/H5/H6) show 18/95/66/81/81/81 unique shard names; H6's **81/81 shards use virtual link chains**, so H6 remains dependent on ancestors. All 319 H3-H6 symlinks had known parent alias categories, but only indexed shard references were resolved to files. Same-SHA CI #38349291372 was SUCCESS; physical results are separate. [New actual-DGX S3 evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md). Source review of `scripts/serve.sh` shows H6 + four RO parent mounts; **actual Docker mounts/serving are NOT verified**. Follow-up S4 (all symlink targets, mount contract, filesystem capability) is NOT_RUN; five llama-benchy reports remain NOT_MEASURED, and model/Docker deletion remains blocked.
+
+
 ## Source-only S3 dependency inspection tool (2026-10-13)
 
 Added `scripts/diagnostics/inspect-hybrid-runtime-references.py` and

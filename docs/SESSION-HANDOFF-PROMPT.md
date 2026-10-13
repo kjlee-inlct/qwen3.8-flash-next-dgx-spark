@@ -1,5 +1,12 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Newer physical S3 actual-DGX result (2026-10-13)
+
+Operator returned a clean exact-SHA `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY` at source `d14915549667e196356b8511526f9bfd4db42cd6`, with same-SHA GitHub CI [38349291372](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38349291372) SUCCESS. Log: `/home/inlc/dgx-hybrid-runtime-refs-20261013-141134.log`. `REFERENCE_GAPS=0`; direct/virtual shard counts base 18/0, mazinb 95/0, H3 63/3, H4 15/66, H5 48/33, **H6 0/81**. The tool classified 319 symlinks as expected parent aliases. [Immutable date-scoped evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md).
+
+**Meaning:** all unique *indexed* safetensors shards resolve through the tool's configured container aliases, not all non-shard symlink entries nor live Docker bind mounts. Source `serve.sh` has H6 and four ancestor `:ro` volume entries, but this has **not** been verified in a live container. H6 cannot be treated as independent of H3/H4/OrcaRouter. The next read-only scope is S4 all-link target/mount contract/filesystem capability review; no H6 start, asset removal or reclaim calculation is approved. Original wizard-first goal remains top priority. Five model benchmark reports `NOT_MEASURED`; old container/release/monitor/swap preserved; M1/M3 unqualified, H38 blocked, destructive M2/D0 not granted; PR #259 Draft / Unmerged. Older below lines saying S2/S3 next are historical and superseded.
+
+
 ## Source-only S3 dependency inspection tool (2026-10-13)
 
 Added `scripts/diagnostics/inspect-hybrid-runtime-references.py` and

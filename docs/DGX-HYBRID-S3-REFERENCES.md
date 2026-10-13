@@ -52,3 +52,15 @@ extent sharing, safetensors tensor integrity, successful model loading, or
 host stability. Actual runtime mount contracts, on-disk physical extent
 uniqueness, benchmark evidence, ownership, and independent backup
 remain separate gates.
+
+## Actual physical result (2026-10-13)
+
+S3 was run successfully on the sole DGX after the exact-source CI succeeded.
+`REFERENCE_GAPS=0` and `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY`;
+all 81 H6 indexed shard filenames reached regular files through the known
+runtime alias chain. [Actual operator evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md).
+The tool did **not** prove every non-index symlink's physical target,
+live Docker binds or block independence. This newer evidence supersedes
+the generic S3-not-yet-run description above without revising its
+historical instructions. No benchmark or cleanup is authorized.
+

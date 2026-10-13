@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## Actual DGX S3 index-link reference survey PASS (2026-10-13)
+
+- [**S3 actual DGX exact-SHA virtual mount/index reference survey**](dgx-hybrid-runtime-references-readonly-20261013.md): at `d14915549667e196356b8511526f9bfd4db42cd6` the operator obtained `REFERENCE_GAPS=0` and `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY`; H6 uses all 81 index shards via source-declared virtual ancestor link chains. 319 symlinks classified under known parent aliases. Not a live Docker bind-mount check, tensor verification, benchmark, or reclamation proof. S4 all-symlink/filesystem read-only scope NOT_RUN.
+
+
 ## S3 follow-up source tool — actual DGX NOT_RUN (2026-10-13)
 
 - New read-only `scripts/diagnostics/inspect-hybrid-runtime-references.py` ([S3 operator runbook](../../../docs/DGX-HYBRID-S3-REFERENCES.md)) maps known virtual mount symlinks to source trees and JSON index shard references, without reading weight payloads. This is **SOURCE_REVIEW/CI only**, and remains **ACTUAL_DGX NOT_RUN** until user evidence.

@@ -1,5 +1,10 @@
 # DGX staged validation — operator runbook (2026-10-13)
 
+## Physical S3 reference check completed without model start (2026-10-13)
+
+[Scoped ACTUAL_DGX S3 evidence](../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md) at source `d14915549667e196356b8511526f9bfd4db42cd6`: `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY`, 0 unmapped indexed references, all 81 H6 index shards via known virtual ancestor aliases. No payload reading, benchmark, Docker/container startup or deletion. Source review confirms the H6 ancestor :ro mounts declared in `serve.sh` but does not verify live Docker mount realization. S4 all symlink targets + physical FS characteristics is the next non-mutating review. Historical S2/S3 pending text below must not override this newer dated scope.
+
+
 ## S2 physical host allocation-block audit PASS (2026-10-13)
 
 At exact source `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`, actual DGX operator output returned **`RECLAIM_BLOCK_ACCOUNTING=COLLECTED_READ_ONLY`**. [Evidence](../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md): six model directories 515623661568 allocated bytes; H3+H4 145557426176 bytes, zero observed hardlink file entries and 319 symlinks. Next **S3 read-only container-alias/safetensors index dependency** survey is not run. No model was started, no benchmark was measured, no file/Docker asset was removed. Never claim real reclaimable capacity from `du` alone. This newer scoped S2 result supersedes previous S2 `NOT_RUN` labels but does not change M1/M2/M3/M4/D0 protections.
