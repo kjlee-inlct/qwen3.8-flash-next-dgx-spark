@@ -43,3 +43,7 @@ supply this). User must use pinned `llama-benchy`, retain
 raw JSON+Markdown+SHA256 and verified off-host backups before
 cleanup. No model/Docker deletion approved. OrcaRouter no-delete
 hold applies **only for this test**, not permanently.
+
+## Legacy → v0.29 handoff without model/Docker cleanup
+
+Wizard stops A by its exact Docker ID and leaves the `qwen38-ab-legacy` container stopped, plus its per-run `record.json` and monitor logs. The next B trial may create only `qwen38-ab-v029`, provided A is cleanly stopped with matching provenance labels. An old B name may not be replaced, and a still-running or unknown A is fatal. No automatic deletion, prune or loss of prior evidence is part of the transition.

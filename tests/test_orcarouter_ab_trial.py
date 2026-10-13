@@ -70,7 +70,26 @@ class OrcaRouterTrialTests(unittest.TestCase):
                 release.mkdir(parents=True)
                 (data / "current").symlink_to(release)
                 with self.assertRaisesRegex(MOD.TrialError, "managed service is active"):
-                    MOD.admission(state, data, {}, "f"*64)
+                    MOD.admission(state, data, {}, "f"*64, "legacy")
+
+    def test_stopped_legacy_allows_v029_without_deletion(self):
+        stopped = {"Id": "a" * 64, "Config": {"Labels": {
+            "qwen38.abtrial": "orcarouter", "qwen38.variant": "legacy"}},
+            "State": {"Running": False, "Status": "exited"}}
+        with mock.patch.object(MOD, "inspect",
+                               side_effect=lambda name: stopped if name == "qwen38-ab-legacy" else None):
+            MOD.check_candidates("v029")
+            with self.assertRaisesRegex(MOD.TrialError, "target trial name already exists"):
+                MOD.check_candidates("legacy")
+
+    def test_running_legacy_refuses_v029(self):
+        running = {"Config": {"Labels": {
+            "qwen38.abtrial": "orcarouter", "qwen38.variant": "legacy"}},
+            "State": {"Running": True, "Status": "running"}}
+        with mock.patch.object(MOD, "inspect",
+                               side_effect=lambda name: running if name == "qwen38-ab-legacy" else None):
+            with self.assertRaisesRegex(MOD.TrialError, "not cleanly stopped"):
+                MOD.check_candidates("v029")
 
     def test_source_isolation_honors_legacy_and_v029(self):
         script = (ROOT / "scripts/serve.sh").read_text()

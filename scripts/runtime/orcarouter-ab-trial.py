@@ -167,10 +167,19 @@ def mem_admission() -> None:
     require(vals["SwapFree"] >= 8 * 1048576, "swap free < 8 GiB")
 
 
-def check_candidates() -> None:
+def check_candidates(target_variant: str) -> None:
     for variant in IMAGES:
         data = inspect("qwen38-ab-" + variant)
-        require(data is None, f"existing trial container must be preserved/reviewed: qwen38-ab-{variant}")
+        if data is None:
+            continue
+        require(variant != target_variant,
+                f"target trial name already exists: qwen38-ab-{variant}; preserve evidence first")
+        require(not data["State"]["Running"] and data["State"]["Status"] == "exited",
+                f"another trial image is not cleanly stopped: qwen38-ab-{variant}")
+        labels = data["Config"]["Labels"]
+        require(labels.get("qwen38.abtrial") == "orcarouter"
+                and labels.get("qwen38.variant") == variant,
+                f"prior trial object has unknown provenance: qwen38-ab-{variant}")
 
 
 def can_bind() -> None:
@@ -179,7 +188,8 @@ def can_bind() -> None:
         s.bind(("127.0.0.1", PORT))
 
 
-def admission(state: Path, data_home: Path, manifest: dict, expected_old_id: str) -> tuple[dict, str]:
+def admission(state: Path, data_home: Path, manifest: dict, expected_old_id: str,
+              target_variant: str) -> tuple[dict, str]:
     require(bool(HEX64.fullmatch(expected_old_id)), "exact 64-digit old Docker ID required")
     for marker in BLOCKED_MARKERS:
         require(not (state / marker).exists() and not (state / marker).is_symlink(),
@@ -199,7 +209,7 @@ def admission(state: Path, data_home: Path, manifest: dict, expected_old_id: str
     require(old["State"]["Status"] == "exited" and not old["State"]["Running"]
             and not old["State"]["OOMKilled"], "original managed Docker is not a clean stopped object")
     require(inspect("qwen38-orca-v029") is None, "unmanaged experimental OrcaRouter already exists")
-    check_candidates()
+    check_candidates(target_variant)
     can_bind()
     mem_admission()
     model_dir = Path(manifest["MODEL_DIR"])
@@ -257,7 +267,7 @@ def start(args: argparse.Namespace) -> None:
     require(read_json(record_path) is None or read_json(record_path).get("phase") == "stopped",
             "another trial is recorded; stop it before a new start")
     manifest, digest = read_manifest(state / "install.env")
-    old, release = admission(state, data_home, manifest, args.expected_old_id)
+    old, release = admission(state, data_home, manifest, args.expected_old_id, variant)
     image_id = image_identity(variant)
     trial_dir = state / "ab-trials" / f"{variant}-{int(time.time())}"
     require(not trial_dir.exists(), "trial run directory already exists")
@@ -295,6 +305,7 @@ def start(args: argparse.Namespace) -> None:
                               trial_dir=trial_dir, phase="created")
         trial_identity(record)
         write_json(record_path, record)
+        write_json(trial_dir / "record.json", record)
         preserve(old)
         require(hashlib.sha256((state / "install.env").read_bytes()).hexdigest() == digest,
                 "installed manifest changed before trial start")
@@ -340,6 +351,7 @@ def start(args: argparse.Namespace) -> None:
         record["phase"] = "started_unqualified"
         record["monitor_pid"] = watcher.pid
         write_json(record_path, record)
+        write_json(trial_dir / "record.json", record)
         preserve(old)
         print("AB_TRIAL_STARTED=UNQUALIFIED")
         print(f"AB_TRIAL_VARIANT={variant}")
@@ -359,6 +371,7 @@ def start(args: argparse.Namespace) -> None:
             if rec and rec.get("container") == candidate_id:
                 rec["phase"] = "failed_stopped"
                 write_json(record_path, rec)
+                write_json(trial_dir / "record.json", rec)
         if watcher and watcher.poll() is not None:
             print(f"AB_MONITOR_EXIT_CODE={watcher.returncode}", file=sys.stderr)
         raise
@@ -376,6 +389,7 @@ def stop() -> None:
     require(not trial_identity(record)["State"]["Running"], "trial still running")
     record["phase"] = "stopped"
     write_json(record_path, record)
+    write_json(Path(record["trial_dir"]) / "record.json", record)
     print(f"AB_TRIAL_STOPPED_EXACT_ID={candidate['Id']}")
     print("AB_TRIAL_DOCKER_REMOVED=NO")
     old = inspect(OLD_NAME)
