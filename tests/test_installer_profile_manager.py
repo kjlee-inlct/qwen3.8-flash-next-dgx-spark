@@ -98,6 +98,21 @@ class InstalledProfileWizardTests(unittest.TestCase):
         return model_dir
 
 
+    def test_existing_install_wizard_eof_cancels_before_dry_run_preview(self) -> None:
+        """No keyboard input is cancellation, never the default model/settings."""
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+
+            result = self.run_installer(home, "")
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("Input stream closed (EOF)", result.stderr)
+            self.assertNotIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
+
     def test_complete_install_wizard_can_preview_profile_switch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
