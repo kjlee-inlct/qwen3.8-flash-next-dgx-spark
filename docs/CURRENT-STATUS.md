@@ -15,6 +15,17 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## B5 legacy OrcaRouter prestart: operator-ready, physical run NOT_YET_OBSERVED (2026-10-13)
+
+New [B5 exact-identity read-only runner and owner handoff](DGX-LEGACY-M1-B5-PRESTART.md)
+verify source SHA, installed immutable release, full predecessor Docker
+ID, stopped unit, unchanged monitor/protect and PLE swap, and
+pre/post state hashes. **No model starts or host edits.** Earlier
+A5 and lychee888 L0 actual-DGX results are PASS. B5 actual
+operator output is still NOT_RUN; a B5 read-only PASS would
+not authorize losing the old Docker ID or passing M1 host
+stability.
+
 ## ACTUAL DGX A5 wizard previews PASS + lychee888 real L0 index JSON PASS (2026-10-13)
 
 The operator ran the exact `f2674f0a60682a62f6218c7bfbfc5e9e5d24e4b8`

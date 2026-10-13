@@ -203,3 +203,8 @@ publication-time state only. Next B5 is a version-matched,
 non-mutating preflight and preservation-decision gate for the
 stopped legacy OrcaRouter service. No live model test has yet
 been attempted or authorized by this result.
+
+
+## B5 legacy OrcaRouter prestart — read-only actual DGX next step
+
+[Exact identity, source SHA and Docker predecessor preservation boundary](DGX-LEGACY-M1-B5-PRESTART.md). The B5 collector contains no service start, rollback or container modification. A read-only PASS is **not permission** to run M1. Previous A5 and lychee888 L0 remain PASS, H38 blocked.

@@ -22,6 +22,10 @@ This directory contains canonical repository-specific read-only diagnostics and 
 
 ## Canonical files
 
+- `check-legacy-orcarouter-b5-readonly.sh`: exact-SHA/installed
+  release/retained stopped Docker ID and monitor/swap assertions;
+  read-only actual-DGX M1 prestart snapshot, not a service start
+  or authorization to discard the Docker predecessor.
 - `check-wizard-dgx-readonly.sh`: exact-SHA real DGX wizard inventory,
   four install/switch target **dry-run** previews and bilingual-independent
   uninstall **dry-run** previews, synthetic fixture tests and state

@@ -4,6 +4,18 @@
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.
 
+## B5 legacy OrcaRouter exact-identity prestart (2026-10-13)
+
+A newly committed [source-only B5 runner](DGX-LEGACY-M1-B5-PRESTART.md)
+can be executed on the actual DGX without changing service/container:
+exact release `ff67bab3`, stopped predecessor
+`f6bfee5a4217...`, monitor/protect, state, and memory/swap
+snapshot. The old managed commit may **delete** the prior
+Docker object; rollback may **restart** it. B5 success can
+establish only read-only observations; live M1 still requires
+explicit container-ID decision and fully reviewed stop plan.
+B5 actual output NOT_RUN at this point.
+
 ## Actual DGX A5+lychee888 L0 result (2026-10-13)
 
 The operator ran A5 from the verified exact source

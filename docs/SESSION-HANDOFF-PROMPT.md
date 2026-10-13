@@ -210,3 +210,11 @@ metadata `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`
 다음 실제 DGX 과제는 구형 OrcaRouter M1의 B5 읽기
 전용 go/no-go 및 기존 Docker ID 삭제·롤백/재시작 위험
 확정입니다. H38 / 실삭제는 여전히 금지된 단계입니다.
+
+
+**다음 물리 DGX 단계 B5:** [읽기 전용 구형 OrcaRouter M1 사전 점검](DGX-LEGACY-M1-B5-PRESTART.md).
+정확한 source SHA와 기존 Docker ID, immutable 릴리스,
+monitor/protect=1, swap, systemd 상태를 확인하는 검사로
+Docker/service mutation이 없습니다. 로그 확인 후에도
+old container ID 삭제 허용 또는 독립 격리 방식의 결정
+없이는 runtime startup을 실행하지 않습니다.
