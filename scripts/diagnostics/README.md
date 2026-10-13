@@ -22,6 +22,25 @@ This directory contains canonical repository-specific read-only diagnostics and 
 
 ## Canonical files
 
+- inspect-hybrid-reclaim-blocks.sh: exact-SHA/real-model-root
+  non-mutating individual and combined allocated-block du,
+  hardlink/symlink counts and installed-state fingerprints.
+  It does not prove CoW shared extents or authorize deletion.
+
+
+- inspect-bench-before-reclaim.sh: exact-SHA DGX read-only
+  storage recommendation, status, preview, model asset dependency
+  and Docker layered accounting, with no deletion or model launch.
+
+
+- `check-legacy-orcarouter-b5-readonly.sh`: exact-SHA/installed
+  release/retained stopped Docker ID and monitor/swap assertions;
+  read-only actual-DGX M1 prestart snapshot, not a service start
+  or authorization to discard the Docker predecessor.
+- `check-wizard-dgx-readonly.sh`: exact-SHA real DGX wizard inventory,
+  four install/switch target **dry-run** previews and bilingual-independent
+  uninstall **dry-run** previews, synthetic fixture tests and state
+  fingerprints; never activates or purges a model.
 - `doctor-observability.sh`: doctor-specific observability checks.
 - `runtime-commit-observability.sh`: runtime attestation observability.
 - `collect-diagnostics.sh`: bounded support-bundle implementation.

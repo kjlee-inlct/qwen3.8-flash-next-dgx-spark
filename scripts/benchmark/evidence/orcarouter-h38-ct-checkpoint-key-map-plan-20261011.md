@@ -1,0 +1,65 @@
+# H38 CT OrcaRouter checkpoint key → candidate expert/shard map — INDEX-ONLY plan (2026-10-11)
+
+## Motivation and prior evidence
+
+The following actual DGX Spark source checks are already closed independently:
+
+- CT eight-registration / Layerwise / RoutedExperts AST: **PASS_SOURCE_CONTRACT_ONLY**, operator HEAD `5fa4265d394255744f8886b857804a28c433cf3f`.
+- Input-scale postconstruction setter AST: **PASS_SOURCE_SITES_ONLY**, operator HEAD `1865521c2ff58add7bddeed6735c76803a3e3637`.
+- Expert/shard destination branch AST: **PASS_SOURCE_BRANCHES_ONLY**, 29/29 source branches, operator HEAD `fd4221b5bdb2b95ad83f94255ee2740cea842c9e`; [actual record](orcarouter-h38-ct-expert-destination-attempt01-source-pass-20261011.md).
+
+A previous **real, read-only header-only** OrcaRouter checkpoint audit already verified the 18 indexed files (17 numbered model shards + `model-mtp.safetensors`), 223,046 total keys, 221,186 names classified routed including 2 in separate MTP namespace, 48 base routed layers and the split base-layer 8 and 11 spans. See [checkpoint metadata Attempt 03](orcarouter-h38-checkpoint-metadata-order-attempt03-revisit-ownership-20261009.md). That completed audit produced `CHECKPOINT_METADATA_ORDER_GATE=FAIL` by its strict contiguous-layer ordering criterion, with **8 split across numbered shards 4→5 and 11 across 5→6**. This failure is not evidence of an observed runtime loader defect. The on-disk hypothetical 6,448,748,544-byte retained peak is NOT a measured H38 RAM/GB10/driver peak.
+
+This new step must **not** repeat scanning all safetensors headers, importing H38 torch or launching the model. It needs only the checkpoint index's mapping of exact tensor keys to shard filenames, checked under the existing 18-file `resolve_shards` guard.
+
+## New implementation: index-only and synthetic-first
+
+- `scripts/benchmark/inspect-h38-ct-checkpoint-key-map.py`: pure Python stdlib. Calls the existing `inspect-h38-checkpoint-metadata-order.py::resolve_shards()` to enforce the earlier strict, read-only 18-shard/index file-set prerequisites; separately parses bounded `model.safetensors.index.json` with duplicate JSON key rejection and requires the two index reads to agree. **Does not invoke** the existing `scan_checkpoint`, `safe_open`, `read_header`, `get_tensor`, `get_slice`, Torch or vLLM.
+- The parser initially recognizes **only** candidate base-model indexed paths of form `model.language_model.layers.{L}.mlp.experts.{E}.{gate_proj|up_proj|down_proj}.{weight|weight_scale|weight_global_scale}`. An unexpected base-expert component/name is an explicit schema FAIL (not silently dropped); invalid expert/layer, semantic aliases due to leading zeros, missing projection/component and inconsistent key count also fail. Do not broaden this syntax merely to get a PASS if the actual checkpoint differs; first preserve diagnostics.
+- The *candidate* name mapping is gate_proj→w1, up_proj→w3, down_proj→w2. `weight` targets the candidate `w13_weight_packed` or `w2_weight_packed`; `weight_scale` targets group scales; `weight_global_scale` targets per-tensor global weight scales. This maps only **six** of the **eight** CT parameter registration families. It does **not** establish that a name actually dispatched to that parameter, was locally selected or copied into a destination.
+- For the previously observed checkpoint, the candidate cardinality is **48 layers × 512 experts × 9 keys = 221,184 base per-expert keys**, matching the earlier reported 221,186 routed candidate keys less the 2 MTP namespace matches. This arithmetic is a **hypothesis to independently check against the actual index**, not an established per-key schema. Every `(layer, expert)` must have one of each nine canonical slots to receive `PASS_BASE_KEY_SCHEMA_ONLY`.
+- `w13_input_global_scale` and `w2_input_global_scale` **do not have an identified counterpart within this 9-key scheme**. The tool will report any index names containing `input_scale` or `input_global_scale` and keep their actual initialization, callback path, and element coverage `UNVERIFIED`, irrespective of whether the base key grid passes. Do NOT conflate 6/8 key families with 8/8 runtime parameter completeness.
+- The tool reports counts by candidate CT parameter, layer 8 and 11's key-to-shard count distribution, cross-shard expert candidate counts, total base/MTP candidates, bounded samples of missing/unknown/semantic duplicates, and the observed index SHA256. It **does not** report Tensor shapes, load callback counts, unique copied destination cells or a RAM bound.
+- `scripts/benchmark/check-h38-ct-checkpoint-key-map.sh`: exact clean Git SHA and fixed H38 image-ID preflight; read-only `runc`, no GPU, no network/pull, `--memory 1g --memory-swap 1g --cpus 1 --pids-limit 64`, UID 65534, private 64 MiB `/tmp`, checkpoint and both source scripts mounted read-only. Exit 0 means **INDEX KEY GRID ONLY**, exit 3 means completed **KEY_SCHEMA_FAIL**, exit 2 means inspector/preflight invalid. Docker image identity is rechecked on either completed path.
+- `tests/test_h38_ct_checkpoint_key_map.py`: tiny synthetic positive and fail-closed manifests, duplicate canonical slots, missing global scales, unknown input-scale key, out-of-range expert, split-shard indices, duplicate JSON keys, strict original 18-shard guard, negative shell safety tests.
+
+**Actual operator checkpoint key mapping has NOT yet run as part of this new gate.** Earlier metadata/header audits were different tools and cannot substitute for its new 9-slot classification result. Only after CI qualification should one pinned-index-only operator action be considered.
+
+## Evidence semantics / next acceptance
+
+- `H38_CKPT_CT_KEY_MAP_GATE=PASS_BASE_KEY_SCHEMA_ONLY` can establish the 48×512×9 **index-name and file-mapping grid** within the recognized schema, including shard ownership by index; it **does not** certify H38 actual loader input selection, expert remapping, grouping/broadcast, optional scale handling, 8/8 loaded parameters, `aten.copy_` events, unique tensor-element coverage or host stability.
+- `H38_CKPT_CT_KEY_MAP_GATE=FAIL_KEY_SCHEMA` is evidence of mismatch to the current explicit 9-key classifier, **not** necessarily a corrupt checkpoint or runtime failure. Preserve sample and head/log.
+- Prior `H38_CKPT_METADATA_ORDER_GATE=FAIL` is **not overridden** by a candidate key-grid PASS. Particularly, layer 8 and 11 still span distinct numbered shards, and whether native layerwise postload waited for all required components remains unverified.
+- The conditional pinned `RoutedExperts` compressed input-scale Tensor-Boolean concern is retained in PR #259 [source crosscheck](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/pull/259#issuecomment-6105299781); no actual runtime exception is proven.
+
+Retain `CT_SOURCE_CONTRACT=PASS_SOURCE_CONTRACT_ONLY`, `CT_SCALE_ATTR_SOURCE_SITES=PASS_SOURCE_SITES_ONLY`, `CT_EXPERT_DESTINATION_BRANCHES=PASS_SOURCE_BRANCHES_ONLY`, `CT_UNIQUE_REAL_DESTINATION_COVERAGE=UNVERIFIED`, `CT_COPYCOUNTER_CREDIT=UNVERIFIED`, `CT_INPUT_SCALE_SOURCE=UNVERIFIED`, `LAYER_8_11_BUFFER_LIFETIME=UNVERIFIED`, `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `FUNCTIONAL=NOT_REACHED`, `HOST_STABILITY=INCONCLUSIVE`, `RM_MITIGATION=UNPROVEN`. **No H38 model/GPU, image rebuild, payload scanning, host safety relaxation, managed service change, CT meta patch, PR Ready or Merge.**
+
+
+## Real checkpoint-index Attempt 01 — completed KEY_SCHEMA_FAIL; packed suffix correction (2026-10-11)
+
+**Authoritative observed result supersedes the initial "not yet compared" status above.** On clean exact Git HEAD 1ed66b602c55534af432bba404b8eb0e6eb9db0e and pinned unchanged H38 image, the operator ran the read-only/index-only gate to completion. It returned H38_CKPT_CT_KEY_MAP_GATE=FAIL_KEY_SCHEMA and H38_CKPT_CT_KEY_MAP_PREFLIGHT=KEY_SCHEMA_FAIL, key_map_rc=3; this is a *valid completed analyzer schema failure*, NOT a tool infrastructure INVALID and NOT an observed H38 runtime checkpoint corruption.
+
+Observed index SHA256: 188d5905df195dd2dca4dbf2f9c029bb79328d0c85fd9772d73f72d881561866. 18 indexed shard files, 223,046 total keys, 221,184 candidate base routed key names, 31 MTP namespace keys. The original parser falsely expected *.weight but actual samples contain *.weight_packed for gate_proj/up_proj/down_proj, leading to missing_canonical_slot_count=73,728 (48 × 512 × 3), incomplete_expert_grid_count=24,576, and unclassified samples for packed weight keys. The four recognized group/global scale families each have the expected 49,152 (w13) or 24,576 (w2) candidate keys. Key names with any input-scale substring: **0**; the two input-global-scale CT parameter registrations still have no proven data sourcing or runtime validation.
+
+13 (layer, expert) index-owner pairs span multiple shards, including layer 8 expert 235 shards 4→5 and layer 11 expert 409 shards 5→6. The original layer 8/11 per-shard counters cover **only the 3,072 recognized scale keys per layer** and cannot be reused as complete 4,608-key distributions. The earlier distinct checkpoint metadata ORDER_GATE remains FAIL. Zero GPU, model, payload, header reread or host changes were reported.
+
+Canonical immutable evidence: [H38 CT checkpoint key-map Attempt 01 FAIL](orcarouter-h38-ct-checkpoint-key-map-attempt01-schema-fail-20261011.md).
+
+The inspector has now been narrowly corrected to recognize exactly the observed \`weight_packed\` instead of \`weight\`, retaining all nine projection×component slots per expert, and synthetic regressions additionally enforce full 48×512×9 candidate cardinality, negative unsuffixed weight, two absent index input-global-scale families, and fail-closed misclassification. **Do not reinterpret the prior Attempt 01 result as PASS.** The new code requires independent CI success and a future fresh, exact-SHA pinned DGX read-only index-only Attempt 02; this future result is NOT yet observed. Avoid changing the 18-file metadata order gate or making any actual CopyCounter/weight completeness/host safety claims.
+
+No H38 model/GPU runtime, image rebuild, checkpoint payload reads, host protection/service change, CT meta patch, Ready or Merge of PR #259.
+
+
+## Operator Attempt 02 — actual index-only grid PASS (2026-10-11)
+
+**This observed result supersedes the previous "new Attempt02 pending" wording above.** The updated, CI-qualified checkpoint key-map inspector ran on actual DGX Spark clean checkout 2426b9a9ac4234865176fc12c5e34a79d0bbfd1d with fixed unchanged H38 image ID sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc. The checkpoint index SHA256 188d5905df195dd2dca4dbf2f9c029bb79328d0c85fd9772d73f72d881561866 **matches Attempt 01**, with the correction from expected unsuffixed weight to observed weight_packed key names.
+
+**Actual verdict:** H38_CKPT_CT_KEY_MAP_GATE=PASS_BASE_KEY_SCHEMA_ONLY; H38_CKPT_CT_KEY_MAP_PREFLIGHT=PASS_BASE_KEY_SCHEMA_ONLY; key_map_rc=0; image_identity_unchanged=YES; no header re-read, tensor payload, model/GPU, service or protection change.
+
+The real checkpoint index exhibits **48 × 512 × 9 = 221,184** recognized base expert keys with missing_canonical_slot_count=0, incomplete_expert_grid_count=0, no unclassified, duplicate-semantic or out-of-range base slots. Six candidate CT family counts are w13 packed 49,152; w2 packed 24,576; w13 group 49,152; w2 group 24,576; w13 global 49,152; w2 global 24,576. Exactly **0 index key names with input_scale substring**; two registered CT input-global-scale families are not covered by the nine-slot grid.
+
+Full layer8 per-shard key counts: shard4 2,119; shard5 2,489. Full layer11 counts: shard5 3,685; shard6 923. **13** (layer, expert) key groups have owners in multiple shard files; tool sampled 12 groups. Checkpoint contains 223,046 total indexed tensor keys over 18 files, 31 with literal mtp. prefix (a different class than the 2 prior MTP routed-classified keys). Source of truth: [actual Attempt 02 index-only PASS evidence](orcarouter-h38-ct-checkpoint-key-map-attempt02-index-pass-20261011.md), sourced from operator pasted stdout, not independently hashed /tmp file.
+
+**Scope:** PASS proves names and file ownership only; NOT runtime weight_loader success, initialized input scales, 8/8 CT registered parameter coverage, real unique Tensor elements written, shard replay/late buffer release, CopyCounter events, measured memory peak, functionality or host stability. CHECKPOINT_METADATA_ORDER_GATE remains FAIL, and Attempt01 remains an immutable historical FAIL_KEY_SCHEMA result due to the old inspector's incorrect suffix assumption.
+
+**Next:** do not spend additional DGX cycles on the same index header audit. Focus on a qualified source-only input-global-scale lifecycle trace and a deterministic metadata-only ownership/last-key-arrival witness for the split 8/11 boundaries (and 13 cross-shard pairs) using synthetic tests. Any runtime instrument must undergo independent resource/safety gating; no H38 GPU/model or host protection change and PR #259 stays Draft/Open / Merge BLOCKED.

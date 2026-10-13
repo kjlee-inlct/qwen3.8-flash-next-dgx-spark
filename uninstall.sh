@@ -14,8 +14,21 @@ UPDATE_TRANSITION_FILE="${STATE_DIR}/update-transition.env"
 PROFILE_SWITCH_TRANSITION_FILE="${STATE_DIR}/profile-switch-transition.env"
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
+RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
+RELEASE_PROFILE_REFRESH_BACKUP="${STATE_FILE}.release-profile-refresh-backup"
+RELEASE_PROFILE_REFRESH_CANDIDATE="${STATE_FILE}.release-profile-refresh-candidate"
+SETTINGS_PHASE_FILE="${STATE_DIR}/settings-transition.phase"
+SETTINGS_START_FILE="${STATE_DIR}/settings-transition.start"
+SETTINGS_NO_START_FILE="${STATE_DIR}/settings-transition.no-start"
+SETTINGS_PREV_SERVICE_FILE="${STATE_DIR}/settings-transition.previous-service-active"
+SETTINGS_PREV_CONTAINER_FILE="${STATE_DIR}/settings-transition.previous-container-running"
+SETTINGS_BACKUP="${STATE_FILE}.settings-backup"
+SETTINGS_CANDIDATE="${STATE_FILE}.settings-candidate"
+SETTINGS_BACKUP_SHA="${SETTINGS_BACKUP}.sha256"
+SETTINGS_CANDIDATE_SHA="${SETTINGS_CANDIDATE}.sha256"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+RUNTIME_ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 PURGE_MODEL=0; PURGE_SWAP=0; PURGE_IMAGE=0; PURGE_SELECTED=0; PURGE_ALL=0; YES=0; DRY_RUN=0
 CLI_LANG=""
@@ -34,8 +47,37 @@ sudo_with_operation_lock() {
 }
 
 asset_bootstrap_install() {
+  local registry="${1:-${ASSET_OWNERSHIP_FILE}}"
   [[ -r "${ASSET_OWNERSHIP_TOOL}" ]] || die "asset ownership helper is unavailable: ${ASSET_OWNERSHIP_TOOL}"
-  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${ASSET_OWNERSHIP_FILE}" "${STATE_FILE}" "${STATE_PARSER}"
+  python3 "${ASSET_OWNERSHIP_TOOL}" bootstrap-install "${registry}" "${STATE_FILE}" "${STATE_PARSER}"
+}
+
+# Stage legacy ownership migration in a private directory. Failed eligibility
+# checks must never publish a partially bootstrapped cumulative registry.
+asset_stage_uninstall_registry() {
+  [[ ! -L "${ASSET_OWNERSHIP_FILE}" ]] || die "refusing symlinked ownership registry"
+  [[ ! -e "${ASSET_OWNERSHIP_FILE}" || -f "${ASSET_OWNERSHIP_FILE}" ]] || \
+    die "ownership registry must be a regular file"
+  ASSET_PREFLIGHT_DIR="$(mktemp -d -- "${STATE_DIR}/.uninstall-preflight.XXXXXXXX")" || \
+    die "failed to create private ownership preflight directory"
+  ASSET_PREFLIGHT_FILE="${ASSET_PREFLIGHT_DIR}/asset-ownership.json"
+  trap 'rm -rf -- "${ASSET_PREFLIGHT_DIR}"' EXIT
+  if [[ -f "${ASSET_OWNERSHIP_FILE}" ]]; then
+    cp -p -- "${ASSET_OWNERSHIP_FILE}" "${ASSET_PREFLIGHT_FILE}"
+  fi
+  asset_bootstrap_install "${ASSET_PREFLIGHT_FILE}"
+}
+
+asset_publish_uninstall_registry() {
+  if [[ -f "${ASSET_PREFLIGHT_FILE}" ]] && \
+     { [[ ! -e "${ASSET_OWNERSHIP_FILE}" ]] || \
+       ! cmp -s -- "${ASSET_PREFLIGHT_FILE}" "${ASSET_OWNERSHIP_FILE}"; }; then
+    [[ ! -L "${ASSET_OWNERSHIP_FILE}" ]] || die "refusing symlinked ownership registry"
+    mv -fT -- "${ASSET_PREFLIGHT_FILE}" "${ASSET_OWNERSHIP_FILE}"
+  fi
+  rm -f -- "${ASSET_PREFLIGHT_FILE}"
+  rmdir -- "${ASSET_PREFLIGHT_DIR}"
+  trap - EXIT
 }
 asset_model_owned() {
   if [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]]; then
@@ -54,30 +96,70 @@ asset_image_owned() {
 asset_forget() {
   python3 "${ASSET_OWNERSHIP_TOOL}" forget "${ASSET_OWNERSHIP_FILE}" "$1" "$2"
 }
+# Image removal may proceed past the ownership preflight only when the
+# image is known to exist or Docker explicitly reports this exact tag missing.
+# API/permission/timeout errors are NOT evidence that removal is complete.
+image_known_present() {
+  local image="$1" detail
+  if detail="$(docker image inspect "${image}" 2>&1)"; then
+    return 0
+  fi
+  case "${detail}" in
+    "Error: No such image: ${image}"|"Error response from daemon: No such image: ${image}"|\
+    "Error: No such object: ${image}"|"Error response from daemon: No such object: ${image}")
+      return 1
+      ;;
+    *)
+      die "refusing to forget owned image; cannot establish Docker image absence for ${image}: ${detail}"
+      ;;
+  esac
+}
 image_referenced_by_external_container() {
-  local image="$1" name
+  local image="$1" name names
+  # Unlike process substitution, command substitution permits explicit
+  # validation of docker ps status before accepting its output.
+  if ! names="$(docker ps -a --filter "ancestor=${image}" --format '{{.Names}}' 2>&1)"; then
+    printf 'ERROR: refusing image purge; external Docker reference query failed for %s: %s\n' \
+      "${image}" "${names}" >&2
+    return 1
+  fi
+  [[ -n "${names}" ]] || return 0
   while IFS= read -r name; do
     [[ -n "${name}" ]] || continue
     [[ "${name}" == "${CONTAINER_NAME}" ]] && continue
     printf '%s\n' "${name}"
-  done < <(docker ps -a --filter "ancestor=${image}" --format '{{.Names}}' 2>/dev/null)
+  done <<< "${names}"
 }
 
+# Capture one checked, ordered ownership plan while the private registry
+# stage is still active, before any real host teardown.
+ASSET_PURGE_PLAN=""
 asset_preflight_full_purge() {
-  [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
-  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${ASSET_OWNERSHIP_FILE}" --kind all
+  local registry="${1:-${ASSET_OWNERSHIP_FILE}}"
+  [[ -f "${registry}" && ! -L "${registry}" ]] || return 0
+  python3 "${ASSET_OWNERSHIP_TOOL}" preflight-purge "${registry}" --kind all || \
+    die "refusing full purge: ownership eligibility check failed"
+  ASSET_PURGE_PLAN="$(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${registry}" --kind all)" || \
+    die "refusing full purge: ownership plan generation failed"
+  [[ -n "${ASSET_PURGE_PLAN}" ]] || return 0
   local kind locator refs
   while IFS=$'\t' read -r kind locator; do
+    [[ -n "${locator}" && ( "${kind}" == model || "${kind}" == image ) ]] || \
+      die "refusing malformed ownership purge plan entry"
     [[ "${kind}" == image ]] || continue
-    refs="$(image_referenced_by_external_container "${locator}")"
+    if image_known_present "${locator}"; then :; fi
+    refs="$(image_referenced_by_external_container "${locator}")" || \
+      die "refusing full purge: Docker external-container inspection failed"
     if [[ -n "${refs}" ]]; then
       die "refusing image purge; ${locator} is referenced by other containers: ${refs}"
     fi
-  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+  done <<< "${ASSET_PURGE_PLAN}"
 }
 
 asset_apply_full_purge() {
   [[ -f "${ASSET_OWNERSHIP_FILE}" && ! -L "${ASSET_OWNERSHIP_FILE}" ]] || return 0
+  # Never regenerate the plan after partial per-asset registry updates.
+  [[ -n "${ASSET_PURGE_PLAN}" ]] || return 0
   local kind locator
   while IFS=$'\t' read -r kind locator; do
     case "${kind}" in
@@ -89,7 +171,7 @@ asset_apply_full_purge() {
         asset_forget model "${locator}"
         ;;
       image)
-        if docker image inspect "${locator}" >/dev/null 2>&1; then
+        if image_known_present "${locator}"; then
           docker image rm "${locator}" || die "owned image is still in use: ${locator}"
           printf 'Removed owned image asset: %s\n' "${locator}"
         fi
@@ -97,8 +179,9 @@ asset_apply_full_purge() {
         ;;
       *) die "invalid asset purge plan kind: ${kind}" ;;
     esac
-  done < <(python3 "${ASSET_OWNERSHIP_TOOL}" plan-purge "${ASSET_OWNERSHIP_FILE}" --kind all)
+  done <<< "${ASSET_PURGE_PLAN}"
 }
+
 mark_manifest_uninstalled() {
   python3 - "${STATE_FILE}" <<'PY'
 import os
@@ -200,6 +283,24 @@ if [[ "${DRY_RUN}" == 1 ]]; then
   exit 0
 fi
 
+# Refuse unowned swap before lock creation, ownership-registry bootstrap,
+# service/container teardown, or any model/image/release deletion. This also
+# covers --purge-all, which implies --purge-swap. Dry-run above stays a preview.
+if [[ "${PURGE_SWAP}" == 1 ]]; then
+  [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
+fi
+
+# Confirm before creating the operation lock or bootstrapping cumulative ownership.
+# Cancellation and EOF must leave the manifest, registry and installer data intact.
+# --yes bypasses this prompt only; post-lock transaction/ownership preflights remain.
+if [[ "${YES}" != 1 ]]; then
+  [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '
+  if ! IFS= read -r -p "${prompt}" answer; then
+    die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
+  fi
+  [[ "${answer}" == DELETE ]] || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
+fi
+
 [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
 # shellcheck source=scripts/lib/operation-lock.sh
 source "${OPERATION_LOCK_LIB}"
@@ -214,22 +315,49 @@ acquire_operation_lock "${STATE_DIR}" "uninstall" || exit $?
 [[ ! -e "${PROFILE_SWITCH_BACKUP}" && ! -L "${PROFILE_SWITCH_BACKUP}" &&
    ! -e "${PROFILE_SWITCH_CANDIDATE}" && ! -L "${PROFILE_SWITCH_CANDIDATE}" ]] || \
   die "profile-switch artifacts exist without an active transaction; run doctor before uninstalling"
+[[ ! -e "${RELEASE_PROFILE_REFRESH_STATE_FILE}" && ! -L "${RELEASE_PROFILE_REFRESH_STATE_FILE}" ]] || \
+  die "a release-profile refresh is active; run scripts/release-profile-refresh-transition.sh recover before uninstalling"
+[[ ! -e "${RELEASE_PROFILE_REFRESH_BACKUP}" && ! -L "${RELEASE_PROFILE_REFRESH_BACKUP}" &&
+   ! -e "${RELEASE_PROFILE_REFRESH_CANDIDATE}" && ! -L "${RELEASE_PROFILE_REFRESH_CANDIDATE}" ]] || \
+  die "release-profile refresh artifacts exist without an active transaction; run doctor before uninstalling"
+[[ ! -e "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] || \
+  die "a one-shot runtime adoption is pending; finish release-profile recovery before uninstalling"
+for settings_artifact in \
+  "${SETTINGS_PHASE_FILE}" "${SETTINGS_START_FILE}" "${SETTINGS_NO_START_FILE}" \
+  "${SETTINGS_PREV_SERVICE_FILE}" "${SETTINGS_PREV_CONTAINER_FILE}" \
+  "${SETTINGS_BACKUP}" "${SETTINGS_CANDIDATE}" "${SETTINGS_BACKUP_SHA}" "${SETTINGS_CANDIDATE_SHA}"
+do
+  [[ ! -e "${settings_artifact}" && ! -L "${settings_artifact}" ]] || \
+    die "settings transaction or stale settings artifact exists; recover settings before uninstalling: ${settings_artifact}"
+done
 
-# Migrate the current manifest's legacy single-asset ownership into the cumulative
-# registry before any destructive decision. This cannot infer assets whose
-# ownership was already lost by older profile switches.
-asset_bootstrap_install
+# SIGKILL/power loss skips EXIT traps. Refuse staged ownership snapshots
+# left by interrupted preflights, including unsafe symlink artifacts.
+# Check under the operation lock and before any service or asset teardown.
+for stale_preflight in "${STATE_DIR}"/.uninstall-preflight.*; do
+  if [[ -e "${stale_preflight}" || -L "${stale_preflight}" ]]; then
+    die "stale uninstall preflight artifact exists; inspect and safely clear it before retry: ${stale_preflight}"
+  fi
+done
+
+# Stage legacy ownership migration under the acquired operation lock.
+# The original registry is not published unless *all* destructive eligibility
+# preflights, including external-container and unowned-service checks, succeed.
+# Historical ownership lost by older profile switches is never inferred.
+asset_stage_uninstall_registry
 if [[ "${PURGE_ALL}" == 1 ]]; then
-  asset_preflight_full_purge
+  asset_preflight_full_purge "${ASSET_PREFLIGHT_FILE}"
 else
   if [[ "${PURGE_MODEL}" == 1 ]]; then
-    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" model "${MODEL_DIR}" || \
+    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_PREFLIGHT_FILE}" model "${MODEL_DIR}" || \
       die "refusing model deletion: active model is not safely recorded as installer-owned"
   fi
   if [[ "${PURGE_IMAGE}" == 1 ]]; then
-    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_OWNERSHIP_FILE}" image "${VLLM_IMAGE}" || \
+    python3 "${ASSET_OWNERSHIP_TOOL}" preflight-one "${ASSET_PREFLIGHT_FILE}" image "${VLLM_IMAGE}" || \
       die "refusing image deletion: active image is not safely recorded as installer-owned"
-    image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")"
+    if image_known_present "${VLLM_IMAGE}"; then :; fi
+    image_refs="$(image_referenced_by_external_container "${VLLM_IMAGE}")" || \
+      die "refusing image deletion: Docker external-container inspection failed"
     if [[ -n "${image_refs}" ]]; then
       die "refusing image deletion; ${VLLM_IMAGE} is referenced by other containers: ${image_refs}"
     fi
@@ -239,11 +367,10 @@ fi
 if [[ "${SERVICE_OWNED}" != 1 ]] && "${INSTALL_ROOT}/scripts/manage-service.sh" status >/dev/null 2>&1; then
   die "a managed runtime service exists but is not owned by this manifest; rerun install.sh to adopt it or remove it explicitly"
 fi
-if [[ "${YES}" != 1 ]]; then
-  [[ "${UI_LANG}" == ko ]] && prompt='계속하려면 DELETE를 입력하십시오: ' || prompt='Type DELETE to continue: '
-  read -r -p "${prompt}" answer
-  [[ "${answer}" == DELETE ]] || die "$([[ "${UI_LANG}" == ko ]] && printf 취소됨 || printf cancelled)"
-fi
+
+# Commit the staged registry only after every eligibility preflight succeeds;
+# any later failure during actual teardown is a distinct recovery obligation.
+asset_publish_uninstall_registry
 if [[ -r "${MONITOR_PID_FILE}" ]]; then
   monitor_pid="$(<"${MONITOR_PID_FILE}")"
   if [[ "${monitor_pid}" =~ ^[0-9]+$ && -r "/proc/${monitor_pid}/cmdline" ]] && \
@@ -258,7 +385,17 @@ fi
 if [[ "${PROXY_OWNED}" == 1 ]]; then
   sudo "${INSTALL_ROOT}/scripts/manage-proxy.sh" remove --yes
 fi
-docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+# A daemon or permission error cannot be treated as successful container removal.
+# Only an exact "No such container" result is an idempotent absent-container case.
+container_rm_error=""
+if container_rm_error="$(docker rm -f "${CONTAINER_NAME}" 2>&1)"; then
+  :
+elif [[ "${container_rm_error}" == "Error response from daemon: No such container: ${CONTAINER_NAME}" ||
+        "${container_rm_error}" == "Error: No such container: ${CONTAINER_NAME}" ]]; then
+  printf 'Container already absent: %s\n' "${CONTAINER_NAME}"
+else
+  die "managed container removal failed; model/image/release purge was not started: ${container_rm_error}"
+fi
 rm -f -- "${STOP_REASON_FILE}" "${STOP_REASON_FILE}.tmp" "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
 
 if [[ "${PURGE_ALL}" == 1 ]]; then
@@ -271,14 +408,13 @@ elif [[ "${PURGE_MODEL}" == 1 ]]; then
   asset_forget model "${MODEL_DIR}"
 fi
 if [[ "${PURGE_SWAP}" == 1 ]]; then
-  [[ "${SWAP_OWNED}" == 1 ]] || die "refusing swap deletion: swap was not created by this installer"
   if [[ -e "${SWAP_FILE}" ]]; then
     swap_args=(remove --file "${SWAP_FILE}"); [[ "${YES}" == 1 ]] && swap_args+=(--yes)
     sudo "${INSTALL_ROOT}/scripts/manage-swap.sh" "${swap_args[@]}"
   fi
 fi
 if [[ "${PURGE_ALL}" != 1 && "${PURGE_IMAGE}" == 1 ]]; then
-  if docker image inspect "${VLLM_IMAGE}" >/dev/null 2>&1; then
+  if image_known_present "${VLLM_IMAGE}"; then
     docker image rm "${VLLM_IMAGE}" || die "image is still in use"
   fi
   asset_forget image "${VLLM_IMAGE}"
@@ -292,10 +428,19 @@ if [[ "${PURGE_ALL}" == 1 ]]; then
   rm -f -- "${STATE_DIR}/monitor.log" "${STATE_DIR}/monitor.pid" \
     "${STATE_DIR}/runtime-stop.env" "${STATE_DIR}/runtime-stop.env.tmp" \
     "${STATE_DIR}/runtime-commit.env" "${STATE_DIR}/runtime-commit.env.tmp" \
+    "${STATE_DIR}/runtime-adopt.env" "${STATE_DIR}/runtime-adopt.env.tmp" \
     "${STATE_DIR}/runtime-transition.env" "${STATE_DIR}/runtime-transition.env.tmp" \
     "${STATE_DIR}/update-transition.env" "${STATE_DIR}/update-transition.env.tmp" \
     "${STATE_DIR}/profile-switch-transition.env" "${STATE_DIR}/profile-switch-transition.env.tmp" \
     "${STATE_FILE}.profile-switch-backup" "${STATE_FILE}.profile-switch-candidate" "${STATE_FILE}.profile-switch-candidate.tmp" \
+    "${STATE_DIR}/release-profile-refresh-transition.env" "${STATE_DIR}/release-profile-refresh-transition.env.tmp" \
+    "${STATE_FILE}.release-profile-refresh-backup" "${STATE_FILE}.release-profile-refresh-backup.tmp" \
+    "${STATE_FILE}.release-profile-refresh-candidate" "${STATE_FILE}.release-profile-refresh-candidate.tmp" \
+    "${STATE_DIR}/settings-transition.phase" "${STATE_DIR}/settings-transition.phase.tmp" \
+    "${STATE_DIR}/settings-transition.start" "${STATE_DIR}/settings-transition.no-start" \
+    "${STATE_DIR}/settings-transition.previous-service-active" "${STATE_DIR}/settings-transition.previous-container-running" \
+    "${STATE_FILE}.settings-backup" "${STATE_FILE}.settings-candidate" \
+    "${STATE_FILE}.settings-backup.sha256" "${STATE_FILE}.settings-candidate.sha256" \
     "${ASSET_OWNERSHIP_FILE}"
   rm -f -- "${STATE_FILE}"
   rmdir --ignore-fail-on-non-empty "${STATE_DIR}" 2>/dev/null || true

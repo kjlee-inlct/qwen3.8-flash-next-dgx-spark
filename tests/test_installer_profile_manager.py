@@ -98,6 +98,21 @@ class InstalledProfileWizardTests(unittest.TestCase):
         return model_dir
 
 
+    def test_existing_install_wizard_eof_cancels_before_dry_run_preview(self) -> None:
+        """No keyboard input is cancellation, never the default model/settings."""
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+
+            result = self.run_installer(home, "")
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("Input stream closed (EOF)", result.stderr)
+            self.assertNotIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
+
     def test_complete_install_wizard_can_preview_profile_switch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -117,6 +132,35 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertNotIn("[5/6] API and service", result.stdout)
             self.assertIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)
+
+    def test_existing_install_invalid_model_choice_retries_and_preserves_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+
+            result = self.run_installer(home, "1\n9\n2\ny\n")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Invalid model selection.", result.stdout)
+            self.assertIn("switch      : orcarouter -> nvidia", result.stdout)
+            self.assertIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+
+    def test_existing_install_model_cancel_preserves_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+
+            result = self.run_installer(home, "1\n5\n")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("5) Cancel", result.stdout)
+            self.assertIn("Cancelled", result.stdout)
+            self.assertNotIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
 
     def test_profile_selector_uses_registry_metadata_and_local_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -411,7 +455,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertIn("[1/1] Installed setup management", result.stdout)
             self.assertNotIn("[1/1] Model selection", result.stdout)
             self.assertIn("profile     : orcarouter", result.stdout)
-            self.assertIn("image change: vllm-skinny-tp1:legacy -> vllm-skinny-tp1:v1", result.stdout)
+            self.assertIn("image change: vllm-skinny-tp1:legacy -> vllm-orcarouter-v029:v1", result.stdout)
             self.assertIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)
 

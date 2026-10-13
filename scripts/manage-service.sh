@@ -11,11 +11,12 @@ ACTION="${1:-status}"
 START=1
 ENABLE=1
 YES=0
+ADOPT_EXISTING=0
 RUNTIME_ROOT_OVERRIDE=""
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
 
 usage() {
-  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--enable|--no-enable] [--runtime-root PATH] [--yes]\n'
+  printf 'Usage: sudo ./scripts/manage-service.sh create [--start|--no-start] [--enable|--no-enable] [--runtime-root PATH] [--adopt-existing] [--yes]\n'
   printf '       sudo ./scripts/manage-service.sh remove [--yes]\n'
   printf '       ./scripts/manage-service.sh status\n'
 }
@@ -33,6 +34,7 @@ while [[ $# -gt 0 ]]; do
       RUNTIME_ROOT_OVERRIDE="$2"
       shift
       ;;
+    --adopt-existing) ADOPT_EXISTING=1 ;;
     --yes) YES=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -67,6 +69,9 @@ SERVICE_GROUP="$(getent group "${SERVICE_GID}" | cut -d: -f1)"
 
 CALLER_STATE_HOME="${QWEN38_STATE_HOME:-${SERVICE_HOME}/.local/state}"
 STATE_DIR="${CALLER_STATE_HOME}/qwen38-spark"
+if [[ "${ADOPT_EXISTING}" == 1 ]]; then
+  export QWEN38_RUNTIME_ADOPT_CONTEXT=1
+fi
 [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
 # shellcheck source=scripts/lib/operation-lock.sh
 source "${OPERATION_LOCK_LIB}"
@@ -84,9 +89,11 @@ if [[ "${ACTION}" == remove ]]; then
   exit 0
 fi
 [[ "${ACTION}" == create ]] || { usage >&2; exit 2; }
+[[ "${ADOPT_EXISTING}" != 1 || "${START}" == 1 ]] || die "--adopt-existing requires --start"
 
 STATE_FILE="${STATE_DIR}/install.env"
 RUNTIME_COMMIT_FILE="${STATE_DIR}/runtime-commit.env"
+RUNTIME_ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 INSTALL_STATE_PARSER="${SCRIPT_ROOT}/scripts/lib/state_file.py"
 [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die "installation manifest is missing or unsafe: ${STATE_FILE}"
 [[ "$(stat -c %u "${STATE_FILE}")" == "${SERVICE_UID}" ]] || die "installation manifest is not owned by ${SERVICE_USER}"
@@ -115,6 +122,25 @@ parse_install_service() {
 }
 parse_install_service || die "installation manifest failed strict service parsing: ${STATE_FILE}"
 
+parse_install_runtime_identity() {
+  local parsed key value
+  parsed="$(mktemp)"
+  if ! python3 "${INSTALL_STATE_PARSER}" install-service-runtime "${STATE_FILE}" >"${parsed}"; then
+    rm -f -- "${parsed}"
+    return 1
+  fi
+  RUNTIME_IMAGE=""; RUNTIME_MODEL_DIR=""
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "${key}" in
+      VLLM_IMAGE) RUNTIME_IMAGE="${value}" ;;
+      MODEL_DIR) RUNTIME_MODEL_DIR="${value}" ;;
+    esac
+  done <"${parsed}"
+  rm -f -- "${parsed}"
+  [[ -n "${RUNTIME_IMAGE}" && -n "${RUNTIME_MODEL_DIR}" ]]
+}
+parse_install_runtime_identity || die "installation manifest failed strict runtime identity parsing: ${STATE_FILE}"
+
 RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
 [[ "${RUNTIME_ROOT}" == /* ]] || die "runtime root must be an absolute path"
 [[ -x "${RUNTIME_ROOT}/scripts/service-runner.sh" ]] || die "runtime root has no service runner: ${RUNTIME_ROOT}"
@@ -122,8 +148,68 @@ RUNTIME_ROOT="${RUNTIME_ROOT_OVERRIDE:-${INSTALL_ROOT}}"
 [[ -r "${RUNTIME_ROOT}/scripts/runtime-transition.sh" ]] || die "runtime root has no transition helper: ${RUNTIME_ROOT}"
 [[ "${RUNTIME_ROOT}" != *[[:space:]]* && "${STATE_FILE}" != *[[:space:]]* ]] || die "service paths cannot contain whitespace"
 EXPECTED_RUNTIME_ROOT="$(realpath -e -- "${RUNTIME_ROOT}")"
-RUNTIME_STATE_PARSER="${EXPECTED_RUNTIME_ROOT}/scripts/lib/state_file.py"
-[[ -r "${RUNTIME_STATE_PARSER}" ]] || die "runtime root has no state parser: ${EXPECTED_RUNTIME_ROOT}"
+RUNTIME_STATE_PARSER="${INSTALL_STATE_PARSER}"
+ADOPT_RUNNER="${SCRIPT_ROOT}/scripts/runtime/service-adopt-runner.sh"
+SERVICE_STOP_HELPER="${SCRIPT_ROOT}/scripts/runtime/service-stop.sh"
+[[ -r "${ADOPT_RUNNER}" ]] || die "runtime adoption supervisor is unavailable: ${ADOPT_RUNNER}"
+[[ -r "${SERVICE_STOP_HELPER}" ]] || die "identity-aware service stop helper is unavailable: ${SERVICE_STOP_HELPER}"
+
+prepare_runtime_adoption() {
+  local container_id image running oom model_mount temporary
+  container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  image="$(docker inspect --format '{{.Config.Image}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  running="$(docker inspect --format '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  oom="$(docker inspect --format '{{.State.OOMKilled}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  [[ -n "${container_id}" ]] || die "cannot adopt missing runtime container: ${CONTAINER_NAME}"
+  [[ "${image}" == "${RUNTIME_IMAGE}" ]] || die "adopted runtime image mismatch: expected=${RUNTIME_IMAGE} observed=${image:-missing}"
+  [[ "${running}" == true ]] || die "adopted runtime container is not running"
+  [[ "${oom}" == false ]] || die "adopted runtime container reports OOMKilled=true"
+  [[ -n "${model_mount}" && "$(realpath -m -- "${model_mount}")" == "$(realpath -m -- "${RUNTIME_MODEL_DIR}")" ]] ||
+    die "adopted runtime model mount mismatch"
+
+  if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+    local parsed key value adopt_root="" adopt_name="" adopt_id="" adopt_image="" adopt_served=""
+    [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] ||
+      die "runtime adoption marker is unsafe: ${RUNTIME_ADOPT_FILE}"
+    parsed="$(mktemp)"
+    if ! python3 "${INSTALL_STATE_PARSER}" runtime-adopt "${RUNTIME_ADOPT_FILE}" >"${parsed}"; then
+      rm -f -- "${parsed}"
+      die "runtime adoption marker failed strict parsing"
+    fi
+    while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+      case "${key}" in
+        RUNTIME_ROOT) adopt_root="${value}" ;;
+        RUNTIME_CONTAINER_NAME) adopt_name="${value}" ;;
+        RUNTIME_CONTAINER_ID) adopt_id="${value}" ;;
+        EXPECTED_IMAGE) adopt_image="${value}" ;;
+        SERVED_NAME) adopt_served="${value}" ;;
+      esac
+    done <"${parsed}"
+    rm -f -- "${parsed}"
+    [[ "${adopt_root}" == "${EXPECTED_RUNTIME_ROOT}" &&
+       "${adopt_name}" == "${CONTAINER_NAME}" &&
+       "${adopt_id}" == "${container_id}" &&
+       "${adopt_image}" == "${RUNTIME_IMAGE}" &&
+       "${adopt_served}" == "${SERVED_NAME}" ]] ||
+      die "existing runtime adoption marker does not match restored runtime"
+    return 0
+  fi
+  temporary="$(mktemp "${STATE_DIR}/runtime-adopt.env.XXXXXX")"
+  {
+    printf 'RUNTIME_ADOPT_SCHEMA_VERSION=1\n'
+    printf 'RUNTIME_ROOT=%s\n' "${EXPECTED_RUNTIME_ROOT}"
+    printf 'RUNTIME_CONTAINER_NAME=%s\n' "${CONTAINER_NAME}"
+    printf 'RUNTIME_CONTAINER_ID=%s\n' "${container_id}"
+    printf 'EXPECTED_IMAGE=%s\n' "${RUNTIME_IMAGE}"
+    printf 'SERVED_NAME=%s\n' "${SERVED_NAME}"
+    printf 'CREATED_AT=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } >"${temporary}"
+  python3 "${INSTALL_STATE_PARSER}" runtime-adopt "${temporary}" >/dev/null ||
+    { rm -f -- "${temporary}"; die "failed to validate runtime adoption marker"; }
+  install -o "${SERVICE_UID}" -g "${SERVICE_GID}" -m 0600 "${temporary}" "${RUNTIME_ADOPT_FILE}"
+  rm -f -- "${temporary}"
+}
 
 parse_runtime_commit() {
   local parsed key value
@@ -257,6 +343,12 @@ fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf -- "${tmp_dir}"' EXIT
+if [[ "${ADOPT_EXISTING}" == 1 ]]; then
+  SERVICE_EXEC_START="/bin/bash ${ADOPT_RUNNER} --runtime-root ${EXPECTED_RUNTIME_ROOT}"
+else
+  SERVICE_EXEC_START="/bin/bash ${RUNTIME_ROOT}/scripts/service-runner.sh"
+fi
+SERVICE_EXEC_STOP="-/bin/bash ${SERVICE_STOP_HELPER}"
 cat >"${tmp_dir}/${UNIT}" <<EOF
 # ${MARKER}; installed by scripts/manage-service.sh
 [Unit]
@@ -274,8 +366,8 @@ Group=${SERVICE_GROUP}
 WorkingDirectory=${RUNTIME_ROOT}
 Environment=HOME=${SERVICE_HOME}
 Environment=QWEN38_STATE_FILE=${STATE_FILE}
-ExecStart=/bin/bash ${RUNTIME_ROOT}/scripts/service-runner.sh
-ExecStop=-/usr/bin/docker stop --timeout 30 ${CONTAINER_NAME}
+ExecStart=${SERVICE_EXEC_START}
+ExecStop=${SERVICE_EXEC_STOP}
 Restart=on-failure
 RestartSec=60
 TimeoutStartSec=infinity
@@ -295,6 +387,11 @@ else
 fi
 if [[ "${START}" == 1 ]]; then
   previous_container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER_NAME}" 2>/dev/null || true)"
+  if [[ "${ADOPT_EXISTING}" == 1 ]]; then
+    prepare_runtime_adoption
+  elif [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+    die "stale runtime adoption marker exists: ${RUNTIME_ADOPT_FILE}"
+  fi
   rm -f -- "${RUNTIME_COMMIT_FILE}" "${RUNTIME_COMMIT_FILE}.tmp"
   systemctl reset-failed "${UNIT}" 2>/dev/null || true
   systemctl stop "${UNIT}" 2>/dev/null || true
@@ -311,7 +408,15 @@ if [[ "${START}" == 1 ]]; then
         die "service stopped before readiness (state=${unit_state})"
         ;;
     esac
-    if [[ -n "${candidate_container_id}" && "${candidate_container_id}" != "${previous_container_id}" ]] && \
+    identity_ok=0
+    if [[ -n "${candidate_container_id}" ]]; then
+      if [[ "${ADOPT_EXISTING}" == 1 && "${candidate_container_id}" == "${previous_container_id}" ]]; then
+        identity_ok=1
+      elif [[ "${ADOPT_EXISTING}" != 1 && "${candidate_container_id}" != "${previous_container_id}" ]]; then
+        identity_ok=1
+      fi
+    fi
+    if [[ "${identity_ok}" == 1 ]] && \
        curl -fsS --max-time 3 http://127.0.0.1:8888/health >/dev/null 2>&1 && \
        runtime_commit_matches "${candidate_container_id}"; then
       ready=1
@@ -329,6 +434,11 @@ if [[ "${START}" == 1 ]]; then
     "${SERVED_NAME}" <<<"${models}" || die "served model ID validation failed"
   runtime_commit_matches "${candidate_container_id}" || die "runtime commit attestation changed after model validation"
   systemctl is-active --quiet "${UNIT}" || die "service became inactive after committed readiness"
+  if [[ "${ADOPT_EXISTING}" == 1 ]]; then
+    [[ ! -e "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] ||
+      die "runtime adoption marker was not consumed by the supervisor"
+    printf 'Managed service adopted the existing runtime without replacement: %s\n' "${candidate_container_id}"
+  fi
   if [[ "${ENABLE}" == 1 ]]; then
     printf 'Runtime service is enabled, committed, and healthy. Logs:\n  journalctl -fu %s\n' "${UNIT}"
   else

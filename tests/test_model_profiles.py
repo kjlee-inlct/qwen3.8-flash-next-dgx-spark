@@ -129,6 +129,15 @@ class ModelProfileTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is a planned profile and is not installable yet", result.stderr)
 
+    def test_planned_lychee888_wizard_key_is_rejected_then_valid_choice_works(self) -> None:
+        result = self.run_wizard("lychee888\n2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Not selectable: lychee888 FP8-PLE", result.stdout)
+        self.assertIn("Invalid model selection.", result.stdout)
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
             [str(ROOT / "install.sh"), "--list-backends"],
@@ -159,6 +168,24 @@ class ModelProfileTests(unittest.TestCase):
                 self.assertIn(f"profile     : {profile}", result.stdout)
                 self.assertIn(model_dir, result.stdout)
                 self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_clean_host_invalid_model_choice_retries_without_side_effects(self) -> None:
+        result = self.run_wizard("9\n2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Invalid model selection.", result.stdout)
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_clean_host_model_selection_can_cancel_without_preview(self) -> None:
+        # Fifth menu entry cancels after the four currently installable profiles.
+        result = self.run_wizard("5")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("5) Cancel", result.stdout)
+        self.assertIn("Cancelled", result.stdout)
+        self.assertNotIn("DRY-RUN complete", result.stdout)
+        self.assertNotIn("Preparing vLLM image", result.stdout)
 
     def test_clean_host_wizard_parses_leading_zero_choice_as_decimal(self) -> None:
         result = self.run_wizard("02")
@@ -355,7 +382,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4", result.stdout)
         self.assertIn("profile     : orcarouter", result.stdout)
-        self.assertIn("vllm-skinny-tp1:v1", result.stdout)
+        self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
 
     def test_nvidia_profile(self) -> None:
         result = self.run_install("nvidia")
@@ -712,9 +739,9 @@ class ModelProfileTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("vllm-skinny-tp1:v1", result.stdout)
+            self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
             self.assertIn(
-                "image change: vllm/vllm-openai:qwen38-flash-next-arm64-cu130 -> vllm-skinny-tp1:v1",
+                "image change: vllm/vllm-openai:qwen38-flash-next-arm64-cu130 -> vllm-orcarouter-v029:v1",
                 result.stdout,
             )
             self.assertEqual((state / "install.env").read_bytes(), before)

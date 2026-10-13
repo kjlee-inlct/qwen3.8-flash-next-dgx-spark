@@ -100,21 +100,37 @@ wizard_menu_option() {
   [[ -z "${detail}" ]] || printf '     %s\n' "${detail}"
 }
 
+# A closed input is an explicit, terminal cancellation even when caller code
+# invokes a wizard prompt in an if/AND-OR list with errexit suppressed.
+wizard_abort_closed_input() {
+  wizard_error 'Input stream closed (EOF); wizard cancelled. / 입력 종료로 취소됨.'
+  exit 2
+}
+
 wizard_read_raw() {
   local variable="$1" prompt="$2" secret="${3:-0}" raw_value=""
+  # EOF / closed SSH / exhausted piped answers is NOT an empty Enter.
+  # Abort the entire wizard rather than return a status which existing
+  # yes/no `&& ... || ...` callers could accidentally interpret as "no"
+  # (disabling safety settings) or an affirmative default confirmation.
+  # A newline-terminated empty answer still selects the requested default.
   if [[ -t 0 && -r /dev/tty ]]; then
     if [[ "${secret}" == 1 ]]; then
-      IFS= read -r -s -p "${prompt}" raw_value </dev/tty
+      IFS= read -r -s -p "${prompt}" raw_value </dev/tty ||
+        wizard_abort_closed_input
       printf '\n' >/dev/tty
     else
-      IFS= read -r -p "${prompt}" raw_value </dev/tty
+      IFS= read -r -p "${prompt}" raw_value </dev/tty ||
+        wizard_abort_closed_input
     fi
   else
     if [[ "${secret}" == 1 ]]; then
-      IFS= read -r -s -p "${prompt}" raw_value
+      IFS= read -r -s -p "${prompt}" raw_value ||
+        wizard_abort_closed_input
       printf '\n'
     else
-      IFS= read -r -p "${prompt}" raw_value
+      IFS= read -r -p "${prompt}" raw_value ||
+        wizard_abort_closed_input
     fi
   fi
   printf -v "${variable}" '%s' "${raw_value}"

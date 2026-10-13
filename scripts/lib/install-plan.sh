@@ -25,6 +25,7 @@ install_plan_apply_snapshot() {
   MODEL_ROOT_SOURCE="${PLAN_MODEL_ROOT_SOURCE}"
   MODEL_DIR="${PLAN_MODEL_DIR}"
   IMAGE="${PLAN_IMAGE}"
+  ORCA_RUNTIME_CHOICE="${PLAN_ORCA_RUNTIME_CHOICE:-}"
   SERVED_NAME="${PLAN_SERVED_NAME}"
   CONFIG_OVERRIDE="${PLAN_CONFIG_OVERRIDE}"
   SWAP_FILE="${PLAN_SWAP_FILE}"
@@ -80,6 +81,10 @@ install_plan_render_cli_preview() {
     "$(install_option_flag profile)" "${PLAN_MODEL_PROFILE}"
     "$(install_option_flag model_root)" "${PLAN_MODEL_ROOT}"
   )
+
+  if [[ "${PLAN_ORCA_RUNTIME_CHOICE:-}" == legacy ]]; then
+    args+=("$(install_option_flag orcarouter_runtime)" legacy)
+  fi
 
   if [[ -n "${PLAN_CONFIG_OVERRIDE}" ]]; then
     args+=("$(install_option_flag config_override config-override)" "${PLAN_CONFIG_OVERRIDE}")
@@ -159,6 +164,7 @@ install_plan_finalize() {
   PLAN_MODEL_ROOT_SOURCE="${MODEL_ROOT_SOURCE}"
   PLAN_MODEL_DIR="${MODEL_DIR}"
   PLAN_IMAGE="${IMAGE}"
+  PLAN_ORCA_RUNTIME_CHOICE="${ORCA_RUNTIME_CHOICE:-}"
   PLAN_SERVED_NAME="${SERVED_NAME}"
   PLAN_CONFIG_OVERRIDE="${CONFIG_OVERRIDE}"
   if [[ -n "${CONFIG_OVERRIDE}" ]]; then

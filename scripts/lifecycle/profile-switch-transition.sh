@@ -93,6 +93,25 @@ load_state() {
 
 clear_state() { rm -f -- "${STATE_FILE}" "${STATE_FILE}.tmp"; }
 
+# A dangling symlink is NOT an absent transaction, and leftover files
+# from an interrupted publication cannot certify a safe idle state.
+transition_state_present() {
+  [[ -e "${STATE_FILE}" || -L "${STATE_FILE}" ]]
+}
+
+assert_no_orphan_profile_switch_artifacts() {
+  local artifact
+  for artifact in \
+    "${STATE_FILE}.tmp" \
+    "${BACKUP_MANIFEST_DEFAULT}" "${BACKUP_MANIFEST_DEFAULT}.tmp" \
+    "${TARGET_MANIFEST_DEFAULT}" "${TARGET_MANIFEST_DEFAULT}.tmp" \
+    "${INSTALL_STATE_FILE}.profile-switch-complete.tmp"
+  do
+    [[ ! -e "${artifact}" && ! -L "${artifact}" ]] ||
+      die "profile-switch artifacts exist without transaction state; refusing ambiguous recovery: ${artifact}"
+  done
+}
+
 atomic_copy() {
   local source="$1" destination="$2"
   [[ -f "${source}" && ! -L "${source}" ]] || die "unsafe or missing source file: ${source}"
@@ -280,8 +299,8 @@ case "${action}" in
     [[ $# -eq 2 ]] || { usage >&2; exit 2; }
     acquire_transition_lock "profile switch prepare"
     [[ ! -e "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] || die 'a profile-switch transition is already active; recover it first'
-    [[ ! -e "${BACKUP_MANIFEST_DEFAULT}" && ! -L "${BACKUP_MANIFEST_DEFAULT}" ]] || die "stale profile-switch backup exists: ${BACKUP_MANIFEST_DEFAULT}"
-    [[ ! -e "${TARGET_MANIFEST_DEFAULT}" && ! -L "${TARGET_MANIFEST_DEFAULT}" ]] || die "stale profile-switch candidate exists: ${TARGET_MANIFEST_DEFAULT}"
+    # A new transaction must not overwrite staging left by an interrupted one.
+    assert_no_orphan_profile_switch_artifacts
     parse_manifest_maintenance "${INSTALL_STATE_FILE}" CURRENT || die 'installation manifest failed strict maintenance parsing'
     [[ "${CURRENT_MODEL_PROFILE}" == "$1" ]] || die "FROM_PROFILE does not match live manifest: $1"
     [[ "${CURRENT_PHASE}" == complete ]] || die "profile switch requires a complete live installation manifest (found ${CURRENT_PHASE})"
@@ -325,7 +344,8 @@ case "${action}" in
   rollback)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
     acquire_transition_lock "profile switch rollback"
-    if [[ ! -e "${STATE_FILE}" ]]; then
+    if ! transition_state_present; then
+      assert_no_orphan_profile_switch_artifacts
       printf 'No profile-switch transition to roll back.\n'
       exit 0
     fi
@@ -348,8 +368,8 @@ case "${action}" in
   recover)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
     acquire_transition_lock "profile switch recover"
-    if [[ ! -e "${STATE_FILE}" ]]; then
-      [[ ! -e "${BACKUP_MANIFEST_DEFAULT}" && ! -e "${TARGET_MANIFEST_DEFAULT}" ]] || die 'profile-switch artifacts exist without transaction state; refusing ambiguous recovery'
+    if ! transition_state_present; then
+      assert_no_orphan_profile_switch_artifacts
       printf 'PROFILE_SWITCH_STATE=idle\n'
       exit 0
     fi
@@ -357,7 +377,10 @@ case "${action}" in
     ;;
   service-recover)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
-    if [[ ! -e "${STATE_FILE}" ]]; then exit 0; fi
+    if ! transition_state_present; then
+      assert_no_orphan_profile_switch_artifacts
+      exit 0
+    fi
     if operation_lock_busy; then
       printf 'Profile-switch startup recovery deferred: installer lifecycle lock is active.\n'
       exit 0
@@ -367,10 +390,13 @@ case "${action}" in
     ;;
   status)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
-    if [[ -r "${STATE_FILE}" ]]; then
+    if transition_state_present; then
+      [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] ||
+        die 'unsafe profile-switch transition state file; refusing idle status'
       python3 "${STATE_PARSER}" profile-switch "${STATE_FILE}" >/dev/null || die 'invalid profile-switch transition state'
       cat "${STATE_FILE}"
     else
+      assert_no_orphan_profile_switch_artifacts
       printf 'PROFILE_SWITCH_STATE=idle\n'
     fi
     ;;

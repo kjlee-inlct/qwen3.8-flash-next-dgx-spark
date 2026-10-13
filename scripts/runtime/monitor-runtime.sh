@@ -15,6 +15,37 @@ PROTECT=0
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"
 MEMINFO_PATH="${QWEN38_MEMINFO_PATH:-/proc/meminfo}"
+EXPECTED_ID=""
+WAIT_RUNNING=0
+ARMED_FILE=""
+HEARTBEAT_FILE=""
+TRIAL_ARMED=0
+TRIAL_RUNTIME_LIMIT=3600  # 60-minute upper bound; only enforced for pinned trials
+TRIAL_RUNNING_START=0
+
+# A pinned trial must not outlive its *own* monitor on a catchable exit.
+# Normal managed monitor sessions without --expected-id are unchanged.
+trial_fail_closed_on_monitor_exit() {
+  local previous_rc=$? snapshot="" attempt
+  trap - EXIT
+  [[ "${TRIAL_ARMED}" == 1 && -n "${EXPECTED_ID}" ]] || return 0
+  for attempt in 1 2 3; do
+    snapshot="$(docker inspect --format '{{.Id}}|{{.State.Running}}|{{index .Config.Labels "qwen38.abtrial"}}|{{index .Config.Labels "qwen38.predecessor"}}' "${EXPECTED_ID}" 2>/dev/null || true)"
+    [[ -n "${snapshot}" ]] && break
+    sleep 1
+  done
+  if [[ "${snapshot}" == "${EXPECTED_ID}|true|orcarouter|"* ]]; then
+    printf '%s TRIAL WATCHDOG EXIT (rc=%s): stopping exact candidate %s, preserving Docker object\n' "$(date '+%F %T')" "${previous_rc}" "${EXPECTED_ID}" >&2
+    if ! docker stop --timeout 30 "${EXPECTED_ID}" >/dev/null; then
+      printf 'ERROR: pinned trial stop failed after watchdog exited; immediate manual intervention required for ID %s\n' "${EXPECTED_ID}" >&2
+    fi
+  elif [[ -z "${snapshot}" ]]; then
+    printf 'ERROR: pinned watchdog exit could not inspect candidate ID %s; manually verify Docker state now\n' "${EXPECTED_ID}" >&2
+  fi
+}
+trap trial_fail_closed_on_monitor_exit EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 usage() {
   cat <<'EOF'
@@ -29,6 +60,12 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --interval N                 Sampling interval in seconds (default: 2)
   --heartbeat N                Healthy status interval in seconds; 0 disables (default: 60)
   --protect                    Stop the container after consecutive low samples
+  --expected-id ID             Pin exact 64-character trial Docker ID
+  --wait-running N             Arm while created trial is not yet running
+  --state-dir PATH             Separate absolute forensic state directory
+  --armed-file PATH            Atomic arm confirmation file
+  --heartbeat-file PATH        Atomic sample timestamp file
+  --trial-max-seconds N        Stop pinned trial after N seconds (default: 3600; max: 7200)
 
 Without --protect this tool only reports warnings and never changes the container.
 EOF
@@ -62,6 +99,12 @@ while [[ $# -gt 0 ]]; do
     --interval) [[ $# -ge 2 ]] || die "$1 requires a value"; INTERVAL="$2"; shift ;;
     --heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; HEARTBEAT="$2"; shift ;;
     --protect) PROTECT=1 ;;
+    --expected-id) [[ $# -ge 2 ]] || die "$1 requires ID"; EXPECTED_ID="$2"; shift ;;
+    --wait-running) [[ $# -ge 2 ]] || die "$1 requires seconds"; WAIT_RUNNING="$2"; shift ;;
+    --state-dir) [[ $# -ge 2 ]] || die "$1 requires path"; STATE_DIR="$2"; STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"; shift ;;
+    --armed-file) [[ $# -ge 2 ]] || die "$1 requires path"; ARMED_FILE="$2"; shift ;;
+    --heartbeat-file) [[ $# -ge 2 ]] || die "$1 requires path"; HEARTBEAT_FILE="$2"; shift ;;
+    --trial-max-seconds) [[ $# -ge 2 ]] || die "$1 requires seconds"; TRIAL_RUNTIME_LIMIT="$2"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -72,9 +115,43 @@ for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_
   positive_integer "${value}" || die "thresholds and intervals must be positive integers"
 done
 nonnegative_integer "${HEARTBEAT}" || die "heartbeat must be a non-negative integer"
+nonnegative_integer "${WAIT_RUNNING}" || die "wait-running must be a non-negative integer"
+positive_integer "${TRIAL_RUNTIME_LIMIT}" || die "trial runtime limit must be a positive integer"
+(( TRIAL_RUNTIME_LIMIT <= 7200 )) || die "trial runtime limit must be at most 7200 seconds"
+[[ -z "${EXPECTED_ID}" || "${EXPECTED_ID}" =~ ^[a-f0-9]{64}$ ]] || die "invalid expected trial ID"
+if [[ -n "${EXPECTED_ID}" ]]; then
+  [[ -n "${ARMED_FILE}" && -n "${HEARTBEAT_FILE}" && "${WAIT_RUNNING}" -gt 0 && "${PROTECT}" == 1 ]] ||
+    die "pinned trial monitor requires arm, heartbeat, wait-running and protect"
+fi
+for path in "${STATE_DIR}" "${ARMED_FILE}" "${HEARTBEAT_FILE}"; do
+  [[ -z "${path}" || "${path}" == /* ]] || die "monitor state path must be absolute"
+  [[ -z "${path}" || ! -L "${path}" ]] || die "monitor state path cannot be symlink"
+done
 command -v docker >/dev/null || die "docker is required"
 [[ -r "${MEMINFO_PATH}" ]] || die "meminfo is unavailable: ${MEMINFO_PATH}"
 docker inspect "${CONTAINER}" >/dev/null 2>&1 || die "container not found: ${CONTAINER}"
+if [[ -n "${EXPECTED_ID}" ]]; then
+  actual_id="$(docker inspect --format '{{.Id}}' "${CONTAINER}")"
+  [[ "${actual_id}" == "${EXPECTED_ID}" ]] || die "trial container ID drift before arm"
+  [[ -d "${STATE_DIR}" && ! -L "${STATE_DIR}" ]] || die "separate monitor state directory missing or unsafe"
+fi
+if [[ -n "${ARMED_FILE}" ]]; then
+  umask 077
+  printf '%s\n' "${EXPECTED_ID}" >"${ARMED_FILE}.tmp"
+  mv -- "${ARMED_FILE}.tmp" "${ARMED_FILE}"
+  TRIAL_ARMED=1
+  printf 'AB_MONITOR_ARMED_ID=%s\n' "${EXPECTED_ID}"
+fi
+if (( WAIT_RUNNING > 0 )); then
+  for (( count=0; count<WAIT_RUNNING; count++ )); do
+    [[ -z "${EXPECTED_ID}" || "$(docker inspect --format '{{.Id}}' "${CONTAINER}" 2>/dev/null || true)" == "${EXPECTED_ID}" ]] ||
+      die "trial ID drift while waiting for start"
+    [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" != true ]] || break
+    sleep 1
+  done
+  [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]] ||
+    die "trial never became running while monitor armed"
+fi
 
 available_floor=$((MIN_AVAILABLE_GIB * 1048576))
 free_floor=$((MIN_FREE_GIB * 1048576))
@@ -86,11 +163,23 @@ initial_swap_free="$(awk '$1=="SwapFree:" {print $2}' "${MEMINFO_PATH}")"
 low_count=0
 warning_active=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
+TRIAL_RUNNING_START="${SECONDS}"
 printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free=%sGiB free-gate=%sGiB swap-growth=%sMiB swapfree=%sGiB\n' \
   "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${SWAP_ACTIVITY_GATE_MIB}" "${MIN_SWAP_FREE_GIB}"
 next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
+  if [[ -n "${EXPECTED_ID}" ]] && (( SECONDS - TRIAL_RUNNING_START >= TRIAL_RUNTIME_LIMIT )); then
+    printf 'TRIAL_RUNTIME_LIMIT_REACHED=%s (stop exact ID %s)\n' "${TRIAL_RUNTIME_LIMIT}" "${EXPECTED_ID}" >&2
+    exit 3
+  fi
+  if [[ -n "${EXPECTED_ID}" && "$(docker inspect --format '{{.Id}}' "${CONTAINER}" 2>/dev/null || true)" != "${EXPECTED_ID}" ]]; then
+    die "trial Docker ID drift while monitoring"
+  fi
+  if [[ -n "${HEARTBEAT_FILE}" ]]; then
+    printf '%s\n' "$(date +%s)" >"${HEARTBEAT_FILE}.tmp"
+    mv -- "${HEARTBEAT_FILE}.tmp" "${HEARTBEAT_FILE}"
+  fi
   mem_available="$(awk '$1=="MemAvailable:" {print $2}' "${MEMINFO_PATH}")"
   mem_free="$(awk '$1=="MemFree:" {print $2}' "${MEMINFO_PATH}")"
   cma_free="$(awk '$1=="CmaFree:" {print $2}' "${MEMINFO_PATH}")"
@@ -149,8 +238,12 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
       printf '%s PROTECT stopping %s gracefully to preserve host stability\n' "$(date '+%F %T')" "${CONTAINER}" >&2
       docker logs --tail 1000 "${CONTAINER}" 2>&1 || true
       container_id="$(docker inspect --format '{{.Id}}' "${CONTAINER}")"
+      [[ -z "${EXPECTED_ID}" || "${container_id}" == "${EXPECTED_ID}" ]] ||
+        die "trial ID drift on protected stop"
       write_stop_reason "${container_id}"
-      if ! docker stop --timeout 30 "${CONTAINER}" >/dev/null; then
+      stop_target="${CONTAINER}"
+      [[ -z "${EXPECTED_ID}" ]] || stop_target="${EXPECTED_ID}"
+      if ! docker stop --timeout 30 "${stop_target}" >/dev/null; then
         rm -f -- "${STOP_REASON_FILE}"
         die "failed to stop protected container"
       fi

@@ -9,6 +9,10 @@ TRANSITION_STATE_FILE="${STATE_DIR}/runtime-transition.env"
 PROFILE_SWITCH_STATE_FILE="${STATE_DIR}/profile-switch-transition.env"
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
+RELEASE_PROFILE_REFRESH_STATE_FILE="${STATE_DIR}/release-profile-refresh-transition.env"
+RELEASE_PROFILE_REFRESH_BACKUP="${STATE_FILE}.release-profile-refresh-backup"
+RELEASE_PROFILE_REFRESH_CANDIDATE="${STATE_FILE}.release-profile-refresh-candidate"
+RUNTIME_ADOPT_FILE="${STATE_DIR}/runtime-adopt.env"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STATE_PARSER="${SCRIPT_DIR}/lib/state_file.py"
 ASSET_OWNERSHIP_TOOL="${SCRIPT_DIR}/lib/asset_ownership.py"
@@ -78,10 +82,10 @@ else
 fi
 
 if load_model_profile "${MODEL_PROFILE:-}" 2>/dev/null; then
-  EXPECTED_REPO="${PROFILE_REPO}"; EXPECTED_REVISION="${PROFILE_REVISION}"
+  EXPECTED_REPO="${PROFILE_REPO}"; EXPECTED_REVISION="${PROFILE_REVISION}"; EXPECTED_IMAGE="${PROFILE_IMAGE}"
   pass "model profile is supported (${MODEL_PROFILE})"
 else
-  EXPECTED_REPO=""; EXPECTED_REVISION=""; fail "unsupported model profile: ${MODEL_PROFILE:-missing}"
+  EXPECTED_REPO=""; EXPECTED_REVISION=""; EXPECTED_IMAGE=""; fail "unsupported model profile: ${MODEL_PROFILE:-missing}"
 fi
 if [[ "${MODEL_REPO:-}" == "${EXPECTED_REPO}" ]]; then pass "model repository is pinned"; else fail "unexpected model repository: ${MODEL_REPO:-missing}"; fi
 if [[ "${MODEL_REVISION:-}" == "${EXPECTED_REVISION}" ]]; then pass "model revision is pinned"; else fail "unexpected model revision: ${MODEL_REVISION:-missing}"; fi
@@ -234,14 +238,62 @@ else
   pass "no incomplete profile-switch transition exists"
 fi
 
+if [[ -r "${RELEASE_PROFILE_REFRESH_STATE_FILE}" ]]; then
+  if release_profile_refresh_state="$(parse_lifecycle_state_value release-profile-refresh "${RELEASE_PROFILE_REFRESH_STATE_FILE}" RELEASE_PROFILE_REFRESH_STATE)"; then
+    fail "release-profile refresh is incomplete (${release_profile_refresh_state}); run scripts/lifecycle/release-profile-refresh-transition.sh recover before maintenance"
+  else
+    fail "release-profile refresh state is malformed; inspect ${RELEASE_PROFILE_REFRESH_STATE_FILE} before maintenance"
+  fi
+elif [[ -e "${RELEASE_PROFILE_REFRESH_BACKUP}" || -L "${RELEASE_PROFILE_REFRESH_BACKUP}" ||
+        -e "${RELEASE_PROFILE_REFRESH_CANDIDATE}" || -L "${RELEASE_PROFILE_REFRESH_CANDIDATE}" ]]; then
+  fail "release-profile refresh candidate/backup artifacts exist without transaction state; automatic cleanup is intentionally disabled"
+else
+  pass "no incomplete release-profile refresh exists"
+fi
+
+if [[ -e "${RUNTIME_ADOPT_FILE}" || -L "${RUNTIME_ADOPT_FILE}" ]]; then
+  if [[ -f "${RUNTIME_ADOPT_FILE}" && ! -L "${RUNTIME_ADOPT_FILE}" ]] &&
+     runtime_adopt_id="$(parse_lifecycle_state_value runtime-adopt "${RUNTIME_ADOPT_FILE}" RUNTIME_CONTAINER_ID)"; then
+    fail "one-shot runtime adoption is still pending (container=${runtime_adopt_id}); let managed-service recovery finish before maintenance"
+  else
+    fail "runtime adoption marker is malformed or unsafe; inspect ${RUNTIME_ADOPT_FILE} before maintenance"
+  fi
+else
+  pass "no pending one-shot runtime adoption exists"
+fi
+
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   pass "Docker daemon is available"
-  if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then pass "vLLM image is present"; else fail "vLLM image is missing"; fi
+  if docker image inspect "${VLLM_IMAGE:-}" >/dev/null 2>&1; then
+    pass "vLLM image is present"
+    if [[ "${MODEL_PROFILE:-}" == orcarouter ]]; then
+      if [[ "${VLLM_IMAGE:-}" == "${EXPECTED_IMAGE}" ]]; then
+        pass "managed OrcaRouter image matches profile default"
+        h38_scope="$(docker image inspect --format '{{ index .Config.Labels "qwen38.h38scope" }}' "${VLLM_IMAGE}" 2>/dev/null || true)"
+        [[ "${h38_scope}" == decoder-v1 ]] && pass "H38 decoder-scope image label is valid" || fail "H38 decoder-scope image label mismatch: ${h38_scope:-missing}"
+      elif [[ "${VLLM_IMAGE:-}" == vllm-skinny-tp1:v1 ||
+              "${VLLM_IMAGE:-}" == vllm/vllm-openai:qwen38-flash-next-arm64-cu130 ]]; then
+        warn "managed OrcaRouter still uses a legacy image; run --refresh-profile-defaults after the immutable release update"
+      else
+        fail "managed OrcaRouter image drift: manifest=${VLLM_IMAGE:-missing}, profile=${EXPECTED_IMAGE:-missing}"
+      fi
+    fi
+  else
+    fail "vLLM image is missing"
+  fi
   if docker inspect "${ROLLBACK_CONTAINER}" >/dev/null 2>&1; then if [[ -r "${TRANSITION_STATE_FILE}" ]]; then fail "rollback container exists while a runtime transition is incomplete (${ROLLBACK_CONTAINER})"; else warn "stale rollback container exists (${ROLLBACK_CONTAINER})"; fi; else pass "no stale rollback container exists"; fi
   if docker inspect "${RUNTIME_CONTAINER}" >/dev/null 2>&1; then
     state="$(docker inspect --format '{{.State.Status}}' "${RUNTIME_CONTAINER}" 2>/dev/null)"; [[ "${state}" == running ]] && pass "container is running" || fail "container state is ${state}"
     runtime_image="$(docker inspect --format '{{.Config.Image}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"; [[ "${runtime_image}" == "${VLLM_IMAGE:-}" ]] && pass "runtime container image matches installation manifest" || warn "runtime image drift: running=${runtime_image:-unknown}, manifest=${VLLM_IMAGE:-missing}"
     runtime_model_mount="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/model"}}{{.Source}}{{end}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"; [[ "${runtime_model_mount}" == "${MODEL_DIR:-}" ]] && pass "runtime model mount matches installation manifest" || warn "runtime model mount drift: running=${runtime_model_mount:-missing}, manifest=${MODEL_DIR:-missing}"
+    runtime_env="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
+    if [[ "${MODEL_PROFILE:-}" == orcarouter && "${VLLM_IMAGE:-}" == "${EXPECTED_IMAGE}" ]]; then
+      grep -Fxq 'VLLM_PLE_MMAP=1' <<<"${runtime_env}" && pass "managed OrcaRouter runtime uses PLE mmap" || fail "managed OrcaRouter PLE mmap setting is missing"
+      grep -Fxq 'VLLM_QSA_EXACT_TOPK=1' <<<"${runtime_env}" && pass "managed OrcaRouter runtime uses exact QSA" || fail "managed OrcaRouter exact-QSA setting is missing"
+      grep -Fxq 'QWEN38_MARLIN_CANONICAL_ORDER=1' <<<"${runtime_env}" && pass "managed OrcaRouter H38 canonical order is enabled" || fail "managed OrcaRouter H38 canonical-order setting is missing"
+      grep -Fxq 'QWEN38_MARLIN_CANONICAL_SCOPE=decoder' <<<"${runtime_env}" && pass "managed OrcaRouter H38 scope is decoder-only" || fail "managed OrcaRouter H38 decoder scope is missing"
+      grep -Fxq 'VLLM_CACHE_ROOT=/root/.cache/vllm/h38-marlin-canonical-decoder-managed-v1' <<<"${runtime_env}" && pass "managed OrcaRouter H38 compile cache is isolated" || fail "managed OrcaRouter H38 compile-cache namespace is missing"
+    fi
     if [[ "${MODEL_PROFILE:-}" == orcarouter-hybrid ]]; then
       declare -A expected_hybrid_mounts=(
         ["/base-model"]="${ORCAROUTER_MODEL_DIR:-$HOME/models/qwen3.8-flash-next-orcarouter}"
@@ -256,7 +308,6 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
         [[ -z "${actual_source}" ]] || actual_source_canonical="$(realpath -m -- "${actual_source}" 2>/dev/null || printf '%s' "${actual_source}")"
         [[ -n "${actual_source_canonical}" && "${actual_source_canonical}" == "${expected_source}" ]] && pass "hybrid parent mount matches (${destination})" || fail "hybrid parent mount drift at ${destination}: ${actual_source:-missing}"
       done
-      runtime_env="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${RUNTIME_CONTAINER}" 2>/dev/null || true)"
       grep -Fxq 'VLLM_PLE_MMAP=1' <<<"${runtime_env}" && pass "hybrid runtime uses PLE mmap" || fail "hybrid runtime PLE mmap setting is missing"
       grep -Fxq 'VLLM_QSA_EXACT_TOPK=1' <<<"${runtime_env}" && pass "hybrid runtime uses exact QSA" || fail "hybrid runtime exact-QSA setting is missing"
     fi

@@ -277,6 +277,50 @@ install_completed_execute_settings_transaction() {
   fi
 }
 
+install_completed_orcarouter_ab_trial() {
+  local choice variant expected
+  local -a cmd=()
+  declare -F install_orcarouter_ab_trial_action >/dev/null 2>&1 ||
+    die 'installer A/B trial adapter unavailable'
+  wizard_info '기존 managed Docker 객체와 install manifest는 변경하지 않습니다.'
+  wizard_menu_option 1 '시험 상태 조회 / Status'
+  wizard_menu_option 2 'Legacy A 생성·기동'
+  wizard_menu_option 3 'v0.29 B 생성·기동'
+  wizard_menu_option 4 '시험 컨테이너 중단·증거 보존'
+  wizard_menu_option 5 '취소 / Cancel'
+  wizard_menu_option 6 'Legacy A 시작 전 읽기 전용 사전 점검'
+  wizard_menu_option 7 'v0.29 B 시작 전 읽기 전용 사전 점검'
+  wizard_input choice 'A/B trial action' 1
+  case "${choice}" in
+    1) cmd=(status) ;;
+    2) cmd=(start --variant legacy) ;;
+    3) cmd=(start --variant v029) ;;
+    4) cmd=(stop) ;;
+    5) return 0 ;;
+    6) cmd=(preflight --variant legacy) ;;
+    7) cmd=(preflight --variant v029) ;;
+    *) die "invalid OrcaRouter A/B action" ;;
+  esac
+  if [[ "${DRY_RUN}" == 1 && "${choice}" != 6 && "${choice}" != 7 ]]; then
+    printf 'AB_TRIAL_DRY_RUN=YES; no host or container mutations\n'
+    install_orcarouter_ab_trial_action plan
+    return $?
+  fi
+  if [[ "${choice}" == 2 || "${choice}" == 3 || "${choice}" == 6 || "${choice}" == 7 ]]; then
+    variant="${cmd[2]}"
+    wizard_input expected '기존 stopped Docker ID 정확히 입력 (64 hex)' ''
+    [[ "${expected}" =~ ^[a-f0-9]{64}$ ]] || die 'exact old Docker ID is required'
+    if [[ "${choice}" == 2 || "${choice}" == 3 ]]; then
+      wizard_info "variant=${variant}; candidate 127.0.0.1:18888; KV 16 GiB; old Docker preserved"
+      wizard_yes_no '새 격리 시험 컨테이너를 생성·기동합니까?' no || return 0
+    fi
+    cmd+=(--expected-old-id "${expected}")
+  elif [[ "${choice}" == 4 ]]; then
+    wizard_yes_no '시험용 Docker ID만 중단하고 증거를 보존합니까?' no || return 0
+  fi
+  install_orcarouter_ab_trial_action "${cmd[@]}"
+}
+
 install_completed_choose_action() {
   local answer current_summary
 
@@ -296,6 +340,8 @@ install_completed_choose_action() {
     wizard_menu_option 2 '런타임 / API / 서비스 설정 편집'
     wizard_menu_option 3 '현재 프로필 기본값 새로고침'
     wizard_menu_option 4 '취소'
+    wizard_menu_option 5 'OrcaRouter 런타임 A/B 비교 계획 (미리보기)'
+    wizard_menu_option 6 'OrcaRouter A/B 격리 시험 (상태·기동·중단)'
     wizard_input answer '선택' 1
   else
     printf 'Installed setup management%s\n\n' "${WIZARD_RESET}"
@@ -304,6 +350,8 @@ install_completed_choose_action() {
     wizard_menu_option 2 'Edit runtime / API / service settings'
     wizard_menu_option 3 'Refresh current profile defaults'
     wizard_menu_option 4 'Cancel'
+    wizard_menu_option 5 'OrcaRouter runtime A/B plan (preview)'
+    wizard_menu_option 6 'OrcaRouter isolated A/B trial (status/start/stop)'
     wizard_input answer 'Select' 1
   fi
 
@@ -327,6 +375,17 @@ install_completed_choose_action() {
     4)
       [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
       exit 0
+      ;;
+    5)
+      [[ "${MODEL_PROFILE}" == orcarouter ]] || die 'OrcaRouter A/B requires an OrcaRouter installed profile'
+      bash "${ROOT_DIR}/scripts/lib/orcarouter-ab-plan.sh" --installed-image "${VLLM_IMAGE}"
+      exit 0
+      ;;
+    6)
+      [[ "${MODEL_PROFILE}" == orcarouter && "${PHASE:-}" == complete ]] ||
+        die 'OrcaRouter trial requires a complete OrcaRouter manifest'
+      install_completed_orcarouter_ab_trial
+      exit $?
       ;;
     *) die "invalid completed-install action" ;;
   esac

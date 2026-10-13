@@ -2,6 +2,34 @@
 
 This directory contains canonical model-profile, checkpoint-inspection, and configuration-preparation helpers.
 
+## Original four target models versus later Hybrid
+
+The initial wizard target models were `orcarouter`, `nvidia`,
+`mazinb`, `lychee888`. Generated `orcarouter-hybrid` H6 was
+**added later**; it is not one of the original four. Current registry
+implementation: 3/4 original installable, 1 planned; plus H6
+installable/experimental = **5 tracked / 4 installable**. H38 is
+a separate OrcaRouter runtime candidate; Hybrid H3/H4/H5 are
+internal construction artifacts, not additional selectable models.
+[Primary wizard-first mission and acceptance](../../docs/PROJECT-MISSION-AND-MODEL-SCOPE.md).
+
+## Planned lychee888 FP8-PLE integration
+
+[Staged candidate-only research and single-GB10 acceptance plan](../../docs/LYCHEE888-WIZARD-INTEGRATION.md)
+now captures the public author's FP8 E4M3 PLE serialization, the
+current repo's missing `load_download_profile`/`serve.sh` branches,
+and why a dual-node recipe cannot be assumed to work on this one
+Spark. Do not enable this profile just because metadata is readable.
+
+### New lychee888 metadata-only probe
+
+`scripts/model/inspect_lychee888_metadata.py` performs pinned-revision,
+JSON-only Hub file/index checks with ten FP8 PLE files, 128 numbered
+PLE shards and one global scale. It cannot validate safetensors dtype,
+tensor hashes or single-Spark TP1 loading. Tests run only against
+synthetic JSON fixtures; the profile stays `planned` and must not
+be enabled on this evidence alone.
+
 ## Responsibilities
 
 - Define supported model profiles and their static defaults.
@@ -40,7 +68,7 @@ Top-level `scripts/model-profiles.sh`, `scripts/inspect-model.py`, and `scripts/
 
 | Profile | Status | Installable |
 |---|---|---:|
-| `orcarouter` | stable/default; 16 GiB managed KV resilience default | yes |
+| `orcarouter` | stable/default checkpoint; H38 decoder-scope managed runtime candidate; 16 GiB managed KV resilience default | yes |
 | `nvidia` | experimental | yes |
 | `mazinb` | experimental; live managed activation exercised; current 16 GiB managed KV reaches functional readiness but strict RM host-stability remains FAIL | yes |
 | `orcarouter-hybrid` | experimental, generated H6; warm/reuse + round-trip functional PASS; R23–R32 allocator/localization closure complete; strict host-stability FAIL remains | yes |

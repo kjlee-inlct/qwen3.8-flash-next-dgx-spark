@@ -275,7 +275,7 @@ install_plan_render_cli_preview
                     "orcarouter",
                     "--model-root",
                     str(model_root),
-                    "--monitor",
+                    "--protect",
                     "--api-access",
                     "docker",
                     "--api-docker-port",

@@ -38,6 +38,7 @@ MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
 PROFILE_SWITCH=0; PROFILE_SWITCH_COMMITTED=0; SWITCH_FROM_PROFILE=""; SWITCH_MODEL_ROOT=""
+ORCA_RUNTIME_CHOICE=""  # Only fresh wizard choice; never override a complete manifest
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 STATE_WRITE_FILE="${STATE_FILE}"
@@ -70,6 +71,13 @@ MONITOR_MIN_FREE_CLI=""; MONITOR_FREE_GATE_CLI=""; MONITOR_MIN_SWAP_FREE_CLI=""
 MONITOR_CONSECUTIVE_CLI=""; MONITOR_HEARTBEAT_CLI=""
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+# Top-level installer owns runtime dependencies. Its shared lib UI must never
+# invoke scripts/runtime directly (lib dependency direction is intentionally zero).
+install_orcarouter_ab_trial_action() {
+  local manager="${ROOT_DIR}/scripts/runtime/orcarouter-ab-trial.py"
+  [[ -r "${manager}" ]] || die "A/B trial runtime manager unavailable: ${manager}"
+  python3 "${manager}" "$@"
+}
 ensure_operation_lock() {
   [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
   if ! declare -F acquire_operation_lock >/dev/null 2>&1; then
@@ -180,6 +188,27 @@ asset_track_profile_images() {
   fi
   if asset_image_owned "${IMAGE}"; then IMAGE_OWNED=1; else IMAGE_OWNED=0; fi
 }
+asset_track_h38_image_chain() {
+  local owned dependency="" image
+  local chain=(
+    vllm-orcarouter-v029:v1
+    vllm-orcarouter-v029-h9-ct-modelweight:v1
+    vllm-orcarouter-v029-h10-ct-global-scale:v1
+    vllm-orcarouter-v029-h11-ct-packed-modelweight:v1
+    vllm-orcarouter-v029-h12-ct-postload-preserve:v1
+    vllm-orcarouter-v029-h38-decoder-scope:v1
+  )
+  for image in "${chain[@]}"; do
+    owned="$(asset_image_ownership_for_name "${image}")"
+    if [[ -n "${dependency}" ]]; then
+      asset_track_image "${image}" "${owned}" "${dependency}"
+    else
+      asset_track_image "${image}" "${owned}"
+    fi
+    dependency="${image}"
+  done
+}
+
 parse_install_manifest() {
   local parsed key value
   parsed="$(mktemp)"
@@ -265,6 +294,11 @@ reload_profile_for_model_root() {
   REVISION="${PROFILE_REVISION}"
   MODEL_DIR="${PROFILE_MODEL_DIR}"
   IMAGE="${PROFILE_IMAGE}"
+  if [[ "${ORCA_RUNTIME_CHOICE:-}" == legacy ]]; then
+    [[ "${MODEL_PROFILE}" == orcarouter && "${RESUME:-0}" == 0 && "${PROFILE_SWITCH:-0}" == 0 ]] ||
+      die '--orcarouter-runtime legacy requires fresh OrcaRouter installation'
+    IMAGE="vllm-skinny-tp1:v1"
+  fi
   SERVED_NAME="${PROFILE_SERVED_NAME}"
 }
 
@@ -450,29 +484,66 @@ wizard_choose_model_profile() {
     fi
   done < <(list_model_candidates)
 
+  if [[ "${mode}" == fresh ]]; then
+    [[ "${UI_LANG}" == ko ]] &&
+      wizard_menu_option L 'OrcaRouter Legacy 런타임 (CPU PLE offload)' ||
+      wizard_menu_option L 'OrcaRouter Legacy runtime (CPU PLE offload)'
+  fi
   cancel_choice=$(("${#profiles[@]}" + 1))
-  if [[ "${mode}" == existing ]]; then
-    [[ "${UI_LANG}" == ko ]] && wizard_menu_option "${cancel_choice}" '취소' || wizard_menu_option "${cancel_choice}" 'Cancel'
-  fi
-  [[ "${UI_LANG}" == ko ]] && wizard_input answer '선택' "${default_choice}" || wizard_input answer 'Select' "${default_choice}"
+  [[ "${UI_LANG}" == ko ]] &&
+    wizard_menu_option "${cancel_choice}" '취소' ||
+    wizard_menu_option "${cancel_choice}" 'Cancel'
 
-  if [[ "${answer}" =~ ^[0-9]+$ ]]; then
-    selection_index=$((10#${answer}))
-    if [[ "${mode}" == existing && "${selection_index}" -eq "${cancel_choice}" ]]; then
-      [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
-      exit 0
+  # A bad menu entry should not require restarting the installer or switch
+  # wizard. Input EOF remains terminal cancellation in wizard_read_raw.
+  while true; do
+    selected=""
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_input answer '선택' "${default_choice}"
+    else
+      wizard_input answer 'Select' "${default_choice}"
     fi
-    if (( selection_index >= 1 && selection_index <= ${#profiles[@]} )); then
-      selected="${profiles[selection_index - 1]}"
-    fi
-  else
-    for profile in "${profiles[@]}"; do
-      [[ "${answer}" != "${profile}" ]] || selected="${profile}"
-    done
-  fi
 
-  [[ -n "${selected}" ]] || die "invalid model selection"
-  MODEL_PROFILE="${selected}"
+    if [[ "${answer}" =~ ^[0-9]+$ ]]; then
+      selection_index=$((10#${answer}))
+      if (( selection_index == cancel_choice )); then
+        [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+        exit 0
+      fi
+      if (( selection_index >= 1 && selection_index <= ${#profiles[@]} )); then
+        selected="${profiles[selection_index - 1]}"
+      fi
+    else
+      case "${answer}" in
+        l|L|legacy|LEGACY)
+          if [[ "${mode}" == fresh ]]; then
+            MODEL_PROFILE=orcarouter
+            ORCA_RUNTIME_CHOICE=legacy
+            return 0
+          fi
+          ;;
+        q|Q|cancel|Cancel|취소)
+          [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+          exit 0
+          ;;
+        *)
+          for profile in "${profiles[@]}"; do
+            [[ "${answer}" != "${profile}" ]] || selected="${profile}"
+          done
+          ;;
+      esac
+    fi
+
+    if [[ -n "${selected}" ]]; then
+      MODEL_PROFILE="${selected}"
+      return 0
+    fi
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_warning '잘못된 모델 선택입니다. 번호/프로필을 다시 입력하거나 취소를 선택하세요.'
+    else
+      wizard_warning 'Invalid model selection. Enter a listed number/profile or Cancel.'
+    fi
+  done
 }
 
 usage() {
@@ -500,6 +571,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
+    --orcarouter-runtime) [[ $# -ge 2 ]] || die "--orcarouter-runtime requires v029 or legacy"; case "$2" in v029|legacy) ORCA_RUNTIME_CHOICE="$2" ;; *) die "--orcarouter-runtime must be v029 or legacy" ;; esac; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
     --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; [[ -n "$2" ]] || die "--config-override requires a non-empty PATH"; CONFIG_OVERRIDE_CLI="$2"; CONFIG_OVERRIDE_CLI_SET=1; shift ;;
     --no-config-override) CONFIG_OVERRIDE_CLI=""; CONFIG_OVERRIDE_CLI_SET=1 ;;
@@ -637,18 +709,26 @@ else
   choose_default_model_root
 fi
 load_model_profile "${MODEL_PROFILE}" || exit $?
-if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 && "${MODEL_PROFILE}" == orcarouter-hybrid &&
+if [[ -n "${ORCA_RUNTIME_CHOICE}" &&
+      ( "${MODEL_PROFILE}" != orcarouter || "${RESUME}" != 0 || "${PROFILE_SWITCH}" != 0 ) ]]; then
+  die '--orcarouter-runtime is valid for fresh OrcaRouter installation only; existing images are manifest-bound'
+fi
+if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 &&
+      ( "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ) &&
       -z "${MONITOR_ENABLED_ENV_SET}" && -z "${MONITOR_PROTECT_ENV_SET}" &&
       -z "${MONITOR_ENABLED_CLI}" && -z "${MONITOR_PROTECT_CLI}" ]]; then
-  # Hybrid H6 can exhaust non-CMA host memory while raw MemFree still looks
-  # healthy because CMA pages dominate. Fresh non-interactive installs protect
-  # the host by default; operators can opt out with --monitor/--no-monitor.
+  # Cold OrcaRouter/Hybrid GB10 loads can exhaust non-CMA host memory.
+  # Existing installs and explicit CLI/env settings keep their original policy.
   MONITOR_ENABLED=1
   MONITOR_PROTECT=1
 fi
 REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
 MODEL_DIR="${MODEL_DIR:-${PROFILE_MODEL_DIR}}"
 IMAGE="${VLLM_IMAGE:-${PROFILE_IMAGE}}"
+if [[ "${ORCA_RUNTIME_CHOICE}" == legacy && "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 ]]; then
+  [[ "${MODEL_PROFILE}" == orcarouter ]] || die "legacy image is only supported for OrcaRouter"
+  IMAGE="vllm-skinny-tp1:v1"
+fi
 SERVED_NAME="${SERVED_NAME:-${PROFILE_SERVED_NAME}}"
 if [[ "${RESUME}" == 1 ]]; then
   [[ "${MODEL_REPO:-}" == "${REPO}" && "${MODEL_REVISION:-}" == "${REVISION}" ]] || \
@@ -682,11 +762,19 @@ if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 && "${YES}" != 1 && -z "${CLI
   wizard_step 1 6 '언어 선택 / Language'
   wizard_menu_option 1 '한국어' '기본값 / Default'
   wizard_menu_option 2 'English'
-  wizard_input answer '선택 / Select' 1
-  case "${answer}" in
-    2|en|EN|English|english) UI_LANG=en ;;
-    *) UI_LANG=ko ;;
-  esac
+  # A mistyped choice is not consent to the default language.
+  while true; do
+    wizard_input answer '선택 / Select' 1
+    case "${answer}" in
+      1|ko|KO|Korean|korean|한국어) UI_LANG=ko; break ;;
+      2|en|EN|English|english) UI_LANG=en; break ;;
+      q|Q|cancel|Cancel|취소)
+        wizard_info 'Cancelled / 취소됨'
+        exit 0
+        ;;
+      *) wizard_warning 'Invalid language selection. Enter 1, 2 or Cancel. / 언어 선택이 잘못되었습니다.' ;;
+    esac
+  done
 elif [[ -z "${UI_LANG}" ]]; then
   UI_LANG=ko
 fi
@@ -725,23 +813,47 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 && -z "${MOD
       wizard_menu_option 1 '기존 모델 저장소 재사용 (권장)' "${existing_home_root}"
       wizard_menu_option 2 '현재 저장소의 models 폴더 사용' "${repo_model_root}"
       wizard_menu_option 3 '직접 입력'
-      wizard_input answer '선택' 1
+      wizard_menu_option 4 '취소'
     else
       wizard_info "Existing verified model store found: ${existing_home_root}"
       wizard_info "Fresh-install default: ${repo_model_root}"
       wizard_menu_option 1 'Reuse existing model store (recommended)' "${existing_home_root}"
       wizard_menu_option 2 'Use repository-local models directory' "${repo_model_root}"
       wizard_menu_option 3 'Enter another path'
-      wizard_input answer 'Select' 1
+      wizard_menu_option 4 'Cancel'
     fi
-    case "${answer}" in
-      2) MODEL_ROOT="${repo_model_root}"; MODEL_ROOT_SOURCE=repo-default ;;
-      3)
-        [[ "${UI_LANG}" == ko ]] && wizard_input MODEL_ROOT '모델 저장 루트' "${repo_model_root}" || wizard_input MODEL_ROOT 'Model storage root' "${repo_model_root}"
-        MODEL_ROOT_SOURCE=custom
-        ;;
-      *) MODEL_ROOT="${existing_home_root}"; MODEL_ROOT_SOURCE=existing-home ;;
-    esac
+    # Invalid input must not silently reuse an existing model store.
+    while true; do
+      if [[ "${UI_LANG}" == ko ]]; then
+        wizard_input answer '선택' 1
+      else
+        wizard_input answer 'Select' 1
+      fi
+      case "${answer}" in
+        1) MODEL_ROOT="${existing_home_root}"; MODEL_ROOT_SOURCE=existing-home; break ;;
+        2) MODEL_ROOT="${repo_model_root}"; MODEL_ROOT_SOURCE=repo-default; break ;;
+        3)
+          if [[ "${UI_LANG}" == ko ]]; then
+            wizard_input MODEL_ROOT '모델 저장 루트' "${repo_model_root}"
+          else
+            wizard_input MODEL_ROOT 'Model storage root' "${repo_model_root}"
+          fi
+          MODEL_ROOT_SOURCE=custom
+          break
+          ;;
+        4|q|Q|cancel|Cancel|취소)
+          [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+          exit 0
+          ;;
+        *)
+          if [[ "${UI_LANG}" == ko ]]; then
+            wizard_warning '잘못된 저장 위치 선택입니다. 1~4 중에서 다시 선택하세요.'
+          else
+            wizard_warning 'Invalid storage selection. Enter 1, 2, 3 or 4.'
+          fi
+          ;;
+      esac
+    done
   else
     if [[ "${UI_LANG}" == ko ]]; then
       wizard_info "모델은 현재 저장소 아래 models 폴더에 저장됩니다."
@@ -810,7 +922,7 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 ]]; then
   fi
   if [[ "${MONITOR_ENABLED}" == 1 ]]; then
     if [[ "${UI_LANG}" == ko ]]; then
-      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
+      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
       wizard_yes_no '지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까?' "${protect_default}" && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
       if wizard_yes_no '권장 모니터 임계값과 heartbeat를 변경합니까?' no; then
         wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
@@ -821,7 +933,7 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 ]]; then
         wizard_input MONITOR_HEARTBEAT 'Heartbeat seconds (0 disables)' "${MONITOR_HEARTBEAT}"
       fi
     else
-      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
+      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
       wizard_yes_no 'Stop the container safely after sustained low memory?' "${protect_default}" && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
       if wizard_yes_no 'Customize the recommended monitor thresholds and heartbeat?' no; then
         wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
@@ -1113,7 +1225,13 @@ else
 fi
 write_state inspected
 printf '\nPreparing vLLM image...\n'
-if [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
+if [[ "${MODEL_PROFILE}" == orcarouter && "${IMAGE}" == vllm-orcarouter-v029-h38-decoder-scope:v1 ]]; then
+  # Claim only missing installer-created stages before construction, then bind
+  # each successful image ID into the cumulative ownership registry afterwards.
+  asset_track_h38_image_chain
+  bash "${ROOT_DIR}/scripts/runtime/prepare-h38-image.sh" build
+  asset_track_h38_image_chain
+elif [[ "${IMAGE}" == vllm-skinny-tp1:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.skinny-gemm" "${ROOT_DIR}/scripts"
   fi
@@ -1124,7 +1242,7 @@ elif [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.nv-mixed" "${ROOT_DIR}/scripts"
   fi
-elif [[ ( "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybrid ) && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
+elif [[ ( "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybrid ) && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
   fi

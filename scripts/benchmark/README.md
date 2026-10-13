@@ -2,6 +2,27 @@
 
 This directory contains the repository's canonical read-only benchmark harness for the managed Qwen3.8 Flash Next runtime.
 
+## Five model-specific llama-benchy benchmark reports (2026-10-13)
+
+Upstream [eugr/llama-benchy](https://github.com/eugr/llama-benchy),
+pinned revision `e9be344578cec17745066b220798b80a0d2686d3` (MIT), has been reviewed.
+[Benchmark shape, per-model report templates and approval
+gates](../../docs/model-reports/README.md) define PP/TG, first
+response/first token, context/caching/concurrency and explicit
+per-model NOT_MEASURED placeholders.
+`llama-benchy-report.py` converts only real llama-benchy JSON to a
+new Markdown report with identity/provenance and no synthetic
+performance values. The DGX model is stopped: **no actual bench run
+or package installation** at this point.
+
+## Reclaim policy
+
+Save and separately archive model-specific llama-benchy reports
+before selected model/Docker deletion. See
+[benchmark-before-reclaim](../../docs/BENCHMARK-BEFORE-RECLAIM.md).
+Do not use a benchmark to automatically restart a stopped service.
+No current model has new quantitative benchmark evidence.
+
 ## Responsibilities
 
 - Run read-only qualification and performance workloads against the already-running loopback API.
@@ -55,7 +76,21 @@ entries:
   deterministic;
 - the H38 runtime determinism repair is closed for the validated
   `scripts/runtime/orcarouter-v029.sh` production track; managed-service
-  integration remains a separate open qualification phase.
+  integration remains a separate open qualification phase;
+- on 2026-10-07 the managed integration branch replaced the invalid two-stage
+  legacy-READY assumption with an atomic release + same-profile H38 manifest
+  refresh transaction; the target runtime attests before the runtime rollback
+  container is destroyed, so the outer transaction retains symmetric recovery until
+  lifecycle commit;
+- `run-h38-managed-migration-gate.sh` is the guarded exact-SHA live migration gate;
+  it records a fresh 384-token x5 legacy baseline, validates the atomic H38 cutover,
+  doctor strict, OOM state, and a strict NVIDIA RM kernel window. This remains an
+  implementation path, not live acceptance, until an actual DGX run is recorded;
+- managed determinism/performance/restart/RM live results remain pending. After a
+  passing migration gate, `scripts/run-h38-managed-followup-gates.sh` binds the same
+  migration evidence baseline to the canonical determinism matrix, the >=90% matched
+  decode-performance gate, a supported managed-service replacement/restart, and one
+  strict NVIDIA RM/monitor evidence window.
 
 See `../../docs/H38-DETERMINISM.md` for the concise operational status.
 Historical entries below remain authoritative for what was observed at their
@@ -6903,3 +6938,123 @@ the only intended new observability is the four narrow RM/UVM entry/return
 probe pairs above. Do not add an RM watchdog: if `NV_ERR_NO_MEMORY` appears,
 allow normal startup/READY/soak behavior to continue so functional and host
 classification remain separate.
+
+
+### Actual DGX synthetic 76/76 at 9220624, followed by prepare-stage orphan guard (2026-10-12)
+
+[New operator-provided local test and subsequent source-review evidence](evidence/dgx-76-and-prepare-orphan-guard-20261012.md): clean exact DGX 9220624 checkout, Bash syntax PASS, 76/76 isolated synthetic, local ShellCheck skipped; matching GitHub CI #38212708550 PASS 802/802 + 76/76. A later source hardening closes `prepare`'s orphan `.tmp` admission gap with a new seven-scenario regression method; this was **not** part of the observed DGX execution. No new live host/M1–M4 qualification or authorization to restart H38.
+
+
+**GitHub follow-up CI confirmation (2026-10-12):** [#38215072213](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38215072213) at exact new source HEAD `51e85f6578ee0694a13964f700f30e854f17c020` passed **803/803 full Python and 77/77 selected synthetic**, with 17 profile-switch tests, Bash syntax, ShellCheck, compilation and whitespace PASS. The sole DGX latest actual *isolated synthetic* evidence remains **76/76 at `9220624`**. No new live M1/M2/M3/M4 acceptance; PR #259 remains Draft/Open/Unmerged.
+
+
+### Actual DGX 77/77 local isolated synthetic at `1283b1a` (2026-10-12)
+
+[New permanent DGX operator evidence](evidence/dgx-77-prepare-orphan-synthetic-pass-20261012.md) supersedes `9220624` 76/76 as the latest *DGX-local synthetic* result: source `1283b1a` passed 77/77 fixture tests including 17 profile-switch methods and the prepare-stage orphan guard. Bash syntax PASS, local ShellCheck SKIPPED_NOT_INSTALLED. Matched GitHub CI #38215504822 passed 803/803 full and 77/77 synthetic. No new H38 GPU/model or live host-lifecycle qualification.
+
+
+## Disposable D0 offline evidence precheck — code staged, not host-qualified (2026-10-12)
+
+A new **offline-only** reviewer, `disposable-d0-preflight.py`, validates two
+explicit operator-provided JSON files using Python stdlib only. It never reads
+live Docker, systemd, host identity, Git or model state; it never runs commands
+on any host. Required policy: exact SHA and repository, **nonempty protected
+machine-id hash and Docker daemon denysets**, forbidden production roots.
+Required inventory: separately identified disposable machine/daemon, clean
+exact SHA + origin, owner disposable declaration, restore point, isolated
+non-default Docker context without external users, nonoverlapping throwaway
+model/log/work roots, bounded owned synthetic model, non-production service
+unit, and no pending lifecycle transactions.
+
+Run **only against an independently assembled, reviewed inventory**:
+`python3 disposable-d0-preflight.py --policy <policy.json> --inventory <inventory.json>`.
+No real protected machine IDs, daemon IDs, credentials or private mount
+inventories belong in Git history or CI logs. Inputs are treated as
+**untrusted assertions**: success prints
+`D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` but always
+`D0_ADMISSION=NOT_GRANTED` and `D0_LIVE_E2E=NOT_AUTHORIZED`.
+Any incomplete/mismatched evidence fails closed with exit 2. A passing
+offline check is **not** permission for D1–D5; independent operator
+attestation, read-only on-host cross-check and explicit disposable-host
+authorization remain mandatory. Neither current DGX nor M1/M2/M3/M4
+qualification is changed.
+
+
+### D0 offline evidence policy CI acceptance (2026-10-12)
+
+Source `7acd15cc5a2d8f5603bdb82b08b1cee49da7d18a` introduced a stdlib-only JSON D0 policy evaluator and nine fixture regressions. [GitHub CI #38217170909](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38217170909) **SUCCESS 812/812 full tests, 77/77 existing bounded synthetic**, Bash syntax, ShellCheck, Python compile, whitespace PASS. The D0 test methods are **not** yet in the bounded DGX verifier; latest DGX actual local run remains `1283b1a` **77/77**. A policy-consistent response is `D0_STATIC_REVIEW=READY_FOR_INDEPENDENT_REVIEW` with `D0_ADMISSION=NOT_GRANTED`; it is not live host attestation or D0 acceptance. [Permanent source/limitation evidence](evidence/disposable-d0-offline-preflight-ci-20261012.md). M1/M2/M3/M4 remain NOT_QUALIFIED/NOT_RUN/BLOCKED and PR #259 stays Draft/Open/Unmerged.
+
+
+## D0 independent-host on-host read-only cross-check (source only; 2026-10-12)
+
+A new conservative `disposable-d0-readonly-crosscheck.py` requires the
+`--ack-independent-disposable-host` flag plus the existing strict
+`--policy` and `--inventory` JSON. The **sole protected DGX is not a
+permitted target**. It first validates the offline D0 policy and compares a
+hashed real machine identity against the inventory and protected denyset
+**before** any Docker/systemd calls. It then performs bounded read-only
+Git HEAD/origin/worktree, candidate path realpath and mountpoint, Docker
+context/daemon/empty-container, and dedicated disposable service-unit checks.
+
+The collector does not probe without the explicit independent-host
+acknowledgement, does not ask for sudo, does not modify files or host
+configuration, and never installs/uninstalls or starts models. Its JSON
+output excludes raw host identities, secrets, mounts and container IDs.
+The output is `ON_HOST_READ_ONLY_ASSERTION_CROSSCHECK`, with
+`d0_admission=NOT_GRANTED` and `d1_d5=NOT_AUTHORIZED` **even after
+all observed fields match**. A missing daemon, unknown service response,
+realpath/mount drift, protected identity or unclean Git state fails closed.
+
+This cross-check **does not independently prove** owner consent, absence of
+external Docker users, isolation of the underlying daemon, mount sources
+outside the selected roots, or restoration/snapshot viability. Independent
+D0 trust review and explicit authorization remain necessary. Current status:
+**source and fixture tests only; not executed on any physical disposable
+host or the protected DGX; M1–M4 and D1–D5 unchanged**.
+
+
+## D0 independent-host read-only crosscheck — GitHub source CI (2026-10-12)
+
+The new on-host read-only D0 cross-check source was implemented at `b6d3188`. Its first [CI #38218386709](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38218386709) **FAILED 1 of 824 full tests**, because a Docker-outage *fixture* used an `AssertionError` instead of subprocess-style `OSError`. The test fake was corrected without relaxing safety guards. [Source CI #38218663210](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38218663210) **SUCCESS 824/824 full Python, 77/77 existing bounded synthetic**, Bash/ShellCheck/Python compile/whitespace PASS at `b99b510e89cc08d99d683dcbf77c75bb55941b2c`.
+
+The 12 new fixture cases cover protected host/daemon identities, clean Git source, path and mount drift, Docker outage/contamination and nonexclusive service refusal. No actual Docker/systemd on a disposable host was inspected; the collector is **not approved for the sole protected DGX**. Its on-host result always keeps `d0_admission=NOT_GRANTED` and `d1_d5=NOT_AUTHORIZED`, even when supplied host observations match. [Permanent evidence and trust limitations](evidence/d0-onhost-readonly-crosscheck-ci-20261012.md). Latest *actual DGX local* isolated synthetic remains 77/77 at `1283b1a`. D0 independent real-host review and D1–D5 remain NOT_RUN; M1/M2/M3/M4, strict host protections and PR #259 Draft/Open/Unmerged are unchanged.
+
+
+## D0 parent-mount and Docker-endpoint fail-closed refinement (2026-10-12)
+
+The source-only read-only host observer now rejects **non-root ancestor mounts** overlapping proposed disposable roots, Docker environment overrides, TCP/SSH and default/shared Unix socket endpoints, aliased/missing sockets, and refuses to use an implicit Docker context for daemon reads. Git command probes set `GIT_OPTIONAL_LOCKS=0` to avoid optional Git index refresh. The four trust-boundary fixture methods and one Git no-optional-locks method extend the read-only D0 module to **17/17 synthetic tests**.
+
+[CI #38266470002](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38266470002) at `4dfc2aed238ce96be0b5f3970256b8a2ce8cadf8` **SUCCESS 828/828 full, 77/77 selected**, and [CI #38267015272](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38267015272) at `b65c0142340d90d681c8f82d05294bb72d813687` **SUCCESS 829/829 full, 77/77 selected** plus Bash/ShellCheck/Python compile/whitespace PASS. [Canonical source evidence](evidence/d0-parent-mount-docker-endpoint-guards-20261012.md) explains remaining host-attestation gaps. The latest *actual DGX-local* isolated result remains **77/77 at `1283b1a`**. This source has not been run on either actual DGX or independent disposable host. D0 `NOT_GRANTED`; D1–D5 `NOT_RUN`; M1/M2/M3/M4 unchanged; PR #259 Draft/Open/Unmerged, Ready/Merge BLOCKED.
+
+
+## D0 read-only command environment and protected-socket refusal (2026-10-13)
+
+Source `f4e83d2ae3f17d82c5f7702497138c3431072358` hardens the on-host D0 read-only observer against redirected Git/Systemd/DBus environment selectors; removes unpinned default Docker info/container commands from the allowlist; refuses arbitrary populated Docker environment overrides; and blocks context endpoints inside forbidden production roots or on/under non-root mountpoints. `GIT_OPTIONAL_LOCKS=0` remains enforced. Five new fixture methods confirm refusal before unintended host commands. [GitHub CI #38315552300](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38315552300) **SUCCESS 834/834 full Python, 77/77 existing selected synthetic, 22/22 D0 crosscheck fixtures, ShellCheck/Bash/Python compile/whitespace PASS**.
+
+[Permanent D0 environment and socket-source evidence](evidence/d0-env-redirection-and-socket-boundaries-20261013.md) records provenance, safety rationale and remaining host-attestation gaps. The **latest actual DGX-local** isolated synthetic result remains **77/77 at `1283b1a`**, not the newer GitHub source. No actual independent disposable host observation or live D0 qualification occurred. `D0_LIVE_ADMISSION=NOT_GRANTED`, `D1_D5=NOT_RUN`, M1/M2/M3/M4 unchanged, and PR #259 Draft/Open/Unmerged with Ready/Merge BLOCKED.
+
+
+## D0 exact-input digest receipts and offline consistency review (2026-10-13)
+
+At source SHA `e41a34f06887f526d0a7ac7cb605d263c226f8f6`, the strict JSON reader hashes the **same bounded no-symlink file-descriptor bytes it parsed**, the read-only host collector emits `policy_sha256` and `inventory_sha256`, and the new `disposable-d0-receipt-review.py` compares its receipt to the exact supplied policy/inventory JSON. Mismatched files, invalid receipt schema, changed Git SHA and forged admission markers are refused. Consistent input is only `D0_RECEIPT_REVIEW=CONSISTENT_UNTRUSTED`; external attestation and replay freshness remain `NOT_VERIFIED`.
+
+[Source CI #38316973840](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38316973840) **SUCCESS: 845/845 full Python, 77/77 bounded synthetic, Bash/ShellCheck/Python compile/whitespace PASS**. [Permanent fixture evidence](evidence/d0-receipt-input-binding-ci-20261013.md) and [receipt workflow/limitations](../../docs/D0-RECEIPT-CHAIN.md) preserve provenance and non-admission semantics. The new 11 tests are **outside** the 77-case bounded DGX synthetic verifier; latest **actual DGX-local** synthetic remains **77/77 at `1283b1a`**. No actual disposable host observation occurred; D0 admission NOT_GRANTED, D1–D5 NOT_RUN, M1/M2/M3/M4 remain unqualified/blocked, PR #259 remains Draft/Open/Unmerged.
+
+
+## D0 external owner/isolation/restore evidence-chain consistency (2026-10-13)
+
+Source `a52ae7f2985ce0f415134b848b6caeb6aefec348` adds `disposable-d0-external-evidence-review.py`, a strictly offline, read-only and fail-closed review of the previous exact-input D0 receipt and **three separately provided artifacts** for independent-owner consent claims, Docker isolation claims and controlled restore-drill claims. It requires the exact policy, inventory, receipt SHA256, host/daemon identifiers and restore point to match; refused evidence includes missing/overlapping role IDs, altered/missing/empty/symlink proofs, overlapping proof digests, contradictory scopes and forged admission. The artifact contents and claimed reviewer actor IDs are **not authenticated or independently witnessed**; success only reports `STRUCTURALLY_CONSISTENT_UNTRUSTED` and always `D0_ADMISSION=NOT_GRANTED`, `D1_D5=NOT_AUTHORIZED`.
+
+[Exact-source GitHub CI #38317915217](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38317915217) **SUCCESS: 860/860 full Python (15 new external proof methods), 77/77 existing bounded synthetic, Bash/ShellCheck/Python compile/whitespace PASS**. See [permanent evidence](evidence/d0-external-owner-isolation-restore-evidence-ci-20261013.md) and [external review schema and workflow](../../docs/D0-EXTERNAL-EVIDENCE-REVIEW.md). The latest **actual DGX-local** fixture acceptance remains `1283b1a` 77/77, not this source; no actual independent disposable host D0 verification or D1–D5 has occurred. M1/M2/M3/M4 and PR #259 Draft/Open/Unmerged gates unchanged.
+
+
+## DGX staged A/B validation recommendation — 2026-10-13
+
+**Run A now when DGX is quiet**: after review and fast-forward-only Git synchronization to exact successful GitHub SHA, invoke the pre-existing local synthetic verifier, now extended to **134/134** offline fixtures (77 original plus 57 D0). It additionally checks the canonical repository origin and refuses Git environment redirection. After A PASS, B is **real HOME/XDG read-only selected-profile and optional Doctor/status observation**, not an M1 acceptance. **C** D0 admission and destructive D1–D5 belong on a separately owned disposable host only; **D** live H38 on the sole protected DGX remains blocked pending RM/metadata/stability/recovery and explicit approval. Source [CI #38319566009](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38319566009) PASS 863/863 full and 134/134 selected; latest actual DGX remains 77/77 at 1283b1a. [Safe DGX operator instructions](../../docs/DGX-STAGED-VALIDATION.md); [source evidence](evidence/dgx-stage-a-expanded-synthetic-ci-20261013.md). D0 NOT_GRANTED, D1–D5 NOT_RUN, M1–M4 unchanged, PR #259 Draft/Open/Unmerged.
+
+
+## Actual DGX 134/134 PASS and solo-owner test authorization boundary (2026-10-13)
+
+User-supplied terminal evidence establishes **actual local 134/134 bounded synthetic PASS at exact b35d0f3d7840d00c55f4c633813e88ac367c6373** (Bash PASS; ShellCheck SKIPPED_NOT_INSTALLED). The immediately following real-HOME selected-profile snapshot showed a VALID complete OrcaRouter manifest, four transactions IDLE, no stale artifacts, monitor/protection both `1`, Docker container EXITED, service INACTIVE and runtime attestation MISSING. This is **A=PASS and B1=COLLECTED**, not M1 health or H38 acceptance. [Actual operator evidence](evidence/dgx-local-134-pass-readonly-snapshot-20261013.md).
+
+The sole DGX owner reports testing can occur at any time without disrupting other human users. **Bounded, reversible, owner-approved live runtime tests on this one DGX may be considered after B2 full read-only Doctor and recovery review**; a second physical DGX is not mandatory for every runtime test. This revises the former blanket schedule restriction but does **not** approve deleting resources, assume Docker exclusivity, upgrade independent disposable D0 admission, run destructive D1-D5 on the only host, or launch H38 against the unresolved checkpoint/RM gates. Immediate B2: use the existing read-only lifecycle inspector at the **already checked out b35d0f3**; do not sync Git merely to run it. PR #259 remains Draft/Open/Unmerged; Ready/Merge BLOCKED.

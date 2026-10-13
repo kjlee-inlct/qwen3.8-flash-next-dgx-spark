@@ -11,10 +11,12 @@ UPDATE_TRANSITION="${SCRIPT_ROOT}/scripts/update-transition.sh"
 MANAGE_SERVICE="${SCRIPT_ROOT}/scripts/manage-service.sh"
 QUALIFICATION_PARSER="${SCRIPT_ROOT}/scripts/lib/qualification_marker.py"
 OPERATION_LOCK_LIB="${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
+RELEASE_PROFILE_REFRESH="${SCRIPT_ROOT}/scripts/lifecycle/release-profile-refresh-transition.sh"
 DRY_RUN=0
+REFRESH_PROFILE_DEFAULTS=0
 
 usage() {
-  printf 'Usage: %s RELEASE_ID [--dry-run]\n' "$0"
+  printf 'Usage: %s RELEASE_ID [--dry-run] [--refresh-profile-defaults]\n' "$0"
 }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 sudo_with_operation_lock() {
@@ -59,12 +61,20 @@ target="$1"; shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
+    --refresh-profile-defaults) REFRESH_PROFILE_DEFAULTS=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
   shift
 done
 [[ "${target}" =~ ^[0-9a-f]{12,40}$ ]] || die "invalid release id: ${target}"
+
+if [[ "${REFRESH_PROFILE_DEFAULTS}" == 1 ]]; then
+  [[ -r "${RELEASE_PROFILE_REFRESH}" ]] || die "release-profile refresh helper is unavailable: ${RELEASE_PROFILE_REFRESH}"
+  refresh_args=(apply "${target}" --profile orcarouter)
+  [[ "${DRY_RUN}" == 1 ]] && refresh_args+=(--dry-run)
+  exec bash "${RELEASE_PROFILE_REFRESH}" "${refresh_args[@]}"
+fi
 
 if [[ "${DRY_RUN}" != 1 ]]; then
   [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"

@@ -11,7 +11,7 @@ Files directly under `scripts/` fall into one of three intentionally different r
 | Role | Purpose | Examples | Relocation policy |
 |---|---|---|---|
 | Upstream-derived | Preserve provenance and compatibility with the upstream repository layout. | `serve.sh`, `bench-prefill.py`, `download-weights.sh`, `patch-*.py`, `Dockerfile.*` | Keep the upstream path. |
-| Stable operator entry point | Human- or service-facing command whose path is part of the operational interface. | `doctor.sh`, `manage-*.sh`, `release-manager.sh`, `update-release.sh`, `runtime-transition.sh`, `profile-switch-transition.sh` | Keep the public path stable; move implementation only when a thin entry point can preserve compatibility. |
+| Stable operator entry point | Human- or service-facing command whose path is part of the operational interface. | `doctor.sh`, `manage-*.sh`, `release-manager.sh`, `update-release.sh`, `runtime-transition.sh`, `profile-switch-transition.sh`, `release-profile-refresh-transition.sh`, `prepare-h38-image.sh`, `run-h38-managed-followup-gates.sh` | Keep the public path stable; move implementation only when a thin entry point can preserve compatibility. |
 | Compatibility shim | Legacy helper path that forwards to a canonical implementation in a role directory. | `qualify-release.sh`, `collect-diagnostics.sh`, `validate-runtime.py`, `state_file.py` | Keep thin; new internal code must target the canonical path. |
 
 Canonical repository-specific implementation belongs in `scripts/<role>/`, currently:
@@ -65,6 +65,9 @@ entry points and remain directly available:
 - `runtime-transition.sh`
 - `update-transition.sh`
 - `profile-switch-transition.sh`
+- `release-profile-refresh-transition.sh`
+- `prepare-h38-image.sh`
+- `run-h38-managed-followup-gates.sh`
 - `preflight-runtime.sh`
 - `service-runner.sh`
 
@@ -78,6 +81,8 @@ implementations live under role-specific directories:
 - `qualify-release.sh` -> `lifecycle/qualify-release.sh`
 - `update-transition.sh` -> `lifecycle/update-transition.sh`
 - `profile-switch-transition.sh` -> `lifecycle/profile-switch-transition.sh`
+- `release-profile-refresh-transition.sh` -> `lifecycle/release-profile-refresh-transition.sh`
+- `prepare-h38-image.sh` -> `runtime/prepare-h38-image.sh`
 - `collect-diagnostics.sh` -> `diagnostics/collect-diagnostics.sh`
 - `monitor-runtime.sh` -> `runtime/monitor-runtime.sh`
 - `runtime-transition.sh` -> `runtime/runtime-transition.sh`
@@ -101,7 +106,7 @@ Repository-specific implementations are organized as follows:
 - `lib/`: reusable Python helpers shared across lifecycle/runtime scripts.
 - `diagnostics/`: read-only diagnostics and support-bundle implementation.
 - `runtime/`: runtime transition, preflight, service runner, monitor, and runtime validation.
-- `lifecycle/`: immutable-release bootstrap, qualification, update transaction, and profile-switch transaction logic.
+- `lifecycle/`: immutable-release bootstrap, qualification, update transaction, profile-switch transaction, and atomic release/profile-refresh logic.
 - `model/`: model profile, checkpoint inspection, and config preparation helpers.
 - `benchmark/`: canonical read-only benchmark runner and benchmark helpers.
 
@@ -114,11 +119,14 @@ Canonical implementations include:
 - `runtime/runtime-transition.sh`
 - `runtime/preflight-runtime.sh`
 - `runtime/service-runner.sh`
+- `runtime/service-adopt-runner.sh`
+- `runtime/service-stop.sh`
 - `runtime/monitor-runtime.sh`
 - `runtime/wait-ready.sh`
 - `runtime/validate_runtime.py`
 - `lifecycle/update-transition.sh`
 - `lifecycle/profile-switch-transition.sh`
+- `lifecycle/release-profile-refresh-transition.sh`
 - `lifecycle/bootstrap-release.sh`
 - `lifecycle/qualify-release.sh`
 - `model/model-profiles.sh`
