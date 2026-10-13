@@ -36,6 +36,38 @@ class MazinbAdmissionTests(unittest.TestCase):
                 self.assertNotIn("PASS_READ_ONLY", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_reviewed_a_requires_full_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            invalid = self.run_gate(home, [
+                "--expected-old-id", EXAMPLE_ID, "--reviewed-trial-a-id", "short"
+            ])
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("reviewed historical A ID", invalid.stderr)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_repeated_and_unknown_flags_denied(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            for flags in (
+                ["--expected-old-id", EXAMPLE_ID, "--expected-old-id", EXAMPLE_ID],
+                ["--reviewed-trial-a-id", EXAMPLE_ID, "--reviewed-trial-a-id", EXAMPLE_ID],
+                ["--expected-old-id", EXAMPLE_ID, "--cleanup"],
+            ):
+                result = self.run_gate(home, flags)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("PASS_READ_ONLY", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_stopped_historical_a_is_reviewed_not_removed(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("historical A must be reviewed through Wizard", source)
+        self.assertIn("qwen38-mazinb-kv-b", source)
+        self.assertIn("PRESERVED_REVIEWED", source)
+        self.assertIn("a_running", source)
+        self.assertNotIn('docker rm "', source)
+        self.assertNotIn('rm -rf "', source)
+
     def test_missing_state_fails_before_docker(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

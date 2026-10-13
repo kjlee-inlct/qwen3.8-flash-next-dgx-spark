@@ -10,11 +10,14 @@ historical read-only result, not current host acceptance.
 
 ### Stage M0 — new read-only identity/admission gate (implemented)
 
-Use `./wizard.sh` -> Benchmark -> **mazinb exact-ID admission**, or invoke:
-
-```bash
-bash scripts/wizard/mazinb-admission.sh --expected-old-id EXACT_STOPPED_DOCKER_ID
-```
+**Operator entry point is only `./wizard.sh`** (Benchmark menu, choice 5).
+Use submenu **4: Historical A/B status**, **5: Historical evidence A/B**,
+then **2: Guarded mazinb B admission**. The wizard itself inspects and displays
+the original managed Docker ID, requires exact user acknowledgement, and
+requires explicit default-NO consent for evidence review and read-only admission.
+The script `scripts/wizard/mazinb-admission.sh` is an internal testable helper,
+**not** an operator entry point. Never instruct an operator to use it directly
+or invoke the legacy A/B runner directly.
 
 The operator must supply the *currently inspected* full 64-character Docker
 ID of the stopped predecessor; do not reuse an old snapshot without checking.
@@ -24,7 +27,11 @@ The helper:
 - requires installed OrcaRouter predecessor, managed service and monitor
   protection ON, exact stopped/clean Docker state and immutable image ID;
 - checks operation-lock availability, interruption markers, systemd inactivity,
-  immutable release pointer and absence of ambiguous prior mazinb KV trials;
+  immutable release pointer and the isolated B Docker namespace;
+- accepts a *stopped* historical A container only after displaying the evidence
+  through Wizard, exact 64-character A ID acknowledgement, and verification
+  of its experiment and monitor log files; does not accept a running A,
+  an occupied target B, or missing/unsafe historical evidence;
 - reruns mazinb's existing preflight only after old-Docker identity is proved;
 - rechecks predecessor identity, manifest SHA and release pointer for drift;
 - makes **no** Docker lifecycle, systemd, checkpoint, release or manifest changes.
@@ -33,6 +40,21 @@ The helper:
 authorization to start a model and **not** FUNCTIONAL/READY/HOST-STABILITY
 or performance evidence. A failure is an actionable BLOCK, never a reason to
 remove an old experimental container or disable protection automatically.
+
+### Actual DGX feedback — 2026-10-14
+
+The first physical attempt at the internal helper reached
+`MAZINB_ADMISSION=BLOCKED reason=prior mazinb experiment object exists:
+qwen38-mazinb-kv-a`. This **proves existence, not running state or
+recoverability**. The helper's blanket refusal was too broad; it has been
+replaced by reviewed, evidence-preserving historical A acceptance. Existing
+A/B containers are never automatically removed. The operator should review
+A via Wizard and re-run admission via Wizard. No actual model was started.
+
+The previous operator used `set -Eeuo pipefail` interactively; any admission
+nonzero exit can terminate that interactive SSH shell. Launch the Wizard with
+`bash /path/to/verified-worktree/wizard.sh` from a normal shell instead,
+without setting `errexit` globally.
 
 ### Stage M1 — protected isolated candidate runtime (NOT IMPLEMENTED)
 
@@ -77,7 +99,7 @@ backed-up assets may be reclaimed. No deletion approval is implied.
 | Gate | Status |
 | --- | --- |
 | Existing 2026-10-13 mazinb KV preflight | historical PASS |
-| New admission script source | implemented, needs current exact-DGX snapshot |
+| Historical A review in Wizard | source implemented; exact-DGX review pending |\n| New admission script source | implemented, needs current exact-DGX snapshot |
 | M1 protected stay-READY controller | NOT_IMPLEMENTED |
 | Actual mazinb READY / served identity | NOT_MEASURED |
 | Actual RM host stability | NOT_MEASURED |

@@ -10,16 +10,18 @@ DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/qwen38-spark"
 SERVICE=qwen38-flash-next.service
 CONTAINER=qwen38-flash-next
 EXPECTED_ID=""
+REVIEWED_A_ID=""
 LOCK_FD=""
 
 usage() {
   cat <<'USAGE'
 Usage:
-  bash scripts/wizard/mazinb-admission.sh --expected-old-id EXACT_64_HEX
+  bash scripts/wizard/mazinb-admission.sh --expected-old-id EXACT_64_HEX \
+    [--reviewed-trial-a-id EXACT_HISTORICAL_A_64_HEX]
 
 READ-ONLY admission gate for an isolated mazinb benchmark session.
 Checks exact stopped predecessor identity, protected manifest, lifecycle
-lock, immutable release, service inactivity, stale mazinb trial objects
+lock, immutable release, service inactivity, historical mazinb A review
 and current mazinb preflight. Does not start, stop, cleanup or benchmark.
 A PASS is NOT READY, HOST-STABILITY PASS or benchmark approval.
 USAGE
@@ -27,13 +29,24 @@ USAGE
 die() { printf 'MAZINB_ADMISSION=BLOCKED reason=%s\n' "$*" >&2; exit 2; }
 
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then usage; exit 0; fi
-if [[ "${1:-}" == --expected-old-id && $# == 2 ]]; then
-  EXPECTED_ID="$2"
-else
-  usage >&2
-  exit 2
-fi
+while (( $# > 0 )); do
+  case "${1}" in
+    --expected-old-id)
+      (( $# >= 2 )) || { usage >&2; exit 2; }
+      [[ -z "${EXPECTED_ID}" ]] || die 'duplicate predecessor ID argument'
+      EXPECTED_ID="$2"
+      shift 2 ;;
+    --reviewed-trial-a-id)
+      (( $# >= 2 )) || { usage >&2; exit 2; }
+      [[ -z "${REVIEWED_A_ID}" ]] || die 'duplicate reviewed A ID argument'
+      REVIEWED_A_ID="$2"
+      shift 2 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
 [[ "${EXPECTED_ID}" =~ ^[a-f0-9]{64}$ ]] || die 'exact predecessor 64-hex ID is required'
+[[ -z "${REVIEWED_A_ID}" || "${REVIEWED_A_ID}" =~ ^[a-f0-9]{64}$ ]] ||
+  die 'reviewed historical A ID must be exact 64-hex Docker identity'
 
 for executable in docker python3 systemctl sha256sum flock stat readlink; do
   command -v "${executable}" >/dev/null 2>&1 || die "missing tool: ${executable}"
@@ -96,11 +109,34 @@ IFS='|' read -r old_id old_status old_running old_oom old_image <<<"${old_state}
   die "predecessor is not cleanly stopped (status=${old_status} running=${old_running} oom=${old_oom})"
 [[ "${old_image}" == sha256:* ]] || die 'cannot prove exact immutable predecessor image ID'
 
-for name in qwen38-mazinb-kv-a qwen38-mazinb-kv-b; do
-  if docker inspect --format '{{.Id}}' "${name}" >/dev/null 2>&1; then
-    die "prior mazinb experiment object exists: ${name}; preserve/review evidence first"
-  fi
-done
+# Case B is the future first-run target, so its name/state must be free.
+# Case A is a different *historical* experiment. Its stopped Docker and
+# evidence must be preserved, not deleted merely to make B admissible.
+if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-b >/dev/null 2>&1; then
+  die 'target B Docker name already exists; review and preserve B evidence first'
+fi
+b_evidence="${HOME}/.local/state/qwen38-mazinb-kv-b"
+[[ ! -e "${b_evidence}" && ! -L "${b_evidence}" ]] ||
+  die 'target B state/evidence directory already exists; preserve/review before a new run'
+historical_a=ABSENT
+if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-a >/dev/null 2>&1; then
+  a_state="$(docker inspect --format '{{.Id}}|{{.Name}}|{{.State.Status}}|{{.State.Running}}' qwen38-mazinb-kv-a 2>/dev/null)" ||
+    die 'cannot inspect historical case A'
+  IFS='|' read -r a_id a_name a_status a_running <<<"${a_state}"
+  [[ "${a_name}" == /qwen38-mazinb-kv-a && "${a_status}" == exited &&
+     "${a_running}" == false ]] ||
+    die "historical A is not safely stopped (status=${a_status} running=${a_running})"
+  [[ "${REVIEWED_A_ID}" == "${a_id}" ]] ||
+    die 'historical A must be reviewed through Wizard and its exact 64-hex ID acknowledged'
+  a_evidence="${HOME}/.local/state/qwen38-mazinb-kv-a/qwen38-spark"
+  [[ -d "${a_evidence}" && ! -L "${a_evidence}" &&
+     -f "${a_evidence}/experiment.env" && ! -L "${a_evidence}/experiment.env" &&
+     -f "${a_evidence}/monitor.log" && ! -L "${a_evidence}/monitor.log" ]] ||
+    die 'historical A experiment or monitor evidence is absent/unsafe; preserve and investigate'
+  historical_a="PRESERVED_REVIEWED:${a_id}"
+elif [[ -n "${REVIEWED_A_ID}" ]]; then
+  die 'reviewed A identity was provided but A is absent'
+fi
 
 [[ -L "${DATA_HOME}/current" ]] || die 'current release link missing'
 current_release="$(readlink -f -- "${DATA_HOME}/current")" ||
@@ -111,6 +147,7 @@ releases_root="$(readlink -f -- "${DATA_HOME}/releases")" ||
   die 'unsafe immutable current release target'
 
 printf 'MAZINB_ADMISSION_STAGE=READ_ONLY\n'
+printf 'HISTORICAL_A=%s\n' "${historical_a}"
 printf 'MANAGED_PREDECESSOR_ID=%s\n' "${old_id}"
 printf 'MANAGED_PREDECESSOR_IMAGE_ID=%s\n' "${old_image}"
 printf 'MANAGED_PREDECESSOR_IMAGE_TAG=%s\n' "${image}"
@@ -130,6 +167,17 @@ bash "${ROOT}/scripts/runtime/mazinb-kv-ab.sh" preflight ||
   die 'immutable release pointer changed during admission'
 [[ "$(systemctl is-active "${SERVICE}" 2>/dev/null || true)" == inactive ]] ||
   die 'managed service changed during admission'
+if [[ "${historical_a}" == PRESERVED_REVIEWED:* ]]; then
+  [[ "$(docker inspect --format '{{.Id}}|{{.Name}}|{{.State.Status}}|{{.State.Running}}' qwen38-mazinb-kv-a 2>/dev/null || true)" == "${a_state}" ]] ||
+    die 'reviewed historical A container changed during admission'
+elif docker inspect --format '{{.Id}}' qwen38-mazinb-kv-a >/dev/null 2>&1; then
+  die 'historical A appeared during admission'
+fi
+if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-b >/dev/null 2>&1; then
+  die 'target B appeared during admission'
+fi
+[[ ! -e "${b_evidence}" && ! -L "${b_evidence}" ]] ||
+  die 'target B state directory appeared during admission'
 
 printf 'MAZINB_ADMISSION=PASS_READ_ONLY\n'
 printf 'MAZINB_CANDIDATE_START=NOT_PERFORMED\n'

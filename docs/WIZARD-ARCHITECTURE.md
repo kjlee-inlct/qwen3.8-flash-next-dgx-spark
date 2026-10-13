@@ -17,7 +17,7 @@ The new `wizard.sh` loads specialized modules under `scripts/wizard/`:
 | Uninstall | Call existing uninstaller with default-NO handoff | Only within existing uninstaller's safety gates |
 | Models | List registry/assets, switch dry-run preview | No switch is executed |
 | Runtime/API/service | Read-only service status, Doctor, manifest summary | None |
-| Benchmark | mazinb preflight; report index | No candidate start; no performance measurement |
+| Benchmark | mazinb preflight, historical A/B status and evidence, reviewed historical A exact-ID admission, report tools | No candidate start; no performance measurement |
 | Storage | Status, recommendations, prune **plan** | No prune, model deletion, or evidence cleanup |
 | Advanced | A/B status and evidence index | No A/B trials started |
 | Diagnostics | Existing read-only Doctor | None |

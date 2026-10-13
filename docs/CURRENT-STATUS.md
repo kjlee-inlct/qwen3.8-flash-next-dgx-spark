@@ -1,3 +1,11 @@
+> **2026-10-14 DGX mazinb M0 follow-up:** Real read-only admission
+> refused the existing historical `qwen38-mazinb-kv-a` container. It is
+> NOT proven running or safe to remove. Wizard Benchmark now exposes
+> read-only status/evidence A/B and an explicit reviewed-A exact-ID
+> acknowledgement before allowing independent B *admission*.
+> No cleanup, model launch, benchmark, or protected-object mutation.
+> See `docs/MAZINB-EXECUTION-GATE.md`.
+
 > **2026-10-14 mazinb timing/approval boundary:** Next DGX candidate is
 > mazinb. The first additional gate is read-only exact Docker-ID admission
 > (`scripts/wizard/mazinb-admission.sh`); M1 protected stay-READY lifecycle

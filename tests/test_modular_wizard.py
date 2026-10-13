@@ -45,6 +45,22 @@ class ModularWizardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((home / "xdg").exists())
 
+    def test_mazinb_evidence_menu_invalid_case_has_no_side_effects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "ko"], "5\n5\ninvalid\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Invalid trial", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_mazinb_status_and_menu_navigation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "5\n4\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("mazinb historical experiments", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
     def test_eof_aborts_before_default_choice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_case(Path(tmp), ["--lang", "en"])

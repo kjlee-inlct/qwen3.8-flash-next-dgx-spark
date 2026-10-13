@@ -1,3 +1,12 @@
+> **2026-10-14 mazinb Wizard-only operator rule:** Do not instruct
+> the user to invoke `mazinb-admission.sh` or `mazinb-kv-ab.sh run`
+> directly. Use verified `wizard.sh` -> Benchmark: historical trial
+> status/evidence, explicit reviewed historical A ID, exact canonical
+> predecessor ID and read-only B admission. Historical A object existence
+> was confirmed on physical DGX, not its running state. Its evidence is
+> protected; B remains NOT STARTED and llama-benchy NOT MEASURED.
+> Real protected M1 candidate start requires further controller work.
+
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
 ## 2026-10-13 17:59:36 KST — ACTUAL_DGX Legacy A protective stop CONFIRMED
