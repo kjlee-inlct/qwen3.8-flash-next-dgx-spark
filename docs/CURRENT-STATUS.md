@@ -37,6 +37,21 @@ Existing `lychee888` remains displayed as planned/not selectable.
 Synthetic wizard-integration tests cover invalid→valid, cancel and
 manifest immutability; no new actual-DGX test has been run.
 
+## lychee888 L0 metadata-only probe added (2026-10-13)
+
+Candidate-only `scripts/model/inspect_lychee888_metadata.py` can now
+inspect Hub revision JSON plus `config.json` and the safetensors
+**index JSON only**, with no tensor download or model load.
+Synthetic tests validate the 128-numbered PLE shard keys, 10 FP8
+file references, one global scale in the final file, config dtype,
+pinned SHA and fail-closed corruption cases. Successful execution
+means `INDEX_STRUCTURE_PASS_METADATA_ONLY`, **not** verified
+safetensors dtype, weights, TP1 runtime or strict RM stability.
+Public model-card claims have **not** been promoted to measured
+checkpoint evidence; actual remote L0 output still outstanding.
+`lychee888` remains planned/not-installable and no DGX change
+is approved by this source-only milestone.
+
 ## P0 wizard shared input: closed-input fail-closed regression (2026-10-13)
 
 Code review of the existing terminal wizard found that EOF / interrupted

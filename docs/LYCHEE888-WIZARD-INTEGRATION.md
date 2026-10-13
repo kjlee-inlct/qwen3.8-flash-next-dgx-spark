@@ -49,3 +49,38 @@ H38/M4 stays blocked by its own loader metadata/order and strict-RM gates. M2/D1
 References: [mission](PROJECT-MISSION-AND-MODEL-SCOPE.md),
 [acceptance](MANAGED-LIFECYCLE-ACCEPTANCE.md),
 [latest status](CURRENT-STATUS.md).
+
+
+## L0 metadata-only read-only implementation (2026-10-13)
+
+Added `scripts/model/inspect_lychee888_metadata.py` with pure standard-library
+Hub JSON fetching and an `--offline-dir` fixture mode. It requests only the
+Hub repository/revision metadata, `config.json`, and
+`model.safetensors.index.json`; it **never downloads any safetensors weights**.
+Remote HEAD is resolved once to a 40-hex commit and later URLs use that
+pinned revision. The probe fails closed for a missing FP8 PLE file,
+unexpected retained BF16 PLE original shard, incorrect
+`text_config.ple_embedding_dtype`, an incomplete 128-shard PLE
+index, absent/duplicate/misplaced global scale, bad revision identity or
+missing index file references.
+
+Usage in the repository checkout (network read-only; **no GPU/model start**):
+
+```bash
+python3 scripts/model/inspect_lychee888_metadata.py
+```
+
+For offline JSON fixtures, supply `api.json`, `config.json`,
+`index.json` in a directory and run:
+
+```bash
+python3 scripts/model/inspect_lychee888_metadata.py --offline-dir /path/to/json-triplet
+```
+
+Passing returns **INDEX_STRUCTURE_PASS_METADATA_ONLY**: this verifies
+*index key names/file mapping and config claims*, **not** the FP8
+dtype/shape inside safetensors file headers, BF16 scale dtype,
+file-byte checksums, vLLM image support, TP=1 behavior, or RM stability.
+The first commit uses isolated **synthetic** fixture tests. Do not label
+L0 complete for the real Hub revision until its actual remote output
+has been captured and pinned. Profile `lychee888` stays disabled.

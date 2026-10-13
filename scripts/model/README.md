@@ -21,6 +21,15 @@ current repo's missing `load_download_profile`/`serve.sh` branches,
 and why a dual-node recipe cannot be assumed to work on this one
 Spark. Do not enable this profile just because metadata is readable.
 
+### New lychee888 metadata-only probe
+
+`scripts/model/inspect_lychee888_metadata.py` performs pinned-revision,
+JSON-only Hub file/index checks with ten FP8 PLE files, 128 numbered
+PLE shards and one global scale. It cannot validate safetensors dtype,
+tensor hashes or single-Spark TP1 loading. Tests run only against
+synthetic JSON fixtures; the profile stays `planned` and must not
+be enabled on this evidence alone.
+
 ## Responsibilities
 
 - Define supported model profiles and their static defaults.
