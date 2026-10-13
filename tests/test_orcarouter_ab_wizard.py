@@ -26,7 +26,7 @@ class OrcaRouterABWizardTests(unittest.TestCase):
         self.assertIn("image       : "+LEGACY,r.stdout)
         self.assertIn("protection  : enabled",r.stdout)
     def test_plan_only(self):
-        r=subprocess.run(["bash",str(ROOT/"scripts/benchmark/orcarouter-ab-plan.sh"),"--installed-image",LEGACY],capture_output=True,text=True)
+        r=subprocess.run(["bash",str(ROOT/"scripts/lib/orcarouter-ab-plan.sh"),"--installed-image",LEGACY],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,r.stderr)
         for key in ("A_IMAGE="+LEGACY,"B_IMAGE="+V029,"BENCHMARK_STATUS=NOT_MEASURED","WIZARD_ISOLATED_START=NOT_IMPLEMENTED"):
             self.assertIn(key,r.stdout)

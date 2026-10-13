@@ -8,12 +8,15 @@ ROOT = Path(__file__).parents[1]
 
 
 class H38ManagedIntegrationTests(unittest.TestCase):
-    def test_orcarouter_registry_selects_h38_decoder_image(self) -> None:
+    def test_orcarouter_registry_defaults_to_v029_baseline_with_explicit_h38_option(self) -> None:
         text = (ROOT / "scripts" / "model" / "model-profiles.sh").read_text(encoding="utf-8")
         start = text.index("    orcarouter)\n", text.index("load_download_profile()"))
         end = text.index("    nvidia)\n", start)
         block = text[start:end]
-        self.assertIn('PROFILE_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"', block)
+        self.assertIn('PROFILE_IMAGE="vllm-orcarouter-v029:v1"', block)
+        refresh = (ROOT / "scripts/lifecycle/release-profile-refresh-transition.sh").read_text(encoding="utf-8")
+        self.assertIn('TARGET_IMAGE="${TARGET_H38_IMAGE}"', refresh)
+        self.assertIn('TARGET_H38_IMAGE="vllm-orcarouter-v029-h38-decoder-scope:v1"', refresh)
 
     def test_managed_orcarouter_uses_qualified_h38_runtime_controls(self) -> None:
         text = (ROOT / "scripts" / "serve.sh").read_text(encoding="utf-8")

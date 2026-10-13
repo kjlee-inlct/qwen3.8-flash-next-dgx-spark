@@ -332,7 +332,7 @@ install_completed_choose_action() {
       ;;
     5)
       [[ "${MODEL_PROFILE}" == orcarouter ]] || die 'OrcaRouter A/B requires an OrcaRouter installed profile'
-      bash "${ROOT_DIR}/scripts/benchmark/orcarouter-ab-plan.sh" --installed-image "${VLLM_IMAGE}"
+      bash "${ROOT_DIR}/scripts/lib/orcarouter-ab-plan.sh" --installed-image "${VLLM_IMAGE}"
       exit 0
       ;;
     *) die "invalid completed-install action" ;;
