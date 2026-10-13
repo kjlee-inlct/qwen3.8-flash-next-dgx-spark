@@ -15,6 +15,37 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## ACTUAL DGX B5 — legacy OrcaRouter read-only PASS (2026-10-13)
+
+The operator returned `B5_READONLY=COLLECTED_READ_ONLY` at
+exact source `c2a73179cc2319cac3b7402ac347cdc41572c1df`.
+All **15/15 identity/read-only guards passed**: exact prior container
+ID `f6bfee5a...`, installed immutable `ff67bab3...`,
+Docker EXITED non-OOM, systemd INACTIVE/DEAD, monitor/protect=1,
+active /swap-ple.img, no rollback object and unchanged real-host
+state/source. MemAvailable ~118.2 GiB, SwapFree ~143.1 GiB,
+CmaFree ~67.7 MiB, available disk 105 GiB (88% used).
+[Scoped actual operator evidence](../scripts/benchmark/evidence/dgx-b5-legacy-orcarouter-prestart-readonly-20261013.md).
+**B5 read-only PASS is NOT M1 startup authorization;** the exact
+old Docker ID may be deleted by a managed-success path, and may
+be restarted on generic rollback; separate owner decision and
+STOP/recovery procedure remain required.
+`lychee888` cannot be assumed to fit available disk based on
+its published ~123.25 GiB checkpoint size. No model load or
+throughput measurement occurred.
+
+## External benchmark reference — llama-benchy model reports planned (2026-10-13)
+
+Pinned external source [eugr/llama-benchy](https://github.com/eugr/llama-benchy)
+at `e9be344578cec17745066b220798b80a0d2686d3` (MIT). Five [per-profile
+model report placeholders](model-reports/README.md) are explicit
+`NOT_MEASURED`; a strict offline JSON-to-Markdown conversion
+script supports later traceable measured reports. Benchy sends API
+requests and can fetch corpus/tokenizer data: **no automatic
+bench install, model start or performance run** on the stopped
+DGX. API/model readiness plus bounded strict RM health gate
+must precede actual benchmarking.
+
 ## B5 legacy OrcaRouter prestart: operator-ready, physical run NOT_YET_OBSERVED (2026-10-13)
 
 New [B5 exact-identity read-only runner and owner handoff](DGX-LEGACY-M1-B5-PRESTART.md)

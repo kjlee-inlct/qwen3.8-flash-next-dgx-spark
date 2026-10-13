@@ -109,3 +109,14 @@ true uninstall/purge needs independently disposable admission.
 **At this commit:** no B5 operator output has been provided.
 A5 physical dry-run and lychee888 actual L0 JSON have passed
 separately; see the [scoped evidence](../scripts/benchmark/evidence/dgx-a5-wizard-and-lychee-l0-result-20261013.md).
+
+
+## Physical B5 return (2026-10-13)
+
+The operator executed this exact read-only runner on the sole DGX
+at `c2a73179...`, reporting **15/15 B5_CHECK PASS** and
+`B5_READONLY=COLLECTED_READ_ONLY`. Docker old ID/release,
+monitor, unit and state preservation matched, without model start.
+[Permanent scoped B5 output](../scripts/benchmark/evidence/dgx-b5-legacy-orcarouter-prestart-readonly-20261013.md).
+This **supersedes the pre-run NOT_RUN publication status** earlier
+in this file, but not the M1 blocked exact-ID and STOP conditions.

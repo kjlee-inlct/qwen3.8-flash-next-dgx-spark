@@ -218,3 +218,30 @@ monitor/protect=1, swap, systemd 상태를 확인하는 검사로
 Docker/service mutation이 없습니다. 로그 확인 후에도
 old container ID 삭제 허용 또는 독립 격리 방식의 결정
 없이는 runtime startup을 실행하지 않습니다.
+
+## 상시 운영 규칙 — 아이디어·규칙·참고자료 자동 문서 반영 (2026-10-13)
+
+- **추가 규칙/아이디어/외부 참고자료/중요 기술 결정/실패가 나타나는 즉시**
+  이 인계 문서와 대응하는 canonical source-of-truth 문서를 **같은 PR의
+  커밋에서 업데이트**합니다. 사용자가 반복하여 요청하게 하지 않습니다.
+  상태가 바뀌면 `docs/CURRENT-STATUS.md`, 새 출처가 있으면 참고 링크,
+  실행 근거가 생기면 날짜별 evidence와 색인을 함께 갱신합니다.
+- 새 외부 참고자료는 원문 URL, upstream **immutable SHA/버전**, 검토일,
+  라이선스, 지원 API/필요 의존성, 도입 근거, 불명확한 사항, 재현 절차와
+  **단일 DGX 위험/허용 게이트**를 기록합니다.
+- **성능 보고서 표준:** [`eugr/llama-benchy`](https://github.com/eugr/llama-benchy)
+  (MIT, 검토 핀 `e9be344578cec17745066b220798b80a0d2686d3`).
+  [모델별 5개 리포트 및 측정/재현 규칙](model-reports/README.md).
+  새 리포트 생성은 실제 API 정상/별도 M1 안정성 Gate 충족 후에만,
+  `llama-benchy --format json --save-result`의 원시 증거를
+  `scripts/benchmark/llama-benchy-report.py`로 **오프라인** 변환.
+  실측값이 없는 프로필은 **NOT_MEASURED**로 유지하고,
+  GITHUB_CI/ACTUAL_DGX/HISTORICAL 출처를 혼합하지 않습니다.
+  benchy도 API 부하를 주므로 무승인 서비스 시작·모델 전환 절대 금지.
+- 2026-10-13 DGX B5 실제 사전 검사:
+  [B5 안전성 15/15 읽기 전용 PASS](../scripts/benchmark/evidence/dgx-b5-legacy-orcarouter-prestart-readonly-20261013.md),
+  소스 `c2a73179...`, 기존 릴리스 `ff67bab3...`,
+  컨테이너 `f6bfee5a...` ID 유지, inactive/dead, protect/monitor=1,
+  /swap-ple.img 활성, disk 105G free. **M1 LIVE 아직 BLOCKED**:
+  기존 Docker object ID 교체/삭제 동의 및 old-release rollback/STOP
+  계획이 없으며 H38 실기/RM 승격과 관계없습니다.

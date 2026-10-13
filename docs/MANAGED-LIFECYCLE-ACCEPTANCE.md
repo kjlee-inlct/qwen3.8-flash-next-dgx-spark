@@ -4,6 +4,20 @@
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.
 
+## Actual physical DGX B5 read-only result and future model benchmark (2026-10-13)
+
+B5 physical host result: **15/15 read-only guards PASS**,
+`B5_READONLY=COLLECTED_READ_ONLY`, source `c2a7317`,
+immutable `ff67bab3`, exact old Docker ID unchanged, inactive
+runtime, protections/swap retained.
+[Scoped evidence](../scripts/benchmark/evidence/dgx-b5-legacy-orcarouter-prestart-readonly-20261013.md).
+M1 remains NOT_QUALIFIED; explicit exact container-object ID
+decision and failure/rollback plan are required.
+Benchmark report templates for all five tracked profiles use
+`NOT_MEASURED` until actual validated
+[llama-benchy protocol](model-reports/README.md) is run against a
+separately qualified healthy API. No metric inferred from B5.
+
 ## B5 legacy OrcaRouter exact-identity prestart (2026-10-13)
 
 A newly committed [source-only B5 runner](DGX-LEGACY-M1-B5-PRESTART.md)

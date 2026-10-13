@@ -2,6 +2,19 @@
 
 This directory contains the repository's canonical read-only benchmark harness for the managed Qwen3.8 Flash Next runtime.
 
+## Five model-specific llama-benchy benchmark reports (2026-10-13)
+
+Upstream [eugr/llama-benchy](https://github.com/eugr/llama-benchy),
+pinned revision `e9be344578cec17745066b220798b80a0d2686d3` (MIT), has been reviewed.
+[Benchmark shape, per-model report templates and approval
+gates](../../docs/model-reports/README.md) define PP/TG, first
+response/first token, context/caching/concurrency and explicit
+per-model NOT_MEASURED placeholders.
+`llama-benchy-report.py` converts only real llama-benchy JSON to a
+new Markdown report with identity/provenance and no synthetic
+performance values. The DGX model is stopped: **no actual bench run
+or package installation** at this point.
+
 ## Responsibilities
 
 - Run read-only qualification and performance workloads against the already-running loopback API.

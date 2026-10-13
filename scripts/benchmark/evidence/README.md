@@ -2,6 +2,14 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## Physical DGX B5 legacy OrcaRouter read-only PASS (2026-10-13)
+
+- [**B5 actual-DGX 15/15 guards PASS**](dgx-b5-legacy-orcarouter-prestart-readonly-20261013.md):
+  exact source c2a7317, installed ff67bab3, original stopped Docker
+  ID and image, inactive unit, monitor/protect=1, PLE swap active,
+  unchanged state, disk 105G available. Strict M1 live readiness
+  **NOT_QUALIFIED**, H38 BLOCKED; no runtime start or benchmark.
+
 ## Physical DGX A5 wizard dry-run + lychee888 L0 real Hub JSON PASS (2026-10-13)
 
 - [**A5 actual-DGX 14/14 read-only checks and 60/60 fixtures;
