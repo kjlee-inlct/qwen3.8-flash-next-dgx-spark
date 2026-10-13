@@ -278,9 +278,10 @@ install_completed_execute_settings_transaction() {
 }
 
 install_completed_orcarouter_ab_trial() {
-  local choice variant expected trial="${ROOT_DIR}/scripts/runtime/orcarouter-ab-trial.py"
+  local choice variant expected
   local -a cmd=()
-  [[ -r "${trial}" ]] || die "OrcaRouter trial helper missing: ${trial}"
+  declare -F install_orcarouter_ab_trial_action >/dev/null 2>&1 ||
+    die 'installer A/B trial adapter unavailable'
   wizard_info '기존 managed Docker 객체와 install manifest는 변경하지 않습니다.'
   wizard_menu_option 1 '시험 상태 조회 / Status'
   wizard_menu_option 2 'Legacy A 생성·기동'
@@ -298,7 +299,7 @@ install_completed_orcarouter_ab_trial() {
   esac
   if [[ "${DRY_RUN}" == 1 ]]; then
     printf 'AB_TRIAL_DRY_RUN=YES; no host or container mutations\n'
-    python3 "${trial}" plan
+    install_orcarouter_ab_trial_action plan
     return $?
   fi
   if [[ "${choice}" == 2 || "${choice}" == 3 ]]; then
@@ -311,7 +312,7 @@ install_completed_orcarouter_ab_trial() {
   elif [[ "${choice}" == 4 ]]; then
     wizard_yes_no '시험용 Docker ID만 중단하고 증거를 보존합니까?' no || return 0
   fi
-  python3 "${trial}" "${cmd[@]}"
+  install_orcarouter_ab_trial_action "${cmd[@]}"
 }
 
 install_completed_choose_action() {

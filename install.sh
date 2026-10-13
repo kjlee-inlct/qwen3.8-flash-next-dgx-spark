@@ -71,6 +71,13 @@ MONITOR_MIN_FREE_CLI=""; MONITOR_FREE_GATE_CLI=""; MONITOR_MIN_SWAP_FREE_CLI=""
 MONITOR_CONSECUTIVE_CLI=""; MONITOR_HEARTBEAT_CLI=""
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+# Top-level installer owns runtime dependencies. Its shared lib UI must never
+# invoke scripts/runtime directly (lib dependency direction is intentionally zero).
+install_orcarouter_ab_trial_action() {
+  local manager="${ROOT_DIR}/scripts/runtime/orcarouter-ab-trial.py"
+  [[ -r "${manager}" ]] || die "A/B trial runtime manager unavailable: ${manager}"
+  python3 "${manager}" "$@"
+}
 ensure_operation_lock() {
   [[ -r "${OPERATION_LOCK_LIB}" ]] || die "operation lock helper is unavailable: ${OPERATION_LOCK_LIB}"
   if ! declare -F acquire_operation_lock >/dev/null 2>&1; then
