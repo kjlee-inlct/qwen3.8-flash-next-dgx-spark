@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-INSTALLER = ROOT / "install.sh"
+INSTALLER = ROOT / "scripts" / "install" / "engine.sh"
 COMPLETED_MANAGER = ROOT / "scripts" / "lib" / "install-completed-manager.sh"
 OPTION_REGISTRY = ROOT / "scripts" / "lib" / "install-options.sh"
 

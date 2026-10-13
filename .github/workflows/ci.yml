@@ -21,12 +21,12 @@ jobs:
           while IFS= read -r -d '' script; do
             bash -n "$script"
           done < <(find scripts -type f -name '*.sh' -print0)
-          bash -n install.sh uninstall.sh
+          bash -n wizard.sh install.sh uninstall.sh
       - name: Run ShellCheck
         shell: bash
         run: |
           mapfile -d '' scripts_to_check < <(find scripts -type f -name '*.sh' -print0)
-          shellcheck --severity=error install.sh uninstall.sh "${scripts_to_check[@]}"
+          shellcheck --severity=error wizard.sh install.sh uninstall.sh "${scripts_to_check[@]}"
       - name: Compile Python
         run: python3 -m compileall -q scripts tests
       - name: Run unit tests

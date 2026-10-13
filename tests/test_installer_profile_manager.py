@@ -73,7 +73,10 @@ class InstalledProfileWizardTests(unittest.TestCase):
         *,
         dry_run: bool = True,
     ) -> subprocess.CompletedProcess[str]:
-        args = [str(ROOT / "install.sh"), "--lang", "en", "--no-start"]
+        manifest = home / "state/qwen38-spark/install.env"
+        completed = manifest.exists() and "PHASE=complete" in manifest.read_text(encoding="utf-8")
+        args = [str(ROOT / "wizard.sh"), "--manage"] if completed else [str(ROOT / "install.sh")]
+        args.extend(["--lang", "en", "--no-start"])
         if dry_run:
             args.append("--dry-run")
         return subprocess.run(
@@ -202,7 +205,8 @@ class InstalledProfileWizardTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    str(ROOT / "install.sh"),
+                    str(ROOT / "wizard.sh"),
+                    "--manage",
                     "--lang",
                     "ko",
                     "--no-start",

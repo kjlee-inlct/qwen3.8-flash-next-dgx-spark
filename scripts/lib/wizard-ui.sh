@@ -12,7 +12,7 @@ WIZARD_RESET=""
 # install.sh has a six-step review boundary shared by CLI and Wizard flows. Load
 # installer-only UI/plan helpers only for that caller; uninstall/other UI
 # consumers remain independent of installer configuration semantics.
-if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then
+if [[ "${BASH_SOURCE[1]:-}" == */install.sh || "${BASH_SOURCE[1]:-}" == */scripts/install/engine.sh ]]; then
   WIZARD_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
   INSTALL_PLAN_HELPER="${WIZARD_LIB_DIR}/install-plan.sh"
   INSTALL_COMPLETED_MANAGER_HELPER="${WIZARD_LIB_DIR}/install-completed-manager.sh"

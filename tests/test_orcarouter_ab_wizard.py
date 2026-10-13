@@ -36,7 +36,7 @@ class OrcaRouterABWizardTests(unittest.TestCase):
         for key in ("A_IMAGE="+LEGACY,"B_IMAGE="+V029,"BENCHMARK_STATUS=NOT_MEASURED","WIZARD_ISOLATED_START=NOT_IMPLEMENTED"):
             self.assertIn(key,r.stdout)
     def test_builder_preflight_and_h38_independent(self):
-        installer=(ROOT/"install.sh").read_text()
+        installer=(ROOT/"scripts/install/engine.sh").read_text()
         self.assertIn('"${IMAGE}" == '+V029,installer)
         self.assertIn('Dockerfile.v029-orcarouter',installer)
         self.assertIn('Dockerfile.skinny-gemm',installer)

@@ -1,7 +1,11 @@
 # Qwen3.8-Flash-Next on a single DGX Spark
 
-**Primary product goal:** easily install, uninstall and switch checkpoint
-models through the `./install.sh` and `./uninstall.sh` terminal wizards.
+**Primary product goal:** manage installation, models, benchmarks and removal through
+`./wizard.sh`. `./install.sh` installs/resumes; `./uninstall.sh` removes resources.
+Existing transactional profile/settings management is routed through
+`./wizard.sh --manage`; benchmark status is read-only until qualified measurement
+and host-safety gates are implemented. The large installer implementation lives
+in `scripts/install/engine.sh` as a compatibility backend during the staged split.
 Original four: OrcaRouter, NVIDIA, mazinb, lychee888; generated
 OrcaRouter Hybrid H6 added later. Only three originals plus H6
 are currently installable; lychee888 is planned. [Canonical product
