@@ -2,6 +2,10 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## Actual DGX S1 storage inventory PASS (2026-10-13)
+
+- [**S1 physical DGX 8/8 no-delete storage checks PASS**](dgx-storage-pre-reclaim-readonly-20261013.md): 105G disk free; OrcaRouter original 171G (ACTIVE), mazinb 174G, H3 73G, H4 64G, H6 34M with H3/H4 source dependencies. Nominal size is not verified recoverable bytes. Docker 47.22GB referenced images / 0B reclaimable, stopped writable 6.239GB potentially reclaimable after archiving. Five model benchy reports still NOT_MEASURED; no runtime start or cleanup. Follow-up guard: exact-SHA read-only hybrid block/hardlink audit.
+
 ## Physical DGX B5 legacy OrcaRouter read-only PASS (2026-10-13)
 
 - [**B5 actual-DGX 15/15 guards PASS**](dgx-b5-legacy-orcarouter-prestart-readonly-20261013.md):
