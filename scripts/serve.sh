@@ -117,6 +117,26 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 MONITOR_PID_FILE="${STATE_DIR}/monitor.pid"
 MONITOR_LOG="${STATE_DIR}/monitor.log"
 RESTART_POLICY="${RESTART_POLICY:-on-failure:3}"
+TRIAL_CREATE_ONLY="${TRIAL_CREATE_ONLY:-0}"
+TRIAL_VARIANT="${TRIAL_VARIANT:-}"
+TRIAL_PREDECESSOR_ID="${TRIAL_PREDECESSOR_ID:-}"
+DOCKER_LAUNCH=(run -d)
+TRIAL_LABELS=()
+if [[ "${TRIAL_CREATE_ONLY}" == 1 ]]; then
+  [[ "${TRIAL_VARIANT}" == legacy || "${TRIAL_VARIANT}" == v029 ]] || { echo "FATAL: invalid trial variant" >&2; exit 2; }
+  [[ "${TRIAL_PREDECESSOR_ID}" =~ ^[a-f0-9]{64}$ ]] || { echo "FATAL: exact predecessor ID missing" >&2; exit 2; }
+  [[ "${NAME}" == "qwen38-ab-${TRIAL_VARIANT}" && "${MODEL_PROFILE}" == orcarouter &&
+     "${PORT}" == 18888 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
+     "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 ]] || { echo "FATAL: trial isolation constraints not satisfied" >&2; exit 2; }
+  [[ "${TRIAL_VARIANT}" != legacy || "${IMAGE}" == vllm-skinny-tp1:v1 ]] || exit 2
+  [[ "${TRIAL_VARIANT}" != v029 || "${IMAGE}" == vllm-orcarouter-v029:v1 ]] || exit 2
+  DOCKER_LAUNCH=(create)
+  TRIAL_LABELS=(--label qwen38.abtrial=orcarouter
+                --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
+                --label "qwen38.variant=${TRIAL_VARIANT}")
+elif [[ "${TRIAL_CREATE_ONLY}" != 0 ]]; then
+  echo "FATAL: invalid trial create-only switch" >&2; exit 2
+fi
 PUBLISH_HOST="${PUBLISH_HOST:-127.0.0.1}"
 [[ "${MONITOR_PROTECT}" == 0 || "${MONITOR_PROTECT}" == 1 ]] || {
   echo "FATAL: MONITOR_PROTECT must be 0 or 1" >&2; exit 2; }
@@ -279,7 +299,8 @@ if docker inspect "${NAME}" >/dev/null 2>&1; then
   exit 1
 fi
 
-docker run -d \
+docker "${DOCKER_LAUNCH[@]}" \
+  "${TRIAL_LABELS[@]}" \
   --name "${NAME}" \
   --init \
   --user root \
@@ -331,6 +352,11 @@ docker run -d \
     --reasoning-parser qwen3 \
     --limit-mm-per-prompt '{"image":4}' \
     "${SPEC_ARGS[@]}"
+
+if [[ "${TRIAL_CREATE_ONLY}" == 1 ]]; then
+  echo "AB_TRIAL_CREATED=${NAME}"
+  exit 0
+fi
 
 if [[ "${MONITOR_ENABLED}" == 1 ]]; then
   mkdir -p "${STATE_DIR}"
