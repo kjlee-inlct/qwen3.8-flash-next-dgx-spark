@@ -160,6 +160,24 @@ class ModelProfileTests(unittest.TestCase):
                 self.assertIn(model_dir, result.stdout)
                 self.assertIn("DRY-RUN complete", result.stdout)
 
+    def test_clean_host_invalid_model_choice_retries_without_side_effects(self) -> None:
+        result = self.run_wizard("9\n2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Invalid model selection.", result.stdout)
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_clean_host_model_selection_can_cancel_without_preview(self) -> None:
+        # Fifth menu entry cancels after the four currently installable profiles.
+        result = self.run_wizard("5")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("5) Cancel", result.stdout)
+        self.assertIn("Cancelled", result.stdout)
+        self.assertNotIn("DRY-RUN complete", result.stdout)
+        self.assertNotIn("Preparing vLLM image", result.stdout)
+
     def test_clean_host_wizard_parses_leading_zero_choice_as_decimal(self) -> None:
         result = self.run_wizard("02")
 

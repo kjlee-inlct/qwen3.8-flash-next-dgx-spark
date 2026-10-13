@@ -133,6 +133,35 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)
 
+    def test_existing_install_invalid_model_choice_retries_and_preserves_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+
+            result = self.run_installer(home, "1\n9\n2\ny\n")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Invalid model selection.", result.stdout)
+            self.assertIn("switch      : orcarouter -> nvidia", result.stdout)
+            self.assertIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+
+    def test_existing_install_model_cancel_preserves_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            manifest = self.write_manifest(home)
+            before = manifest.read_bytes()
+
+            result = self.run_installer(home, "1\n5\n")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("5) Cancel", result.stdout)
+            self.assertIn("Cancelled", result.stdout)
+            self.assertNotIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
+
     def test_profile_selector_uses_registry_metadata_and_local_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

@@ -74,3 +74,19 @@ Regression tests exercise EOF in a conditional, an AND/OR safety setting,
 a defaulted text input, a secret input, and an unterminated consent answer.
 This is **source/CI fixture acceptance only**: it does not constitute a
 physical DGX install, uninstall or GPU startup test.
+
+## P0 model picker retry and explicit cancel (2026-10-13)
+
+The interactive profile selector now has a **Cancel** item for fresh installs
+as well as existing-install model switches. An invalid numeric choice or
+unknown profile key produces a bilingual warning and re-prompts in the
+**same wizard** instead of throwing the operator back to the shell.
+The originally selected profile remains unchanged until a recognized
+entry is chosen. Both explicit cancel and the shared reader's EOF
+handling exit before any model/runtime actions. Current model order and
+the `lychee888` non-installable candidate display remain registry-owned.
+
+Host-free integration tests cover recovery from an incorrect number,
+selecting a valid replacement afterwards, and cancelling a fresh/existing
+wizard with the existing manifest unchanged. This does not change actual
+DGX running service state or prove real live switching readiness.

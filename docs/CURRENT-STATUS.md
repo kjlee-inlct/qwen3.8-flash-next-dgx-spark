@@ -15,6 +15,16 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## P0 model selection usability — retry and safe cancellation (2026-10-13)
+
+The interactive installer now offers a **Cancel** entry for fresh install
+and existing-profile switches and allows re-entry after invalid model
+number/profile input. It preserves the previous profile until a valid
+selection, and cancelling exits before a model/start/purge operation.
+Existing `lychee888` remains displayed as planned/not selectable.
+Synthetic wizard-integration tests cover invalid→valid, cancel and
+manifest immutability; no new actual-DGX test has been run.
+
 ## P0 wizard shared input: closed-input fail-closed regression (2026-10-13)
 
 Code review of the existing terminal wizard found that EOF / interrupted

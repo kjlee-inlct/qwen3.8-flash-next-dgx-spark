@@ -472,28 +472,53 @@ wizard_choose_model_profile() {
   done < <(list_model_candidates)
 
   cancel_choice=$(("${#profiles[@]}" + 1))
-  if [[ "${mode}" == existing ]]; then
-    [[ "${UI_LANG}" == ko ]] && wizard_menu_option "${cancel_choice}" '취소' || wizard_menu_option "${cancel_choice}" 'Cancel'
-  fi
-  [[ "${UI_LANG}" == ko ]] && wizard_input answer '선택' "${default_choice}" || wizard_input answer 'Select' "${default_choice}"
+  [[ "${UI_LANG}" == ko ]] &&
+    wizard_menu_option "${cancel_choice}" '취소' ||
+    wizard_menu_option "${cancel_choice}" 'Cancel'
 
-  if [[ "${answer}" =~ ^[0-9]+$ ]]; then
-    selection_index=$((10#${answer}))
-    if [[ "${mode}" == existing && "${selection_index}" -eq "${cancel_choice}" ]]; then
-      [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
-      exit 0
+  # A bad menu entry should not require restarting the installer or switch
+  # wizard. Input EOF remains terminal cancellation in wizard_read_raw.
+  while true; do
+    selected=""
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_input answer '선택' "${default_choice}"
+    else
+      wizard_input answer 'Select' "${default_choice}"
     fi
-    if (( selection_index >= 1 && selection_index <= ${#profiles[@]} )); then
-      selected="${profiles[selection_index - 1]}"
-    fi
-  else
-    for profile in "${profiles[@]}"; do
-      [[ "${answer}" != "${profile}" ]] || selected="${profile}"
-    done
-  fi
 
-  [[ -n "${selected}" ]] || die "invalid model selection"
-  MODEL_PROFILE="${selected}"
+    if [[ "${answer}" =~ ^[0-9]+$ ]]; then
+      selection_index=$((10#${answer}))
+      if (( selection_index == cancel_choice )); then
+        [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+        exit 0
+      fi
+      if (( selection_index >= 1 && selection_index <= ${#profiles[@]} )); then
+        selected="${profiles[selection_index - 1]}"
+      fi
+    else
+      case "${answer}" in
+        q|Q|cancel|Cancel|취소)
+          [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+          exit 0
+          ;;
+        *)
+          for profile in "${profiles[@]}"; do
+            [[ "${answer}" != "${profile}" ]] || selected="${profile}"
+          done
+          ;;
+      esac
+    fi
+
+    if [[ -n "${selected}" ]]; then
+      MODEL_PROFILE="${selected}"
+      return 0
+    fi
+    if [[ "${UI_LANG}" == ko ]]; then
+      wizard_warning '잘못된 모델 선택입니다. 번호/프로필을 다시 입력하거나 취소를 선택하세요.'
+    else
+      wizard_warning 'Invalid model selection. Enter a listed number/profile or Cancel.'
+    fi
+  done
 }
 
 usage() {
