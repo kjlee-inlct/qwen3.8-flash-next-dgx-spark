@@ -4,6 +4,16 @@
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.
 
+## Shared wizard EOF cancellation guard (2026-10-13)
+
+The interactive installer uses a shared reader for yes/no, text and secret
+prompts. The previous reader could misclassify EOF as blank input in
+conditional/AND-OR callers, selecting default-yes confirmation or a
+safety-setting fallback. The reader now **exits 2 on EOF**, preserving the
+separate semantics of an actual empty Enter, and adds regression tests in
+`tests/test_wizard_ui.py`. This is a host-free wizard correctness fix,
+**not** fresh-install, model-switch or actual deletion E2E acceptance.
+
 ## P0 wizard objective and original target model scope
 
 The original target is **easy installation, removal and profile switching

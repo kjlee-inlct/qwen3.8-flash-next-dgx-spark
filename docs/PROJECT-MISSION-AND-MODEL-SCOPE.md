@@ -57,3 +57,20 @@ Registry truth: [model-profiles.sh](../scripts/model/model-profiles.sh), exposed
 Current bounds: actual DGX B4 is a collected stopped-runtime read-only prestart, **not M1 LIVE PASS**; M2 destructive live E2E not run; M3 live all-pairs unqualified; M4 H38 blocked; D0 independent disposable admission not granted; PR #259 Draft/Open/Unmerged. The current state may change: always re-read [CURRENT-STATUS.md](CURRENT-STATUS.md), [MANAGED-LIFECYCLE-ACCEPTANCE.md](MANAGED-LIFECYCLE-ACCEPTANCE.md), [OPERATIONS.md](../OPERATIONS.md) and [dated evidence](../scripts/benchmark/evidence/README.md).
 
 **New-session instruction:** Begin with this mission and scope. Then inspect recent operator state/CI/PR and pick the next **highest-value safe wizard deliverable**, not the deepest unresolved GPU experiment by default.
+
+## Wizard consent and closed-input safety regression (2026-10-13)
+
+The shared terminal wizard previously treated an exhausted input stream (EOF)
+like an empty Enter under callers that suppressed Bash `errexit`. That could
+select a default-`yes` confirmation or flow through an AND/OR fallback to
+turn off a default-enabled memory protection option. The updated shared
+wizard reader **terminates the wizard (exit code 2)** if reading a full
+newline-terminated answer fails, in both terminal and non-TTY modes.
+A **real newline-terminated empty answer** continues to select the documented
+default, and explicit `yes`/`no` remains supported. `wizard_input`,
+`wizard_secret` and `wizard_yes_no` share the fail-closed behavior.
+
+Regression tests exercise EOF in a conditional, an AND/OR safety setting,
+a defaulted text input, a secret input, and an unterminated consent answer.
+This is **source/CI fixture acceptance only**: it does not constitute a
+physical DGX install, uninstall or GPU startup test.

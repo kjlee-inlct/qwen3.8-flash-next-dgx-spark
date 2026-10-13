@@ -15,6 +15,18 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## P0 wizard shared input: closed-input fail-closed regression (2026-10-13)
+
+Code review of the existing terminal wizard found that EOF / interrupted
+input could be treated as an empty/default answer when Bash `errexit`
+was suppressed by conditional or AND/OR callers. The common reader now
+exits with code 2 for EOF rather than treating it as a default-entered
+answer, guarding default-yes confirmations and memory-monitor settings.
+Normal newline-terminated Enter and explicit consent remain unchanged;
+additional `test_wizard_ui.py` cases cover the failure modes.
+Only branch/CI source and disposable-subprocess behavior are in scope;
+there is **no actual DGX host action** and no M1/M2/M3/M4/D0 promotion.
+
 ## Primary P0 restored: original wizard goal and five tracked families
 
 **The product is an easy interactive terminal wizard for first install, uninstall

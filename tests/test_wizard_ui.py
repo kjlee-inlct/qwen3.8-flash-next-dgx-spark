@@ -58,6 +58,59 @@ class WizardUiTests(unittest.TestCase):
         self.assertNotIn("\x1b[", result.stdout)
         self.assertIn("[1/2] Step", result.stdout)
 
+    def test_eof_never_approves_default_yes_confirmation(self) -> None:
+        result = self.run_bash(
+            f'source "{WIZARD}"; '
+            'if wizard_yes_no "Apply changes?" yes; then echo UNEXPECTED_APPROVAL; '
+            'else echo UNEXPECTED_FALLBACK; fi; echo UNEXPECTED_CONTINUATION',
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("Input stream closed (EOF)", result.stderr)
+        self.assertNotIn("UNEXPECTED_", result.stdout)
+
+    def test_eof_cannot_disable_monitor_via_and_or_fallback(self) -> None:
+        result = self.run_bash(
+            f'source "{WIZARD}"; '
+            'wizard_yes_no "Protect memory?" yes && echo PROTECTION_ON '
+            '|| echo PROTECTION_OFF; echo UNEXPECTED_CONTINUATION',
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertNotIn("PROTECTION_ON", result.stdout)
+        self.assertNotIn("PROTECTION_OFF", result.stdout)
+        self.assertNotIn("UNEXPECTED_CONTINUATION", result.stdout)
+
+    def test_eof_does_not_use_input_default_or_accept_secret(self) -> None:
+        for entrypoint in (
+            'wizard_input value "Target model" "orcarouter"; echo UNEXPECTED_DEFAULT',
+            'wizard_secret token "Token"; echo UNEXPECTED_SECRET',
+        ):
+            with self.subTest(entrypoint=entrypoint):
+                result = self.run_bash(f'source "{WIZARD}"; {entrypoint}')
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("wizard cancelled", result.stderr)
+                self.assertNotIn("UNEXPECTED_", result.stdout)
+
+    def test_truncated_unterminated_answer_is_not_consent(self) -> None:
+        result = self.run_bash(
+            f'source "{WIZARD}"; '
+            'if wizard_yes_no "Delete?" yes; then echo UNEXPECTED_DELETE; fi',
+            "yes",
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertNotIn("UNEXPECTED_DELETE", result.stdout)
+
+    def test_newline_terminated_explicit_yes_still_works(self) -> None:
+        result = self.run_bash(
+            f'source "{WIZARD}"; '
+            'if wizard_yes_no "Continue?" no; then echo APPROVED; '
+            'else echo DENIED; fi',
+            "yes\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("APPROVED", result.stdout)
+        self.assertNotIn("DENIED", result.stdout)
+
+
 
 if __name__ == "__main__":
     unittest.main()
