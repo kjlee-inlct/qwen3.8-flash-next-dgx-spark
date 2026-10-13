@@ -1,7 +1,7 @@
 # S2 actual DGX hybrid block-accounting audit — 2026-10-13
 
 **Evidence class: ACTUAL_DGX (operator-supplied terminal output; not a GitHub-hosted run).**
-Physical operator log: `~/dgx-hybrid-blocks-20261013-135405.log` (14:00 KST session, log filename timestamp 13:54:05).
+Physical operator log: `~/dgx-hybrid-blocks-20261013-135405.log` (log filename timestamp 13:54:05 KST).
 Source detached worktree: `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`.
 Original model tree: `$HOME/Workspace/llm/qwen3.8-flash-next-dgx-spark/models`.
 Exact SHA GitHub Actions CI: [38347956896](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38347956896) — **SUCCESS** (separate `GITHUB_CI` evidence).

@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## S3 follow-up source tool — actual DGX NOT_RUN (2026-10-13)
+
+- New read-only `scripts/diagnostics/inspect-hybrid-runtime-references.py` ([S3 operator runbook](../../../docs/DGX-HYBRID-S3-REFERENCES.md)) maps known virtual mount symlinks to source trees and JSON index shard references, without reading weight payloads. This is **SOURCE_REVIEW/CI only**, and remains **ACTUAL_DGX NOT_RUN** until user evidence.
+
+
 ## Actual DGX S2 block/inode audit PASS (2026-10-13)
 
 - [**S2 exact-SHA six-tree allocated-block and symlink audit**](dgx-hybrid-block-accounting-readonly-20261013.md): physical operator output at `14c67135f94b3c507a90c3a0702c83b9f3bfcda7`, `RECLAIM_BLOCK_ACCOUNTING=COLLECTED_READ_ONLY`. Combined 515623661568 bytes / 480.212 GiB; H3+H4 145557426176 bytes / 135.561 GiB **not certified reclaimable**; no hardlink file entries, 319 symlinks (H3 13/H4 76/H5 91/H6 139), device 66306 across all six. No runtime start/delete/benchmark. Next: S3 actual symlink target / index-shard / container bind-mount dependency survey, followed by CoW/reflink review; five model reports `NOT_MEASURED`.

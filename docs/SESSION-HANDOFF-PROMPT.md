@@ -1,5 +1,18 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Source-only S3 dependency inspection tool (2026-10-13)
+
+Added `scripts/diagnostics/inspect-hybrid-runtime-references.py` and
+[read-only S3 runbook](DGX-HYBRID-S3-REFERENCES.md). The tool recognizes only
+builder-declared container aliases, reports each stage's link counts and unique
+safetensors-index shard resolutions, checks exact clean checkout + installed
+manifest/ownership/current pointer fingerprints before/after, and fails closed
+for unknown references. It never loads weight tensors or starts/removes a
+model. Static/synthetic tests are not actual DGX S3 evidence. **S3=NOT_RUN
+on physical host** until the new commit's CI succeeds and the operator
+returns the exact log. S2 PASS does not change deletion/benchmark gates.
+
+
 ## Latest S2 physical result and next safe gate (2026-10-13)
 
 An actual DGX operator returned **S2=PASS_READ_ONLY** from exact source `14c67135f94b3c507a90c3a0702c83b9f3bfcda7` after same-head GitHub CI [38347956896](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38347956896) SUCCESS. [Permanent scoped evidence](../scripts/benchmark/evidence/dgx-hybrid-block-accounting-readonly-20261013.md): six model trees 515623661568 allocated bytes (480.212 GiB); H3+H4 145557426176 (135.561 GiB) **not proved reclaimable**; 0 hardlink file entries, 319 symlinks (H3 13/H4 76/H5 91/H6 139), all six directories device 66306. The H3-H6 builders use virtual Docker bind-mount aliases (`/base-model`, `/h3-model`, `/h4-all`, `/h5-parent`); a host-dangling symlink does not by itself prove missing runtime data.
