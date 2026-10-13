@@ -258,6 +258,33 @@ def trial_identity(record: dict) -> dict:
     return container
 
 
+def preflight(args: argparse.Namespace) -> None:
+    variant = args.variant
+    require(variant in IMAGES, "preflight requires legacy or v029")
+    state, data_home, _ = host_state()
+    safe_dir(state)
+    safe_dir(data_home)
+    manifest, digest = read_manifest(state / "install.env")
+    old, release = admission(state, data_home, manifest, args.expected_old_id, variant)
+    image_id = image_identity(variant)
+    preserve(old)
+    require(hashlib.sha256((state / "install.env").read_bytes()).hexdigest() == digest,
+            "manifest changed during read-only preflight")
+    require((data_home / "current").resolve().as_posix() == release,
+            "immutable release changed during preflight")
+    print("AB_PREFLIGHT=PASS_READ_ONLY")
+    print(f"AB_VARIANT={variant}")
+    print(f"AB_IMAGE={IMAGES[variant]}")
+    print(f"AB_IMAGE_ID={image_id}")
+    print(f"AB_OLD_DOCKER_ID={old['Id']}")
+    print(f"AB_MANIFEST_SHA256={digest}")
+    print(f"AB_RELEASE={release}")
+    print("AB_TRIAL_PORT=127.0.0.1:18888")
+    print("AB_MODEL_START=NOT_PERFORMED")
+    print("AB_HOST_RM_QUALIFICATION=NOT_PERFORMED")
+    print("AB_BENCHMARK=NOT_MEASURED")
+
+
 def start(args: argparse.Namespace) -> None:
     lock_is_held()
     variant = args.variant
@@ -432,7 +459,7 @@ def status() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("plan", "status", "start", "stop"))
+    parser.add_argument("action", choices=("plan", "status", "preflight", "start", "stop"))
     parser.add_argument("--variant", choices=tuple(IMAGES))
     parser.add_argument("--expected-old-id")
     args = parser.parse_args()
@@ -447,6 +474,9 @@ def main() -> int:
             print("AB_TRIAL_BENCHMARK=NOT_MEASURED")
         elif args.action == "status":
             status()
+        elif args.action == "preflight":
+            require(bool(args.expected_old_id), "preflight requires exact old Docker ID")
+            preflight(args)
         elif args.action == "start":
             require(args.variant in IMAGES, "start requires variant")
             require(bool(args.expected_old_id), "start requires exact old Docker ID")

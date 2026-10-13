@@ -21,6 +21,28 @@ class OrcaRouterTrialTests(unittest.TestCase):
         self.assertIn("AB_TRIAL_WIZARD_PLAN_ONLY=YES", p.stdout)
         self.assertIn("AB_TRIAL_START=OPT_IN_EXACT_OLD_DOCKER_ID", p.stdout)
 
+    def test_preflight_without_exact_old_id_blocks_before_host_access(self):
+        run = subprocess.run(["python3", str(PATH), "preflight", "--variant", "v029"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("exact old Docker ID", run.stderr)
+
+    def test_physical_preflight_cannot_create_a_candidate(self):
+        from argparse import Namespace
+        before = {"Id": "f" * 64}
+        with mock.patch.object(MOD, "host_state",
+                               return_value=(Path("/a"), Path("/b"), Path("/c"))), \
+             mock.patch.object(MOD, "safe_dir"), \
+             mock.patch.object(MOD, "read_manifest", return_value=({"MODEL_PROFILE": "orcarouter"}, "a" * 64)), \
+             mock.patch.object(MOD, "admission", return_value=(before, "/b/releases/abc")), \
+             mock.patch.object(MOD, "image_identity", return_value="sha256:" + "a" * 64), \
+             mock.patch.object(MOD, "preserve"), \
+             mock.patch.object(MOD, "call", side_effect=AssertionError("docker create/start forbidden")), \
+             mock.patch.object(MOD.hashlib, "sha256", return_value=mock.Mock(hexdigest=lambda: "a" * 64)), \
+             mock.patch.object(MOD.Path, "read_bytes", return_value=b""), \
+             mock.patch.object(MOD.Path, "resolve", return_value=Path("/b/releases/abc")):
+            MOD.preflight(Namespace(variant="v029", expected_old_id="f" * 64))
+
     def test_missing_explicit_old_id_blocks_start(self):
         p = subprocess.run(["python3", str(PATH), "start", "--variant", "legacy"],
                            capture_output=True, text=True)

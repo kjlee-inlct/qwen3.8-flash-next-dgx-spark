@@ -47,3 +47,7 @@ hold applies **only for this test**, not permanently.
 ## Legacy → v0.29 handoff without model/Docker cleanup
 
 Wizard stops A by its exact Docker ID and leaves the `qwen38-ab-legacy` container stopped, plus its per-run `record.json` and monitor logs. The next B trial may create only `qwen38-ab-v029`, provided A is cleanly stopped with matching provenance labels. An old B name may not be replaced, and a still-running or unknown A is fatal. No automatic deletion, prune or loss of prior evidence is part of the transition.
+
+## Read-only host preflight from the same wizard
+
+For first physical validation, run `./install.sh --dry-run` → existing installed management **6** → **6** (Legacy) or **7** (v0.29). Enter the already observed exact stopped predecessor Docker 64-character ID. The preflight validates installation/release/manifest, absent active managed service/transactions/other running trials, pinned image and checkpoint, endpoint 18888 and non-CMA/swap margins. It prints `AB_PREFLIGHT=PASS_READ_ONLY` with image SHA and manifest SHA; no Docker create/start, swap/config edits, monitor launch or benchmark. A PASS is admission only, **not** GPU/RM stability or model/API readiness.
