@@ -6,6 +6,10 @@ This directory preserves canonical evidence for live DGX Spark runtime, profile-
 
 - [**Actual B2 lifecycle inventory / Doctor 5 FAIL and 2 WARN**](dgx-b2-readonly-lifecycle-doctor-partial-20261013.md): exact physical DGX checkout `b35d0f3`, seven inventory/status sections rc=0, Doctor rc=1, overall `PARTIAL_CHECK_FAILURE`. Full checkpoint/host-reserve/transaction evidence with EXITED runtime and missing live attestation; no model launch, M1/M3 still unqualified, H38 blocked. See the operator runbook for next-stage guards.
 
+### Actual immutable-release path / legacy service-unit partial inspection (2026-10-13)
+
+- [**DGX release paths, historical service-unit identity and pager-limited output**](dgx-b3-release-path-and-systemd-partial-20261013.md): actual checkout b35d0f3, immutable current ff67bab3 / previous a8aeca47, `INSTALL_ROOT` retained source checkout while unit `ExecStart` used immutable current. Source review proves the naive equality test is not a valid generic drift gate. Legacy direct Docker `ExecStop` remains and final state markers were not collected due to pager; no live M1 or H38 acceptance.
+
 ## H38 managed-service integration
 
 The managed H38 candidate is tracked separately from the historical H38

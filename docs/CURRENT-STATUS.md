@@ -21,6 +21,12 @@ Operator-supplied exact-SHA `b35d0f3d7840d00c55f4c633813e88ac367c6373` lifecycle
 
 The existing October 7 managed candidate protected abort / stopped-predecessor lineage remains relevant, but a new healthy live runtime, an intentional current stop, and strict RM stability are **not** proven by B2. First review installed immutable release and service identity, rollback/stop bounds, and historical protection evidence; only then consider a reversible **legacy OrcaRouter** baseline using the existing managed service path with protection unchanged. Do not use a raw Docker start, rewrite attestation, silently refresh image defaults, or conflate this with H38. M1/M3 remain NOT_QUALIFIED, M2/D1-D5 NOT_RUN, H38/M4 BLOCKED, D0 NOT_GRANTED and PR #259 Draft/Unmerged.
 
+## Actual DGX release-path and legacy service-unit interpretation (2026-10-13)
+
+After B2, the operator inspected the already-verified DGX checkout `b35d0f3`. The immutable `current` release was `ff67bab3` with previous `a8aeca47`, but `install.env` retained a mutable checkout for `INSTALL_ROOT`. A one-off comparison printed `MISMATCH_STOP`; **this comparison is not a valid generic gate** because the installed `ff67bab3` release updater supports an explicit immutable `--runtime-root` service override and its runtime runner derives execution root from the installed script. The observed unit starts from immutable `current`; the B2 Doctor previously verified release integrity and unit path. The observed `ExecStop` was the legacy direct Docker-name stop, consistent with the exact installed release but not the latest feature branch's attestation-checked service stop. Output ended in a `systemctl` pager before state markers and completion marker; follow-up status is **PARTIAL_READONLY**, not an installation failure or new live qualification. [Dated physical-DGX evidence and source-level interpretation](../scripts/benchmark/evidence/dgx-b3-release-path-and-systemd-partial-20261013.md).
+
+Use `--no-pager` and the existing read-only offline diagnostic for the remaining information. Do not alter the manifest or systemd unit just to force equality. Live M1 NOT_QUALIFIED, H38/M4 BLOCKED; PR #259 Draft/Open/Unmerged.
+
 ## Managed model profiles
 
 | Profile | Registry status | Managed state | Current host-stability interpretation |
