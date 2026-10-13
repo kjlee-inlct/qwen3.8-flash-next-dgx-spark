@@ -622,6 +622,17 @@ fi
 if [[ "${DRY_RUN}" != 1 ]]; then
   ensure_operation_lock
 fi
+# Defense in depth: the public install.sh refuses completed installations
+# before invoking the engine; repeat the phase gate under the operation lock
+# so an intervening manifest update cannot turn an install into a switch.
+if [[ "${QWEN38_WIZARD_MANAGEMENT:-0}" != 1 && -e "${STATE_FILE}" ]]; then
+  [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] ||
+    die 'unsafe installation manifest'
+  install_phase="$(read_manifest_phase)" ||
+    die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+  [[ "${install_phase}" != complete ]] ||
+    die 'INSTALL_ALREADY_COMPLETE: use ./wizard.sh for completed management'
+fi
 if [[ "${DRY_RUN}" != 1 ]]; then
   [[ -r "${PROFILE_SWITCH_TRANSITION}" ]] || die "profile-switch transition helper is unavailable: ${PROFILE_SWITCH_TRANSITION}"
   bash "${PROFILE_SWITCH_TRANSITION}" recover
