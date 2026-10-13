@@ -1,5 +1,19 @@
 # Benchmark evidence index
 
+## ACTUAL_DGX Legacy A wizard isolation STARTED (2026-10-13 17:57 KST)
+
+[**Physical operator Legacy A trial startup evidence**](dgx-orcarouter-legacy-a-actual-start-20261013.md):
+source `48c517357cef2182be986c298a86ddfa1f4c74b0`,
+wizard menu 6→2, new exact candidate ID
+`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+old managed Docker ID unchanged, `install.env` SHA unchanged,
+and `AB_TRIAL_STARTED=UNQUALIFIED`, rc 0. Actual vLLM
+health/models, sustained watchdog heartbeat, RM stability and
+llama-benchy remain **NOT_VERIFIED/NOT_MEASURED**. Do not
+promote this to model READY; next collect read-only host/API
+runtime evidence and abort via wizard if watchdog stale/host unsafe.
+
+
 ## Physical A/B preflight both PASS (2026-10-13 17:18 KST)
 
 [Physical OrcaRouter Legacy/v0.29 read-only A/B preflight](dgx-orcarouter-ab-readonly-both-20261013.md):
