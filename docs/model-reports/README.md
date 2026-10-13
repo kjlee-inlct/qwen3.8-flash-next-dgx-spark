@@ -1,5 +1,18 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
+## Physical S4 link closure done; five benchmark profiles still unmeasured (2026-10-13)
+
+[S4 actual-DGX evidence](../../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md)
+resolved all 319 Hybrid symlinks and recorded ext4/free space without
+any runtime start or API benchmark. **All five profile reports
+NOT_MEASURED**. S1–S4 storage/link audits are complete. The next
+step is **separate approval for safely isolated legacy M1 live
+readiness**, then real pinned llama-benchy raw JSON and derived
+report with independently verified SHA256 copies. Missing local
+NVIDIA/lychee888 weights cannot be benchmarked without future model
+availability. No throughput or deletion permission inferred.
+
+
 ## Physical S3 is not a llama-benchy measurement (2026-10-13)
 
 [Actual DGX S3](../../scripts/benchmark/evidence/dgx-hybrid-runtime-references-readonly-20261013.md) confirmed virtual shard-reference resolution only (`REFERENCE_GAPS=0`). It did not send API requests, load models or generate raw performance JSON. **All five per-model reports remain NOT_MEASURED**. Do not delete H3/H4 based on H6 index integrity; benchmark and dependency/ownership guards still apply.

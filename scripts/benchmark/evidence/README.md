@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## Actual DGX S4 all-link closure PASS (2026-10-13)
+
+- [**S4 operator log: all 319 Hybrid symlinks resolved and ext4 observed**](dgx-hybrid-all-link-closure-readonly-20261013.md). Exact-source `5a14d169bbca93604b92e52dc1e548ed75cc5569` (CI #38350725606 SUCCESS); `ALL_LINK_REFERENCE_GAPS=0`, H3/H4/H5/H6 13/76/91/139 links to regular files. Device 66306, available 112103874560 bytes, source mount contract PASS. S1–S4 READ_ONLY complete; live Docker mount/host performance/deletion remain unverified. Old-Docker preservation and actual llama-benchy are next, with no model/Docker deletions approved.
+
+
 ## Actual DGX S3 index-link reference survey PASS (2026-10-13)
 
 - [**S3 actual DGX exact-SHA virtual mount/index reference survey**](dgx-hybrid-runtime-references-readonly-20261013.md): at `d14915549667e196356b8511526f9bfd4db42cd6` the operator obtained `REFERENCE_GAPS=0` and `S3_REFERENCE_SURVEY=COLLECTED_READ_ONLY`; H6 uses all 81 index shards via source-declared virtual ancestor link chains. 319 symlinks classified under known parent aliases. Not a live Docker bind-mount check, tensor verification, benchmark, or reclamation proof. S4 all-symlink/filesystem read-only scope NOT_RUN.

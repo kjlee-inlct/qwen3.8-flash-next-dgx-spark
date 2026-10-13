@@ -1,5 +1,12 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Latest actual DGX S4 completed and action priority (2026-10-13)
+
+**S4=ACTUAL_DGX_PASS_READ_ONLY** at SHA `5a14d169bbca93604b92e52dc1e548ed75cc5569`, [same-SHA CI 38350725606 SUCCESS](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38350725606), operator log `/home/inlc/dgx-hybrid-link-closure-20261013-142413.log`: all H3 13, H4 76, H5 91, H6 139 symlinks source-aliased to regular files; `ALL_LINK_REFERENCE_GAPS=0`. File system ext4, device 66306, 112103874560 available bytes point-in-time, `SOURCE_MOUNT_CONTRACT=STATIC_PASS`. [Scoped S4 evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md). The whole S1–S4 **read-only evidence chain** is now complete. Do not add another storage-check stage without a material new risk.
+
+**Next actual goal:** preserve/explicitly decide fate of the exact stopped predecessor Docker object, then approved isolated M1 live readiness and bounded host/RM protection; only after healthy served-name API attestation, real `llama-benchy` per-model capture and independently SHA256-verified raw JSON/Markdown copies, then separately approved per-object model/Docker disposal. The previous managed service commit can delete the old container, rollback can restart it. Neither a quiet single-user Spark nor this S4 PASS authorizes live restart or checkpoint removal. All five model reports `NOT_MEASURED`, M1/M3 `NOT_QUALIFIED`, H38/M4 BLOCKED, destructive M2/D0 not granted, PR #259 Draft/Open/Unmerged. Older pre-run S4 NOT_RUN snippets below are historical, superseded.
+
+
 ## Newly added source-only S4 follow-up gate (2026-10-13)
 
 The [S4 runbook](DGX-HYBRID-S4-LINK-CLOSURE.md) uses `scripts/diagnostics/inspect-hybrid-link-closure.py` plus `tests/test_hybrid_link_closure.py` to check **all** H3–H6 symlinks including non-index assets. It validates builder and `serve.sh` `:ro` mount contract in source, not live Docker; reports FS type/free bytes, **not** CoW extents or reclaimability. Run only after same-head CI SUCCESS from a separate clean worktree. **ACTUAL_DGX S4 NOT_RUN** until operator log. Do not start/reclaim any model or Docker asset. Five llama-benchy reports remain NOT_MEASURED.

@@ -1,5 +1,19 @@
 # DGX staged validation — operator runbook (2026-10-13)
 
+## Physical S4 all-link closure completed; M1 live still blocked (2026-10-13)
+
+[S4 actual operator evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md):
+`S4_LINK_CLOSURE=COLLECTED_READ_ONLY` and 0 link reference gaps,
+319/319 Hybrid symlinks resolved (H3=13,H4=76,H5=91,H6=139),
+ext4, FS device 66306, free 112103874560 bytes. Source H6 mount
+contract STATIC_PASS, not actual live Docker verification. S1–S4
+physical read-only surveys are complete. Next independent admission:
+old stopped Docker predecessor object preservation/owner decision,
+approved M1 monitored live readiness, then pinned llama-benchy
+evidence. No new S5 storage gate by default. M1/M3/M4 and actual
+destructive M2/D0 states do not change.
+
+
 ## S4 source implementation, physical NOT_RUN (2026-10-13)
 
 [Exact-SHA non-mutating S4 runbook](DGX-HYBRID-S4-LINK-CLOSURE.md)

@@ -1,5 +1,19 @@
 # Managed installer, uninstaller, and model-switch acceptance
 
+## S4 actual DGX Hybrid links PASS; M1 live and wizard E2E not qualified (2026-10-13)
+
+[Physical S4 read-only scope](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md)
+resolved all 319 Hybrid symlinks through known aliases, source-mount
+contract STATIC_PASS, `ALL_LINK_REFERENCE_GAPS=0`, ext4, snapshot
+available 112103874560 bytes. **Actual Docker mounts/model start,
+M1 live host-stability, M3 pairwise switch, destructive M2/D0,
+and wizard full E2E remain NOT_QUALIFIED/NOT_RUN as before**. The
+protected stopped Docker predecessor/immutable release cannot be
+trivially replaced by the managed service in order to run benchmark.
+Benchmarks remain 5/5 NOT_MEASURED, deletion NOT_AUTHORIZED. The
+P0 bilingual terminal wizard stays the product priority.
+
+
 **Status: implementation and simulation substantially complete; full live E2E NOT QUALIFIED.**
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.

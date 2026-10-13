@@ -52,3 +52,15 @@ and the exact historical Docker predecessor, immutable release, swap
 and memory protection unchanged. Benchmark raw JSON, reports, SHA256
 and independent copy remain required before a separately authorized
 selective cleanup.
+
+## Actual DGX execution result (2026-10-13)
+
+The operator ran the exact-SHA `5a14d169bbca93604b92e52dc1e548ed75cc5569`
+version on the physical DGX; all **319/319** Hybrid symlinks
+mapped through source aliases to regular files, `ALL_LINK_REFERENCE_GAPS=0`
+and `S4_LINK_CLOSURE=COLLECTED_READ_ONLY`. ext4 FS device 66306,
+available bytes 112103874560 at capture. [Immutable scoped S4 evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md).
+The original title's NOT_RUN status is historical pre-execution text;
+this later section supersedes it. No live model, Docker mount, extent,
+benchmark or deletion approval is implied.
+

@@ -1,5 +1,21 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
+## S4 actual-DGX complete — move from inventory to evidence-preserving model qualification (2026-10-13)
+
+[Actual S4 physical evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md):
+319/319 H3–H6 symlinks resolve to regular files through known source aliases,
+`ALL_LINK_REFERENCE_GAPS=0`, ext4 (device 66306), available bytes
+`112103874560`. S1/S2/S3/S4 read-only surveys now complete;
+actual live Docker binds, extent-level reclaimability and model
+functional/host readiness remain unknown. **No further storage audit is
+a prerequisite by default.** Next, preserve the exact stopped Docker
+predecessor unless a separate explicit identity-disposition decision
+is made, obtain safely monitored M1 live approval, and only benchmark
+against a healthy, identity-verified API. Five report templates remain
+`NOT_MEASURED`. Raw JSON + Markdown + SHA256 **verified external copy**
+must precede any individually approved cleanup. **NO deletion approved.**
+
+
 ## S4 source read-only gate for non-index links (2026-10-13)
 
 After S3 successfully resolved all indexed shard names, S4

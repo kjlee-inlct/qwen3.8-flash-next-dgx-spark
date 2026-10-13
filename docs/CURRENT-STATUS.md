@@ -1,5 +1,10 @@
 # Current project status
 
+## Actual DGX S4 all-Hybrid-link closure PASS (2026-10-13) — benchmark next, no deletion
+
+**ACTUAL_DGX** exact clean source `5a14d169bbca93604b92e52dc1e548ed75cc5569` with same-SHA CI [38350725606](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38350725606) SUCCESS: operator log `/home/inlc/dgx-hybrid-link-closure-20261013-142413.log` reports `S4_LINK_CLOSURE=COLLECTED_READ_ONLY`, `ALL_LINK_REFERENCE_GAPS=0`; all 319 H3/H4/H5/H6 symlinks resolved to regular files by the source's known Docker-virtual alias model (13/76/91/139). Static H6 source mount contract PASS; ext4/device 66306, available bytes 112103874560 (~104.404 GiB snapshot). [Permanent S4 evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md). **S1/S2/S3/S4 physical READ_ONLY checks complete**, not runtime acceptance or reclaim approval. Actual Docker mounts, CoW extents, payload correctness, M1 live, five llama-benchy reports still NOT_VERIFIED/NOT_MEASURED. **No more S-style inventory gates by default**; prioritize protected old-Docker-ID M1 isolation decision, safely monitored model readiness, then actual benchmark evidence before any selective cleanup. Old ID/release/swap/protect unchanged as far as this S4 log establishes; no destructive operation evidenced.
+
+
 ## S4 source-only all-link and H6 mount-contract audit ready (2026-10-13)
 
 Added `inspect-hybrid-link-closure.py`, synthetic link-closure tests and [S4 read-only runbook](DGX-HYBRID-S4-LINK-CLOSURE.md). It reuses S3 exact-SHA and installation fingerprints, checks ALL H3–H6 symlink destinations, and verifies source-only H6 `:ro` bind-mount declarations; collects FS type/free bytes without claiming CoW/reflink extent uniqueness. **S4 ACTUAL_DGX NOT_RUN**; same-HEAD CI SUCCESS and operator output required. S3 actual PASS and benchmark/deletion safety gates remain unchanged.
