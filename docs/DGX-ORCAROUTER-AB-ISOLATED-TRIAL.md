@@ -183,3 +183,26 @@ ID mismatch; **SIGKILL, kernel/host resets and Docker-daemon outages
 cannot be fully handled by a shell exit trap**, so source CI alone
 must not be promoted to proven host safety. Actual DGX isolated trial
 and RM stability remain NOT_PERFORMED pending operator qualification.
+
+## Confirmed physical Legacy A protection stop and state reconciliation
+
+The actual 2026-10-13 Legacy A launch ended after the watchdog detected
+`noncmafree=914MiB` (below 2 GiB), **swapgrowth=14,096MiB**, and
+five consecutive protection samples at 17:59:36 KST. The monitor wrote
+`STOP_REASON=memory-protection` for the exact Legacy trial Docker ID.
+The container subsequently exited with code 137 / OOMKilled=false
+at 18:00:10 KST. This is a watchdog stop, **not a proven NVRM OOM**.
+See [actual confirmed evidence](../scripts/benchmark/evidence/dgx-orcarouter-legacy-a-protection-confirmed-20261013.md).
+
+The watchdog terminates independently of the wizard and so cannot
+update the original wizard's `ab-trial.json`: it may still show
+`phase=started_unqualified` even though the trial exited.
+New wizard status (menu 6→1) reports the **actual Docker status,
+exit code, forensic STOP_REASON** and reconciliation-needed flag
+without changing state. Once evidence is preserved, wizard
+**menu 6→4** can reconcile a *previously exited* protected A
+as `stopped` **without Docker stop**, after strict exact-ID,
+release and manifest safety checks; it captures the protected
+stop reason and exit code and preserves original trial evidence.
+Then, and only after another independent read-only B admission
+and explicit approval, B may be trial-started.

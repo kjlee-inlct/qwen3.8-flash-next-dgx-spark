@@ -285,6 +285,19 @@ def preflight(args: argparse.Namespace) -> None:
     print("AB_BENCHMARK=NOT_MEASURED")
 
 
+def monitor_stop_reason(record: dict) -> str | None:
+    """Read a pinned trial's forensic stop cause without executing env content."""
+    path = Path(record["trial_dir"]) / "monitor" / "runtime-stop.env"
+    if not path.exists() and not path.is_symlink():
+        return None
+    require(path.is_file() and not path.is_symlink(), f"unsafe stop evidence: {path}")
+    fields = [line.partition("=")[2].strip() for line in path.read_text().splitlines()
+              if line.startswith("STOP_REASON=")]
+    require(len(fields) == 1 and fields[0] == "memory-protection",
+            "unrecognized or ambiguous monitor stop evidence")
+    return fields[0]
+
+
 def start(args: argparse.Namespace) -> None:
     lock_is_held()
     variant = args.variant
@@ -413,19 +426,31 @@ def stop() -> None:
     # Safety requires stop authorization by the candidate's pinned ID.
     if candidate["State"]["Running"]:
         call("docker", "stop", "--timeout", "30", candidate["Id"])
-    require(not trial_identity(record)["State"]["Running"], "trial still running")
-    record["phase"] = "stopped"
-    write_json(record_path, record)
-    write_json(Path(record["trial_dir"]) / "record.json", record)
-    print(f"AB_TRIAL_STOPPED_EXACT_ID={candidate['Id']}")
-    print("AB_TRIAL_DOCKER_REMOVED=NO")
+    completed = trial_identity(record)
+    require(not completed["State"]["Running"], "trial still running")
     old = inspect(OLD_NAME)
-    require(old is not None and old["Id"] == record["old_id"],
+    require(old is not None and old["Id"] == record["old_id"]
+            and old["State"]["Status"] == "exited" and not old["State"]["Running"],
             "managed old Docker changed while trial was running")
+    require(old["Image"] == record["old_image_id"], "old Docker image identity drift")
     require((data_home / "current").resolve().as_posix() == record["release"],
             "immutable release changed while trial was running")
     require(hashlib.sha256((state / "install.env").read_bytes()).hexdigest()
             == record["manifest_sha256"], "install manifest changed during trial")
+    # Reconcile an already stopped, protected A before permitting B. Never
+    # restart A, and preserve the monitor's original runtime-stop.env.
+    reason = monitor_stop_reason(record)
+    record["phase"] = "stopped"
+    record["exit_code"] = completed["State"].get("ExitCode")
+    if reason is not None:
+        record["stop_reason"] = reason
+    record["stop_recorded_at"] = int(time.time())
+    write_json(record_path, record)
+    write_json(Path(record["trial_dir"]) / "record.json", record)
+    print(f"AB_TRIAL_STOPPED_EXACT_ID={completed['Id']}")
+    print(f"AB_TRIAL_EXIT_CODE={record['exit_code']}")
+    print(f"AB_TRIAL_STOP_REASON={reason or 'not-recorded'}")
+    print("AB_TRIAL_DOCKER_REMOVED=NO")
 
 
 def status() -> None:
@@ -439,6 +464,11 @@ def status() -> None:
     print(f"AB_TRIAL_VARIANT={record['variant']}")
     print(f"AB_TRIAL_CONTAINER_ID={candidate['Id']}")
     print(f"AB_TRIAL_RUNNING={candidate['State']['Running']}")
+    print(f"AB_TRIAL_DOCKER_STATUS={candidate['State']['Status']}")
+    print(f"AB_TRIAL_EXIT_CODE={candidate['State'].get('ExitCode')}")
+    print(f"AB_TRIAL_STOP_REASON={monitor_stop_reason(record) or 'not-recorded'}")
+    if not candidate["State"]["Running"] and record["phase"] == "started_unqualified":
+        print("AB_TRIAL_PHASE_RECONCILIATION_REQUIRED=YES")
     print(f"AB_TRIAL_MONITOR_LOG={record['trial_dir']}/monitor.log")
     if candidate["State"]["Running"]:
         heartbeat = Path(record["trial_dir"]) / "monitor" / "heartbeat"

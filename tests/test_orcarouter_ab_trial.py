@@ -254,6 +254,76 @@ class OrcaRouterTrialTests(unittest.TestCase):
         self.assertIn('trap trial_fail_closed_on_monitor_exit EXIT', sh)
         self.assertIn('--trial-max-seconds', sh)
 
+    def test_status_reports_protection_exit_and_stale_record_without_mutation(self):
+        import io
+        import tempfile
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            monitor = root / "monitor"
+            monitor.mkdir()
+            (monitor / "runtime-stop.env").write_text(
+                "RUNTIME_STOP_SCHEMA_VERSION=1\nSTOP_REASON=memory-protection\n",
+                encoding="utf-8")
+            rec = {"trial_dir": str(root), "phase": "started_unqualified",
+                   "variant": "legacy", "container": "b" * 64}
+            candidate = {"Id": "b" * 64, "State": {
+                "Running": False, "Status": "exited", "ExitCode": 137}}
+            with mock.patch.object(MOD, "host_state", return_value=(state, root, state/"ab-trial.json")), \
+                 mock.patch.object(MOD, "read_json", return_value=rec), \
+                 mock.patch.object(MOD, "trial_identity", return_value=candidate), \
+                 mock.patch.object(MOD, "call", side_effect=AssertionError("not read-only")), \
+                 redirect_stdout(io.StringIO()) as out:
+                MOD.status()
+            report = out.getvalue()
+            self.assertIn("AB_TRIAL_STOP_REASON=memory-protection", report)
+            self.assertIn("AB_TRIAL_EXIT_CODE=137", report)
+            self.assertIn("AB_TRIAL_PHASE_RECONCILIATION_REQUIRED=YES", report)
+
+    def test_reconcile_already_stopped_trial_without_docker_stop(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            data = root / "data"
+            data.mkdir()
+            rel = data / "releases" / "a"*40
+            rel.mkdir(parents=True)
+            (data/"current").symlink_to(rel)
+            trial = state/"experiment"
+            trial.mkdir()
+            (trial/"monitor").mkdir()
+            (trial/"monitor"/"runtime-stop.env").write_text(
+                "STOP_REASON=memory-protection\n", encoding="utf-8")
+            candidate_id = "b"*64
+            old_id = "c"*64
+            im = "sha256:"+"d"*64
+            record = {"name":"qwen38-ab-legacy","container":candidate_id,
+                      "variant":"legacy", "old_id":old_id,"old_image_id":im,
+                      "trial_dir":str(trial), "release":str(rel),
+                      "manifest_sha256":"f"*64,"phase":"started_unqualified"}
+            candidate = {"Id":candidate_id, "State":{"Running":False,
+                         "Status":"exited","ExitCode":137}}
+            old = {"Id":old_id,"Image":im,"State":{"Running":False,"Status":"exited"}}
+            values=[]
+            with mock.patch.object(MOD, "lock_is_held"), \
+                 mock.patch.object(MOD, "host_state", return_value=(state,data,state/"ab-trial.json")), \
+                 mock.patch.object(MOD, "read_json", return_value=record), \
+                 mock.patch.object(MOD, "trial_identity", return_value=candidate), \
+                 mock.patch.object(MOD, "inspect", return_value=old), \
+                 mock.patch.object(MOD, "call", side_effect=AssertionError("Docker stop forbidden")), \
+                 mock.patch.object(MOD.hashlib, "sha256", return_value=mock.Mock(hexdigest=lambda: "f"*64)), \
+                 mock.patch.object(MOD.Path,"read_bytes",return_value=b"x"):
+                MOD.stop()
+            self.assertEqual(record["phase"],"stopped")
+            self.assertEqual(record["stop_reason"],"memory-protection")
+            self.assertEqual(record["exit_code"],137)
+            self.assertEqual((trial/"monitor"/"runtime-stop.env").read_text(), "STOP_REASON=memory-protection\n")
+
     def test_source_isolation_honors_legacy_and_v029(self):
         script = (ROOT / "scripts/serve.sh").read_text()
         self.assertIn('DOCKER_LAUNCH=(create)', script)
