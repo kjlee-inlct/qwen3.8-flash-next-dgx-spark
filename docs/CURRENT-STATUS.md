@@ -1,5 +1,34 @@
 # Current project status
 
+## Wizard-only install/switch/uninstall + two terminals — latest owner requirement (2026-10-13)
+
+The owner requires that model installation, profile switching, and
+uninstallation use the **interactive wizard**, never manually via
+experimental Docker/runtime scripts. TWO distinct terminals are used:
+A=wizard/management/storage inspection and B=bench/reporting; a live
+bench cannot overlap A's installation, switching, deletion or pruning.
+See [two-terminal workflow and limitations](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md).
+Existing install wizard supports profile selection/switch; uninstall
+wizard supports preview and purge, but real uninstallation destroys the
+canonical container, and a model switch may commit deletion of the
+protected stopped predecessor. **No actual wizard install/switch/uninstall
+yet approved**; do not use raw experiment start to bypass this.
+Inactive intermediate model removal is not presently a wizard menu,
+so treat that as an unmet UI feature rather than using low-level
+remove/retire/prune without a separately approved exception.
+
+**Actual DGX M1 read-only preflight PASS**: source
+`5a14d169bbca93604b92e52dc1e548ed75cc5569` (same SHA
+CI #38350725606 SUCCESS), operator log
+`/home/inlc/dgx-m1-experiment-preflight-20261013-143450.log`,
+RC 0; OrcaRouter weights and v0.29 image ready, managed inactive,
+experiment absent, port 8888 free, exact stopped old Docker
+ID/status/image/OOM unchanged before/after.
+[Permanent M1 preflight evidence](../scripts/benchmark/evidence/dgx-orcarouter-m1-isolated-preflight-20261013.md).
+This was read-only and **not** M1 live or measured performance.
+Five benchmark profiles remain NOT_MEASURED. No host cleanup yet.
+
+
 ## Actual DGX S4 all-Hybrid-link closure PASS (2026-10-13) — benchmark next, no deletion
 
 **ACTUAL_DGX** exact clean source `5a14d169bbca93604b92e52dc1e548ed75cc5569` with same-SHA CI [38350725606](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38350725606) SUCCESS: operator log `/home/inlc/dgx-hybrid-link-closure-20261013-142413.log` reports `S4_LINK_CLOSURE=COLLECTED_READ_ONLY`, `ALL_LINK_REFERENCE_GAPS=0`; all 319 H3/H4/H5/H6 symlinks resolved to regular files by the source's known Docker-virtual alias model (13/76/91/139). Static H6 source mount contract PASS; ext4/device 66306, available bytes 112103874560 (~104.404 GiB snapshot). [Permanent S4 evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md). **S1/S2/S3/S4 physical READ_ONLY checks complete**, not runtime acceptance or reclaim approval. Actual Docker mounts, CoW extents, payload correctness, M1 live, five llama-benchy reports still NOT_VERIFIED/NOT_MEASURED. **No more S-style inventory gates by default**; prioritize protected old-Docker-ID M1 isolation decision, safely monitored model readiness, then actual benchmark evidence before any selective cleanup. Old ID/release/swap/protect unchanged as far as this S4 log establishes; no destructive operation evidenced.

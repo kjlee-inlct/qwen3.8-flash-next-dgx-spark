@@ -1,5 +1,30 @@
 # Managed installer, uninstaller, and model-switch acceptance
 
+## Owner P0 workflow update: all model lifecycle via wizard, bench in second terminal (2026-10-13)
+
+[Two-terminal wizard/benchmark operating specification](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md):
+Terminal A for interactive installer/profile switch/uninstaller and
+read-only storage plans, Terminal B for benchmark-only workloads on an
+already wizard-activated, health/model-verified and host-qualified API.
+No A mutating operation while B is benchmarking; the existing wizard
+flock does NOT alone serialize upstream llama-benchy.
+Uninstall actually removes the managed canonical Docker object;
+switch can delete a stopped predecessor on successful commit.
+Therefore current owner protected-ID rule blocks actual mutation
+until a reviewed isolation/rollback design and explicit approval.
+The wizard currently does not expose every individual inactive
+H3/H4 asset-retirement action; do not use low-level direct deletion
+as an implicit fallback. The product acceptance must cover wizard
+selection/install/switch/cleanup preview/realistic guarded teardown
+and exclusion of concurrent benchmark work.
+
+ACTUAL_DGX v0.29 OrcaRouter **read-only preflight** RC=0
+([dated evidence](../scripts/benchmark/evidence/dgx-orcarouter-m1-isolated-preflight-20261013.md)):
+image/checkpoint ready, port 8888 free, old Docker identity preserved;
+MODEL_START=NOT_PERFORMED. M1/M3 full live acceptance NOT_QUALIFIED,
+5/5 benchmark reports NOT_MEASURED; no deletion authorized.
+
+
 ## S4 actual DGX Hybrid links PASS; M1 live and wizard E2E not qualified (2026-10-13)
 
 [Physical S4 read-only scope](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md)

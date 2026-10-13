@@ -1,5 +1,22 @@
 # DGX staged validation — operator runbook (2026-10-13)
 
+## Latest operating boundary: wizard-only lifecycle, separate bench window (2026-10-13)
+
+The owner will operate two terminals, **A wizard/management/cleanup
+and B performance measurement**. Model installation/switching/
+uninstallation must be performed through the wizard; no raw Docker
+or experimental start as substitute. While B benchmarks, A may
+only inspect; no concurrent install/switch/purge/prune.
+[Runbook](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md).
+Actual v0.29 OrcaRouter independent preflight RC=0, old Docker
+protected as before/after identical, but MODEL_START=NOT_PERFORMED:
+[physical evidence](../scripts/benchmark/evidence/dgx-orcarouter-m1-isolated-preflight-20261013.md).
+Managed wizard mutation can still delete the old Docker container,
+so do not trigger live operation until explicit owner consent and
+a safety-qualified wizard path are established. Benchmark 5/5
+NOT_MEASURED, M1 live NOT_QUALIFIED and storage deletion forbidden.
+
+
 ## Physical S4 all-link closure completed; M1 live still blocked (2026-10-13)
 
 [S4 actual operator evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md):

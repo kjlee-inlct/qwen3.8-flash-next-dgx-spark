@@ -1,5 +1,23 @@
 # Benchmark first — selective DGX model/Docker reclamation
 
+## Owner requires wizard-only lifecycle and separate bench terminal (2026-10-13)
+
+[Two-terminal operating contract](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md):
+A=wizard model install/switch/uninstall, read-only storage planning;
+B=pinned llama-benchy on an already wizard-started,
+health-checked and host-qualified model. A must **not**
+switch/install/remove/prune while B benchmarks. First record actual
+model/API/host stability, then raw JSON + report + SHA256 and
+independently verified off-host backup, then separately authorize any
+narrowly-scoped wizard-mediated cleanup. The current uninstaller
+can destroy the protected canonical Docker object, even with default
+non-purge behavior; therefore wizard-only is not deletion approval.
+An inactive checkpoint not independently accessible in the wizard
+is a future UI feature requirement, not permission to invoke
+low-level removal tools. All five model reports remain NOT_MEASURED;
+actual M1 read-only preflight RC=0 is NOT live qualification.
+
+
 ## S4 actual-DGX complete — move from inventory to evidence-preserving model qualification (2026-10-13)
 
 [Actual S4 physical evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md):

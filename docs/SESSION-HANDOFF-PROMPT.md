@@ -1,5 +1,42 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## Owner rule: wizard-only lifecycle and separate management/benchmark terminals (2026-10-13)
+
+**Latest owner instruction (supersedes any prior experimental-start plan):**
+model installs, profile selection/switching, and uninstalls must happen
+**through the interactive wizard**. User will open TWO terminal windows:
+**A — management/cleanup**, **B — llama-benchy benchmark**. These are
+role-separated, **not** concurrent mutation/benchmark permission.
+Use [two-terminal authoritative workflow](DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md).
+A may perform read-only storage inventory and wizard dry-run/preview,
+but real model/image/old Docker removal needs separate approval and
+benchmark-preserving verified off-host copies. B only benchmarks a
+previously **wizard-activated, verified-ready and host-qualified**
+model, never starts/restarts it. While B measures, A does NO install,
+switch, remove, prune or runtime update. A real model switch through
+the wizard can start a new runtime and may delete the protected old
+Docker object, so **wizard-only does not waive safety**.
+
+Operator-provided actual DGX M1 isolated preflight
+`/home/inlc/dgx-m1-experiment-preflight-20261013-143450.log`
+at source `5a14d169bbca93604b92e52dc1e548ed75cc5569` returned
+`M1_PREFLIGHT_RC=0`: OrcaRouter checkpoint/image ready,
+service inactive, experiment absent, port 8888 free, and exact
+protected stopped Docker ID/image/status unchanged before/after.
+[Permanent measured preflight evidence](../scripts/benchmark/evidence/dgx-orcarouter-m1-isolated-preflight-20261013.md).
+**This is NOT a model start or M1 live PASS**. Former plan to launch
+the separate experiment with raw runtime script is **superseded** by
+the wizard-only requirement. Existing experimental monitor
+`--protect` uses managed-state stop marker by default;
+do not mix its state with a wizard activation.
+
+S1–S4 PASS read-only, all 5 benchmark reports NOT_MEASURED,
+M1/M3 NOT_QUALIFIED, H38 blocked, M2/D0 destructive NOT_GRANTED,
+PR #259 Draft/Open/Unmerged. Next work: wizard-safe
+old-container-preserving M1 qualification + benchmark admission
+without shortcuts, not another storage inspection phase.
+
+
 ## Latest actual DGX S4 completed and action priority (2026-10-13)
 
 **S4=ACTUAL_DGX_PASS_READ_ONLY** at SHA `5a14d169bbca93604b92e52dc1e548ed75cc5569`, [same-SHA CI 38350725606 SUCCESS](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark/actions/runs/38350725606), operator log `/home/inlc/dgx-hybrid-link-closure-20261013-142413.log`: all H3 13, H4 76, H5 91, H6 139 symlinks source-aliased to regular files; `ALL_LINK_REFERENCE_GAPS=0`. File system ext4, device 66306, 112103874560 available bytes point-in-time, `SOURCE_MOUNT_CONTRACT=STATIC_PASS`. [Scoped S4 evidence](../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md). The whole S1–S4 **read-only evidence chain** is now complete. Do not add another storage-check stage without a material new risk.

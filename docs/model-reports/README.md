@@ -1,5 +1,23 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
+## Two-terminal wizard activation prerequisite (2026-10-13)
+
+Per the owner, actual model install/switch/uninstall belongs in
+the interactive wizard in **Terminal A**. Real llama-benchy
+measurements belong in **Terminal B** but only on the model
+previously activated in the wizard and separately verified healthy,
+API-served-name-correct, and host/RM-safe.
+[Authoritative workflow](../DGX-TWO-TERMINAL-WIZARD-BENCHMARK.md).
+A cannot mutate lifecycle or delete model/Docker while B measures.
+The upstream benchmark is not automatically serialized with the
+wizard's operation lock; an explicit verified lock/admission
+mechanism is a remaining implementation task.
+ACTUAL_DGX preflight RC=0 for OrcaRouter v0.29 is a **stopped model**
+observation, not live readiness. Keep all five cards NOT_MEASURED.
+No checkpoint or image may be deleted before a real report +
+independently verified off-host backup and separate owner approval.
+
+
 ## Physical S4 link closure done; five benchmark profiles still unmeasured (2026-10-13)
 
 [S4 actual-DGX evidence](../../scripts/benchmark/evidence/dgx-hybrid-all-link-closure-readonly-20261013.md)

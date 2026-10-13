@@ -1,5 +1,10 @@
 # Benchmark evidence index
 
+## Owner two-terminal wizard/bench split and actual M1 preflight (2026-10-13)
+
+- [M1 OrcaRouter v0.29 **physical DGX read-only preflight**](dgx-orcarouter-m1-isolated-preflight-20261013.md): RC 0 at source `5a14d169bbca93604b92e52dc1e548ed75cc5569`; checkpoint/image ready, inactive managed service, canonical stopped, experimental container absent, port 8888 free and protected old Docker identity/exit/OOM/image unchanged. No live startup or speed evidence. All five models remain NOT_MEASURED. Owner subsequently required wizard-only actual install/switch/uninstall and two terminal roles. **No standalone experiment launch or model/Docker deletion authorized**. Benchmark admission awaits wizard-activated, healthy and host-qualified API.
+
+
 ## Actual DGX S4 all-link closure PASS (2026-10-13)
 
 - [**S4 operator log: all 319 Hybrid symlinks resolved and ext4 observed**](dgx-hybrid-all-link-closure-readonly-20261013.md). Exact-source `5a14d169bbca93604b92e52dc1e548ed75cc5569` (CI #38350725606 SUCCESS); `ALL_LINK_REFERENCE_GAPS=0`, H3/H4/H5/H6 13/76/91/139 links to regular files. Device 66306, available 112103874560 bytes, source mount contract PASS. S1–S4 READ_ONLY complete; live Docker mount/host performance/deletion remain unverified. Old-Docker preservation and actual llama-benchy are next, with no model/Docker deletions approved.
