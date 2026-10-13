@@ -102,3 +102,25 @@ The five per-model llama-benchy templates remain NOT_MEASURED.
 A5 wizard dry-run, B5 readonly and lychee888 JSON-only L0 are actual
 DGX PASS; M1 live, M3 profile pairs, H38/M4, destructive M2 and D0
 remain unqualified/not authorized.
+
+
+## Actual S1 physical host result (2026-10-13)
+
+The owner returned all 8 read-only checks PASS from source 5136232.
+[Preserved exact-scope evidence](../scripts/benchmark/evidence/dgx-storage-pre-reclaim-readonly-20261013.md).
+OrcaRouter 171G active, mazinb 174G, H3 73G, H4 64G,
+H5 43M, H6 34M. H6 depends on H5/H4/H3/OrcaRouter.
+Neither H3 nor H4 is approved for deletion and neither is
+a separate default user-facing llama-benchy model.
+An H6 benchmark must never be misread as permission
+to delete required H6 checkpoint ancestors.
+
+Docker images 47.22GB but all referenced and 0B currently
+reclaimable. About 6.239GB of stopped-container writable layers
+may be reclaimable later following evidence preservation.
+Nonproject Open WebUI and Portainer services are running.
+Next read-only exact-SHA test:
+scripts/diagnostics/inspect-hybrid-reclaim-blocks.sh,
+requiring QWEN38_RECLAIM_MODELS_ROOT set to the real model root.
+The combined directory du and hardlink checks narrow
+disk accounting but cannot detect all CoW/reflink shared extents.

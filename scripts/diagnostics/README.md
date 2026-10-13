@@ -22,6 +22,12 @@ This directory contains canonical repository-specific read-only diagnostics and 
 
 ## Canonical files
 
+- inspect-hybrid-reclaim-blocks.sh: exact-SHA/real-model-root
+  non-mutating individual and combined allocated-block du,
+  hardlink/symlink counts and installed-state fingerprints.
+  It does not prove CoW shared extents or authorize deletion.
+
+
 - inspect-bench-before-reclaim.sh: exact-SHA DGX read-only
   storage recommendation, status, preview, model asset dependency
   and Docker layered accounting, with no deletion or model launch.

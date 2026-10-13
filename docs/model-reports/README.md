@@ -138,3 +138,13 @@ planned cleanup directory; record their SHA256 and Docker image ID
 alongside model checkpoint/release/config. All five current
 templates are NOT_MEASURED. A future per-asset deletion requires
 owner-specific approval, not merely a passing read-only inventory.
+
+
+## S1 actual DGX storage snapshot: NOT a benchmark
+
+[Physical inventory result](../scripts/benchmark/evidence/dgx-storage-pre-reclaim-readonly-20261013.md)
+shows OrcaRouter 171G active, mazinb 174G present,
+H3 73G and H4 64G as registered H6 parents despite
+the small H6 34M directory. No new llama-benchy
+numeric result exists. Preserve all five NOT_MEASURED
+states pending approved model runtime validation.

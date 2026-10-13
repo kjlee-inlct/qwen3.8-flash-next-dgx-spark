@@ -266,3 +266,29 @@ old container ID 삭제 허용 또는 독립 격리 방식의 결정
   container until full individually scoped safety/ownership approval.
 - For every new rule/idea/reference update this handoff and relevant
   canonical docs together with project work (ongoing).
+
+
+## DGX S1 actual storage inventory — persistent handoff (2026-10-13)
+
+Physical DGX checked exact SHA 513623243c12c204378a0e22bb965ff47542f4f9:
+eight read-only inspections PASS. See
+[DGX actual S1 storage evidence](../scripts/benchmark/evidence/dgx-storage-pre-reclaim-readonly-20261013.md).
+Disk 105G free; OrcaRouter 171G ACTIVE; mazinb 174G;
+H3 73G, H4 64G, H5 43M, H6 34M. H6 model asset depends
+on H5/H4/H3/OrcaRouter. NEVER assume small H6 footprint
+means the large intermediates can be safely discarded.
+The 137G H3/H4 sum is nominal, not proven reclaimable.
+
+Docker: 10 referenced images, 47.22GB, 0B presently
+reclaimable; R25-R28 and H38 share ~22.05GB layers each.
+24 containers, 2 running (Open WebUI and Portainer).
+6.239GB old writable layers listed reclaimable only
+after evidence/ownership review. Old stopped canonical
+Docker ID f6bfee5a4217... stays protected.
+The next read-only accounting script is
+scripts/diagnostics/inspect-hybrid-reclaim-blocks.sh; require
+exact SHA and QWEN38_RECLAIM_MODELS_ROOT pointing to
+the REAL original models root. It never deletes files.
+llama-benchy 5/5 model reports still NOT_MEASURED.
+Keep updating handoff + canonical evidence/status on each
+new owner priority, external reference or observation.
