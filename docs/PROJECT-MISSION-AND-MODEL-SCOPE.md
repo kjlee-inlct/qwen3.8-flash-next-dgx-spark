@@ -90,3 +90,5 @@ Host-free integration tests cover recovery from an incorrect number,
 selecting a valid replacement afterwards, and cancelling a fresh/existing
 wizard with the existing manifest unchanged. This does not change actual
 DGX running service state or prove real live switching readiness.
+
+Original fourth-model implementation gates: [lychee888 FP8-PLE roadmap](LYCHEE888-WIZARD-INTEGRATION.md). This is a source/research plan, not installed/live support.

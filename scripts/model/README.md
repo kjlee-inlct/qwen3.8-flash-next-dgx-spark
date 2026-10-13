@@ -13,6 +13,14 @@ a separate OrcaRouter runtime candidate; Hybrid H3/H4/H5 are
 internal construction artifacts, not additional selectable models.
 [Primary wizard-first mission and acceptance](../../docs/PROJECT-MISSION-AND-MODEL-SCOPE.md).
 
+## Planned lychee888 FP8-PLE integration
+
+[Staged candidate-only research and single-GB10 acceptance plan](../../docs/LYCHEE888-WIZARD-INTEGRATION.md)
+now captures the public author's FP8 E4M3 PLE serialization, the
+current repo's missing `load_download_profile`/`serve.sh` branches,
+and why a dual-node recipe cannot be assumed to work on this one
+Spark. Do not enable this profile just because metadata is readable.
+
 ## Responsibilities
 
 - Define supported model profiles and their static defaults.

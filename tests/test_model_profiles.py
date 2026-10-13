@@ -129,6 +129,15 @@ class ModelProfileTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is a planned profile and is not installable yet", result.stderr)
 
+    def test_planned_lychee888_wizard_key_is_rejected_then_valid_choice_works(self) -> None:
+        result = self.run_wizard("lychee888\n2")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Not selectable: lychee888 FP8-PLE", result.stdout)
+        self.assertIn("Invalid model selection.", result.stdout)
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
             [str(ROOT / "install.sh"), "--list-backends"],

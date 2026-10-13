@@ -15,6 +15,18 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## Original fourth model lychee888: FP8-PLE separate compatibility path (2026-10-13)
+
+The public checkpoint card claims a ~123.25 GiB OrcaRouter derivative
+with FP8 E4M3 PLE and a single BF16 global scale; its author documents
+a **dual-DGX** recipe using an FP8 PLE loader override, **not** proof of
+single-GB10 TP=1 operation. Existing model registry has no lychee888
+download defaults, image or runtime mapping; `serve.sh` has no case.
+It is **planned / not selectable**. [Source-grounded staged integration
+plan](LYCHEE888-WIZARD-INTEGRATION.md) defines metadata-only L0, source
+L1, bounded future host L2 and final wizard admission L3. No model
+download, runtime launch or actual DGX change is authorized by this plan.
+
 ## P0 model selection usability — retry and safe cancellation (2026-10-13)
 
 The interactive installer now offers a **Cancel** entry for fresh install
