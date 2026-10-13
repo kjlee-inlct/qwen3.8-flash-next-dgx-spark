@@ -1,5 +1,26 @@
 # Qwen3.8 Flash Next — Operations Guide
 
+## Cross-session operations and current physical DGX read-only baseline
+
+Start every new project conversation with [the stable session-handoff
+prompt](docs/SESSION-HANDOFF-PROMPT.md) and fresh
+[canonical status](docs/CURRENT-STATUS.md), [DGX stage runbook](docs/DGX-STAGED-VALIDATION.md),
+[acceptance matrix](docs/MANAGED-LIFECYCLE-ACCEPTANCE.md) and
+[evidence index](scripts/benchmark/evidence/README.md). GitHub head/PR/CI and
+the host checkout/installed immutable release must be verified independently.
+
+Physical DGX \`b35d0f3\` B3 read-only collection now **completed**:
+exited predecessor (exit 0, no Docker OOM flag), systemd inactive,
+declared loopback 8888, eight transient markers absent, immutable
+\`current\` ExecStart and older direct-Docker ExecStop.
+[Date-scoped actual-host evidence](scripts/benchmark/evidence/dgx-b3-readonly-runtime-unit-complete-20261013.md).
+This is **not** an M1 READY or strict RM-stability pass. Do not blind-restart
+the legacy service: source at installed \`ff67bab3\` release shows ordinary
+rollback/recover paths may start the safety-stopped predecessor, unlike
+\`abort-protected\`. Review exact topology/identity and protections before
+a scoped reversible OrcaRouter baseline plan; M4 H38 remains blocked.
+
+
 
 ## H38 runtime vs managed-service status
 

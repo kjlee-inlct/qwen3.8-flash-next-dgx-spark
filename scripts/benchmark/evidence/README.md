@@ -2,6 +2,10 @@
 
 This directory preserves canonical evidence for live DGX Spark runtime, profile-switch, host-stability, allocator, ownership, mitigation-discriminator, and userspace-localization experiments. Historical per-run documents remain immutable in meaning: later documents may add closure links, but must not rewrite what an earlier run actually observed.
 
+## Actual DGX B3 complete: read-only offline runtime and unit (2026-10-13)
+
+- [**B3 physical-DGX complete state, exact unit and all eight markers**](dgx-b3-readonly-runtime-unit-complete-20261013.md): operator checkout \`b35d0f3\`, all 3 offline probes rc=0, \`MANAGED_RUNTIME_OFFLINE=COLLECTED_READ_ONLY\`, Docker predecessor exited/0/non-OOM, service inactive/success, loopback 8888 declared, historical direct Docker ExecStop, eight markers absent. Supersedes earlier **B3 partial collection** only. Installed \`ff67bab3\` release source review identifies ordinary rollback/recover restart risks; no M1 live READY, H38, disposable D0 or destructive-test acceptance. [Reusable session handoff template](../../../docs/SESSION-HANDOFF-PROMPT.md).
+
 ## Actual DGX stage B2 read-only Doctor (2026-10-13)
 
 - [**Actual B2 lifecycle inventory / Doctor 5 FAIL and 2 WARN**](dgx-b2-readonly-lifecycle-doctor-partial-20261013.md): exact physical DGX checkout `b35d0f3`, seven inventory/status sections rc=0, Doctor rc=1, overall `PARTIAL_CHECK_FAILURE`. Full checkpoint/host-reserve/transaction evidence with EXITED runtime and missing live attestation; no model launch, M1/M3 still unqualified, H38 blocked. See the operator runbook for next-stage guards.

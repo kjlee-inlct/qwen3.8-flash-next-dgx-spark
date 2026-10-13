@@ -1,5 +1,10 @@
 # Qwen3.8-Flash-Next on a single DGX Spark
 
+For recurring work and a **new ChatGPT session**, use the
+[canonical continuation-prompt skeleton](docs/SESSION-HANDOFF-PROMPT.md).
+It supplies the current-source lookup order, GitHub/host provenance rules,
+PR gate boundaries and safe live-test handoff without freezing a stale HEAD.
+
 The primary supported path is the pinned
 `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` checkpoint on one DGX Spark.
 **OrcaRouter stability and correctness take priority over headline throughput.**
