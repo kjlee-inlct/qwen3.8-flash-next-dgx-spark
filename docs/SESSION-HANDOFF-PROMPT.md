@@ -1,5 +1,10 @@
 # Next-session continuation prompt — single DGX Spark / Qwen3.8
 
+## OrcaRouter permanent keeper code enforcement (2026-10-13)
+
+In addition to the owner-level absolute checkpoint retention rule, new source guards in `uninstall.sh` and `scripts/manage-models.sh` reject real canonical OrcaRouter checkpoint purge and profile retire operations (even `--yes`), with synthetic tests. An uninstaller DRY-RUN is still hypothetical; real default uninstall can remove the canonical stopped Docker object and must NOT run without a separately reviewed safe pathway. OrcaRouter is first for wizard-managed model readiness and benchmark only, not cleanup. Distinct lifecycle-vs-benchmark lock helper is SOURCE/CI evidence, not host readiness. The currently stopped API remains NOT_QUALIFIED.
+
+
 ## Highest-priority owner instruction: OrcaRouter FIRST and NEVER delete it (2026-10-13)
 
 The owner explicitly requires OrcaRouter as the FIRST wizard-activated and

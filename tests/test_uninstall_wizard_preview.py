@@ -1090,5 +1090,26 @@ class UninstallWizardPreviewTests(unittest.TestCase):
                 observed.pop("state/qwen38-spark/operation.lock", None)
                 self.assertEqual(observed, expected)
 
+    def test_real_orcarouter_purge_is_blocked_before_any_host_action(self) -> None:
+        """Canonical keeper model cannot be purged even if --yes was supplied."""
+        protected = self.model.with_name("qwen3.8-flash-next-orcarouter")
+        self.model.rename(protected)
+        self.manifest.write_text(
+            self.manifest.read_text(encoding="utf-8").replace(str(self.model), str(protected)),
+            encoding="utf-8",
+        )
+        for flag in ("--purge-model", "--purge-all"):
+            with self.subTest(flag=flag):
+                result = subprocess.run(
+                    ["bash", str(UNINSTALL), "--lang", "en", "--yes", flag],
+                    cwd=REPO, env={**os.environ, "HOME": str(self.home),
+                        "XDG_STATE_HOME": str(self.home / "state"),
+                        "XDG_DATA_HOME": str(self.home / "data")},
+                    text=True, capture_output=True, check=False, timeout=12,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("ORCAROUTER_PROTECTED", result.stderr)
+                self.assertEqual((protected / "keep-model.bin").read_bytes(), b"KEEP MODEL")
+
 if __name__ == "__main__":
     unittest.main()

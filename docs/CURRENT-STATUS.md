@@ -1,5 +1,10 @@
 # Current project status
 
+## Enforced permanent OrcaRouter checkpoint deletion guard (2026-10-13)
+
+The direct model-manager `remove` and real `retire orcarouter` paths now fail closed for the permanent OrcaRouter profile; the uninstall wizard refuses selected/full deletion of its canonical checkpoint before any runtime teardown, including with `--yes`. Synthetic tests cover these guards. Dry-run previews remain non-mutating and may display hypothetical purge actions; **do not interpret preview as permission**. This protection does not make a normal uninstall safe for the exact old stopped Docker container; no actual uninstall/switch/start approved. OrcaRouter FIRST for future wizard activation/benchmark, NEVER a deletion candidate.
+
+
 ## ORCAROUTER FIRST — protected permanent keeper / wizard and benchmark terminals (2026-10-13)
 
 Owner specifies **OrcaRouter is the first model to activate/benchmark through

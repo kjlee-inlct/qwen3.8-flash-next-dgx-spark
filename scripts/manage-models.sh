@@ -378,6 +378,9 @@ relocate_model_root() {
 remove_model() {
   local path manifest status kind repo revision files size allowed
   path="$(realpath -m -- "${TARGET}")"
+  # Permanent keeper: never remove OrcaRouter weights, even with --yes.
+  [[ "$(basename -- "${path}")" != qwen3.8-flash-next-orcarouter ]] ||
+    die "ORCAROUTER_PROTECTED: permanent checkpoint is not removable"
   [[ -d "${path}" ]] || die "model directory not found: ${path}"
   manifest="$(manifest_path "${path}" 2>/dev/null || true)"
   [[ -n "${manifest}" ]] || die "refusing deletion: model/hybrid manifest missing"
@@ -417,7 +420,11 @@ case "${ACTION}" in
   list) [[ -z "${TARGET}" ]] || die "list takes no target"; list_models ;;
   assets) [[ -z "${TARGET}" ]] || die "assets takes no target"; list_assets ;;
   remove) remove_model ;;
-  retire) retire_profile ;;
+  retire)
+    [[ "${TARGET}" != orcarouter || "${DRY_RUN}" == 1 ]] ||
+      die "ORCAROUTER_PROTECTED: permanent profile is not retireable"
+    retire_profile
+    ;;
   migrate-orcarouter) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "migrate-orcarouter takes no target"; migrate_orcarouter ;;
   relocate-root) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "relocate-root takes flags, not a positional target"; relocate_model_root ;;
   -h|--help|help) usage ;;
