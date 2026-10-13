@@ -4,8 +4,7 @@
 > explicit opt-in new live start. A strict pinned-label watchdog is
 > armed BEFORE start, post-ready 180s soak and strict RM monitoring are
 > source-implemented; the M1 shared lifecycle + exclusive benchmark
-> lock contract is source-implemented in `with-wizard-lock.sh
-> --m1-benchmark`. **M1 ACTUAL DGX PREFLIGHT / LIVE READY /
+> lock contract is source-implemented in `scripts/wizard/m1-benchmark-lock.sh`. **M1 ACTUAL DGX PREFLIGHT / LIVE READY /
 > LLAMA-BENCHY remain NOT_RUN.** Old A/B and OrcaRouter protected.
 > Controlled B (16 GiB) historical success does not erase the
 > archived *managed* 16 GiB `NV_ERR_NO_MEMORY` HOST-STABILITY FAIL.

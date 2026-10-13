@@ -46,7 +46,7 @@ record JSON files remain preserved.
 4. The foreground M1 supervisor holds a **shared lifecycle lock**
    for its entire session; lifecycle mutation commands require
    **exclusive** lock and cannot overlap. A separate B-terminal
-   benchmark uses the explicit \`with-wizard-lock.sh --m1-benchmark\`
+   benchmark uses the explicit \`m1-benchmark-lock.sh\`
    shared-lifecycle / exclusive-benchmark pair after independent
    source-level \`bench-admission\` identity and current-host checks.
 5. Before READY: strict \`/health\` HTTP 200, *exact one* expected
@@ -95,7 +95,7 @@ Do not infer benchmark eligibility from historical 2026-10-02 trial B.
 The B-terminal execution wrapper is:
 
 \`\`\`bash
-bash scripts/benchmark/with-wizard-lock.sh --m1-benchmark -- COMMAND [ARGS...]
+bash scripts/wizard/m1-benchmark-lock.sh -- COMMAND [ARGS...]
 \`\`\`
 
 \`COMMAND\` must be the separately verified pinned \`llama-benchy\`

@@ -154,6 +154,28 @@ def check_trial_history() -> None:
             require(not c["State"]["Running"], "prior M1 trial is still running")
 
 
+def memory_admission(manifest: dict) -> None:
+    """Fail closed on host/swap headroom before any GPU workload is created."""
+    values: dict[str, int] = {}
+    for row in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+        if ":" in row:
+            key, _, value = row.partition(":")
+            fields = value.split()
+            if fields:
+                values[key] = int(fields[0])
+    for name in ("MemAvailable", "MemFree", "SwapFree"):
+        require(name in values, f"missing /proc/meminfo field {name}")
+    cma = values.get("CmaFree", 0)
+    require(max(0, values["MemAvailable"] - cma) >= 6 * 1048576,
+            "non-CMA available memory below 6 GiB")
+    require(max(0, values["MemFree"] - cma) >= 2 * 1048576,
+            "non-CMA free memory below 2 GiB")
+    require(values["SwapFree"] >= 8 * 1048576, "SwapFree below 8 GiB")
+    swaps = call("swapon", "--show=NAME", "--noheadings").stdout.split()
+    require(manifest.get("SWAP_FILE") == "/swap-ple.img" and "/swap-ple.img" in swaps,
+            "expected active managed PLE swap missing")
+
+
 def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
     safe_dir(state)
     safe_dir(data)
@@ -168,6 +190,7 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
     service = call("systemctl", "is-active", SERVICE, check=False).stdout.strip()
     require(service == "inactive", f"managed service is not proven inactive: {service}")
     old = snapshot_old(expected)
+    memory_admission(manifest)
     check_trial_history()
     if m1.exists() or m1.is_symlink():
         safe_dir(m1)
@@ -270,6 +293,35 @@ def api_healthy() -> bool:
         return [item.get("id") for item in body.get("data", [])] == [MODEL]
     except (OSError, ValueError, KeyError):
         return False
+
+
+def inference_smoke() -> None:
+    """One supervised OpenAI-compatible inference, without saving model text."""
+    payload = json.dumps({
+        "model": MODEL, "messages": [
+            {"role": "user", "content": "Reply briefly with the word OK."}
+        ], "temperature": 0.0, "max_tokens": 64,
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{PORT}/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+    try:
+        with opener.open(req, timeout=120) as resp:
+            require(resp.status == 200, "M1 smoke HTTP status not 200")
+            result = json.load(resp)
+    except (OSError, ValueError, KeyError) as exc:
+        raise M1Error(f"M1 inference smoke request failed: {type(exc).__name__}") from exc
+    choices = result.get("choices")
+    require(isinstance(choices, list) and len(choices) == 1, "M1 smoke invalid completion envelope")
+    msg = choices[0].get("message", {})
+    require(isinstance(msg, dict) and isinstance(msg.get("content"), str)
+            and bool(msg["content"].strip()), "M1 smoke produced no assistant text")
+    print("M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED", flush=True)
 
 
 def kernel_rm_since(utc_start: str) -> str:
@@ -420,7 +472,10 @@ def run_session(expected: str) -> None:
                 time.sleep(5)
             verify_host(record, snap, state, data)
             require(api_healthy(), "exact model API identity lost after soak")
-            journal(m1, record, "ready_for_bench", "strict initial RM/monitor window passed")
+            inference_smoke()
+            watch_fresh(monitor, monitor_dir, record["id"])
+            verify_host(record, snap, state, data)
+            journal(m1, record, "ready_for_bench", "API, smoke, soak and RM/monitor checks passed")
             print(f"M1_READY_FOR_BENCH=http://127.0.0.1:{PORT}", flush=True)
             print(f"M1_SERVED_NAME={MODEL}", flush=True)
             print(f"M1_EXACT_CONTAINER_ID={record['id']}", flush=True)

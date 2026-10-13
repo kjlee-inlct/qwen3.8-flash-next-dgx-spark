@@ -4,8 +4,7 @@
 > unique `qwen38-mazinb-m1-...` container, create-only provenance,
 > exact-ID watchdog armed before Docker start, 16 GiB KV and strict
 > /health + served-ID + 180s soak. Source has foreground shared
-> lifecycle lock, while Terminal B's `with-wizard-lock.sh
-> --m1-benchmark` uses shared lifecycle/exclusive benchmark and
+> lifecycle lock, while Terminal B's `scripts/wizard/m1-benchmark-lock.sh` uses shared lifecycle/exclusive benchmark and
 > pinned ready-session reattestation. Old A/B and managed predecessor
 > unchanged, no cleanup. **NOT ACTUAL_DGX_QUALIFIED**; physical
 > read-only preflight is the mandatory next operator action, NOT

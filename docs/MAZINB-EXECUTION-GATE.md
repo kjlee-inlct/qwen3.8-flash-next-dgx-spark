@@ -140,8 +140,7 @@ and exact-ID safety tests would violate the preservation contract.
 
 ### Stage M2 — actual benchmark (NOT PERFORMED)
 
-The source-side B-terminal `scripts/benchmark/with-wizard-lock.sh
---m1-benchmark` option now shares the lifecycle lock while holding an
+The source-side B-terminal `scripts/benchmark/m1-benchmark-lock.sh` option now shares the lifecycle lock while holding an
 exclusive benchmark lock and checking a pinned active M1 session before and
 after the workload. This does not itself install or execute llama-benchy.
 

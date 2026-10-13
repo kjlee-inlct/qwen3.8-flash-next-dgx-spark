@@ -96,7 +96,7 @@ class M1SafetyTests(unittest.TestCase):
                 cwd=ROOT, env=env, input="5\n9\n\n0\n0\n",
                 capture_output=True, text=True, timeout=20, check=False)
             self.assertEqual(p.returncode, 0, p.stderr)
-            self.assertIn("NEW physical model load", p.stdout)
+            self.assertIn("NEW GPU-heavy mazinb Docker", p.stdout)
             self.assertFalse((Path(tmp)/"xdg").exists())
 
     def test_m1_bench_wrapper_blocks_without_active_session(self) -> None:
@@ -106,8 +106,8 @@ class M1SafetyTests(unittest.TestCase):
             state.mkdir(parents=True)
             (state/"operation.lock").touch()
             env={**os.environ, "HOME":tmp, "XDG_STATE_HOME":str(root/"xdg")}
-            p=subprocess.run(["/bin/bash", str(ROOT/"scripts/benchmark/with-wizard-lock.sh"),
-                "--m1-benchmark", "--", "/bin/true"], env=env,
+            p=subprocess.run(["/bin/bash", str(ROOT/"scripts/wizard/m1-benchmark-lock.sh"),
+                "--", "/bin/true"], env=env,
                 text=True, capture_output=True, check=False)
             self.assertEqual(p.returncode, 2)
             self.assertIn("BENCH_M1=BLOCKED", p.stderr)
