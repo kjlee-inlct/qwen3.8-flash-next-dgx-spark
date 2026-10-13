@@ -53,7 +53,7 @@ At the exact audited source revision, the `orcarouter-hybrid` branch
 in `scripts/serve.sh` defines **read-only** bind-mount arguments:
 H6 to `/model`, OrcaRouter base to `/base-model`, H3 to
 `/h3-model`, H4 to `/h4-all`, H5 to `/h5-parent`.
-The experiment entry `scripts/runtime/orcarouter-v029.sh` also defines
+The experiment entry `orcarouter-v029.sh` (runtime category) also defines
 H6-specific ancestor mounts. These are **SOURCE_REVIEW** observations.
 Neither the actual installed immutable release, current runtime container's
 mounts, nor a successful H6 start was verified by S3.
