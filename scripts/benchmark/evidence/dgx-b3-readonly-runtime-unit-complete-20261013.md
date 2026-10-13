@@ -10,7 +10,7 @@ model launch, GPU workload, install, uninstall, swap change or protection change
 ## Exact collector and result
 
 The user ran the pre-existing
-`scripts/lifecycle/inspect-readonly-runtime-offline.sh` with
+`inspect-readonly-runtime-offline.sh` from the repository's lifecycle script category with
 `QWEN38_OFFLINE_DIAGNOSTIC_TARGET_SHA=b35d0f3d7840d00c55f4c633813e88ac367c6373`,
 with pager disabled, followed by `systemctl cat --no-pager` and
 `stat` of named state-marker paths. Completion sentinels:
