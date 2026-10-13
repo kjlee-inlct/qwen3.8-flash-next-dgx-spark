@@ -84,3 +84,13 @@ file-byte checksums, vLLM image support, TP=1 behavior, or RM stability.
 The first commit uses isolated **synthetic** fixture tests. Do not label
 L0 complete for the real Hub revision until its actual remote output
 has been captured and pinned. Profile `lychee888` stays disabled.
+
+
+**L0 public source reference, not yet probe output (2026-10-13):**
+The Hugging Face model's public commit page exposes a full
+40-hex commit `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`
+(README update, Sep 4). This is a verified **web commit URL**,
+not a completed pinned-Hub API/config/index probe. Do not mark
+L0 real file/index verification PASS until the probe emits its
+metadata-only verdict from actual fetched JSON. Single-Spark loader
+and weight-file gates still remain unverified.

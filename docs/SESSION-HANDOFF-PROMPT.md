@@ -187,3 +187,14 @@ Avoid embedding transcripts or secrets here. A new session must discover all
 tools and repository status anew instead of claiming prior connector auth or
 live host access. A new chat can reference this URL and copy the prompt even
 when the previous conversation is unavailable.
+
+
+**즉시 실행할 DGX 위자드 검증 A5(2026-10-13):**
+[docs/DGX-WIZARD-A5-READONLY.md](DGX-WIZARD-A5-READONLY.md)을
+읽고, 정확한 성공 CI HEAD로 별도 detached worktree에서
+`scripts/diagnostics/check-wizard-dgx-readonly.sh`의
+설치/전환/삭제 **dry-run만** 물리 DGX에서 수행합니다.
+메인 checkout/current release/Docker/swap는 변경하지 않습니다.
+호스트 로그 없이 A5 PASS로 표시하지 않습니다.
+이는 기존 B4와 독립된 새 위자드 검증이며 M1 라이브 전환의
+승인이나 오래된 Docker ID 삭제 동의가 아닙니다.

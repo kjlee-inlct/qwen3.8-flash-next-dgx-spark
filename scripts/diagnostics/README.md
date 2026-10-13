@@ -22,6 +22,10 @@ This directory contains canonical repository-specific read-only diagnostics and 
 
 ## Canonical files
 
+- `check-wizard-dgx-readonly.sh`: exact-SHA real DGX wizard inventory,
+  four install/switch target **dry-run** previews and bilingual-independent
+  uninstall **dry-run** previews, synthetic fixture tests and state
+  fingerprints; never activates or purges a model.
 - `doctor-observability.sh`: doctor-specific observability checks.
 - `runtime-commit-observability.sh`: runtime attestation observability.
 - `collect-diagnostics.sh`: bounded support-bundle implementation.

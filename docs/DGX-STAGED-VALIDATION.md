@@ -177,3 +177,13 @@ and disk/host headroom, and strict RM/kernel monitoring/stopping plan.
 The installed legacy monitor's source lacks the earlier H38 candidate
 swap-growth predicate; do not conflate those versions. No H38 model
 rerun, no protection relaxation, and no gate promotion from B4.
+
+
+## A5 — run wizard previews now on the actual DGX
+
+[Exact-SHA, clean-worktree, real-HOME **dry-run only** operator command
+and acceptance](DGX-WIZARD-A5-READONLY.md). This uses a detached source
+worktree to avoid altering the previously installed release or current
+operator source checkout. It is intended to run immediately once the
+corresponding GitHub CI has succeeded. It does not start models, restart
+systemd, remove resources, or promote M1/M2/M3/M4.

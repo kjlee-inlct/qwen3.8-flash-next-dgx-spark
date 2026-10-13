@@ -4,6 +4,17 @@
 
 This is the current-facing acceptance checklist for the Qwen3.8 Flash Next single-DGX-Spark managed lifecycle. It separates **implemented**, **CI/synthetic**, **historical operator functional**, and **new live end-to-end** proof. An installable model profile is not automatically host-stable. Use `docs/CURRENT-STATUS.md` and `scripts/benchmark/evidence/README.md` as the authority for exact historical gate outcomes; dated source records are not automatically production approval.
 
+## Physical-DGX wizard A5 — now operator-ready, not yet observed (2026-10-13)
+
+[Explicit bounded A5 runbook](DGX-WIZARD-A5-READONLY.md) uses an
+exact-SHA source worktree, true installed manifest/ownership state,
+read-only model inventory, four install/switch target `--dry-run`
+previews and two uninstall `--dry-run` previews. It checks
+manifest/asset registry/current-link fingerprints before and after.
+A successful actual-host log is `ACTUAL_DGX_DRY_RUN_PASS`, **not**
+M1 live READY, real M2 destructive uninstall, M3 actual managed
+switch, H38/M4, or D0 independence. No actual new A5 host log yet.
+
 ## Shared wizard EOF cancellation guard (2026-10-13)
 
 The interactive installer uses a shared reader for yes/no, text and secret

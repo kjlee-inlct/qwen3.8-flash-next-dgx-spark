@@ -15,6 +15,18 @@ Current-facing repository documentation (`README.md`, `OPERATIONS.md`,
 historical even when it contains then-current words such as `pending`, `next`, or
 `current`.
 
+## A5 real-DGX wizard preview gate — operator-ready, not yet run (2026-10-13)
+
+A new [exact-SHA physical-DGX wizard dry-run script](DGX-WIZARD-A5-READONLY.md)
+checks the installed profile and previews four installable model
+targets plus default/full-purge **uninstall dry-run only**, then
+executes isolated wizard fixtures. It verifies no change to
+`install.env`, the asset ownership registry or the installed current
+release pointer. Stage A5 is **ACTUAL_DGX_NOT_RUN** until a fresh
+operator terminal log is received; GitHub CI alone is not A5.
+The existing legacy runtime and old container remain untouched;
+M1 LIVE NOT_QUALIFIED, H38/M4 BLOCKED and D0 NOT_GRANTED.
+
 ## Original fourth model lychee888: FP8-PLE separate compatibility path (2026-10-13)
 
 The public checkpoint card claims a ~123.25 GiB OrcaRouter derivative
