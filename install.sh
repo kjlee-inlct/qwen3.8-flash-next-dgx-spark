@@ -20,6 +20,16 @@ WIZARD_UI="${ROOT_DIR}/scripts/lib/wizard-ui.sh"
 [[ -r "${WIZARD_UI}" ]] || { printf 'ERROR: wizard UI helper missing: %s\n' "${WIZARD_UI}" >&2; exit 1; }
 # shellcheck source=scripts/lib/wizard-ui.sh
 source "${WIZARD_UI}"
+# Installer owns its own 6/6 plan and completed-install compatibility helpers.
+# Shared wizard-ui.sh must never implicitly import installer management code.
+INSTALL_PLAN_HELPER="${ROOT_DIR}/scripts/lib/install-plan.sh"
+INSTALL_COMPLETED_MANAGER_HELPER="${ROOT_DIR}/scripts/lib/install-completed-manager.sh"
+[[ -r "${INSTALL_PLAN_HELPER}" ]] || { printf 'ERROR: installer plan helper missing: %s\n' "${INSTALL_PLAN_HELPER}" >&2; exit 1; }
+[[ -r "${INSTALL_COMPLETED_MANAGER_HELPER}" ]] || { printf 'ERROR: completed-install manager helper missing: %s\n' "${INSTALL_COMPLETED_MANAGER_HELPER}" >&2; exit 1; }
+# shellcheck source=scripts/lib/install-plan.sh
+source "${INSTALL_PLAN_HELPER}"
+# shellcheck source=scripts/lib/install-completed-manager.sh
+source "${INSTALL_COMPLETED_MANAGER_HELPER}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"

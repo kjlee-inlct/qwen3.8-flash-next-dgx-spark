@@ -9,26 +9,8 @@ WIZARD_RED=""
 WIZARD_BOLD=""
 WIZARD_RESET=""
 
-# install.sh has a six-step review boundary shared by CLI and Wizard flows. Load
-# installer-only UI/plan helpers only for that caller; uninstall/other UI
-# consumers remain independent of installer configuration semantics.
-if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then
-  WIZARD_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-  INSTALL_PLAN_HELPER="${WIZARD_LIB_DIR}/install-plan.sh"
-  INSTALL_COMPLETED_MANAGER_HELPER="${WIZARD_LIB_DIR}/install-completed-manager.sh"
-  [[ -r "${INSTALL_PLAN_HELPER}" ]] || {
-    printf 'ERROR: installer plan helper missing: %s\n' "${INSTALL_PLAN_HELPER}" >&2
-    return 1
-  }
-  [[ -r "${INSTALL_COMPLETED_MANAGER_HELPER}" ]] || {
-    printf 'ERROR: completed-install manager helper missing: %s\n' "${INSTALL_COMPLETED_MANAGER_HELPER}" >&2
-    return 1
-  }
-  # shellcheck source=install-plan.sh
-  source "${INSTALL_PLAN_HELPER}"
-  # shellcheck source=install-completed-manager.sh
-  source "${INSTALL_COMPLETED_MANAGER_HELPER}"
-fi
+# Presentation and input helpers are independent of installer module loading.
+# Legacy callback hooks remain until the installed-management flow is extracted.
 
 wizard_init() {
   if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then

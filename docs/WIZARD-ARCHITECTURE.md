@@ -31,7 +31,11 @@ defaults to NO. There is no `--yes` shortcut in `wizard.sh`.
 
 ## Not yet implemented — no premature completion claims
 
-**The legacy `install.sh` is still a mixed-responsibility 1,334-line script.**
+**The legacy `install.sh` remains mixed-responsibility.** Its installer-only
+plan/completed-manager imports are now explicit at the installer entry; the
+shared `wizard-ui.sh` no longer imports these modules for its callers.
+Its optional completed-manager callback hooks still need extraction and
+full installed-management relocation before the install-only requirement is met.
 It retains installed-state management, profile switching, settings UI,
 `scripts/lib/install-completed-manager.sh` and a conditional load from
 `scripts/lib/wizard-ui.sh`. Phase 1 does **not** satisfy the final

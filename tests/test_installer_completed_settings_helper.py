@@ -25,11 +25,14 @@ class CompletedInstallSettingsHelperTests(unittest.TestCase):
         self.assertNotIn("profile-switch-transition.sh", text)
         self.assertNotIn("runtime-transition.sh", text)
 
-    def test_wizard_loads_helper_only_for_installer(self) -> None:
-        text = WIZARD.read_text(encoding="utf-8")
-        self.assertIn('if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then', text)
-        self.assertIn("install-completed-manager.sh", text)
-        self.assertIn("install_completed_manager_step_hook", text)
+    def test_shared_ui_does_not_import_installer_implementation(self) -> None:
+        ui = WIZARD.read_text(encoding="utf-8")
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertNotIn('if [[ "${BASH_SOURCE[1]:-}" == */install.sh ]]; then', ui)
+        self.assertNotIn('source "${INSTALL_COMPLETED_MANAGER_HELPER}"', ui)
+        self.assertIn('source "${INSTALL_COMPLETED_MANAGER_HELPER}"', installer)
+        self.assertIn('source "${INSTALL_PLAN_HELPER}"', installer)
+        self.assertIn("install_completed_manager_step_hook", ui)
 
     def test_settings_are_reapplied_before_normalized_plan(self) -> None:
         text = WIZARD.read_text(encoding="utf-8")
