@@ -19,6 +19,33 @@ EXPECTED_ID=""
 WAIT_RUNNING=0
 ARMED_FILE=""
 HEARTBEAT_FILE=""
+TRIAL_ARMED=0
+TRIAL_RUNTIME_LIMIT=3600  # 60-minute upper bound; only enforced for pinned trials
+TRIAL_RUNNING_START=0
+
+# A pinned trial must not outlive its *own* monitor on a catchable exit.
+# Normal managed monitor sessions without --expected-id are unchanged.
+trial_fail_closed_on_monitor_exit() {
+  local previous_rc=$? snapshot="" attempt
+  trap - EXIT
+  [[ "${TRIAL_ARMED}" == 1 && -n "${EXPECTED_ID}" ]] || return 0
+  for attempt in 1 2 3; do
+    snapshot="$(docker inspect --format '{{.Id}}|{{.State.Running}}|{{index .Config.Labels "qwen38.abtrial"}}|{{index .Config.Labels "qwen38.predecessor"}}' "${EXPECTED_ID}" 2>/dev/null || true)"
+    [[ -n "${snapshot}" ]] && break
+    sleep 1
+  done
+  if [[ "${snapshot}" == "${EXPECTED_ID}|true|orcarouter|"* ]]; then
+    printf '%s TRIAL WATCHDOG EXIT (rc=%s): stopping exact candidate %s, preserving Docker object\n' "$(date '+%F %T')" "${previous_rc}" "${EXPECTED_ID}" >&2
+    if ! docker stop --timeout 30 "${EXPECTED_ID}" >/dev/null; then
+      printf 'ERROR: pinned trial stop failed after watchdog exited; immediate manual intervention required for ID %s\n' "${EXPECTED_ID}" >&2
+    fi
+  elif [[ -z "${snapshot}" ]]; then
+    printf 'ERROR: pinned watchdog exit could not inspect candidate ID %s; manually verify Docker state now\n' "${EXPECTED_ID}" >&2
+  fi
+}
+trap trial_fail_closed_on_monitor_exit EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 usage() {
   cat <<'EOF'
@@ -38,6 +65,7 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --state-dir PATH             Separate absolute forensic state directory
   --armed-file PATH            Atomic arm confirmation file
   --heartbeat-file PATH        Atomic sample timestamp file
+  --trial-max-seconds N        Stop pinned trial after N seconds (default: 3600; max: 7200)
 
 Without --protect this tool only reports warnings and never changes the container.
 EOF
@@ -76,6 +104,7 @@ while [[ $# -gt 0 ]]; do
     --state-dir) [[ $# -ge 2 ]] || die "$1 requires path"; STATE_DIR="$2"; STOP_REASON_FILE="${STATE_DIR}/runtime-stop.env"; shift ;;
     --armed-file) [[ $# -ge 2 ]] || die "$1 requires path"; ARMED_FILE="$2"; shift ;;
     --heartbeat-file) [[ $# -ge 2 ]] || die "$1 requires path"; HEARTBEAT_FILE="$2"; shift ;;
+    --trial-max-seconds) [[ $# -ge 2 ]] || die "$1 requires seconds"; TRIAL_RUNTIME_LIMIT="$2"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -87,6 +116,8 @@ for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_
 done
 nonnegative_integer "${HEARTBEAT}" || die "heartbeat must be a non-negative integer"
 nonnegative_integer "${WAIT_RUNNING}" || die "wait-running must be a non-negative integer"
+positive_integer "${TRIAL_RUNTIME_LIMIT}" || die "trial runtime limit must be a positive integer"
+(( TRIAL_RUNTIME_LIMIT <= 7200 )) || die "trial runtime limit must be at most 7200 seconds"
 [[ -z "${EXPECTED_ID}" || "${EXPECTED_ID}" =~ ^[a-f0-9]{64}$ ]] || die "invalid expected trial ID"
 if [[ -n "${EXPECTED_ID}" ]]; then
   [[ -n "${ARMED_FILE}" && -n "${HEARTBEAT_FILE}" && "${WAIT_RUNNING}" -gt 0 && "${PROTECT}" == 1 ]] ||
@@ -108,6 +139,7 @@ if [[ -n "${ARMED_FILE}" ]]; then
   umask 077
   printf '%s\n' "${EXPECTED_ID}" >"${ARMED_FILE}.tmp"
   mv -- "${ARMED_FILE}.tmp" "${ARMED_FILE}"
+  TRIAL_ARMED=1
   printf 'AB_MONITOR_ARMED_ID=%s\n' "${EXPECTED_ID}"
 fi
 if (( WAIT_RUNNING > 0 )); then
@@ -131,11 +163,16 @@ initial_swap_free="$(awk '$1=="SwapFree:" {print $2}' "${MEMINFO_PATH}")"
 low_count=0
 warning_active=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
+TRIAL_RUNNING_START="${SECONDS}"
 printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free=%sGiB free-gate=%sGiB swap-growth=%sMiB swapfree=%sGiB\n' \
   "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${SWAP_ACTIVITY_GATE_MIB}" "${MIN_SWAP_FREE_GIB}"
 next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
+  if [[ -n "${EXPECTED_ID}" ]] && (( SECONDS - TRIAL_RUNNING_START >= TRIAL_RUNTIME_LIMIT )); then
+    printf 'TRIAL_RUNTIME_LIMIT_REACHED=%s (stop exact ID %s)\n' "${TRIAL_RUNTIME_LIMIT}" "${EXPECTED_ID}" >&2
+    exit 3
+  fi
   if [[ -n "${EXPECTED_ID}" && "$(docker inspect --format '{{.Id}}' "${CONTAINER}" 2>/dev/null || true)" != "${EXPECTED_ID}" ]]; then
     die "trial Docker ID drift while monitoring"
   fi

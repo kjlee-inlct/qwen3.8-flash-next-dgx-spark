@@ -79,3 +79,16 @@ Wizard stops A by its exact Docker ID and leaves the `qwen38-ab-legacy` containe
 ## Read-only host preflight from the same wizard
 
 For first physical validation, run `./install.sh --dry-run` → existing installed management **6** → **6** (Legacy) or **7** (v0.29). Enter the already observed exact stopped predecessor Docker 64-character ID. The preflight validates installation/release/manifest, absent active managed service/transactions/other running trials, pinned image and checkpoint, endpoint 18888 and non-CMA/swap margins. It prints `AB_PREFLIGHT=PASS_READ_ONLY` with image SHA and manifest SHA; no Docker create/start, swap/config edits, monitor launch or benchmark. A PASS is admission only, **not** GPU/RM stability or model/API readiness.
+
+## Watchdog exit and maximum trial time (2026-10-13 hardening)
+
+For pinned A/B candidates, the monitor's catchable EXIT/SIGTERM/SIGINT path
+verifies the **exact candidate Docker ID and trial ownership label** and, if
+still running, stops **only that trial container ID**. The watchdog also
+stops the candidate after **3600 seconds maximum** through the same
+protected exit path. It never removes the container or touches the old
+managed predecessor. Tests exercise exit-time protection and watchdog
+ID mismatch; **SIGKILL, kernel/host resets and Docker-daemon outages
+cannot be fully handled by a shell exit trap**, so source CI alone
+must not be promoted to proven host safety. Actual DGX isolated trial
+and RM stability remain NOT_PERFORMED pending operator qualification.

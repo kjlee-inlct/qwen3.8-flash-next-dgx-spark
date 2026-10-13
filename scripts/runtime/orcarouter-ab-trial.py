@@ -346,7 +346,7 @@ def start(args: argparse.Namespace) -> None:
         watcher = subprocess.Popen(
             ["bash", str(ROOT / "scripts/runtime/monitor-runtime.sh"),
              "--container", name, "--expected-id", candidate_id,
-             "--wait-running", "120", "--state-dir", str(monitor_state),
+             "--wait-running", "120", "--trial-max-seconds", "3600", "--state-dir", str(monitor_state),
              "--armed-file", str(armed), "--heartbeat-file", str(heartbeat),
              "--min-available-gib", manifest["MONITOR_MIN_AVAILABLE_GIB"],
              "--min-free-gib", manifest["MONITOR_MIN_FREE_GIB"],

@@ -192,6 +192,68 @@ class OrcaRouterTrialTests(unittest.TestCase):
             self.assertIn("trial container ID drift before arm", proc.stderr)
             self.assertFalse((wd / "armed").exists())
 
+    def test_trial_watchdog_exit_stops_only_pinned_candidate(self):
+        import tempfile
+        import stat
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            trial = root / "watchdog"
+            trial.mkdir()
+            actions = root / "docker-actions"
+            docker = bin_dir / "docker"
+            docker.write_text(
+                '#!/usr/bin/env bash\n'
+                'set -euo pipefail\n'
+                'printf "%s\\n" "$*" >> "$AB_ACTIONS"\n'
+                'if [[ "$1" == inspect ]]; then\n'
+                '  if [[ "${2:-}" == --format ]]; then\n'
+                '    case "$3" in\n'
+                '      *qwen38.abtrial*) printf "%s|true|orcarouter|%s\\n" "$AB_ID" "$AB_OLD" ;;\n'
+                '      *) printf "%s\\n" "$AB_ID" ;;\n'
+                '    esac\n'
+                '  elif [[ "${2:-}" == -f ]]; then printf "true\\n"; fi\n'
+                '  exit 0\n'
+                'fi\n'
+                'if [[ "$1" == stop && "$3" == "$AB_ID" ]]; then exit 0; fi\n'
+                'exit 73\n',
+                encoding="utf-8",
+            )
+            docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
+            mem = root / "meminfo"
+            mem.write_text(
+                "MemAvailable: 25165824 kB\nMemFree: 25165824 kB\n"
+                "CmaFree: 1048576 kB\nSwapFree: 25165824 kB\n",
+                encoding="utf-8",
+            )
+            candidate = "a" * 64
+            run = subprocess.run([
+                "bash", str(ROOT / "scripts/runtime/monitor-runtime.sh"),
+                "--container", "qwen38-ab-legacy", "--expected-id", candidate,
+                "--wait-running", "1", "--trial-max-seconds", "1",
+                "--state-dir", str(trial), "--armed-file", str(trial / "armed"),
+                "--heartbeat-file", str(trial / "heartbeat"), "--interval", "1",
+                "--protect",
+            ], cwd=ROOT, text=True, capture_output=True, timeout=8,
+                env={**os.environ, "AB_ACTIONS": str(actions),
+                     "AB_ID": candidate, "AB_OLD": "f" * 64,
+                     "PATH": str(bin_dir) + ":" + os.environ.get("PATH", ""),
+                     "QWEN38_MEMINFO_PATH": str(mem)})
+            self.assertEqual(run.returncode, 3, run.stdout + run.stderr)
+            self.assertIn("TRIAL_RUNTIME_LIMIT_REACHED=1", run.stderr)
+            self.assertIn("TRIAL WATCHDOG EXIT", run.stderr)
+            logs = actions.read_text(encoding="utf-8")
+            self.assertIn("stop --timeout 30 " + candidate, logs)
+            self.assertNotIn("stop --timeout 30 " + "f" * 64, logs)
+
+    def test_managed_monitor_exit_does_not_stop_nontrial(self):
+        sh = (ROOT / "scripts/runtime/monitor-runtime.sh").read_text()
+        self.assertIn('[[ "${TRIAL_ARMED}" == 1 && -n "${EXPECTED_ID}" ]] || return 0', sh)
+        self.assertIn('trap trial_fail_closed_on_monitor_exit EXIT', sh)
+        self.assertIn('--trial-max-seconds', sh)
+
     def test_source_isolation_honors_legacy_and_v029(self):
         script = (ROOT / "scripts/serve.sh").read_text()
         self.assertIn('DOCKER_LAUNCH=(create)', script)
