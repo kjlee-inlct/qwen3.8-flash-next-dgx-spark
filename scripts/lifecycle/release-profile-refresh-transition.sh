@@ -295,9 +295,9 @@ load_target_profile_defaults() {
   TARGET_REPO="${PROFILE_REPO}"
   TARGET_REVISION="${PROFILE_REVISION}"
   TARGET_MODEL_DIR="${PROFILE_MODEL_DIR}"
-  TARGET_IMAGE="${PROFILE_IMAGE}"
+  # Experimental H38 refresh must not inherit the fresh wizard's v0.29 default.
+  TARGET_IMAGE="${TARGET_H38_IMAGE}"
   TARGET_SERVED_NAME="${PROFILE_SERVED_NAME}"
-  [[ "${TARGET_IMAGE}" == "${TARGET_H38_IMAGE}" ]] || die "target profile image is not managed H38: ${TARGET_IMAGE}"
   [[ "${CURRENT_MODEL_REPO}" == "${TARGET_REPO}" ]] || die 'same-profile refresh cannot change MODEL_REPO'
   [[ "${CURRENT_MODEL_REVISION}" == "${TARGET_REVISION}" ]] || die 'same-profile refresh cannot change MODEL_REVISION'
   [[ "$(realpath -m -- "${CURRENT_MODEL_DIR}")" == "$(realpath -m -- "${TARGET_MODEL_DIR}")" ]] || die 'same-profile refresh cannot change MODEL_DIR'

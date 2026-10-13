@@ -455,7 +455,7 @@ class InstalledProfileWizardTests(unittest.TestCase):
             self.assertIn("[1/1] Installed setup management", result.stdout)
             self.assertNotIn("[1/1] Model selection", result.stdout)
             self.assertIn("profile     : orcarouter", result.stdout)
-            self.assertIn("image change: vllm-skinny-tp1:legacy -> vllm-orcarouter-v029-h38-decoder-scope:v1", result.stdout)
+            self.assertIn("image change: vllm-skinny-tp1:legacy -> vllm-orcarouter-v029:v1", result.stdout)
             self.assertIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)
 

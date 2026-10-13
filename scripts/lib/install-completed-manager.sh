@@ -296,6 +296,7 @@ install_completed_choose_action() {
     wizard_menu_option 2 '런타임 / API / 서비스 설정 편집'
     wizard_menu_option 3 '현재 프로필 기본값 새로고침'
     wizard_menu_option 4 '취소'
+    wizard_menu_option 5 'OrcaRouter 런타임 A/B 비교 계획 (미리보기)'
     wizard_input answer '선택' 1
   else
     printf 'Installed setup management%s\n\n' "${WIZARD_RESET}"
@@ -304,6 +305,7 @@ install_completed_choose_action() {
     wizard_menu_option 2 'Edit runtime / API / service settings'
     wizard_menu_option 3 'Refresh current profile defaults'
     wizard_menu_option 4 'Cancel'
+    wizard_menu_option 5 'OrcaRouter runtime A/B plan (preview)'
     wizard_input answer 'Select' 1
   fi
 
@@ -326,6 +328,11 @@ install_completed_choose_action() {
       ;;
     4)
       [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+      exit 0
+      ;;
+    5)
+      [[ "${MODEL_PROFILE}" == orcarouter ]] || die 'OrcaRouter A/B requires an OrcaRouter installed profile'
+      bash "${ROOT_DIR}/scripts/benchmark/orcarouter-ab-plan.sh" --installed-image "${VLLM_IMAGE}"
       exit 0
       ;;
     *) die "invalid completed-install action" ;;

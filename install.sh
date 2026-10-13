@@ -38,6 +38,7 @@ MODEL_PROFILE="${MODEL_PROFILE:-orcarouter}"
 MODEL_CLI=""
 YES=0; START=1; DRY_RUN=0; MIGRATE_MANIFEST=0; REFRESH_PROFILE_DEFAULTS=0; CONFIG_OWNED=0
 PROFILE_SWITCH=0; PROFILE_SWITCH_COMMITTED=0; SWITCH_FROM_PROFILE=""; SWITCH_MODEL_ROOT=""
+ORCA_RUNTIME_CHOICE=""  # Only fresh wizard choice; never override a complete manifest
 PROFILE_SWITCH_BACKUP="${STATE_FILE}.profile-switch-backup"
 PROFILE_SWITCH_CANDIDATE="${STATE_FILE}.profile-switch-candidate"
 STATE_WRITE_FILE="${STATE_FILE}"
@@ -471,6 +472,11 @@ wizard_choose_model_profile() {
     fi
   done < <(list_model_candidates)
 
+  if [[ "${mode}" == fresh ]]; then
+    [[ "${UI_LANG}" == ko ]] &&
+      wizard_menu_option L 'OrcaRouter Legacy 런타임 (CPU PLE offload)' ||
+      wizard_menu_option L 'OrcaRouter Legacy runtime (CPU PLE offload)'
+  fi
   cancel_choice=$(("${#profiles[@]}" + 1))
   [[ "${UI_LANG}" == ko ]] &&
     wizard_menu_option "${cancel_choice}" '취소' ||
@@ -497,6 +503,13 @@ wizard_choose_model_profile() {
       fi
     else
       case "${answer}" in
+        l|L|legacy|LEGACY)
+          if [[ "${mode}" == fresh ]]; then
+            MODEL_PROFILE=orcarouter
+            ORCA_RUNTIME_CHOICE=legacy
+            return 0
+          fi
+          ;;
         q|Q|cancel|Cancel|취소)
           [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
           exit 0
@@ -683,18 +696,22 @@ else
   choose_default_model_root
 fi
 load_model_profile "${MODEL_PROFILE}" || exit $?
-if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 && "${MODEL_PROFILE}" == orcarouter-hybrid &&
+if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 &&
+      ( "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ) &&
       -z "${MONITOR_ENABLED_ENV_SET}" && -z "${MONITOR_PROTECT_ENV_SET}" &&
       -z "${MONITOR_ENABLED_CLI}" && -z "${MONITOR_PROTECT_CLI}" ]]; then
-  # Hybrid H6 can exhaust non-CMA host memory while raw MemFree still looks
-  # healthy because CMA pages dominate. Fresh non-interactive installs protect
-  # the host by default; operators can opt out with --monitor/--no-monitor.
+  # Cold OrcaRouter/Hybrid GB10 loads can exhaust non-CMA host memory.
+  # Existing installs and explicit CLI/env settings keep their original policy.
   MONITOR_ENABLED=1
   MONITOR_PROTECT=1
 fi
 REPO="${PROFILE_REPO}"; REVISION="${PROFILE_REVISION}"
 MODEL_DIR="${MODEL_DIR:-${PROFILE_MODEL_DIR}}"
 IMAGE="${VLLM_IMAGE:-${PROFILE_IMAGE}}"
+if [[ "${ORCA_RUNTIME_CHOICE}" == legacy && "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 ]]; then
+  [[ "${MODEL_PROFILE}" == orcarouter ]] || die "legacy image is only supported for OrcaRouter"
+  IMAGE="vllm-skinny-tp1:v1"
+fi
 SERVED_NAME="${SERVED_NAME:-${PROFILE_SERVED_NAME}}"
 if [[ "${RESUME}" == 1 ]]; then
   [[ "${MODEL_REPO:-}" == "${REPO}" && "${MODEL_REVISION:-}" == "${REVISION}" ]] || \
@@ -888,7 +905,7 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 ]]; then
   fi
   if [[ "${MONITOR_ENABLED}" == 1 ]]; then
     if [[ "${UI_LANG}" == ko ]]; then
-      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
+      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
       wizard_yes_no '지속적인 저메모리 상태에서 컨테이너를 안전하게 중지합니까?' "${protect_default}" && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
       if wizard_yes_no '권장 모니터 임계값과 heartbeat를 변경합니까?' no; then
         wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
@@ -899,7 +916,7 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 ]]; then
         wizard_input MONITOR_HEARTBEAT 'Heartbeat seconds (0 disables)' "${MONITOR_HEARTBEAT}"
       fi
     else
-      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
+      protect_default=no; [[ "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ]] && protect_default=yes
       wizard_yes_no 'Stop the container safely after sustained low memory?' "${protect_default}" && MONITOR_PROTECT=1 || MONITOR_PROTECT=0
       if wizard_yes_no 'Customize the recommended monitor thresholds and heartbeat?' no; then
         wizard_input MONITOR_MIN_AVAILABLE_GIB 'MemAvailable GiB' "${MONITOR_MIN_AVAILABLE_GIB}"
@@ -1208,7 +1225,7 @@ elif [[ "${MODEL_PROFILE}" == nvidia && "${IMAGE}" == vllm-nv-mixed:v2 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.nv-mixed" "${ROOT_DIR}/scripts"
   fi
-elif [[ ( "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybrid ) && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
+elif [[ ( "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == mazinb || "${MODEL_PROFILE}" == orcarouter-hybrid ) && "${IMAGE}" == vllm-orcarouter-v029:v1 ]]; then
   if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     docker build -t "${IMAGE}" -f "${ROOT_DIR}/scripts/Dockerfile.v029-orcarouter" "${ROOT_DIR}/scripts"
   fi
