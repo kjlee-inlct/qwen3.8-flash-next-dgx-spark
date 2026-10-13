@@ -287,6 +287,11 @@ reload_profile_for_model_root() {
   REVISION="${PROFILE_REVISION}"
   MODEL_DIR="${PROFILE_MODEL_DIR}"
   IMAGE="${PROFILE_IMAGE}"
+  if [[ "${ORCA_RUNTIME_CHOICE:-}" == legacy ]]; then
+    [[ "${MODEL_PROFILE}" == orcarouter && "${RESUME:-0}" == 0 && "${PROFILE_SWITCH:-0}" == 0 ]] ||
+      die '--orcarouter-runtime legacy requires fresh OrcaRouter installation'
+    IMAGE="vllm-skinny-tp1:v1"
+  fi
   SERVED_NAME="${PROFILE_SERVED_NAME}"
 }
 
@@ -559,6 +564,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
+    --orcarouter-runtime) [[ $# -ge 2 ]] || die "--orcarouter-runtime requires v029 or legacy"; case "$2" in v029|legacy) ORCA_RUNTIME_CHOICE="$2" ;; *) die "--orcarouter-runtime must be v029 or legacy" ;; esac; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
     --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; [[ -n "$2" ]] || die "--config-override requires a non-empty PATH"; CONFIG_OVERRIDE_CLI="$2"; CONFIG_OVERRIDE_CLI_SET=1; shift ;;
     --no-config-override) CONFIG_OVERRIDE_CLI=""; CONFIG_OVERRIDE_CLI_SET=1 ;;
@@ -696,6 +702,10 @@ else
   choose_default_model_root
 fi
 load_model_profile "${MODEL_PROFILE}" || exit $?
+if [[ -n "${ORCA_RUNTIME_CHOICE}" &&
+      ( "${MODEL_PROFILE}" != orcarouter || "${RESUME}" != 0 || "${PROFILE_SWITCH}" != 0 ) ]]; then
+  die '--orcarouter-runtime is valid for fresh OrcaRouter installation only; existing images are manifest-bound'
+fi
 if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 &&
       ( "${MODEL_PROFILE}" == orcarouter || "${MODEL_PROFILE}" == orcarouter-hybrid ) &&
       -z "${MONITOR_ENABLED_ENV_SET}" && -z "${MONITOR_PROTECT_ENV_SET}" &&

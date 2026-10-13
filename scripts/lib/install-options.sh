@@ -16,6 +16,7 @@ install_option_registry() {
   printf '%s\t%s\t%s\t%s\t%s\n' \
     profile setting yes '[--model PROFILE]' '--model' \
     model_root setting yes '[--model-root PATH]' '--model-root' \
+    orcarouter_runtime setting yes '[--orcarouter-runtime v029|legacy]' '--orcarouter-runtime' \
     config_override setting yes '[--config-override PATH|--no-config-override]' '--config-override,--no-config-override' \
     list_models informational no '[--list-models]' '--list-models' \
     list_backends informational no '[--list-backends]' '--list-backends' \

@@ -25,6 +25,11 @@ class OrcaRouterABWizardTests(unittest.TestCase):
         self.assertEqual(r.returncode,0,r.stdout+r.stderr)
         self.assertIn("image       : "+LEGACY,r.stdout)
         self.assertIn("protection  : enabled",r.stdout)
+        self.assertIn("--orcarouter-runtime legacy",r.stdout)
+        # Equivalent CLI must reproduce the selected legacy image.
+        cli=self.run_clean("--model","orcarouter","--lang","en","--yes","--no-start","--orcarouter-runtime","legacy")
+        self.assertEqual(cli.returncode,0,cli.stdout+cli.stderr)
+        self.assertIn("image       : "+LEGACY,cli.stdout)
     def test_plan_only(self):
         r=subprocess.run(["bash",str(ROOT/"scripts/lib/orcarouter-ab-plan.sh"),"--installed-image",LEGACY],capture_output=True,text=True)
         self.assertEqual(r.returncode,0,r.stderr)

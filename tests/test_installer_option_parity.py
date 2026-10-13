@@ -21,6 +21,7 @@ class InstallerOptionParityTests(unittest.TestCase):
         "language": "wizard_step 1 6 '언어 선택 / Language'",
         "profile": "wizard_choose_model_profile",
         "model_root": "wizard_input MODEL_ROOT",
+        "orcarouter_runtime": "ORCA_RUNTIME_CHOICE=legacy",
         "config_override": "wizard_input CONFIG_OVERRIDE",
         "monitor_mode": "Enable the runtime memory monitor?",
         "monitor_min_available": "wizard_input MONITOR_MIN_AVAILABLE_GIB",
