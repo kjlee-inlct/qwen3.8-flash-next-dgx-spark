@@ -1,5 +1,17 @@
 # Benchmark evidence index
 
+## Physical Legacy A exited 137 — cause still under investigation (2026-10-13)
+
+[Actual post-start diagnostics](dgx-orcarouter-legacy-a-exit137-20261013.md):
+new isolated A exited 137 / OOMKilled=false, API refused,
+watchdog heartbeat stale; old managed Docker unchanged.
+Checkpoint load incomplete (~2/18 main, ~1/18 PLE).
+Copied engine logs in monitor.log are consistent with a
+memory-protection stop but `monitor/runtime-stop.env`
+and warning counters are not yet available.
+No confirmed NVRM fault and no benchmark measurements.
+
+
 ## ACTUAL_DGX Legacy A wizard isolation STARTED (2026-10-13 17:57 KST)
 
 [**Physical operator Legacy A trial startup evidence**](dgx-orcarouter-legacy-a-actual-start-20261013.md):

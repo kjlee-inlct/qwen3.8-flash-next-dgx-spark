@@ -1,5 +1,49 @@
 # Current project status
 
+## ACTUAL_DGX Legacy A startup failed after Docker START — exited 137 (2026-10-13 ~18:16 KST)
+
+Physical operator diagnostic after the first Legacy A isolated launch:
+original protected managed container `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+still **exited, Running=false, OOMKilled=false, ExitCode=0**
+at image ID `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`.
+New A candidate `57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`
+is **exited, Running=false, ExitCode=137, OOMKilled=false**.
+The watchdog heartbeat was 1028 seconds old when read; its armed
+file matched the exact candidate ID. Both `/health` and
+`/v1/models` refused connections. Docker model logs show
+vLLM `v0.1.dev20073+g8e685d198`, Legacy PLE offload worker,
+16 GiB KV, two MTP speculation tokens, a **170.88 GiB
+checkpoint on EXT4**, with ~38.68 GiB RAM available at
+load start. Only initial 2/18 (GPU) and 1/18 (PLE) shard
+progress was captured; no model READY, API, inference,
+NVIDIA RM stability or benchmark success.
+
+After termination, DGX shows ~118 GiB available and ~1 GiB
+swap used, GPU idle, no matching RM/Xid strings in shown
+kernel journal filter. These **post-exit** values cannot prove
+lack of pressure during load. Monitor log tail includes many
+copied Docker logs, which is strongly **consistent** with
+the memory-protection path in `monitor-runtime.sh` (prints
+`PROTECT stopping`, copies last 1000 container log lines,
+then writes `monitor/runtime-stop.env` and invokes Docker
+stop timeout 30 seconds); **NOT PROVEN** without early
+`monitor.log` warnings and `runtime-stop.env`.
+Exit 137 (SIGKILL) plus `OOMKilled=false` does not
+establish container/kernel OOM or NVRM fault.
+
+**NEXT GATE: READ-ONLY STOP REASON INVESTIGATION.**
+Capture exact Docker StartedAt/FinishedAt; `monitor.log`
+lines matching `WARNING memory margin`, `PROTECT stopping`,
+`HEARTBEAT healthy`, `TRIAL WATCHDOG EXIT`;
+`monitor/runtime-stop.env`; persisted trial records.
+Do not start B, repeat A, weaken memory guards, clean up
+images/models/containers, or benchmark until reason
+is established. Previous old Docker is preserved;
+OrcaRouter checkpoint no-delete is only for this test.
+See [actual physical exit evidence](../scripts/benchmark/evidence/dgx-orcarouter-legacy-a-exit137-20261013.md).
+PR #259 Draft/Open/Unmerged.
+
+
 ## ACTUAL_DGX OrcaRouter Legacy A isolated Docker START succeeded — NOT READY/NOT QUALIFIED (2026-10-13 17:57 KST)
 
 The operator physically ran `./install.sh` using a clean detached worktree
