@@ -128,16 +128,86 @@ wizard_mazinb_admission() {
   fi
 }
 
+wizard_m1_confirm_old_id() {
+  local old_id typed
+  WIZARD_M1_EXPECTED_ID=""
+  command -v docker >/dev/null 2>&1 || {
+    wizard_warning 'Docker unavailable; M1 cancelled.'
+    return 1
+  }
+  old_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null)" || {
+    wizard_warning 'Canonical predecessor cannot be inspected; M1 blocked.'
+    return 1
+  }
+  [[ "${old_id}" =~ ^[a-f0-9]{64}$ ]] || {
+    wizard_warning 'Invalid full predecessor Docker ID; M1 blocked.'
+    return 1
+  }
+  printf 'M1_PROTECTED_PREDECESSOR_ID=%s\n' "${old_id}"
+  wizard_input typed 'Re-enter full 64-hex predecessor Docker ID / 기존 Docker ID 재입력' ''
+  [[ "${typed}" == "${old_id}" ]] || {
+    wizard_warning 'Exact predecessor ID mismatch; M1 cancelled.'
+    return 1
+  }
+  WIZARD_M1_EXPECTED_ID="${old_id}"
+}
+
+wizard_m1_authenticate_read_only_kernel() {
+  if ! sudo -n true >/dev/null 2>&1; then
+    wizard_yes_no 'Authenticate sudo for strict kernel RM evidence? / 읽기용 sudo 인증' no || return 1
+    sudo -v || {
+      wizard_warning 'Sudo authentication failed; M1 cancelled.'
+      return 1
+    }
+  fi
+}
+
+wizard_m1_preflight() {
+  wizard_header 'New isolated mazinb M1 / 새 M1 사전 검증'
+  wizard_info 'Historical A/B and managed OrcaRouter are preserved.'
+  wizard_m1_confirm_old_id || return 0
+  wizard_m1_authenticate_read_only_kernel || return 0
+  if ! python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" preflight \
+      --expected-old-id "${WIZARD_M1_EXPECTED_ID}"; then
+    wizard_warning 'M1 fresh admission BLOCKED; no model created or started.'
+  fi
+}
+
+wizard_m1_run() {
+  local consent
+  wizard_header 'EXPERIMENTAL mazinb M1 live session / 실 DGX 모델 실행'
+  wizard_warning 'This starts a NEW GPU-heavy mazinb Docker. Not previously qualified on the CURRENT DGX.'
+  wizard_warning 'Protected managed Docker, old KV-A/B and model assets are NEVER deleted.'
+  wizard_warning 'Terminal A stays open until STOP; Terminal B benchmarks only after M1_READY_FOR_BENCH.'
+  wizard_yes_no 'Do you explicitly approve this NEW physical model load? / 새 모델 기동 승인' no ||
+    return 0
+  wizard_m1_confirm_old_id || return 0
+  wizard_input consent 'Type exactly START_MAZINB_16G to confirm new GPU startup' ''
+  [[ "${consent}" == START_MAZINB_16G ]] || {
+    wizard_warning 'Live start confirmation mismatch; M1 cancelled.'
+    return 0
+  }
+  wizard_m1_authenticate_read_only_kernel || return 0
+  if ! QWEN38_M1_WIZARD_APPROVED=1 python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" run \
+      --expected-old-id "${WIZARD_M1_EXPECTED_ID}"; then
+    wizard_warning 'M1 failed or was stopped; inspect read-only M1 status/evidence and watchdog.'
+  fi
+}
+
 wizard_benchmark_menu() {
   local choice
   while true; do
     wizard_header 'Benchmark / 벤치마크'
-    wizard_info 'mazinb historical evidence and admission are read-only. Actual start awaits M1.'
+    wizard_info 'Old A/B are preserved. M1 is source-implemented; DGX live qualification is pending.'
     wizard_menu_option 1 'mazinb preflight (read-only) / 사전 점검'
     wizard_menu_option 2 'New mazinb B admission (read-only; blocked if B exists)'
     wizard_menu_option 3 'Report tools / 보고서 도구'
     wizard_menu_option 4 'Historical mazinb A/B status / 기존 실험 상태'
     wizard_menu_option 5 'Historical A/B evidence (1=A, 2=B, 3=both) / 기존 증거'
+    wizard_menu_option 6 'mazinb M1 plan (no start) / 새로운 M1 계획'
+    wizard_menu_option 7 'mazinb M1 status (no mutation) / M1 상태'
+    wizard_menu_option 8 'mazinb M1 physical read-only preflight / 신규 M1 사전 검증'
+    wizard_menu_option 9 'mazinb M1 experimental live start (explicit approval) / 새 모델 기동'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -151,6 +221,12 @@ wizard_benchmark_menu() {
         printf 'Metrics     : NOT_MEASURED without actual DGX evidence.\n' ;;
       4) wizard_mazinb_status ;;
       5) wizard_mazinb_evidence ;;
+      6) python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" plan ||
+           wizard_warning 'M1 plan unavailable.' ;;
+      7) python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" status ||
+           wizard_warning 'M1 status invalid; forensic investigation required.' ;;
+      8) wizard_m1_preflight ;;
+      9) wizard_m1_run ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac

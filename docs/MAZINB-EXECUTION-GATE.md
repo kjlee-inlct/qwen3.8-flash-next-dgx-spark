@@ -57,6 +57,8 @@ watchdog and SSH-interruption recovery; there is no reason to delete
 either historical trial to make room for it. The managed legacy
 OrcaRouter image `vllm-skinny-tp1:v1` remains unchanged.
 
+**Caution from pre-existing repository evidence:** [`mazinb-kv-ab-20261002.md`](../scripts/benchmark/evidence/mazinb-kv-ab-20261002.md) explicitly records two A-side NVIDIA RM `NV_ERR_NO_MEMORY` signals and the subsequent managed 16 GiB revalidation with one such RM event despite functional readiness. The fresh Wizard evidence menu's filtered kernel window being empty is not evidence that these archived RM findings did not occur. Historical isolated B PASS never guarantees strict future host RM PASS.
+
 ## Priority and sequencing (2026-10-14)
 
 The next **actual DGX model test** should be mazinb; finishing the entire
@@ -114,9 +116,14 @@ nonzero exit can terminate that interactive SSH shell. Launch the Wizard with
 `bash /path/to/verified-worktree/wizard.sh` from a normal shell instead,
 without setting `errexit` globally.
 
-### Stage M1 — protected isolated candidate runtime (NOT IMPLEMENTED)
+### Stage M1 — protected isolated candidate runtime (SOURCE IMPLEMENTED; ACTUAL DGX NOT QUALIFIED)
 
-Build and qualify a separate controller (not just the old KV A/B runner)
+A new controller (`scripts/runtime/mazinb-m1.py`) is source-implemented,
+with plan/status/preflight and explicitly gated Wizard live-start menu.
+It must still pass actual DGX read-only preflight and separately owner-
+approved startup/rollback acceptance before any model success claim.
+[New Wizard M1 guide](MAZINB-M1-WIZARD.md) details the safety contract.
+The new controller is separate from the old KV A/B runner and is designed to
 that holds exactly one lifecycle lock throughout setup, model start,
 readiness, identity, benchmark and safe stop. Its protected start must
 preserve exact managed Docker ID/status/image, require restart-policy=no
@@ -132,6 +139,11 @@ llama-benchy; changing that stop behavior without lifecycle recovery
 and exact-ID safety tests would violate the preservation contract.
 
 ### Stage M2 — actual benchmark (NOT PERFORMED)
+
+The source-side B-terminal `scripts/benchmark/with-wizard-lock.sh
+--m1-benchmark` option now shares the lifecycle lock while holding an
+exclusive benchmark lock and checking a pinned active M1 session before and
+after the workload. This does not itself install or execute llama-benchy.
 
 Once M1 is qualified by synthetic tests and DGX admission succeeds,
 run one supervised smoke request, verify `/health` and exact
@@ -158,8 +170,8 @@ backed-up assets may be reclaimed. No deletion approval is implied.
 | --- | --- |
 | Existing 2026-10-13 mazinb KV preflight | historical PASS |
 | Historical A/B status and evidence in Wizard | actual-DGX historical review completed; A protect-stop, B HTTP READY observed |
-| New admission script source | implemented; fresh B blocked by existing historical B |
-| M1 protected stay-READY controller | NOT_IMPLEMENTED |
+| Legacy admission helper source | implemented; old B collision blocks this fixed-name path; new M1 has unique names |
+| M1 protected stay-READY controller | SOURCE IMPLEMENTED; CURRENT-DGX NOT QUALIFIED |
 | Historical B API HTTP readiness | observed 2026-10-02; exact served-name JSON absent from pasted output |
 | Fresh M1 mazinb READY / served identity | NOT_MEASURED |
 | Historical A/B filtered RM/monitor window | A protect-stop; B no protect stop, no matching RM lines; full current-host acceptance pending |

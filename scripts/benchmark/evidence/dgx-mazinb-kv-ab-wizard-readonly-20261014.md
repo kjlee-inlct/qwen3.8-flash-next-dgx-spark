@@ -39,7 +39,7 @@ The pasted evidence does not expose a full immutable B Docker ID, nor Docker imm
 
 - The memory monitor started `20:45:40` in **protect** mode. Periodic `HEARTBEAT healthy` entries continue through `20:59:49`, with no shown `WARNING memory margin low` or `PROTECT stopping`.
 - The vLLM engine initialization and CUDA graph warmup completed; logs state `Initial free memory 114.91 GiB, reserved 16.0 GiB memory for KV Cache` and `GPU KV cache size: 579,086 tokens`.
-- At **20:57:29 KST** (`11:57:29Z`) vLLM logged server startup; API `Application startup complete` followed at **20:57:33 KST** (`11:57:33Z`).
+- `21:57:29` would be the wrong date/time alignment; the **actual** API `Application startup complete` was **20:57:33 KST** (`11:57:33Z`).
 - At **20:57:42 KST** (`11:57:42Z`) the API logged successful GET requests for **`/health` HTTP 200** and **`/v1/models` HTTP 200**.
 - At **21:00:42 KST** (`12:00:42Z`), exactly about **180 seconds** later, vLLM's orderly shutdown began; Docker exited **0** around `21:00:45 KST`.
 - The displayed `runtime-stop` marker is absent and the filtered RM/OOM section contains no matching events.

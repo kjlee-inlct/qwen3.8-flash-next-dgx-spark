@@ -1,3 +1,16 @@
+> **2026-10-14 mazinb M1 source implementation:** Added an isolated
+> unique-name create-only `scripts/runtime/mazinb-m1.py` supervisor;
+> Wizard Benchmark 6/7/8/9 = plan/status/read-only physical preflight/
+> explicit opt-in new live start. A strict pinned-label watchdog is
+> armed BEFORE start, post-ready 180s soak and strict RM monitoring are
+> source-implemented; the M1 shared lifecycle + exclusive benchmark
+> lock contract is source-implemented in `with-wizard-lock.sh
+> --m1-benchmark`. **M1 ACTUAL DGX PREFLIGHT / LIVE READY /
+> LLAMA-BENCHY remain NOT_RUN.** Old A/B and OrcaRouter protected.
+> Controlled B (16 GiB) historical success does not erase the
+> archived *managed* 16 GiB `NV_ERR_NO_MEMORY` HOST-STABILITY FAIL.
+> See `docs/MAZINB-M1-WIZARD.md`.
+
 > **2026-10-14 mazinb ACTUAL_DGX historical A/B evidence review:**
 > The owner's Wizard 5 -> 5 -> 3 output shows A/24 GiB
 > `STOP_REASON=memory-protection` after five low-memory samples

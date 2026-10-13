@@ -1,3 +1,11 @@
+> **2026-10-14 M1 source stage:** Benchmark submenu now delegates
+> dedicated `mazinb-m1.py` plan/status/preflight and protected
+> explicitly approved new live run. The source uses create-only
+> isolated Docker names, exact-ID prearmed detached monitor and
+> a shared lifecycle lock throughout supervised operation. Model
+> start, CUDA/RM load and llama-benchy have NOT been performed on the
+> physical DGX with this controller. See `MAZINB-M1-WIZARD.md`.
+
 > **2026-10-14 ACTUAL_DGX mazinb historical review:** Wizard
 > successfully displayed both old A/B evidence. A/24 GiB reached
 > `PROTECT stopping` after 5/5 samples; B/16 GiB served health/models
@@ -26,7 +34,7 @@ The new `wizard.sh` loads specialized modules under `scripts/wizard/`:
 | Uninstall | Call existing uninstaller with default-NO handoff | Only within existing uninstaller's safety gates |
 | Models | List registry/assets, switch dry-run preview | No switch is executed |
 | Runtime/API/service | Read-only service status, Doctor, manifest summary | None |
-| Benchmark | mazinb preflight, historical A/B status and evidence (1=A, 2=B, 3=both), read-only new B admission (blocked while historical B exists), report tools | No candidate start; no performance measurement |
+| Benchmark | old A/B status/evidence, M1 plan/status/read-only preflight, opt-in new isolated M1 live controller, report tools | Live new M1 candidate only after exact-ID typed approval; not qualified on physical DGX |
 | Storage | Status, recommendations, prune **plan** | No prune, model deletion, or evidence cleanup |
 | Advanced | A/B status and evidence index | No A/B trials started |
 | Diagnostics | Existing read-only Doctor | None |

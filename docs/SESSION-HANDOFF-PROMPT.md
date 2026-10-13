@@ -1,3 +1,18 @@
+> **2026-10-14 NEXT: M1 code source stage:** New Wizard Benchmark
+> submenu 6 plan / 7 status / 8 read-only M1 preflight / 9
+> separately approved new M1 LIVE start. Source implements
+> unique `qwen38-mazinb-m1-...` container, create-only provenance,
+> exact-ID watchdog armed before Docker start, 16 GiB KV and strict
+> /health + served-ID + 180s soak. Source has foreground shared
+> lifecycle lock, while Terminal B's `with-wizard-lock.sh
+> --m1-benchmark` uses shared lifecycle/exclusive benchmark and
+> pinned ready-session reattestation. Old A/B and managed predecessor
+> unchanged, no cleanup. **NOT ACTUAL_DGX_QUALIFIED**; physical
+> read-only preflight is the mandatory next operator action, NOT
+> M1 live launch by default. Archived managed 16GiB RM error means
+> isolated B PASS is not a universal guarantee.
+> See `docs/MAZINB-M1-WIZARD.md`.
+
 > **2026-10-14 mazinb historical A/B complete read-only review:**
 > The user executed verified Wizard `b4c58750...`, Benchmark -> Evidence
 > -> Both. Old A (2026-10-02, 24 GiB) protected-stop CONFIRMED
