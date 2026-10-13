@@ -1,5 +1,21 @@
 # Benchmark evidence index
 
+## Source-only A/B trial implementation is not physical evidence (2026-10-13)
+
+The installed wizard's **menu 6** now contains source code
+to create new isolated OrcaRouter Legacy/v0.29 trial Docker
+objects, pin the old predecessor, arm a separate protective
+watchdog, then start/stop **only** the new trial exact ID.
+This is **SOURCE_REVIEW / SYNTHETIC_CI**: no actual DGX
+trial start, API READY, host RM safety or new benchmark evidence.
+The original physical installed-wizard `--dry-run` PASS
+remains recorded separately at
+`dgx-orcarouter-wizard-actual-dry-run-20261013.md`.
+Do not promote source CI to ACTUAL_DGX acceptance.
+No Docker/model deletes; all reports NOT_MEASURED.
+[Source-only safety and operator constraints](../../../docs/DGX-ORCAROUTER-AB-ISOLATED-TRIAL.md).
+
+
 ## OrcaRouter A/B implementation — SOURCE/CI only, NOT measured (2026-10-13)
 
 The owner selected separate Legacy `vllm-skinny-tp1:v1` and v0.29 `vllm-orcarouter-v029:v1` runs on the same pinned OrcaRouter checkpoint. New installer offers **L** for clean-host Legacy alongside provisional v0.29 default, and existing-installed manager **5** for read-only A/B plan preview. It does NOT launch models or qualify GPU/host health; canonical model results remain NOT_MEASURED. Actual frozen source `394805e62999186afd56d085f279d87f4e4742af`; CLI/wizard executable modes were restored after the first source-only CI failure, followed by CLI parity fixes. First CI #38359872526 failed (lost git executable bits + prohibited lib→benchmark reference + H38 test expectation), second #38360356229 failed 2/940 (legacy image selection overwritten after root reload + monitor default parity). Both are corrected in the latest implementation, with fresh CI validation separate from any real DGX acceptance. [Full A/B plan](../../../docs/DGX-ORCAROUTER-AB-BENCHMARK.md). No Docker/model deletion authorized.

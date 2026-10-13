@@ -1,5 +1,53 @@
 # DGX two-terminal operation — wizard-managed lifecycle, separate benchmark
 
+## OrcaRouter A/B trial wizard implementation — SOURCE ONLY (2026-10-13)
+
+**Progress since A/B preview:** A separate, experimental installed-setup
+**menu 6** now offers **status / start Legacy / start v0.29 / stop**,
+plus a plan-only response under `./install.sh --dry-run`.
+A fresh DGX Spark OS with working NVIDIA driver/Docker/Git/Python/curl/sudo
+still uses `./install.sh` to select v0.29 (default) or press
+`L` (Legacy), automatically download pinned checkpoint and
+locally build the selected runtime image if absent. These are
+distinct workflows: neither is a pretext to change the existing
+managed manifest, immutable release or stopped predecessor.
+
+The A/B trial is **source-implemented but NOT ACTUAL_DGX
+qualified**. Safety boundary: interactive choice and explicit
+old Docker ID confirmation; shared lifecycle lock; complete
+OrcaRouter manifest; service inactive; no conflicting lifecycle
+transaction; protected predecessor exact 64-character ID,
+`exited`, non-OOM and unchanged; original release and manifest
+SHA retained; present pinned checkpoint/config/image; swap and
+non-CMA memory margins; exclusive localhost trial API 18888.
+
+Launch uses a new `qwen38-ab-legacy` or `qwen38-ab-v029`
+container with immutable predecessor/variant labels, initially
+**docker create, not start**; a separately persisted state
+watchdog must be **armed to that exact Docker ID** before the
+trial can be started. The watchdog uses its own stop journal and
+non-CMA/swap monitoring. Failure/stop targets only the exact new
+trial ID; Docker container/logs are preserved for evidence.
+After stopping A, B can start only if A is cleanly stopped with
+proper provenance. Neither trial changes installed image,
+manifest, service, old Docker object or release pointer.
+Ref: [isolated trial source runbook](DGX-ORCAROUTER-AB-ISOLATED-TRIAL.md).
+
+**Crucial:** A successful GitHub Python/ShellCheck CI tests
+source and synthetic mocks, NOT actual GPU load, model READY,
+NVIDIA RM correctness, stability or benchmark. No actual
+model start, pause or deletion has been performed in this chat.
+The host's earlier read-only OrcaRouter wizard dry-run remains
+the only verified physical wizard event. A/B results,
+raw llama-benchy JSON/Markdown/SHA256 and off-host backup
+remain **NOT_MEASURED/NOT_CAPTURED**. Before live use,
+conduct an owner-approved exact-SHA read-only menu 6 preview,
+check all host prerequisites and watchdog behavior; any
+physical launch is a separate explicit operator decision.
+OrcaRouter deletion HOLD applies **only during this test**,
+not permanently. PR #259 remains Draft/Open/Unmerged.
+
+
 ## OrcaRouter legacy / v0.29 A/B wizard plan staged (2026-10-13)
 
 **Owner's new choice:** do not decide the final runtime image from source inspection alone. Benchmark **both** `vllm-skinny-tp1:v1` (legacy CPU-offload) and `vllm-orcarouter-v029:v1` (official vLLM v0.29 + PLE mmap/GB10 FLA/exact QSA) **sequentially** on the same OrcaRouter checkpoint/revision and a **16 GiB KV cache** starting point. These represent whole-runtime differences, not an image-only isolation. Measure actual load/READY, TTFT/TTFR, PP/TG, concurrency, failure rate and strict NVIDIA RM/non-CMA/swap stability with the same pinned `llama-benchy` workload, separate cold/warm repeats and preserved JSON/Markdown/SHA256/off-host backup. Prefer a stable image only **after** real qualification; both reports are NOT_MEASURED.
