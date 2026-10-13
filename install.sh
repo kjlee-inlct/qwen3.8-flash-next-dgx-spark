@@ -728,11 +728,19 @@ if [[ "${RESUME}" == 0 && "${PROFILE_SWITCH}" == 0 && "${YES}" != 1 && -z "${CLI
   wizard_step 1 6 '언어 선택 / Language'
   wizard_menu_option 1 '한국어' '기본값 / Default'
   wizard_menu_option 2 'English'
-  wizard_input answer '선택 / Select' 1
-  case "${answer}" in
-    2|en|EN|English|english) UI_LANG=en ;;
-    *) UI_LANG=ko ;;
-  esac
+  # A mistyped choice is not consent to the default language.
+  while true; do
+    wizard_input answer '선택 / Select' 1
+    case "${answer}" in
+      1|ko|KO|Korean|korean|한국어) UI_LANG=ko; break ;;
+      2|en|EN|English|english) UI_LANG=en; break ;;
+      q|Q|cancel|Cancel|취소)
+        wizard_info 'Cancelled / 취소됨'
+        exit 0
+        ;;
+      *) wizard_warning 'Invalid language selection. Enter 1, 2 or Cancel. / 언어 선택이 잘못되었습니다.' ;;
+    esac
+  done
 elif [[ -z "${UI_LANG}" ]]; then
   UI_LANG=ko
 fi
@@ -771,23 +779,47 @@ if [[ "${YES}" != 1 && "${RESUME}" != 1 && "${PROFILE_SWITCH}" != 1 && -z "${MOD
       wizard_menu_option 1 '기존 모델 저장소 재사용 (권장)' "${existing_home_root}"
       wizard_menu_option 2 '현재 저장소의 models 폴더 사용' "${repo_model_root}"
       wizard_menu_option 3 '직접 입력'
-      wizard_input answer '선택' 1
+      wizard_menu_option 4 '취소'
     else
       wizard_info "Existing verified model store found: ${existing_home_root}"
       wizard_info "Fresh-install default: ${repo_model_root}"
       wizard_menu_option 1 'Reuse existing model store (recommended)' "${existing_home_root}"
       wizard_menu_option 2 'Use repository-local models directory' "${repo_model_root}"
       wizard_menu_option 3 'Enter another path'
-      wizard_input answer 'Select' 1
+      wizard_menu_option 4 'Cancel'
     fi
-    case "${answer}" in
-      2) MODEL_ROOT="${repo_model_root}"; MODEL_ROOT_SOURCE=repo-default ;;
-      3)
-        [[ "${UI_LANG}" == ko ]] && wizard_input MODEL_ROOT '모델 저장 루트' "${repo_model_root}" || wizard_input MODEL_ROOT 'Model storage root' "${repo_model_root}"
-        MODEL_ROOT_SOURCE=custom
-        ;;
-      *) MODEL_ROOT="${existing_home_root}"; MODEL_ROOT_SOURCE=existing-home ;;
-    esac
+    # Invalid input must not silently reuse an existing model store.
+    while true; do
+      if [[ "${UI_LANG}" == ko ]]; then
+        wizard_input answer '선택' 1
+      else
+        wizard_input answer 'Select' 1
+      fi
+      case "${answer}" in
+        1) MODEL_ROOT="${existing_home_root}"; MODEL_ROOT_SOURCE=existing-home; break ;;
+        2) MODEL_ROOT="${repo_model_root}"; MODEL_ROOT_SOURCE=repo-default; break ;;
+        3)
+          if [[ "${UI_LANG}" == ko ]]; then
+            wizard_input MODEL_ROOT '모델 저장 루트' "${repo_model_root}"
+          else
+            wizard_input MODEL_ROOT 'Model storage root' "${repo_model_root}"
+          fi
+          MODEL_ROOT_SOURCE=custom
+          break
+          ;;
+        4|q|Q|cancel|Cancel|취소)
+          [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
+          exit 0
+          ;;
+        *)
+          if [[ "${UI_LANG}" == ko ]]; then
+            wizard_warning '잘못된 저장 위치 선택입니다. 1~4 중에서 다시 선택하세요.'
+          else
+            wizard_warning 'Invalid storage selection. Enter 1, 2, 3 or 4.'
+          fi
+          ;;
+      esac
+    done
   else
     if [[ "${UI_LANG}" == ko ]]; then
       wizard_info "모델은 현재 저장소 아래 models 폴더에 저장됩니다."
