@@ -1,5 +1,18 @@
 # Benchmark evidence index
 
+## Actual Legacy A physical protection stop CONFIRMED (2026-10-13)
+
+[Real Legacy A watchdog record and memory margins](dgx-orcarouter-legacy-a-protection-confirmed-20261013.md):
+`STOP_REASON=memory-protection`, exact candidate ID,
+17:59:36 KST protect=5/5,
+noncmafree=914MiB, swapgrowth=14,096MiB, later exit 137
+OOMKilled=false. Not NVIDIA RM OOM; no model/API READY,
+no benchmark. Legacy A journal remains stale until
+exact-ID protected stopped-trial wizard reconciliation
+(new code CI pending). Do not delete A evidence or
+change monitoring limits.
+
+
 ## Physical Legacy A exited 137 — cause still under investigation (2026-10-13)
 
 [Actual post-start diagnostics](dgx-orcarouter-legacy-a-exit137-20261013.md):

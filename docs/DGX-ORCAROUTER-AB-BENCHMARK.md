@@ -1,5 +1,66 @@
 # OrcaRouter legacy vs v0.29 A/B — single DGX, wizard-first
 
+## 2026-10-13 17:59:36 KST — ACTUAL_DGX Legacy A protective stop CONFIRMED
+
+The owner's second physical diagnostic resolved the first Legacy A
+model-loading failure at source `48c517357cef2182be986c298a86ddfa1f4c74b0`.
+**This is a verified MONITOR_MEMORY_PROTECTION stop, not an
+unexplained exit 137 or proven NVIDIA RM OOM.**
+
+- Candidate exact Docker ID
+  `57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`;
+  started **2026-10-13 08:58:06.343Z** (17:58:06 KST);
+  monitor `mode=protect` started 17:58:07; at **17:59:36 KST**
+  monitor emitted `protect=5/5`, then
+  `PROTECT stopping qwen38-ab-legacy gracefully to preserve host stability`.
+  `monitor/runtime-stop.env` explicitly contains
+  `STOP_REASON=memory-protection`,
+  exact `STOP_CONTAINER_ID`, timestamp
+  `2026-10-13T08:59:36Z`.
+  Docker finished **2026-10-13 09:00:10.252Z**
+  (18:00:10 KST), **ExitCode=137**, **OOMKilled=false**.
+  The ~34 s between stop request and final exit is consistent
+  with Docker `stop --timeout 30` escalating to SIGKILL
+  but the exact kill mechanism is not independently proven.
+- Protection sequence includes recovery/reset at 17:59:18,
+  then 17:59:27→36 five consecutive low-memory samples.
+  Final margin **noncmafree=914MiB** (below 2 GiB)
+  despite **noncma_available=23,163MiB** and
+  `swapgrowth=14,096MiB` (~13.77 GiB, exceeds 256 MiB
+  swap-activity gate). Thus warning/protect is triggered by
+  low *immediately free* non-CMA with sustained swapping,
+  **not** by the non-CMA available floor or swapfree<8GiB.
+  Final `swapfree=132,391MiB`.
+- Original old managed Docker
+  `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+  remained exited clean (ExitCode 0), image unchanged.
+  Real API `/health` and `/v1/models` refused;
+  checkpoint loading incomplete, **no benchmark**.
+  In shown kernel filter no NVRM/Xid/OOM matches,
+  not a guarantee of complete hardware failure absence.
+- **Stale recorded phase bug:** both
+  `ab-trial.json` and per-run `record.json` retained
+  `phase=started_unqualified` although the monitor already
+  stopped A. The monitor operates asynchronously and
+  cannot mutate the wizard's main journal. New code added
+  actual Docker status, exit code and forensic STOP_REASON to
+  read-only wizard status (6→1), and an exact-ID validated
+  *already-exited* A reconciliation through wizard (6→4)
+  that writes `phase=stopped` with `stop_reason` and
+  `exit_code` **without another Docker stop or deletion**.
+  Do not invoke the new reconciliation on the user's older
+  worktree until the corrected SHA's CI is verified.
+- **Next:** keep full Legacy logs/container,
+  do not disable memory monitoring or change thresholds
+  to force Legacy startup. After CI, reconcile A via
+  wizard and repeat read-only v0.29 admission. Only then
+  consider supervised B image loading as a *separate*
+  real DGX test; no A throughput value can be reported.
+  No benchmark, no cleanup, no PR merge. OrcaRouter
+  checkpoint deletion hold is scoped to this test.
+  [Canonical confirmed evidence](../scripts/benchmark/evidence/dgx-orcarouter-legacy-a-protection-confirmed-20261013.md).
+
+
 ## ACTUAL_DGX Legacy A startup failed after Docker START — exited 137 (2026-10-13 ~18:16 KST)
 
 Physical operator diagnostic after the first Legacy A isolated launch:
