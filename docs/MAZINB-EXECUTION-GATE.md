@@ -80,6 +80,16 @@ After this physical result, source was hardened to isolate each candidate's
 HOME and vLLM/FlashInfer caches; re-check the newer SHA and pass CI before
 an explicitly owner-approved live run. The preflight is not proof
 of M1 READY, post-ready soak, strict live RM stability or llama-benchy.
+### Second M1 read-only preflight — repeat PASS, no new model (2026-10-14)
+
+User again selected Wizard Benchmark 5 -> 8 and received
+`M1_PREFLIGHT=PASS_READ_ONLY`, unchanged old Docker ID, release and
+image ID, and `M1_CANDIDATE_START=NOT_PERFORMED`. The follow-up
+5 -> 5 -> 0 exited the historical evidence picker without an A/B
+re-inspection. The second terminal excerpt does not itself show a
+Git HEAD verification; re-verify exact SHA before first opt-in live
+launch. Source CI for the cache-isolation change passed; actual
+GPU load and any new M1 host-stability verdict remain NOT_RUN.
 ## Priority and sequencing (2026-10-14)
 
 The next **actual DGX model test** should be mazinb; finishing the entire

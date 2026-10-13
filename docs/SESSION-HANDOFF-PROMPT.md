@@ -1,3 +1,14 @@
+> **2026-10-14 second DGX M1 read-only verification:** Repeated
+> Wizard 5 -> 8 returned `M1_PREFLIGHT=PASS_READ_ONLY` and
+> `M1_CANDIDATE_START=NOT_PERFORMED` with unchanged protected Docker,
+> release and image. Wizard 5 -> 5 -> 0 only returned from the old
+> evidence menu. No Docker mutation or new GPU load observed.
+> The second terminal snippet OMITTED `git rev-parse HEAD`: although
+> its context is the new per-candidate cache-isolation commit, require
+> a read-only exact worktree SHA + clean status check before Wizard 9.
+> Keep Draft PR #261 unmerged, all old A/B preserved. Never claim
+> strict M1 live stability, READY, or llama-benchy before observed results.
+
 > **M1 NEXT-SESSION IMPORTANT 2026-10-14:** The owner physically
 > verified Wizard SHA `2dfa74dacedfe50fe1c28ca309939ed9d61b8123`
 > in detached worktree and performed Benchmark 6/7/8: new M1 plan

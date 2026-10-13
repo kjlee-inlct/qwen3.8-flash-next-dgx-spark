@@ -69,3 +69,27 @@ that hardening commit. Do not launch live M1 on the older preflight SHA.
 historical managed 16-GiB mazinb run had an NVIDIA
 `NV_ERR_NO_MEMORY` event despite successfully reaching READY; the
 new M1 physical strict RM gate remains mandatory.
+
+## Second current-host read-only review — user transcript (2026-10-14 KST)
+
+After the source-only per-trial cache isolation change at
+`72982e0e1bb53cdf8bb66a641356eb4a7e743320`, the operator
+submitted a second root Wizard 5 -> 8 output confirming again:
+
+- `M1_PREFLIGHT=PASS_READ_ONLY`
+- `M1_CANDIDATE_START=NOT_PERFORMED`
+- protected predecessor ID `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+- identical release `ff67bab3c94d6992f61b9535836df97f03b9c022`
+- identical image `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`
+
+The operator subsequently opened historical evidence via 5 -> 5 and chose
+0 (Back). This did **not** re-inspect or mutate either historical case.
+
+**Provenance qualification:** This second pasted output did *not* include a
+`git rev-parse HEAD` line. The operator had been given instructions to
+switch to the hardening commit, but the text alone is not an independent
+cryptographic confirmation that the second preflight ran that exact SHA.
+Before authorizing a physical M1 load, recheck the live worktree HEAD
+against the pinned runtime source SHA and ensure the worktree is clean.
+No M1 Docker creation, API READY, inference smoke or benchmark is reported.
+

@@ -1,3 +1,14 @@
+> **2026-10-14 DGX M1 repeat READ_ONLY PASS:** A second physical
+> Wizard 5 -> 8 transcript returned `M1_PREFLIGHT=PASS_READ_ONLY` and
+> `M1_CANDIDATE_START=NOT_PERFORMED`, matching the previously recorded
+> old Docker ID `f6bfee5a...ff6acd24`, immutable release `ff67bab3...`
+> and image SHA256 `dba5d8af...`. The user then entered 5 -> 5 -> 0,
+> which *cancelled* historical evidence selection without mutation.
+> The second transcript did not print its git HEAD; do not assert it
+> cryptographically establishes SHA 72982e0 until `git rev-parse HEAD`
+> is checked. No new M1 live container, READY, smoke or bench has run.
+> See `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
 > **2026-10-14 M1 ACTUAL DGX READ-ONLY PREFLIGHT PASS:** Source
 > `2dfa74dacedfe50fe1c28ca309939ed9d61b8123` in isolated
 > worktree; Wizard Benchmark 6 plan (16 GiB / port 18889),
