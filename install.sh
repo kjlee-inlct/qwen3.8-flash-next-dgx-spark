@@ -637,10 +637,13 @@ if [[ "${MANAGE_SETTINGS}" == 1 ]]; then
   [[ "${YES}" != 1 && -z "${MODEL_CLI}" && -z "${MODEL_ROOT_CLI}" &&
      -z "${ORCA_RUNTIME_CHOICE}" && "${MIGRATE_MANIFEST}" != 1 &&
      "${REFRESH_PROFILE_DEFAULTS}" != 1 &&
-     -z "${CONFIG_OVERRIDE_CLI_SET}" && -z "${SERVICE_CLI}" &&
+     "${CONFIG_OVERRIDE_CLI_SET}" == 0 && -z "${SERVICE_CLI}" &&
      -z "${MONITOR_ENABLED_CLI}" && -z "${MONITOR_PROTECT_CLI}" &&
      -z "${API_ACCESS_CLI}" && -z "${API_DOCKER_PORT_CLI}" &&
-     -z "${API_LAN_ADDRESS_CLI}" && -z "${API_LAN_PORT_CLI}" ]] ||
+     -z "${API_LAN_ADDRESS_CLI}" && -z "${API_LAN_PORT_CLI}" &&
+     -z "${MONITOR_MIN_AVAILABLE_CLI}" && -z "${MONITOR_MIN_FREE_CLI}" &&
+     -z "${MONITOR_FREE_GATE_CLI}" && -z "${MONITOR_MIN_SWAP_FREE_CLI}" &&
+     -z "${MONITOR_CONSECUTIVE_CLI}" && -z "${MONITOR_HEARTBEAT_CLI}" ]] ||
     die '--manage-settings is interactive; cannot combine with model changes, settings CLI overrides or --yes'
 fi
 
