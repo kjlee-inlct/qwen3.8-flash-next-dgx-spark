@@ -72,6 +72,7 @@ API_LAN_PORT="${API_LAN_PORT:-8001}"
 API_ACCESS_CLI=""; API_DOCKER_PORT_CLI=""; API_LAN_ADDRESS_CLI=""; API_LAN_PORT_CLI=""
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
+MANAGE_SETTINGS=0  # Completed install only: direct settings editor, never a fresh install.
 MODEL_ROOT_CLI=""
 MODEL_ROOT_ENV="${QWEN38_MODEL_ROOT:-}"
 MODEL_ROOT=""
@@ -600,6 +601,7 @@ while [[ $# -gt 0 ]]; do
     --api-docker-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_DOCKER_PORT_CLI="$2"; shift ;;
     --api-lan-address) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_ADDRESS_CLI="$2"; shift ;;
     --api-lan-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_PORT_CLI="$2"; shift ;;
+    --manage-settings) MANAGE_SETTINGS=1 ;;
     --migrate-manifest) MIGRATE_MANIFEST=1 ;;
     --refresh-profile-defaults) REFRESH_PROFILE_DEFAULTS=1 ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
@@ -629,6 +631,19 @@ if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
   exit 0
 fi
 
+if [[ "${MANAGE_SETTINGS}" == 1 ]]; then
+  [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] ||
+    die '--manage-settings requires an existing managed installation'
+  [[ "${YES}" != 1 && -z "${MODEL_CLI}" && -z "${MODEL_ROOT_CLI}" &&
+     -z "${ORCA_RUNTIME_CHOICE}" && "${MIGRATE_MANIFEST}" != 1 &&
+     "${REFRESH_PROFILE_DEFAULTS}" != 1 &&
+     -z "${CONFIG_OVERRIDE_CLI_SET}" && -z "${SERVICE_CLI}" &&
+     -z "${MONITOR_ENABLED_CLI}" && -z "${MONITOR_PROTECT_CLI}" &&
+     -z "${API_ACCESS_CLI}" && -z "${API_DOCKER_PORT_CLI}" &&
+     -z "${API_LAN_ADDRESS_CLI}" && -z "${API_LAN_PORT_CLI}" ]] ||
+    die '--manage-settings is interactive; cannot combine with model changes, settings CLI overrides or --yes'
+fi
+
 if [[ "${DRY_RUN}" != 1 ]]; then
   ensure_operation_lock
 fi
@@ -642,6 +657,11 @@ if [[ -r "${STATE_FILE}" ]]; then
   [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
   manifest_profile="$(read_manifest_profile)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
   manifest_phase="$(read_manifest_phase)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+  if [[ "${MANAGE_SETTINGS}" == 1 ]]; then
+    [[ "${manifest_phase}" == complete ]] ||
+      die '--manage-settings requires PHASE=complete; fresh install/resume is not allowed'
+    INSTALL_COMPLETED_FORCE_SETTINGS=1
+  fi
   if [[ "${manifest_phase}" == complete && "${YES}" != 1 && "${MIGRATE_MANIFEST}" != 1 && -z "${MODEL_CLI}" ]]; then
     parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
     [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"
