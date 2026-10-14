@@ -1,3 +1,10 @@
+## PHYSICAL_M1_JOURNAL_RECONCILE=PASS_RECORDED_STOPPED — 2026-10-14
+
+Actual owner-operated Wizard 5 → 10 returned successful reconciled stopped
+phase with two owner-only backups. Docker remains stopped (exit 0),
+shutdown cause `UNDETERMINED`; no new GPU work or Docker mutation.
+[Read-only post-check and recovery transcript](dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+
 ## ACTUAL DGX mazinb M1 read-only preflight (2026-10-14)
 
 See [`dgx-mazinb-m1-physical-readonly-preflight-20261014.md`](dgx-mazinb-m1-physical-readonly-preflight-20261014.md).

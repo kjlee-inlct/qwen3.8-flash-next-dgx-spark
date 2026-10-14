@@ -26,6 +26,30 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## Single canonical working directory; bounded Git worktrees (2026-10-14)
+
+- Routine operator commands, code edits and Wizard invocation should occur
+  in **`~/Workspace/llm/qwen3.8-flash-next-dgx-spark`**, the user's original root.
+- Temporary Git worktrees are additional checkouts of the **same** repository;
+  they should not be accumulated for serial tests/status checks.
+- Use a temporary worktree only if a specific concurrent incompatible branch
+  or isolated source experiment justifies it. Record its purpose and removal gate.
+- Before any cleanup, inspect `git -C <canonical-root> worktree list --porcelain`
+  and `git -C <candidate-path> status --porcelain`. Verify each candidate is
+  registered and clean, contains no needed untracked evidence, and is not
+  the operator's current shell directory.
+- To remove *only* a known clean disposable worktree, first `cd` to the
+  canonical root, then run `git -C <canonical-root> worktree remove <exact-path>`.
+  Do **not** use `--force`, `rm -rf`, `git clean`, `reset --hard`, or a
+  blanket worktree prune. Git refuses dirty worktrees by default.
+- Before reusing the canonical root for PR #261, inspect its status and
+  current branch. `git switch` can be blocked if that branch belongs to
+  another registered worktree; never force a change or discard local edits.
+- `~/.local/state/qwen38-spark`, Docker/Checkpoint/PLE swap, releases,
+  logs, and benchmark evidence are **not** worktrees and remain protected.
+- The operator's physically successful 2026-10-14 reconciliation is
+  [permanent evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+
 **Latest decision: 2026-10-14.** The future operator entry point is `./wizard.sh`.
 `install.sh` must ultimately install/resume only, `uninstall.sh` must own
 removal, and model/runtime/API-service/benchmark/storage controllers must have

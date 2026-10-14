@@ -1,5 +1,17 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## Physical 2026-10-14 13:40 KST M1 journal reconciliation — VERIFIED
+
+Using verified runtime SHA `4776a6118decabc7cb511e4e60e7b157d3a57bec`,
+Wizard menu 5 → 10 returned `M1_RECONCILE=RECORDED_STOPPED`.
+Operator's separate status check verified `M1_SESSION_PHASE=stopped`,
+`M1_RUNNING=False`, and `M1_EXIT_CODE=0`. Two `0600` original
+journal backups (1,149 bytes each) were observed. No Docker start/stop/
+remove was performed. Shutdown cause remains `UNDETERMINED`.
+**RECOVERY_PASS**, but NOT a long-term host-stability qualification.
+[Physical operator evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+The earlier SOURCE_ONLY/RECOVERY_NOT_RUN section below is historical.
+
 ## 2026-10-14 update: successful physical benchmark, orphaned shutdown journal
 
 Unique M1 reached exact API READY, completed 180s soak, inference smoke,
