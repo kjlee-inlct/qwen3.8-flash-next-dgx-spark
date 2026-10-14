@@ -126,12 +126,16 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("named volumes are always protected", script)
         self.assertIn("portainer_data", script)
 
-    def test_build_cache_and_benchmark_retention_are_bounded(self) -> None:
+    def test_build_cache_bounded_and_benchmark_artifacts_never_pruned(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("BUILD_CACHE_DAYS=7", script)
         self.assertIn("BENCHMARK_DAYS=30", script)
         self.assertIn('docker builder prune -f --filter "until=${hours}h"', script)
         self.assertIn('-mtime "+${BENCHMARK_DAYS}"', script)
+        self.assertIn("BENCHMARK_ARTIFACT_PURGE=DISABLED_ALWAYS_PRESERVE", script)
+        self.assertNotIn('rm -f -- "${path}"', script)
+        self.assertIn("benchmark_candidates()", script)
+        self.assertIn("benchmark result files are ALWAYS PRESERVED", script)
 
     def test_model_manager_exposes_profile_asset_lifecycle(self) -> None:
         script = MODEL_MANAGER.read_text(encoding="utf-8")

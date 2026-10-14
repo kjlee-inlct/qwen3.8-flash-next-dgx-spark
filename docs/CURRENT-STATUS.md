@@ -1,3 +1,18 @@
+> **2026-10-14 PRIORITY: REAL MODEL BENCHMARK → ARCHIVE → TARGETED SPACE RECOVERY**
+> User explicitly clarified the goal is to test models, preserve actual
+> llama-benchy results, then recover memory/disk by selective removal;
+> Wizard should make this lifecycle easier. Further pure P1f/P1g
+> Supervisor simulation is DEFERRED as non-critical.
+> Physical DGX at source `1594f30`: P1e in-memory journal simulation
+> PASS and all **11/11** P1e standalone tests PASS; neither is a
+> live Supervisor qualification. Sole canonical worktree clean.
+> Important source guard: current storage prune could remove old local
+> benchmark results automatically by age; new source disables this
+> behavior and adds Wizard Storage read-only benchmark SHA checks.
+> No checkpoint/Docker cleanup is authorized; inspect actual up-to-date
+> storage inventory and protect managed predecessor/dependency graph.
+> [Benchmark/reclaim operating contract](BENCHMARK-BEFORE-RECLAIM.md).
+
 > **2026-10-14 M1 P1e WRITE-AHEAD JOURNAL — PURE SYNTHETIC SOURCE ONLY:**
 > Source commit `f715ee9c8e1877ea9da53ff3388d9caaf64cbc26`
 > adds `m1-supervisor-journal-protocol.py`, adversarial unit tests
