@@ -73,6 +73,7 @@ API_ACCESS_CLI=""; API_DOCKER_PORT_CLI=""; API_LAN_ADDRESS_CLI=""; API_LAN_PORT_
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
 MANAGE_SETTINGS=0  # Completed install only: direct settings editor, never a fresh install.
+SHUTDOWN_ACCESS=0 # With --manage-settings: managed API + boot service teardown, no model deletion.
 MODEL_ROOT_CLI=""
 MODEL_ROOT_ENV="${QWEN38_MODEL_ROOT:-}"
 MODEL_ROOT=""
@@ -602,6 +603,7 @@ while [[ $# -gt 0 ]]; do
     --api-lan-address) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_ADDRESS_CLI="$2"; shift ;;
     --api-lan-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_PORT_CLI="$2"; shift ;;
     --manage-settings) MANAGE_SETTINGS=1 ;;
+    --shutdown-access) SHUTDOWN_ACCESS=1 ;;
     --migrate-manifest) MIGRATE_MANIFEST=1 ;;
     --refresh-profile-defaults) REFRESH_PROFILE_DEFAULTS=1 ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
@@ -631,6 +633,9 @@ if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
   exit 0
 fi
 
+if [[ "${SHUTDOWN_ACCESS}" == 1 && "${MANAGE_SETTINGS}" != 1 ]]; then
+  die '--shutdown-access requires --manage-settings'
+fi
 if [[ "${MANAGE_SETTINGS}" == 1 ]]; then
   [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] ||
     die '--manage-settings requires an existing managed installation'
@@ -664,6 +669,7 @@ if [[ -r "${STATE_FILE}" ]]; then
     [[ "${manifest_phase}" == complete ]] ||
       die '--manage-settings requires PHASE=complete; fresh install/resume is not allowed'
     INSTALL_COMPLETED_FORCE_SETTINGS=1
+    INSTALL_COMPLETED_SHUTDOWN_ACCESS="${SHUTDOWN_ACCESS}"
   fi
   if [[ "${manifest_phase}" == complete && "${YES}" != 1 && "${MIGRATE_MANIFEST}" != 1 && -z "${MODEL_CLI}" ]]; then
     parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
