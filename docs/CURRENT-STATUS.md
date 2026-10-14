@@ -1,3 +1,19 @@
+> **2026-10-14 M1 P1e WRITE-AHEAD JOURNAL — PURE SYNTHETIC SOURCE ONLY:**
+> Source commit `f715ee9c8e1877ea9da53ff3388d9caaf64cbc26`
+> adds `m1-supervisor-journal-protocol.py`, adversarial unit tests
+> and Wizard Benchmark **16** in-memory journal/crash simulation.
+> Prepared STOP_INTENT is not 'durable' without an injected ack;
+> acknowledged intent cannot be auto-replayed after interruption;
+> independently proven candidate exit and stopped monitor are needed
+> before an EXIT_PROVEN record, with unknown shutdown cause preserved.
+> No actual file I/O, real fsync, authenticated IPC, concurrent durable
+> CAS, replay ledger, user service, Docker or GPU action is implemented.
+> All 'durable' snapshots/acks and watchdog evidence are simulated.
+> **P1e has not yet been run on the physical DGX.** P1d actual
+> in-memory simulation PASS is archived separately. Physical
+> `Linger=no` remains confirmed and no change approved.
+> [P1e design and limits](MAZINB-M1-WIZARD.md).
+
 > **2026-10-14 ACTUAL DGX P1d COMMAND SIMULATION: PASS_IN_MEMORY**
 > At exact source `08f69beda51a7ee8d610774e260aae21bed911b0`
 > the operator ran the pure `m1-supervisor-command-protocol.py`
