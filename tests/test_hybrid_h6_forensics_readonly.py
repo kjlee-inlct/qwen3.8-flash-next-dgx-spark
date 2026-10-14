@@ -120,19 +120,24 @@ class H6ForensicTests(unittest.TestCase):
 
     def test_kernel_query_is_bounded_and_includes_prior_boots(self):
         from contextlib import redirect_stdout
+        from datetime import datetime, timezone
         from io import StringIO
+        # H6 journals use host-local time. Derive it from an absolute
+        # timestamp instead of assuming KST on UTC-based CI runners.
+        local_since = datetime(2026, 10, 14, 14, 18, 3, tzinfo=timezone.utc)
+        local_since = local_since.astimezone().strftime("%Y-%m-%d %H:%M:%S")
         output = StringIO()
         with patch.object(m.subprocess, "run",
                           return_value=subprocess.CompletedProcess([], 0, stdout="")) as run:
             with redirect_stdout(output):
-                m.kernel_summary("2026-10-14 23:18:03", "2026-10-14T14:28:55Z")
+                m.kernel_summary(local_since, "2026-10-14T14:28:55Z")
+            self.assertTrue(run.called, output.getvalue())
             args = run.call_args.args[0]
             self.assertIn("_TRANSPORT=kernel", args)
             self.assertNotIn("-k", args)
             self.assertIn("--until", args)
             self.assertIn("--since", args)
-            self.assertEqual(args[args.index("--since") + 1],
-                             "2026-10-14 23:18:03")
+            self.assertEqual(args[args.index("--since") + 1], local_since)
             self.assertIn("H6_FORENSIC_KERNEL=REVIEW_MATCHED_WINDOW_ONLY",
                           output.getvalue())
 
