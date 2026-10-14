@@ -47,10 +47,10 @@ class M1BackgroundHostProbeTests(unittest.TestCase):
 
     @staticmethod
     def mock_unit(load="not-found", active="inactive", sub="dead", pid="0"):
-        body = (f"LoadState={load}\\nActiveState={active}\\n"
-                f"SubState={sub}\\nMainPID={pid}\\n")
+        body = (f"LoadState={load}\nActiveState={active}\n"
+                f"SubState={sub}\nMainPID={pid}\n")
         return subprocess.CompletedProcess(["systemctl"], 0,
-                                           stdout=body.replace("\\\\n", "\\n"), stderr="")
+                                           stdout=body, stderr="")
 
     def test_missing_reserved_unit_is_not_claimed_as_supervisor(self):
         calls = []
@@ -79,7 +79,7 @@ class M1BackgroundHostProbeTests(unittest.TestCase):
         self.assertNotIn("M1_BG_UNIT_STATUS=NOT_FOUND", out)
 
     def test_malformed_or_duplicate_unit_properties_fail_closed(self):
-        invalid = "LoadState=not-found\\nActiveState=inactive\\nMainPID=0\\nMainPID=0\\nSubState=dead\\n"
+        invalid = "LoadState=not-found\nActiveState=inactive\nMainPID=0\nMainPID=0\nSubState=dead\n"
         response = subprocess.CompletedProcess(["systemctl"], 0,
                                                 stdout=invalid, stderr="")
         with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/systemctl"), \
@@ -90,7 +90,7 @@ class M1BackgroundHostProbeTests(unittest.TestCase):
 
     def test_unit_manager_error_or_absent_property_blocks(self):
         response = subprocess.CompletedProcess(["systemctl"], 1,
-                                                stdout="LoadState=not-found\\n", stderr="no bus")
+                                                stdout="LoadState=not-found\n", stderr="no bus")
         with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/systemctl"), \
                 mock.patch.object(PROBE, "command", return_value=response):
             rc, out = self.invoke_unit_status()
