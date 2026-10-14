@@ -78,6 +78,15 @@ def inspect(name: str) -> dict | None:
     return items[0]
 
 
+def source_revision() -> str:
+    """Pin this checkout; never run a GPU trial from dirty/untrusted source."""
+    revision = cmd("git", "-C", str(ROOT), "rev-parse", "HEAD")
+    check(bool(re.fullmatch(r"[0-9a-f]{40}", revision)), "source_git_sha_invalid")
+    check(not cmd("git", "-C", str(ROOT), "status", "--porcelain=v1",
+                  "--untracked-files=all"), "source_checkout_dirty")
+    return revision
+
+
 def state_roots() -> tuple[Path, Path, Path]:
     state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen38-spark"
     data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "qwen38-spark"
@@ -167,6 +176,7 @@ def load_record(path: Path) -> dict:
 
 
 def host_snapshot(state: Path, data: Path, old_id: str) -> dict:
+    code_sha = source_revision()
     manifest_path = state / "install.env"
     check(manifest_path.is_file() and not manifest_path.is_symlink(),
           "installed_manifest_invalid")
@@ -244,12 +254,15 @@ def host_snapshot(state: Path, data: Path, old_id: str) -> dict:
           "unexpected_running_qwen_container")
     check(hashlib.sha256(manifest_path.read_bytes()).hexdigest() == digest,
           "manifest_changed_during_snapshot")
-    return {"manifest": manifest, "manifest_sha256": digest, "release": str(current.resolve()),
+    check(source_revision() == code_sha, "source_changed_during_preflight")
+    return {"manifest": manifest, "source_sha": code_sha,
+            "manifest_sha256": digest, "release": str(current.resolve()),
             "old_image": old_snapshot(old_id)[1], "image_id": image_id,
             "model_root": str(root), "model_dir": str(model_dirs[4])}
 
 
 def still_safe(record: dict, snap: dict, state: Path, data: Path) -> None:
+    check(source_revision() == snap["source_sha"], "trial_source_drift")
     check(old_snapshot(record["old_id"])[1] == snap["old_image"],
           "old_canonical_drift")
     check(hashlib.sha256((state / "install.env").read_bytes()).hexdigest()
@@ -381,7 +394,8 @@ def run_session(old_id: str) -> None:
         monitor_dir.mkdir(mode=0o700)
         record = {"schema": 1, "name": name, "id": "",
                   "old_id": old_id, "old_image_id": snap["old_image"],
-                  "image_id": snap["image_id"], "manifest_sha256": snap["manifest_sha256"],
+                  "image_id": snap["image_id"], "source_sha": snap["source_sha"],
+                  "manifest_sha256": snap["manifest_sha256"],
                   "release": snap["release"], "model": MODEL, "port": PORT, "kv_bytes": KV,
                   "monitor_dir": str(monitor_dir), "trial_dir": str(trial),
                   "started_at": now.isoformat(),
@@ -540,7 +554,8 @@ def bench_admission() -> None:
     check(heartbeat.is_file() and not heartbeat.is_symlink()
           and 0 <= time.time() - int(heartbeat.read_text().strip()) <= 15,
           "benchmark_watchdog_not_fresh")
-    snap = {"old_image": record["old_image_id"],
+    snap = {"source_sha": record["source_sha"],
+            "old_image": record["old_image_id"],
             "manifest_sha256": record["manifest_sha256"],
             "release": record["release"]}
     still_safe(record, snap, state, data)
@@ -572,6 +587,7 @@ def main() -> int:
             print("H6_PREFLIGHT=PASS_READ_ONLY")
             print("H6_OLD_DOCKER_ID=" + args.expected_old_id)
             print("H6_IMAGE_ID=" + snap["image_id"])
+            print("H6_SOURCE_SHA=" + snap["source_sha"])
             print("H6_RELEASE=" + snap["release"])
             print("H6_CANDIDATE_START=NOT_PERFORMED")
         else:

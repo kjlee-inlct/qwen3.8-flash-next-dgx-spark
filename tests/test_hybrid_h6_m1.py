@@ -78,6 +78,32 @@ class HybridH6M1Tests(unittest.TestCase):
         self.assertIn('"docker", "start", record["id"]', SCRIPT.read_text())
         self.assertIn('"docker", "stop", "--timeout", "30", record["id"]', SCRIPT.read_text())
 
+    def test_source_revision_refuses_dirty_checkout(self):
+        with patch.object(h6, "cmd", side_effect=["a" * 40, " M scripts/serve.sh"]):
+            with self.assertRaisesRegex(h6.GuardError, "source_checkout_dirty"):
+                h6.source_revision()
+
+    def test_source_revision_requires_exact_commit_id(self):
+        with patch.object(h6, "cmd", side_effect=["not-a-sha", ""]):
+            with self.assertRaisesRegex(h6.GuardError, "source_git_sha_invalid"):
+                h6.source_revision()
+
+    def test_source_revision_clean(self):
+        with patch.object(h6, "cmd", side_effect=["a" * 40, ""]):
+            self.assertEqual(h6.source_revision(), "a" * 40)
+
+    def test_live_session_fails_closed_before_host_mutation_on_source_drift(self):
+        with patch.object(h6, "source_revision", return_value="a" * 40):
+            with self.assertRaisesRegex(h6.GuardError, "trial_source_drift"):
+                h6.still_safe({}, {"source_sha": "b" * 40}, None, None)
+
+    def test_benchmark_admission_rechecks_pinned_source(self):
+        content = SCRIPT.read_text()
+        self.assertIn('"source_sha": snap["source_sha"]', content)
+        self.assertIn('"source_sha": record["source_sha"]', content)
+        self.assertIn('source_revision() == snap["source_sha"]', content)
+        self.assertIn("H6_SOURCE_SHA=", content)
+
     def test_wizard_approval_is_default_no(self):
         menu = MENU.read_text()
         self.assertIn("wizard_menu_option 20", menu)

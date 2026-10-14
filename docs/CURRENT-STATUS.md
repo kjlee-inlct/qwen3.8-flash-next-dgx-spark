@@ -1,3 +1,41 @@
+## 2026-10-14 — REAL DGX Wizard Benchmark 5→17/18/19: H6 preflight PASS
+
+**Exact checkout:** `1de3ec0c9ae4cba5eb44fc66176d0c96b04371e6`
+fast-forward from `e61f6b4` succeeded. Real DGX Wizard
+**Benchmark 17** plan displayed `H6_PLAN=ISOLATED_16G_NO_BOOT`,
+loopback port 18890, watchdog exact-ID before start;
+**Benchmark 18** reported `H6_SESSION=ABSENT`.
+**Benchmark 19**, with sudo kernel-journal read access, returned
+`H6_PREFLIGHT=PASS_READ_ONLY`,
+`H6_CANDIDATE_START=NOT_PERFORMED`.
+Pinned existing old Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`;
+H6 runtime image
+`sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`;
+immutable release `ff67bab3c94d6992f61b9535836df97f03b9c022`.
+The installed manifest remains OrcaRouter legacy image
+`vllm-skinny-tp1:v1`, **not** the H6 isolated runtime image;
+its identity was deliberately preserved.
+
+**Result interpretation:** the actual host has sufficient
+admission memory/swap/storage at this instant, H6 stage structure,
+v0.29 image, sudo journal read and non-boot service policy pass
+the *preflight*; **no new Docker container is created, no GPU model is
+started, no READY/soak/inference, no llama-benchy numbers exist**.
+Historical H7/H20 aliases and 16 old Docker mounts still prevent
+H3–H6 cleanup. DO NOT run Wizard Benchmark 20 without separate
+explicit operator approval for new GPU load.
+
+**Follow-up source hardening:** check the running Git checkout is
+clean and pin the exact 40-character HEAD before trial creation,
+record the source SHA in the session journal, reject any source
+drift during GPU load/soak/benchmark, and require that same pinned
+source when admitting Terminal B. The new hardening is SOURCE_ONLY
+until CI passes and its **new commit** is installed on DGX.
+The observed physical preflight above belongs to prior source
+`1de3ec0`; never claim the new source physically qualified yet.
+Keep PR #261 Draft/unmerged and PR #259 unchanged.
+
 ## 2026-10-14 — Actual DGX H6 start-admission RC=3; isolated controller source-only
 
 DGX checked exact commit `e61f6b4d44624e8ebb454eac3288d13e3904f370`:
