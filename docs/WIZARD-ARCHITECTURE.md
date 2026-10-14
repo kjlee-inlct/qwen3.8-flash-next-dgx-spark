@@ -26,6 +26,16 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## P1e in-memory journal transaction contract (source only)
+
+- Wizard Benchmark **16** executes in-memory synthetic write-ahead
+  STOP-intent and proven-exit states. No persistent journal or real
+  fsync exists; acknowledgements and proofs are mocked.
+- Loss after acknowledged intent yields `RECONCILE_REQUIRED_NO_AUTO_REPLAY`.
+  Lost staged outcome cannot be considered committed. Hash/sequence
+  mismatch and stale compare-and-swap proposals reject admission.
+- Actual physical logout `Linger=no` blocks durable user service; no
+  worker, IPC, Docker, monitor or host setting changes are included.
 ## P1d physical synthetic result (2026-10-14)
 
 - Canonical worktree at `08f69be`; actual DGX `plan` and `simulate`

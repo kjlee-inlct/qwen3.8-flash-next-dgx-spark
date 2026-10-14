@@ -223,6 +223,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 13 'Background user unit status (read-only) / 서비스 상태'
     wizard_menu_option 14 'Background lifecycle simulation (no host I/O) / 합성 시뮬레이션'
     wizard_menu_option 15 'Background command admission simulation (no host I/O) / 명령 검증'
+    wizard_menu_option 16 'Background journal crash simulation (no host I/O) / 기록 복구 모형'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -253,6 +254,8 @@ wizard_benchmark_menu() {
             wizard_warning 'Synthetic supervisor protocol blocked; no host or Docker changes.' ;;
       15) python3 -B "${ROOT_DIR}/scripts/runtime/m1-supervisor-command-protocol.py" simulate ||
             wizard_warning 'Synthetic command admission blocked; no host or Docker changes.' ;;
+      16) python3 -B "${ROOT_DIR}/scripts/runtime/m1-supervisor-journal-protocol.py" simulate ||
+            wizard_warning 'Synthetic journal protocol blocked; no host or Docker changes.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac

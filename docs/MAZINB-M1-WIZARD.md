@@ -1,5 +1,28 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## P1e in-memory write-ahead journal/crash protocol — SOURCE ONLY
+
+Wizard Benchmark **16** uses `m1-supervisor-journal-protocol.py simulate`
+to evaluate immutable prepared `STOP_INTENT` and `EXIT_PROVEN`
+records against an injected, **in-memory** copy-on-write ledger.
+An unacknowledged record cannot advance the synthetic durable snapshot.
+A committed intent is bound to the exact Docker ID, predecessor ID,
+owner token and one command nonce. On crash/recovery from that state
+the only safe result is **`RECONCILE_REQUIRED_NO_AUTO_REPLAY`**,
+not automatic reissue of STOP. An exit proof requires matching
+candidate identity, an exited (not running) synthetic Docker state,
+confirmed monitor termination, a free benchmark lease, exit code
+and preserved shutdown cause. The journal chain uses SHA-256 for
+synthetic corruption detection; **it is not authentication**.
+
+**Not implemented:** real durable file persistence, fsync, directory
+fsync, cross-process locks/CAS, trusted clock, authenticated IPC,
+atomic nonce store, actual Docker inspect/stop, systemd worker,
+on-host watchdog/Journal recovery, or restart handling. Commit
+acknowledgements are injected booleans, not real durability proof.
+CI/host simulation must not be mistaken for a worker qualification.
+The existing physical `Linger=no` gate remains, with no permission
+to enable lingering.
 ## P1d physically executed in-memory simulation (2026-10-14)
 
 Operator executed the P1d `plan` and `simulate` commands at exact SHA
