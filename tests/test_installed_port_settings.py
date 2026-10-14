@@ -104,7 +104,7 @@ class InstalledPortSettingsTests(unittest.TestCase):
             # config=keep, monitor=yes, protect=yes, customize=no;
             # LAN=existing, Docker port=8000, IP=192.0.2.10,
             # NEW LAN port=8007, boot service=yes, final continue=yes.
-            answers = "1\n\n\nn\n\n\n8007\n\ny\n"
+            answers = "1\n\n\nn\n\n\n\n8007\n\ny\n"
             r = self.installer(home, ["--manage-settings", "--lang", "en",
                                       "--dry-run"], answers)
             self.assertEqual(r.returncode, 0, r.stderr + "\n" + r.stdout[-1800:])
