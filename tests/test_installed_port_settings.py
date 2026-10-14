@@ -87,7 +87,7 @@ class InstalledPortSettingsTests(unittest.TestCase):
                        "--lang", "en", "--dry-run"], "y\n",
             )
             self.assertEqual(result.returncode, 0, result.stderr + "\n" + result.stdout[-1700:])
-            self.assertIn("Post-benchmark", result.stdout)
+            self.assertIn("This closes managed Docker/LAN API access", result.stdout)
             self.assertIn("local only: 127.0.0.1:8888", result.stdout)
             self.assertIn("service     : Docker container via immutable current release",
                           result.stdout)
