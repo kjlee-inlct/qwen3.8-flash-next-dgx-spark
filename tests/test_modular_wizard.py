@@ -127,6 +127,49 @@ class ModularWizardTests(unittest.TestCase):
             self.assertNotIn("Re-enter complete predecessor Docker ID", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_mazinb_reclaim_wizard_is_default_no_and_requires_exact_phrase(self) -> None:
+        """Never execute source removal from a blank/default or mistyped consent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stub_dir = home / "bin"
+            stub_dir.mkdir()
+            stub = stub_dir / "bash"
+            stub.write_text(
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$HOME/calls"\n'
+                'if [ "$2" = reclaim-mazinb ] && [ "$3" = --dry-run ]; then\n'
+                '  echo MAZINB_RECLAIM_PLAN=PASS_READ_ONLY_NOT_AUTHORIZED_TO_DELETE\n'
+                '  exit 0\n'
+                'fi\n'
+                'if [ "$2" = reclaim-mazinb ] && [ "$3" = --yes ]; then\n'
+                '  echo FAKE_RECLAIM_APPLY_CALLED\n'
+                '  exit 0\n'
+                'fi\n'
+                'exit 0\n', encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env = {
+                **os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "xdg"),
+                "PATH": str(stub_dir) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            for answer, expected_apply in (
+                ("", False),
+                ("y\nWRONG_PHRASE\n", False),
+                ("y\nDELETE_MAZINB_SOURCE_CHECKPOINT\n", True),
+            ):
+                with self.subTest(answer=answer):
+                    (home / "calls").unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                        cwd=ROOT, env=env, input="3\n4\n" + answer + "0\n0\n",
+                        capture_output=True, text=True, timeout=20, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    calls = (home / "calls").read_text(encoding="utf-8")
+                    self.assertIn("reclaim-mazinb --dry-run", calls)
+                    self.assertEqual("reclaim-mazinb --yes" in calls, expected_apply)
+            self.assertFalse((home / "xdg").exists())
+
     def test_eof_aborts_before_default_choice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_case(Path(tmp), ["--lang", "en"])
