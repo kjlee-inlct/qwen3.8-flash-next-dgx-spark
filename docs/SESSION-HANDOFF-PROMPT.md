@@ -6,9 +6,11 @@
 > Physical DGX at source `1594f30`: P1e in-memory journal simulation
 > PASS and all **11/11** P1e standalone tests PASS; neither is a
 > live Supervisor qualification. Sole canonical worktree clean.
-> Important source guard: current storage prune could remove old local
-> benchmark results automatically by age; new source disables this
-> behavior and adds Wizard Storage read-only benchmark SHA checks.
+> IMPORTANT: The former broad storage prune could erase stopped
+> experiment containers and older benchmark files. Current source
+> disables BOTH default deletion paths; they are preserved until
+> exact-ID archive review, independent checksum verification and
+> explicit per-target approval. Wizard 6→4 adds read-only archive SHA checks.
 > No checkpoint/Docker cleanup is authorized; inspect actual up-to-date
 > storage inventory and protect managed predecessor/dependency graph.
 > [Benchmark/reclaim operating contract](BENCHMARK-BEFORE-RECLAIM.md).

@@ -16,8 +16,11 @@ passed at `1594f30`. They do not prove an actual background worker.
 results by file age. `--benchmark-days` is now a **report-only age
 threshold**. The Wizard Storage menu includes a read-only checksum/report
 readiness audit; this does not certify external backup or authorize deletion.
-The existing broad prune can delete experiment containers and therefore must
-NOT be used as a shortcut around per-target evidence and owner approval.
+Historical prune behavior could delete stopped experiment containers.
+**The current hardened source now preserves these containers** during broad
+prune as well as benchmark files; their logs/evidence are retained until
+individually identified, archived, reviewed and explicitly approved.
+A future targeted cleanup must verify exact Docker ID and dependent assets.
 
 **Operational next:** run fresh read-only storage inventory (filesystem,
 containers/image references, current checkpoint/dependency graph, model

@@ -84,11 +84,15 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-orcarouter-v029-h14-ct-input-scale-postload:v1", assets)
         self.assertIn('STORAGE_IMAGE_DESCRIPTION="Shared vLLM v0.29 experiment base; keep"', assets)
 
-    def test_stopped_experiment_cleanup_covers_h7_h8_h9_h10_names(self) -> None:
+    def test_stopped_experiment_inventory_covers_h7_h8_h9_h10_names(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("docker ps -a --filter 'name=qwen38-'", script)
         self.assertIn('$1 != "qwen38-flash-next"', script)
         self.assertNotIn("name=^/qwen38-orca-", script)
+        self.assertIn("EXPERIMENT_CONTAINER_PURGE=DISABLED_REQUIRES_EXACT_ID_ARCHIVE_AND_OWNER_APPROVAL", script)
+        self.assertIn("[Stopped experiment containers: PRESERVED for logs/evidence]", script)
+        self.assertNotIn('run_or_echo docker rm "${name}"', script)
+
 
     def test_manager_uses_disposable_registry_instead_of_hardcoded_function(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
