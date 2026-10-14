@@ -36,7 +36,7 @@ class MzinbPostAuditTests(unittest.TestCase):
     def test_dedicated_user_or_system_unit_blocks(self):
         for prefix in ((), ("--user",)):
             def fake_cmd(*args):
-                if args[2:] == ("list-unit-files", "--all", "--no-legend", "--no-pager", "--plain"):
+                if "list-unit-files" in args:
                     return "qwen38-mazinb-m1-background.service enabled enabled\n"
                 return ""
             with mock.patch.object(AUDIT, "command", side_effect=fake_cmd):
