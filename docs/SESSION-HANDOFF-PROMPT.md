@@ -1,3 +1,20 @@
+> **2026-10-14 ACTUAL DGX P1c PURE SYNTHETIC PROTOCOL: PASS_IN_MEMORY**
+> At exact source `835be6f411abbb3e901992566d4459881853acf7`,
+> the operator synced the sole canonical worktree and ran P1c
+> `plan` and `simulate` physically on DGX.
+> Output: `M1_P1C_SIMULATION=PASS_IN_MEMORY`,
+> `SIM_STOP=PASS_EXPLICIT_ACK`, `SIM_RECOVERY=PASS_UNDETERMINED`,
+> `SIM_UNAUTHORIZED_STOP=BLOCKED`, `SIM_PID_REUSE=BLOCKED`.
+> The script also reported `WORKER_IMPLEMENTED=NO`,
+> `HOST_INSPECTION=NONE`, `DOCKER_ACTION=NONE`,
+> `USER_SERVICE_MUTATION=NONE`, `LINGER_CHANGE=NONE`.
+> This proves only execution of an in-memory simulation on DGX.
+> It does not qualify a real Worker, watchdog, Docker stop, host
+> stability or logout persistence. `Linger=no` remains confirmed
+> and no policy change has been approved.
+> [Exact operator evidence](MAZINB-M1-P1C-PHYSICAL-SYNTHETIC-20261014.md).
+> Source `835be6f` Push and PR CIs both SUCCESS.
+
 > **2026-10-14 M1 BACKGROUND SUPERVISOR P1c — PURE SYNTHETIC SOURCE ONLY:**
 > Commit `80501d2277945390ffc4c97ef79a10460ebdc073` adds
 > `scripts/runtime/m1-supervisor-protocol.py` with in-memory

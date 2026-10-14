@@ -1,5 +1,21 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## Physically executed P1c in-memory simulation — VERIFIED (2026-10-14)
+
+The operator synchronized the single canonical Git checkout to exact
+`835be6f411abbb3e901992566d4459881853acf7` and invoked P1c
+`plan` and `simulate` on the real DGX. Reported:
+`PASS_IN_MEMORY`, `PASS_EXPLICIT_ACK`, `PASS_UNDETERMINED`
+reconciliation, plus `BLOCKED` unauthorized STOP and PID reuse.
+
+**This verifies synthetic program execution only.** No host PID,
+systemd service, Docker, GPU, real watchdog or filesystem journal
+was inspected or mutated by the scenario. `Linger=no` remains
+independently confirmed; no permission to enable linger has been given.
+Actual Background Worker and logout-persistent supervision are
+still NOT_IMPLEMENTED / NOT_QUALIFIED.
+
+[Exact physical synthetic transcript](MAZINB-M1-P1C-PHYSICAL-SYNTHETIC-20261014.md).
 ## P1c source-only supervisor protocol simulator — NOT A WORKER
 
 Wizard Benchmark **14** and `scripts/runtime/m1-supervisor-protocol.py simulate`

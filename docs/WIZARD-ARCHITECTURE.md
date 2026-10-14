@@ -26,6 +26,16 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## P1c physical execution of synthetic protocol (2026-10-14)
+
+- Actual DGX invocation at `835be6f` printed `PASS_IN_MEMORY`,
+  `PASS_EXPLICIT_ACK`, `PASS_UNDETERMINED` for synthetic recovery,
+  `BLOCKED` for unapproved stop and PID-reuse.
+- Classification is **PHYSICAL_DGX_SYNTHETIC**, not physical
+  background worker or real Docker/supervisor/host lifetime test.
+- Original single Git worktree only; no Docker or linger mutation;
+  persistent `Linger=no` and reserved unit NOT_FOUND remain gates.
+- [Physical synthetic transcript](MAZINB-M1-P1C-PHYSICAL-SYNTHETIC-20261014.md).
 ## P1c synthetic supervisor contract — no host effects
 
 - Wizard Benchmark 14 only executes `m1-supervisor-protocol.py simulate`
