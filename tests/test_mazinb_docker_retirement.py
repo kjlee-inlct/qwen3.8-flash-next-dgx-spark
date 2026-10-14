@@ -50,6 +50,7 @@ class MzinbDockerRetirementTests(unittest.TestCase):
             "".join(f"{sha}  {name}\n" for name, sha in sums.items()))
         (self.state / "mazinb-m1").mkdir()
         (self.state / "mazinb-m1/active.json").write_text(json.dumps({
+            "name": "qwen38-mazinb-m1-20261014013811-16ced779",
             "id": MODULE.EXPECTED["qwen38-mazinb-m1-20261014013811-16ced779"],
             "phase": "stopped"}))
         self.repo_patch = mock.patch.object(MODULE, "ROOT", repo)
@@ -175,11 +176,27 @@ class MzinbDockerRetirementTests(unittest.TestCase):
         }), mock.patch.object(MODULE, "docker", side_effect=docker), \
              mock.patch.object(MODULE, "inventory",
                                side_effect=[(objects, before_ids), (objects, before_ids)]), \
-             mock.patch.object(MODULE, "save_all_logs_and_metadata", side_effect=archive):
+             mock.patch.object(MODULE, "save_all_logs_and_metadata", side_effect=archive), \
+             mock.patch.object(MODULE, "write_m1_retirement_marker",
+                               side_effect=lambda *args: calls.append("tombstone")):
             MODULE.apply(self.home, self.root, self.state)
-        self.assertEqual(calls, ["archive"] + ["remove"]*5)
+        self.assertEqual(calls, ["archive"] + ["remove"]*5 + ["tombstone"])
         self.assertEqual(retired, set(MODULE.EXPECTED.values()))
         self.assertTrue((self.state / "mazinb-m1/active.json").exists())
+
+    def test_separate_m1_tombstone_preserves_original_journal(self):
+        original = (self.state / "mazinb-m1/active.json").read_bytes()
+        archive = self.state / "retirement-archives/mazinb-docker-fixture"
+        archive.mkdir(parents=True)
+        (archive / "SHA256SUMS").write_text("dummy-sha-manifest\n")
+        MODULE.write_m1_retirement_marker(self.state, archive)
+        marker = json.loads((self.state / "mazinb-m1/retired-docker.json").read_text())
+        self.assertEqual(marker["id"],
+                         MODULE.EXPECTED["qwen38-mazinb-m1-20261014013811-16ced779"])
+        self.assertEqual(marker["state"], "archived_docker_removed")
+        self.assertEqual((self.state / "mazinb-m1/active.json").read_bytes(), original)
+        with self.assertRaisesRegex(MODULE.Blocked, "already exists"):
+            MODULE.write_m1_retirement_marker(self.state, archive)
 
     def test_archive_parent_rejects_symlink(self):
         outside = self.home / "other"
