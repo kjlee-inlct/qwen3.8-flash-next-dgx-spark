@@ -73,18 +73,33 @@ def marker_fields(data: str, *, name: str, container_id: str) -> dict[str, str]:
 
 def monitor_events(path: Path) -> tuple[list[str], bool, int]:
     checked_file(path, max_size=256 * 1024 * 1024)
-    latest = deque(maxlen=16)
+    recent_warnings = deque(maxlen=12)
+    critical = deque(maxlen=8)
+    other = deque(maxlen=3)
+    setup = deque(maxlen=2)
     protect_seen = False
     warnings = 0
     with path.open(encoding="utf-8", errors="replace") as src:
         for line in src:
+            line = line.strip()[:750]
             if "WARNING memory margin low" in line:
                 warnings += 1
-            if "PROTECT stopping" in line:
+                recent_warnings.append(line)
+            elif "PROTECT stopping" in line:
                 protect_seen = True
-            if any(term in line for term in KEEP_MONITOR):
-                latest.append(line.strip()[:750])
-    return list(latest), protect_seen, warnings
+                critical.append(line)
+            elif ("TRIAL WATCHDOG EXIT" in line or
+                  "TRIAL_RUNTIME_LIMIT_REACHED" in line):
+                critical.append(line)
+            elif "monitor started:" in line or "AB_MONITOR_ARMED_ID=" in line:
+                setup.append(line)
+            elif any(term in line for term in KEEP_MONITOR):
+                other.append(line)
+    # The watchdog prints up to 1000 Docker log lines immediately AFTER
+    # PROTECT, so a single global "last N matches" deque could hide the
+    # five causal WARN samples. Always retain WARN + PROTECT separately.
+    return (list(setup) + list(recent_warnings) + list(critical)
+            + list(other)), protect_seen, warnings
 
 
 def inspect_exact(container_id: str, name: str, record: dict) -> dict:

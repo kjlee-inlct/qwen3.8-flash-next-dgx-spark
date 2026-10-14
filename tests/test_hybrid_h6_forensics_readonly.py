@@ -65,6 +65,25 @@ class H6ForensicTests(unittest.TestCase):
             self.assertEqual(count, 1)
             self.assertEqual(len(lines), 2)
 
+    def test_docker_traceback_cannot_displace_causal_memory_warnings(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "monitor.log"
+            warnings = [
+                "2026-10-14 WARNING memory margin low protect=%d/5: noncmafree=800MiB swapgrowth=500MiB" % i
+                for i in range(1, 6)
+            ]
+            path.write_text(
+                "\n".join(warnings + [
+                    "2026-10-14 PROTECT stopping qwen38-hybrid-h6-m1-trial"
+                ] + ["ERROR: vLLM shutdown traceback"] * 100) + "\n"
+            )
+            events, protected, count = m.monitor_events(path)
+            self.assertTrue(protected)
+            self.assertEqual(count, 5)
+            self.assertTrue(any("protect=5/5" in line for line in events))
+            self.assertTrue(any("PROTECT stopping" in line for line in events))
+
     def test_kernel_check_skips_bad_timestamp(self):
         with patch.object(m.subprocess, "run") as run:
             m.kernel_summary("invalid")
