@@ -1,3 +1,66 @@
+## 2026-10-14 — H6 isolated protected 16-GiB trial controller (SOURCE ONLY)
+
+**Actual DGX admission evidence at commit**
+`e61f6b4d44624e8ebb454eac3288d13e3904f370`:
+`INSTALLED_MODEL_PROFILE=orcarouter`,
+`SERVICE_ENABLED=0`, `SERVICE_OWNED=0`,
+`MONITOR_ENABLED=1`, `MONITOR_PROTECT=1`,
+`MONITOR_HEARTBEAT=60`; managed idle PASS;
+pinned H3→H6 structural validator PASS; canonical prior Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+stopped/non-OOM. `HYBRID_H6_LAUNCH_ADMISSION=BLOCKED_PENDING_SAFE_CONTROLLER`,
+RC=3 **EXPECTED** because the existing service-backed live profile
+switch requires ownership and boot-enabled management. This does not
+invalidate the earlier H6 structural PASS or authorize checkpoint reclaim.
+
+**New source-only experiment path:** Wizard **Benchmark 17–20** uses
+`scripts/wizard/hybrid-h6-m1.py` (plan, status, strict preflight,
+explicitly approved foreground protected run), extending
+`scripts/serve.sh` with a unique `hybrid-h6-m1` create-only
+profile at loopback `127.0.0.1:18890` with fixed **16 GiB KV**,
+reboot restart policy **no**, and isolated trial HOME/cache/state.
+This path **does not invoke installer profile switch**, change the
+installed manifest or boot units, remove/recreate the original
+`qwen38-flash-next` container, or retire old Hybrid trials.
+
+First checks exact original container+image, immutable release,
+install manifest SHA, transaction markers, owned operation lock,
+single-model host idle, pinned H6 chain, image ID, active 128-GiB
+managed swap, 12-GiB non-CMA available / 4-GiB non-CMA free /
+16-GiB SwapFree / 20-GiB filesystem free, exclusive port 18890,
+and strict sudo-readable NVIDIA kernel journal.
+The fresh candidate is **Docker CREATE only**, then the separately
+started exact-ID memory watchdog MUST write `armed` BEFORE
+`docker start`. Stop on watchdog loss/memory-protect marker,
+kernel NVIDIA RM allocation errors, old container/manifest/release
+drift, API READY/served model ID failure, missing heartbeat, or
+runtime/soak failure. Require 180-sec soak and inference smoke
+before printing `H6_READY_FOR_BENCH`.
+A caught terminal termination and normal STOP target **only** the
+new pinned H6 ID, preserve the Docker object/logs, and never prune.
+The watchdog has its own bounded fail-closed stop even if the
+operator supervisor unexpectedly exits. Failure is never a 0-tok/s
+measurement.
+
+Terminal B `scripts/wizard/with-h6-session-lock.sh` holds a shared
+lifecycle lock and exclusive H6 benchmark lock, reruns H6
+`bench-admission` with exact Docker ID + heartbeat + RM checks
+**before** executing the benchmark command. Wizard Terminal A
+defers STOP while the benchmark lock is held. Do not run arbitrary
+Docker CLI commands as a benchmark. Use a pinned llama-benchy
+command with real JSON and provenance; separately archive/verify
+hashes before any later model cleanup.
+
+**QUALIFICATION BOUNDARY:** This entire new controller and synthetic
+tests are SOURCE_ONLY until CI plus real DGX read-only preflight
+and a separately authorized GPU run are captured.
+`H6_READY_FOR_BENCH=NOT_OBSERVED`;
+`H6_LLAMA_BENCHY=NOT_MEASURED`;
+`H3_H4_H5_H6_DELETE=BLOCKED_KNOWN_REFERENCES`.
+H7/H20 checkpoint alias and 16 old stopped Docker mounts still
+block the original full-chain deletion. Do not use deletion, service
+enablement, or raw unmanaged Docker as a bypass.
+
 ## 2026-10-14 — DGX dependency audit PHYSICAL PASS (retirement BLOCKED)
 
 At exact `443fd2bd01f0bd5314ee6a0dc66608d2059dfbf6`, operator

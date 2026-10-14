@@ -203,6 +203,53 @@ wizard_m1_recover() {
   fi
 }
 
+wizard_h6_readonly() {
+  local action="$1" predecessor
+  wizard_header 'Hybrid H6 isolated experiment / H6 보호 실험'
+  if [[ "$action" == plan || "$action" == status ]]; then
+    python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-m1.py" "$action" ||
+      wizard_warning 'H6 information unavailable; no host mutation.'
+    return 0
+  fi
+  predecessor="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null)" || {
+    wizard_warning 'Protected predecessor ID unavailable.'
+    return 0
+  }
+  [[ "$predecessor" =~ ^[a-f0-9]{64}$ ]] || {
+    wizard_warning 'Invalid protected predecessor identity.'
+    return 0
+  }
+  printf 'H6_OLD_DOCKER_ID=%s\n' "$predecessor"
+  if [[ "$action" == run ]]; then
+    wizard_warning 'EXPERIMENTAL: physical H6 GPU load; 16GiB KV, localhost :18890, exact-ID watchdog.'
+    wizard_warning 'DO NOT start another model or close Terminal A until exact STOP.'
+    wizard_warning 'No service is installed/enabled, models are never deleted, candidate container is preserved.'
+    wizard_yes_no 'Approve NEW protected H6 GPU experiment? / 새 H6 실험 기동' no || return 0
+    local typed approval
+    wizard_input typed 'Re-enter entire 64-hex protected predecessor Docker ID' ''
+    [[ "$typed" == "$predecessor" ]] || {
+      wizard_warning 'Predecessor ID acknowledgement mismatch.'; return 0;
+    }
+    wizard_input approval 'Type START_HYBRID_H6_16G exactly' ''
+    [[ "$approval" == START_HYBRID_H6_16G ]] || {
+      wizard_warning 'H6 physical start confirmation mismatch.'; return 0;
+    }
+  fi
+  if ! sudo -n true >/dev/null 2>&1; then
+    wizard_yes_no 'Authenticate sudo for strict READ-ONLY kernel RM inspection?' no || return 0
+    sudo -v || { wizard_warning 'RM journal read permission denied.'; return 0; }
+  fi
+  if [[ "$action" == run ]]; then
+    QWEN38_H6_WIZARD_APPROVED=1 python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-m1.py" \
+      run --expected-old-id "$predecessor" ||
+      wizard_warning 'H6 protected session failed/stopped; preserve Docker and forensic evidence.'
+  else
+    python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-m1.py" \
+      preflight --expected-old-id "$predecessor" ||
+      wizard_warning 'H6 protected preflight BLOCKED; no GPU load.'
+  fi
+}
+
 wizard_benchmark_menu() {
   local choice
   while true; do
@@ -224,6 +271,10 @@ wizard_benchmark_menu() {
     wizard_menu_option 14 'Background lifecycle simulation (no host I/O) / 합성 시뮬레이션'
     wizard_menu_option 15 'Background command admission simulation (no host I/O) / 명령 검증'
     wizard_menu_option 16 'Background journal crash simulation (no host I/O) / 기록 복구 모형'
+    wizard_menu_option 17 'Hybrid H6 isolated trial plan (read-only) / H6 실행 계획'
+    wizard_menu_option 18 'Hybrid H6 isolated trial status (read-only) / H6 상태'
+    wizard_menu_option 19 'Hybrid H6 physical preflight (read-only) / H6 실제 사전 점검'
+    wizard_menu_option 20 'Hybrid H6 isolated 16GiB protected live session / H6 보호 기동'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -256,6 +307,10 @@ wizard_benchmark_menu() {
             wizard_warning 'Synthetic command admission blocked; no host or Docker changes.' ;;
       16) python3 -B "${ROOT_DIR}/scripts/runtime/m1-supervisor-journal-protocol.py" simulate ||
             wizard_warning 'Synthetic journal protocol blocked; no host or Docker changes.' ;;
+      17) wizard_h6_readonly plan ;;
+      18) wizard_h6_readonly status ;;
+      19) wizard_h6_readonly preflight ;;
+      20) wizard_h6_readonly run ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac

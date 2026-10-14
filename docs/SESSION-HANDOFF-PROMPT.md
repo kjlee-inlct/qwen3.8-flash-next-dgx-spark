@@ -1,3 +1,22 @@
+## 2026-10-14 — Actual DGX H6 start-admission RC=3; isolated controller source-only
+
+DGX checked exact commit `e61f6b4d44624e8ebb454eac3288d13e3904f370`:
+Hybrid H3–H6 structural PASS, managed idle PASS, monitor=1,
+protect=1, heartbeat=60, canonical predecessor stopped exact ID,
+but `SERVICE_ENABLED=0` and `SERVICE_OWNED=0` block
+**installer-managed profile switch**. The physical start-admission
+`BLOCKED_PENDING_SAFE_CONTROLLER` result (RC=3) was expected.
+A new Wizard Benchmark **17–20** isolated-H6 source controller
+handles no-boot/no-service protected candidate create + exact-ID
+watchdog-before-start + localhost port 18890 + 16-GiB KV and
+forensic STOP; a separate Terminal-B benchmark lock adds
+readiness/monitor/kernel RM admission. CI, physical preflight and
+H6 live qualification must be recorded independently; **none yet
+performed for this new controller at the time of authoring**.
+H6 bench NOT_MEASURED; original H3–H6 full retire blocked by
+2 preserved H7/H20 aliases and 16 old Docker trial mounts.
+Canonical [runbook](HYBRID-BENCH-REBUILD-CYCLE.md).
+
 ## 2026-10-14 — DGX dependency audit PHYSICAL PASS (retirement BLOCKED)
 
 At exact `443fd2bd01f0bd5314ee6a0dc66608d2059dfbf6`, operator

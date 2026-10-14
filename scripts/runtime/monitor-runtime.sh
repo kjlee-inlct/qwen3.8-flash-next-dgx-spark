@@ -38,7 +38,8 @@ trial_fail_closed_on_monitor_exit() {
     sleep 1
   done
   if [[ "${snapshot}" == "${EXPECTED_ID}|true|orcarouter|"* ||
-      "${snapshot}" == "${EXPECTED_ID}|true|mazinb|"* ]]; then
+      "${snapshot}" == "${EXPECTED_ID}|true|mazinb|"* ||
+      "${snapshot}" == "${EXPECTED_ID}|true|hybrid|"* ]]; then
     printf '%s TRIAL WATCHDOG EXIT (rc=%s): stopping exact candidate %s, preserving Docker object\n' "$(date '+%F %T')" "${previous_rc}" "${EXPECTED_ID}" >&2
     if ! docker stop --timeout 30 "${EXPECTED_ID}" >/dev/null; then
       printf 'ERROR: pinned trial stop failed after watchdog exited; immediate manual intervention required for ID %s\n' "${EXPECTED_ID}" >&2

@@ -137,6 +137,16 @@ if [[ "${TRIAL_CREATE_ONLY}" == 1 ]]; then
     TRIAL_LABELS=(--label qwen38.abtrial=mazinb
                   --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
                   --label qwen38.variant=m1)
+  elif [[ "${TRIAL_VARIANT}" == hybrid-h6-m1 ]]; then
+    [[ "${NAME}" =~ ^qwen38-hybrid-h6-m1-[0-9]{14}-[a-f0-9]{8}$ &&
+       "${MODEL_PROFILE}" == orcarouter-hybrid && "${IMAGE}" == vllm-orcarouter-v029:v1 &&
+       "${PORT}" == 18890 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
+       "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 &&
+       "${MONITOR_PROTECT}" == 0 && "${KV_MEM:-}" == 17179869184 ]] ||
+      { echo "FATAL: H6 M1 create-only isolation constraints not satisfied" >&2; exit 2; }
+    TRIAL_LABELS=(--label qwen38.abtrial=hybrid
+                  --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
+                  --label qwen38.variant=h6-m1)
   else
     [[ "${TRIAL_VARIANT}" == legacy || "${TRIAL_VARIANT}" == v029 ]] || { echo "FATAL: invalid trial variant" >&2; exit 2; }
     [[ "${NAME}" == "qwen38-ab-${TRIAL_VARIANT}" && "${MODEL_PROFILE}" == orcarouter &&
