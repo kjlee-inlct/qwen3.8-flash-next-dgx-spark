@@ -153,7 +153,7 @@ class ModularWizardTests(unittest.TestCase):
                 "PATH": str(stub_dir) + os.pathsep + os.environ.get("PATH", ""),
             }
             for answer, expected_apply in (
-                ("", False),
+                ("\n", False),
                 ("y\nWRONG_PHRASE\n", False),
                 ("y\nDELETE_MAZINB_SOURCE_CHECKPOINT\n", True),
             ):
