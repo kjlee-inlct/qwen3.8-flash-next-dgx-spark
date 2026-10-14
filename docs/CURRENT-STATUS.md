@@ -4,7 +4,7 @@
 > additionally recovered, all other Docker IDs unchanged. Known shared
 > `qwen38-flash-next.service`, `qwen38-openwebui-proxy.socket/service`,
 > and shared vLLM image MUST NOT be removed simply for mazinb.
-> New Wizard Model 3→6 calls read-only `scripts/diagnostics/verify-mazinb-retirement.py`
+> New Wizard Model 3→6 calls read-only `scripts/verify-mazinb-retirement.py`
 > to audit system/user units, processes, M1 port 18889, shared proxy/runtime,
 > benchmark SHA, retired Docker tombstone and 10 archived files.
 > **ACTUAL DGX FULL SERVICE/PROXY AUDIT: NOT_RUN**. Exact details in
