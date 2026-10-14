@@ -90,6 +90,21 @@ re-inspection. The second terminal excerpt does not itself show a
 Git HEAD verification; re-verify exact SHA before first opt-in live
 launch. Source CI for the cache-isolation change passed; actual
 GPU load and any new M1 host-stability verdict remain NOT_RUN.
+### First supervised physical M1 startup — PROTECTED STOP (2026-10-14)
+
+New actual DGX first live M1 run with verified source SHA
+`72982e0e1bb53cdf8bb66a641356eb4a7e743320` produced
+`M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261013235416-edd777eb`.
+The exact new ID
+`1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`
+was stopped, with `M1_DOCKER_REMOVED=NO` and
+`M1_BLOCKED=candidate triggered memory-protection stop`.
+No READY/soak/inference/llama-benchy result was printed.
+Keep source/forensics intact. Before any retry, obtain actual
+`monitor.log` five-sample series, exact stop marker, Docker and kernel
+evidence. A protection stop does not alone establish a kernel OOM or
+`NV_ERR_NO_MEMORY`. See the first live update in
+[physical M1 evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md).
 ## Priority and sequencing (2026-10-14)
 
 The next **actual DGX model test** should be mazinb; finishing the entire

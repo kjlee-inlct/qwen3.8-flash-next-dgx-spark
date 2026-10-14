@@ -1,3 +1,16 @@
+> **2026-10-14 ACTUAL DGX first M1 live started but MEMORY-PROTECTION STOPPED:**
+> Exact source SHA `72982e0e1bb53cdf8bb66a641356eb4a7e743320`,
+> operator approved Wizard 5 -> 9 and launched
+> `qwen38-mazinb-m1-20261013235416-edd777eb`,
+> exact Docker ID `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`.
+> Output `M1_STOPPED_EXACT_ID=...`, `M1_DOCKER_REMOVED=NO`,
+> `M1_BLOCKED=candidate triggered memory-protection stop`.
+> No READY/soak/inference/llama-benchy. Protective stop is confirmed;
+> actual non-CMA/swap samples, OOMKilled and RM journal not yet supplied.
+> HOLD new launch; request read-only candidate Docker/monitor/kernel
+> evidence. Preserve historical A/B, managed Docker, M1 candidate and swap.
+> See `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
 > **2026-10-14 DGX M1 repeat READ_ONLY PASS:** A second physical
 > Wizard 5 -> 8 transcript returned `M1_PREFLIGHT=PASS_READ_ONLY` and
 > `M1_CANDIDATE_START=NOT_PERFORMED`, matching the previously recorded

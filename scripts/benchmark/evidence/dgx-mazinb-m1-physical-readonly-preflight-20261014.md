@@ -93,3 +93,47 @@ Before authorizing a physical M1 load, recheck the live worktree HEAD
 against the pinned runtime source SHA and ensure the worktree is clean.
 No M1 Docker creation, API READY, inference smoke or benchmark is reported.
 
+## ACTUAL DGX FIRST LIVE M1 — memory protection stop (2026-10-14 KST)
+
+**Observed source:** Exact DGX detached-worktree HEAD
+`72982e0e1bb53cdf8bb66a641356eb4a7e743320` with clean status.
+The owner selected root Wizard **5 -> 9**, explicitly approved a new
+GPU-heavy M1 launch, acknowledged the complete preserved managed
+predecessor Docker ID and typed `START_MAZINB_16G`; sudo kernel log
+access was authorized.
+
+**Physical terminal output (verbatim):**
+
+```text
+M1_SOURCE_READY=72982e0e1bb53cdf8bb66a641356eb4a7e743320
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261013235416-edd777eb
+M1_STOPPED_EXACT_ID=1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d
+M1_DOCKER_REMOVED=NO
+M1_BLOCKED=candidate triggered memory-protection stop
+```
+
+**Verdict:** The new mazinb M1 Docker candidate was started and
+supervised, then **stopped under memory protection before READY**.
+The candidate Docker object was preserved, not removed.
+No `M1_READY_FOR_BENCH`, actual inference smoke, post-ready 180-second
+soak, llama-benchy JSON, model token/s or performance report exists
+from this attempt. Do not misclassify the protective stop as an
+observed Docker OOMKilled or NVIDIA RM failure: the pasted terminal
+does not contain Docker inspect, monitor warning samples or kernel logs.
+
+**Mandatory next step before any relaunch:** Collect read-only
+`docker inspect` for the exact candidate ID,
+`~/.local/state/qwen38-spark/mazinb-m1/<NAME>/monitor.log`,
+`.../monitor/runtime-stop.env`, preserved active/per-trial JSON,
+`docker logs`, `/proc/meminfo` and scoped sudo kernel journal.
+Keep all old A/B, managed Docker, original candidate, models,
+image, swap and evidence. No threshold lowering or repeated live start
+until the numeric cause of the memory-protection transition is known.
+
+**Source interpretation, not yet physical proof:** The current
+`monitor-runtime.sh` protection predicate requires either
+`SwapFree < 8 GiB` OR `noncmafree < 2 GiB` together with
+`noncma_available < 10 GiB` OR swap consumption during monitoring
+`>= 256 MiB`, for 5 consecutive samples 2 seconds apart.
+Monitor log values determine which path actually triggered.
+

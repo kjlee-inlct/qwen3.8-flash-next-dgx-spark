@@ -1,3 +1,16 @@
+> **2026-10-14 physical M1 FIRST LIVE ATTEMPT — blocked:**
+> Source verified clean SHA `72982e0e1bb53cdf8bb66a641356eb4a7e743320`.
+> Wizard 5 -> 9 explicit approval; candidate
+> `qwen38-mazinb-m1-20261013235416-edd777eb` created/started.
+> Exact ID `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`
+> stopped under `candidate triggered memory-protection stop`.
+> Docker removed NO. M1 READY and llama-benchy NOT_MEASURED.
+> NEXT obtain read-only per-session `monitor.log`,
+> `monitor/runtime-stop.env`, `active.json` / case record,
+> exact Docker inspect and docker logs, meminfo and NVIDIA RM journal.
+> Preserve assets, do NOT rerun Wizard 9 or lower protect thresholds
+> before diagnosing numeric 5-sample protection trigger.
+
 > **2026-10-14 second DGX M1 read-only verification:** Repeated
 > Wizard 5 -> 8 returned `M1_PREFLIGHT=PASS_READ_ONLY` and
 > `M1_CANDIDATE_START=NOT_PERFORMED` with unchanged protected Docker,
