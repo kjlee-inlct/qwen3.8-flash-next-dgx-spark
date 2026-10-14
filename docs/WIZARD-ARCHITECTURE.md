@@ -26,6 +26,15 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## Background supervisor capability probe — P1a (source only)
+
+- Wizard Benchmark **11** prints a plan and **12** inspects (read-only)
+  user-level systemd capability, current user manager and linger policy.
+- No background worker, systemd unit, Docker start or linger policy mutation
+  is implemented. Existing Foreground Wizard menu 9 remains unchanged.
+- The P1a probe is **not** functional/background/host-stability qualification.
+  Proceed to worker implementation only with exact-ID, independent stop
+  authorization, benchmark-lock and lost-supervisor safety evidence.
 ## 2026-10-14 observed cleanup result and preserved output
 
 - DGX operator confirmed the three remaining detached temporary worktrees

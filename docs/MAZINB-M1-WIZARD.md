@@ -1,5 +1,25 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## P1a background supervisor: read-only user-service host probe (2026-10-14)
+
+Source now provides `scripts/runtime/m1-background-probe.py plan|probe` and
+Wizard Benchmark **11** plan / **12** read-only host inspection.
+The probe uses **only** `loginctl show-user ... -p Linger --value` and
+`systemctl --user show -p Version --no-pager`, plus local tool/runtime-dir
+metadata checks; it does **not** start, stop, enable, install or edit any
+user unit, Docker container, swap or managed release.
+`M1_BG_HOST_PROBE=PASS_CAPABILITY_ONLY` means only that user linger and
+a current user manager appear available; it **does not qualify actual
+terminal-detached worker behavior**. Failure is fail-closed, including
+missing linger, inaccessible user manager, unsafe runtime-dir or missing
+tools. Do not enable linger silently, introduce autorestart, or change
+user unit configuration while probing.
+
+**Background start, stop, logs, durable PID/unit/token ownership and
+interactive attach are NOT IMPLEMENTED.** Existing Foreground
+`mazinb-m1.py run` remains unchanged and continues to require
+TTY + explicit Wizard approval. Live DGX background lifecycle is NOT_RUN.
+Source synthetic tests and GitHub CI are separate qualification gates.
 ## Proposed next stage: background/foreground supervisor — DESIGN ONLY
 
 **Status:** source design only; no background engine, automatic model boot,
