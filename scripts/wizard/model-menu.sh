@@ -71,8 +71,18 @@ wizard_mazinb_docker_retire() {
     wizard_success 'Five exact mazinb containers removed; archive verified and other objects preserved.'
     bash "${ROOT_DIR}/scripts/manage-models.sh" assets ||
       wizard_warning 'Post-retirement model inventory unavailable.'
-  else
+    wizard_mazinb_retirement_audit  else
     wizard_warning 'Cleanup BLOCKED or PARTIAL; inspect output and saved archives before any retry.'
+  fi
+}
+
+wizard_mazinb_retirement_audit() {
+  wizard_header 'mazinb full post-removal audit / mazinb 서비스·프록시 포함 정리 검증'
+  wizard_info 'Read-only: Docker archive, historical journal, dedicated system/user units, shared proxy/runtime and port 18889.'
+  if python3 -B "${ROOT_DIR}/scripts/diagnostics/verify-mazinb-retirement.py"; then
+    wizard_success 'mazinb-only Docker and service/proxy remnants absent; managed OrcaRouter shared assets preserved.'
+  else
+    wizard_warning 'INCONCLUSIVE/BLOCKED: inspect service, proxy and endpoint evidence; do not claim fully removed.'
   fi
 }
 
@@ -85,6 +95,7 @@ wizard_model_menu() {
     wizard_menu_option 3 'Switch preview only / 전환 미리보기'
     wizard_menu_option 4 'Reclaim mazinb source checkpoint (evidence gated) / mazinb 원본 정리'
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
+    wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -93,6 +104,7 @@ wizard_model_menu() {
       3) wizard_profile_preview ;;
       4) wizard_mazinb_source_reclaim ;;
       5) wizard_mazinb_docker_retire ;;
+      6) wizard_mazinb_retirement_audit ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
