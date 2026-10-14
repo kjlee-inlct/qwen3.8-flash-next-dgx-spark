@@ -29,7 +29,7 @@ was never implemented as a running user worker; verify no unexpected
 user/system unit appeared.
 
 New permanent read-only closer:
-`python3 -B scripts/diagnostics/verify-mazinb-retirement.py` and Wizard
+`python3 -B scripts/verify-mazinb-retirement.py` and Wizard
 **Models (3) → 6: final mazinb audit**. It verifies complete original
 benchmark archive, all ten retired Docker archive files and their
 metadata/IDs, the M1 tombstone, absence of mazinb-labelled/owned Docker
