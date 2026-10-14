@@ -1,3 +1,45 @@
+## 2026-10-14 Wizard installed API / LAN port configuration restored (source)
+
+**User finding:** prior installer supported setting Docker-app/LAN ports, but
+modular `wizard.sh` hid those settings for already completed installations.
+Verified code: fresh `install.sh` stage 5/6 still prompts for
+`API_ACCESS_MODE=local|docker|lan`, `API_DOCKER_PORT`,
+`API_LAN_ADDRESS`, `API_LAN_PORT`. Completed `install.sh` already
+had a transactional **Edit runtime / API / service settings** path.
+However the modular Wizard's top-level "Install/resume" blocks a
+`PHASE=complete` install while its runtime menu initially exposed
+only status/doctor/summary. This was a missing navigation route,
+not a removed port capability.
+
+**Source fix:** `wizard.sh` → **4 Runtime/Service → 4 API access /
+Docker & LAN ports** now delegates directly to
+`./install.sh --lang ko --manage-settings` (with the selected UI language).
+The new `--manage-settings` option requires an existing strictly
+parsed `PHASE=complete` manifest; blocks switches, forced `--yes`,
+CLI setting overrides and fresh/resume mode. It directly opens the
+existing installed-settings editor with current values, separate
+**default-NO apply** consent, normalized plan and equivalent CLI,
+and a last "Continue?" review. Only an accepted live edit delegates
+to the existing rollback-capable `settings-transition.sh`; it does
+not duplicate proxy/service mutation code. Direct preview supported:
+`./install.sh --manage-settings --lang ko --dry-run`. Runtime menu
+**5** shows `./scripts/manage-proxy.sh status` (read-only).
+Run disposable-HOME CI and real DGX source/host preview before
+claiming physical qualification.
+
+**Physical host 2026-10-14 19:38 KST (older checkout `446de3a93494...`):**
+the user's read-only mazinb post-retirement audit PASSED. The
+shared `qwen38-flash-next.service` is loaded but inactive; the shared
+OpenWebUI socket and proxy service are loaded/active. The listener
+inventory shows `172.17.0.1:8000` for Docker apps,
+`10.221.50.65:8000` for the LAN, neither on dedicated 8001,
+and no active backend 8888 (because runtime is stopped).
+Dedicated mazinb port 18889 and service, user unit and
+worker processes were absent. The proxy is still active and is a
+shared OrcaRouter component; do not delete it as mazinb debris.
+This output documents actual current listener facts, not a test
+that a future port-setting transaction has been applied.
+
 > **2026-10-14 PHYSICAL MAZINB CHECKPOINT + FIVE DOCKER REMOVAL PASS; SERVICES/PROXY AUDIT PENDING.**
 > Checkpoint recovered 186449989632 B (~173.65 GiB); Docker five-container
 > archive PASS_10_FILES then `REMOVED_FIVE_VERIFIED`, 1397395456 B (~1.30 GiB)
