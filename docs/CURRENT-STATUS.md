@@ -1,3 +1,33 @@
+## 2026-10-14 — Actual H6 first GPU load MEMORY-PROTECTION STOP; benchmark NOT_MEASURED
+
+The operator physically ran approved Wizard **Benchmark 5→20** at
+exact `a30fe34b8c2fd3ad511d79876ac95ad69ac32523`.
+A unique H6 isolated container
+`qwen38-hybrid-h6-m1-20261014141803-69ef3492`, ID
+`e526189f1093e95d81568d82eb10b8beaeb6227adca49029f241634769e6cbc7`,
+reached **DOCKER_STARTED_UNQUALIFIED**, then Wizard emitted
+`H6_EXACT_STOPPED_ID` and `H6_SESSION_BLOCKED=memory_protection_stop_marker`.
+Read-only verification: journal `failed_stopped`, Docker `exited`,
+`Running=false`, `OOMKilled=false`, `ExitCode=1`.
+One 81/81 shard loading pass completed in 577.40 s, **then another
+81-shard loading pass began** (at least 9/81 observed); READY was
+NEVER observed. The post-stop host had 118Gi RAM available and 142Gi
+swap free, but this **does not prove at-stop headroom**.
+Full non-CMA/swap warning samples (especially `protect=5/5`),
+exact monitor marker, and NVIDIA RM kernel events remain TO_BE_AUDITED.
+Do not ascribe failure to the FP4/ModelOpt warnings or API
+`KeyboardInterrupt` termination trace alone.
+**No immediate rerun, benchmark, deletion or loosening watchdog
+thresholds.** Historical H7/H20 model aliases and 16 stopped Docker
+mount references remain protected; full H3–H6 retire blocked.
+
+New **source-only** Wizard **Benchmark 5→21** forensics will display
+bounded critical warnings plus independently pinned journal,
+stop marker and exact stopped Docker ID; it does not mutate host.
+[Permanent selective physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+CI and physical forensic check must pass separately before
+any safe candidate configuration decision.
+
 ## 2026-10-14 — REAL DGX Wizard Benchmark 5→17/18/19: H6 preflight PASS
 
 **Exact checkout:** `1de3ec0c9ae4cba5eb44fc66176d0c96b04371e6`

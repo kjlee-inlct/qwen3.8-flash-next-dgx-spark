@@ -250,6 +250,13 @@ wizard_h6_readonly() {
   fi
 }
 
+wizard_h6_forensics_readonly() {
+  wizard_header 'Hybrid H6 stopped trial forensics / 보호 중지 분석'
+  wizard_info 'Read-only identity, stop marker, memory warnings and optional kernel log.'
+  python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-forensics-readonly.py" --latest ||
+    wizard_warning 'H6 forensic evidence incomplete/inconsistent; do NOT relaunch.'
+}
+
 wizard_benchmark_menu() {
   local choice
   while true; do
@@ -275,6 +282,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 18 'Hybrid H6 isolated trial status (read-only) / H6 상태'
     wizard_menu_option 19 'Hybrid H6 physical preflight (read-only) / H6 실제 사전 점검'
     wizard_menu_option 20 'Hybrid H6 isolated 16GiB protected live session / H6 보호 기동'
+    wizard_menu_option 21 'Hybrid H6 stopped trial forensic audit (read-only) / 보호 중지 원인 검사'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -311,6 +319,7 @@ wizard_benchmark_menu() {
       18) wizard_h6_readonly status ;;
       19) wizard_h6_readonly preflight ;;
       20) wizard_h6_readonly run ;;
+      21) wizard_h6_forensics_readonly ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
