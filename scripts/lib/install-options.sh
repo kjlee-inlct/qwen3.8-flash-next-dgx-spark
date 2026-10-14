@@ -36,6 +36,7 @@ install_option_registry() {
     api_lan_address setting yes '[--api-lan-address IPv4]' '--api-lan-address' \
     api_lan_port setting yes '[--api-lan-port N]' '--api-lan-port' \
     manage_settings maintenance no '[--manage-settings]' '--manage-settings' \
+    shutdown_access maintenance no '[--shutdown-access]' '--shutdown-access' \
     manifest_migration maintenance no '[--migrate-manifest]' '--migrate-manifest' \
     refresh_profile_defaults setting yes '[--refresh-profile-defaults]' '--refresh-profile-defaults' \
     dry_run setting yes '[--dry-run]' '--dry-run' \
