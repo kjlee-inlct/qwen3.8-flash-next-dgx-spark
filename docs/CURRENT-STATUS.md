@@ -1,3 +1,19 @@
+> **2026-10-14 M1 BACKGROUND SUPERVISOR P1c — PURE SYNTHETIC SOURCE ONLY:**
+> Commit `80501d2277945390ffc4c97ef79a10460ebdc073` adds
+> `scripts/runtime/m1-supervisor-protocol.py` with in-memory
+> exact-ID/session-token/PID-start-ticks/systemd-invocation binding,
+> watchdog freshness, benchmark-lease and explicit STOP-approval gates.
+> New Wizard Benchmark **14** runs `simulate` only; no host/Docker
+> subprocesses, services, journals, GPU, linger or model actions.
+> Synthetic STOP and supervisor-loss reconciliation are modeled, not
+> performed. Prior physical DGX `Linger=no` and reserved unit
+> `NOT_FOUND` remain the only actual background host observations.
+> No real Background Worker, persistent journal/IPC, user unit or
+> start/stop implementation has been built or qualified. SOURCE_CI
+> result must be checked separately; no actual DGX P1c test yet.
+> [Protocol guide](MAZINB-M1-WIZARD.md). Older source-only plans
+> below must not be construed as real worker readiness.
+
 > **2026-10-14 ACTUAL DGX P1b READ-ONLY USER UNIT INVENTORY: PASS_NOT_FOUND**
 > At exact source `e542f99fa711a61a1713fa0c10341f47934e7866`,
 > the owner fetched and fast-forwarded the single canonical checkout and
