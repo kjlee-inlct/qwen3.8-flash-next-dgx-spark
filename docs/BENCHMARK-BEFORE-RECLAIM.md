@@ -1,3 +1,62 @@
+## 2026-10-14 20:43 KST — PHYSICAL DGX MANAGED HOST IDLE: PASS (final)
+
+**Evidence type: operator DGX terminal, not CI simulation.** The user fast-forwarded the
+physical DGX source from `909b03f` to verified branch commit
+`2a2c2220bbb70db6007934bd678bddd704c0f643`:
+`SOURCE_UPDATE=PASS`. The standalone read-only shutdown preview
+`bash install.sh --lang ko --manage-settings --shutdown-access --dry-run`
+reached normalized **6/6 plan** with current `orcarouter` model profile,
+`API access: local only: 127.0.0.1:8888`, service disabled (`--no-service`),
+`--no-start`, and `DRY-RUN 완료` with no host resource mutation.
+
+The operator then invoked `./wizard.sh` → **Runtime 4 → post-benchmark shutdown 6**,
+explicitly approved the separate default-NO plan/commit questions, and reached
+`Settings transaction prepared (start=0)`, systemd
+`qwen38-flash-next.service` boot target link removed,
+`Managed Qwen API access endpoints removed`,
+`Managed Qwen runtime service removed`,
+`Settings resources applied and verified with boot enable deferred until commit`,
+`Settings transaction committed`, and transaction state applied/verified.
+The managed install manifest remains `PHASE=complete`, `MODEL_PROFILE=orcarouter`,
+but is now configured `API_ACCESS_MODE=local`, `SERVICE_ENABLED=0`.
+**The profile shown in the manifest is configured identity, not evidence
+of a running model.**
+
+**Two independent physical host-idle checks passed**: once automatically after
+Wizard shutdown and once directly after exiting Wizard using
+`python3 -B scripts/diagnostics/verify-managed-idle.py`. Both output:
+
+```text
+MANAGED_IDLE_MODEL_PROFILE=orcarouter
+MANAGED_IDLE_API_ACCESS_MODE=local
+MANAGED_IDLE_SERVICE_ENABLED=0
+MANAGED_IDLE_UNIT=qwen38-flash-next.service load=not-found active=inactive boot=
+MANAGED_IDLE_UNIT=qwen38-openwebui-proxy.socket load=not-found active=inactive boot=
+MANAGED_IDLE_UNIT=qwen38-openwebui-proxy.service load=not-found active=inactive boot=
+MANAGED_IDLE_SYSTEMD=NO_RUNNING_OR_BOOT_ENABLED_UNITS
+MANAGED_IDLE_MANAGED_PORTS=NO_LISTENERS
+MANAGED_IDLE_DOCKER=NO_RUNNING_QWEN38_CONTAINERS
+MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START
+MANAGED_IDLE_AUDIT_HOST_MUTATION=NONE
+```
+
+**Scope of PASS:** the project-managed runtime and OpenWebUI systemd units,
+boot-enable flags, configured backend/API/experiment port set, and running
+`qwen38-*` Docker containers. This is not proof that every non-project
+Docker or unrelated host service is stopped, nor proof of a physical reboot.
+ma-zinb checkpoint (~173.65 GiB reclaimed), exact five trial containers
+(~1.30 GiB reclaimed), and complete mazinb evidence archive were verified
+in earlier physical stages. H3–H6, OrcaRouter model checkpoint, Docker images,
+historic Docker objects not selected for reclaim, releases, benchmark payloads,
+journals, and archives remain in place.
+
+**Next workflow consequence:** newly installed or selected model must explicitly
+restore the desired `API_ACCESS_MODE` and `SERVICE_ENABLED` through the
+managed Wizard settings editor (Runtime **4 → 4**), only when wanted.
+Do not manually toggle raw systemd units without updating managed state.
+The older subsections below record historic intermediate states
+(active proxy / unverified idle) and are **superseded by this physical PASS**.
+
 ## 2026-10-14 physical mazinb five-container retirement — PASS, final service/proxy audit pending
 
 **Physical operator console (2026-10-14 ~19:37 KST), source SHA `c89b481562f0e53cc49bc5212b4cb645b5618fd2`:**
