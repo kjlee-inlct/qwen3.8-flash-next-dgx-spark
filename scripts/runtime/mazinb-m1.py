@@ -304,7 +304,7 @@ def retired_docker_marker(record: dict, m1: Path) -> dict | None:
     require(len(entries) == 10, "M1 Docker retirement archive does not contain five log/metadata pairs")
     seen = set()
     for entry in entries:
-        match = re.fullmatch(r"([0-9a-f]{64})  ([0-9a-f]{16}\\.(?:log|json))", entry)
+        match = re.fullmatch(r"([0-9a-f]{64})  ([0-9a-f]{16}\.(?:log|json))", entry)
         require(match is not None, "invalid M1 retirement manifest entry")
         _, name = match.groups()
         require(name not in seen, "duplicate M1 retirement manifest entry")
