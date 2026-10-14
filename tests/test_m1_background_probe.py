@@ -39,6 +39,71 @@ class M1BackgroundHostProbeTests(unittest.TestCase):
             rc = PROBE.probe()
         return rc, output.getvalue()
 
+    def invoke_unit_status(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            rc = PROBE.unit_status()
+        return rc, output.getvalue()
+
+    @staticmethod
+    def mock_unit(load="not-found", active="inactive", sub="dead", pid="0"):
+        body = (f"LoadState={load}\\nActiveState={active}\\n"
+                f"SubState={sub}\\nMainPID={pid}\\n")
+        return subprocess.CompletedProcess(["systemctl"], 0,
+                                           stdout=body.replace("\\\\n", "\\n"), stderr="")
+
+    def test_missing_reserved_unit_is_not_claimed_as_supervisor(self):
+        calls = []
+        def query(*argv):
+            calls.append(argv)
+            return self.mock_unit()
+        with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/systemctl"), \
+                mock.patch.object(PROBE, "command", side_effect=query):
+            rc, out = self.invoke_unit_status()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("M1_BG_UNIT_STATUS=NOT_FOUND", out)
+        self.assertIn("M1_BG_WORKER_IMPLEMENTED=NO", out)
+        self.assertIn("M1_BG_WORKER_IDENTITY_VERIFIED=NO", out)
+        self.assertEqual(calls, [(
+            "systemctl", "--user", "show", PROBE.BG_UNIT,
+            "--property=" + ",".join(PROBE.BG_UNIT_FIELDS), "--no-pager")])
+
+    def test_loaded_unit_with_pid_is_untrusted(self):
+        with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/systemctl"), \
+                mock.patch.object(PROBE, "command",
+                                  return_value=self.mock_unit("loaded", "active", "running", "1234")):
+            rc, out = self.invoke_unit_status()
+        self.assertEqual(rc, 2)
+        self.assertIn("M1_BG_UNIT_STATUS=BLOCKED_UNTRUSTED_PRESENT", out)
+        self.assertIn("UNIT_PROVENANCE_NOT_IMPLEMENTED", out)
+        self.assertNotIn("M1_BG_UNIT_STATUS=NOT_FOUND", out)
+
+    def test_malformed_or_duplicate_unit_properties_fail_closed(self):
+        invalid = "LoadState=not-found\\nActiveState=inactive\\nMainPID=0\\nMainPID=0\\nSubState=dead\\n"
+        response = subprocess.CompletedProcess(["systemctl"], 0,
+                                                stdout=invalid, stderr="")
+        with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/systemctl"), \
+                mock.patch.object(PROBE, "command", return_value=response):
+            rc, out = self.invoke_unit_status()
+        self.assertEqual(rc, 2)
+        self.assertIn("MALFORMED_UNIT_PROPERTIES", out)
+
+    def test_unit_manager_error_or_absent_property_blocks(self):
+        response = subprocess.CompletedProcess(["systemctl"], 1,
+                                                stdout="LoadState=not-found\\n", stderr="no bus")
+        with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/systemctl"), \
+                mock.patch.object(PROBE, "command", return_value=response):
+            rc, out = self.invoke_unit_status()
+        self.assertEqual(rc, 2)
+        self.assertIn("UNIT_QUERY_FAILED", out)
+
+    def test_unsafe_runtime_dir_never_queries_user_manager(self):
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": ""}), \
+                mock.patch.object(PROBE, "command", side_effect=AssertionError("unexpected query")):
+            rc, out = self.invoke_unit_status()
+        self.assertEqual(rc, 2)
+        self.assertIn("XDG_RUNTIME_DIR_MISSING", out)
+
     def test_plan_is_pure_and_never_offers_mutating_action(self):
         with mock.patch.object(PROBE, "command", side_effect=AssertionError("must not execute")):
             out = io.StringIO()

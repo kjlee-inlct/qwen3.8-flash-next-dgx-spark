@@ -1,5 +1,48 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## 2026-10-14 ACTUAL DGX P1a linger policy — READ_ONLY CONFIRMED
+
+On the original canonical Git checkout at source `56b51aa94a5db5b32ce0d8adc2397760bb026805`,
+the operator ran `loginctl show-user "$(id -u)" --property=Linger`
+and `python3 -B scripts/runtime/m1-background-probe.py probe`.
+The physical DGX output was:
+
+```text
+Linger=no
+M1_BG_USER_LINGER=DISABLED
+M1_BG_USER_MANAGER=AVAILABLE
+M1_BG_LINGER_POLICY_CHANGE=NOT_PERFORMED
+M1_BG_SUPERVISOR_IMPLEMENTED=NO
+M1_BG_DOCKER_ACTION=NONE
+M1_BG_USER_SERVICE_MUTATION=NONE
+M1_BG_AUTO_START=DISABLED
+M1_BG_HOST_PROBE=BLOCKED
+M1_BG_BLOCK_REASON=USER_LINGER_DISABLED
+```
+
+**PHYSICAL_P1A_HOST=CONFIRMED_LINGER_NO / BLOCKED_AS_DESIGNED**.
+The source HEAD matched the fetched branch and retained the sole
+canonical Git checkout. The operator did NOT authorize or perform
+`loginctl enable-linger`. No Docker, service, GPU or managed
+release mutation was performed. The earlier unknown/disabled combined
+reason below is historical; `Linger=no` is now independently established.
+## P1b preliminary unit visibility — READ ONLY / NO WORKER
+
+Wizard Benchmark **13** and
+`python3 -B scripts/runtime/m1-background-probe.py unit-status`
+inspect only the reserved user unit
+`qwen38-mazinb-m1-background.service` using read-only
+`systemctl --user show` properties.
+
+The method reports `M1_BG_UNIT_STATUS=NOT_FOUND` **only when**
+the reserved unit is explicitly not found, inactive/dead with MainPID=0.
+That does **not** prove there is no other process, system unit or
+experimental worker. If a unit exists, has an unexpected property,
+or user manager inspection fails, the probe reports BLOCKED or
+BLOCKED_UNTRUSTED_PRESENT; a MainPID alone is never accepted
+as worker identity. The worker, unit deployment, session-token
+binding, stop protocol and real background launch remain unimplemented.
+All existing Docker, host and user-service states are left unchanged.
 ## Physical DGX P1a host admission result — 2026-10-14 (owner output)
 
 On the original single Git checkout, source `9df9d0823762b16a1316847b7804e178f8b1a494`,

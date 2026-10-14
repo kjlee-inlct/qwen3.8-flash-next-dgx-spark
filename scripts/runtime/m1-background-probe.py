@@ -94,8 +94,76 @@ def probe() -> int:
     return 0
 
 
+
+# Reserved unit label for future development. It is NOT created by this script.
+BG_UNIT = "qwen38-mazinb-m1-background.service"
+BG_UNIT_FIELDS = ("LoadState", "ActiveState", "SubState", "MainPID",
+                  "InvocationID", "Restart", "Transient")
+
+
+def unit_status() -> int:
+    """Read a reserved user unit's presence; NEVER infer M1 ownership from PID.
+
+    The background worker/start/stop protocol is not implemented. Even a
+    seemingly healthy user unit is therefore untrusted and must not enable
+    model operations or claim exact-Docker-ID supervision.
+    """
+    print("M1_BG_RESERVED_UNIT=" + BG_UNIT)
+    print("M1_BG_WORKER_IMPLEMENTED=NO")
+    print("M1_BG_WORKER_IDENTITY_VERIFIED=NO")
+    print("M1_BG_DOCKER_ACTION=NONE")
+    print("M1_BG_USER_SERVICE_MUTATION=NONE")
+    issues = runtime_dir_issues(os.getuid(), os.environ.get("XDG_RUNTIME_DIR", ""))
+    if issues:
+        print("M1_BG_UNIT_STATUS=BLOCKED")
+        for reason in issues:
+            print("M1_BG_UNIT_BLOCK_REASON=" + reason)
+        return 2
+    if not shutil.which("systemctl"):
+        print("M1_BG_UNIT_STATUS=BLOCKED")
+        print("M1_BG_UNIT_BLOCK_REASON=SYSTEMCTL_MISSING")
+        return 2
+    try:
+        result = command(
+            "systemctl", "--user", "show", BG_UNIT,
+            "--property=" + ",".join(BG_UNIT_FIELDS), "--no-pager",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        print("M1_BG_UNIT_STATUS=BLOCKED")
+        print("M1_BG_UNIT_BLOCK_REASON=UNIT_QUERY_FAILED")
+        return 2
+    if result.returncode != 0:
+        print("M1_BG_UNIT_STATUS=BLOCKED")
+        print("M1_BG_UNIT_BLOCK_REASON=UNIT_QUERY_FAILED")
+        return 2
+    properties: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        key, sep, value = line.partition("=")
+        if not sep or key not in BG_UNIT_FIELDS or key in properties:
+            print("M1_BG_UNIT_STATUS=BLOCKED")
+            print("M1_BG_UNIT_BLOCK_REASON=MALFORMED_UNIT_PROPERTIES")
+            return 2
+        properties[key] = value
+    if not {"LoadState", "ActiveState", "SubState", "MainPID"}.issubset(properties):
+        print("M1_BG_UNIT_STATUS=BLOCKED")
+        print("M1_BG_UNIT_BLOCK_REASON=INCOMPLETE_UNIT_PROPERTIES")
+        return 2
+    if (properties["LoadState"] == "not-found"
+            and properties["ActiveState"] == "inactive"
+            and properties["SubState"] == "dead"
+            and properties["MainPID"] == "0"):
+        print("M1_BG_UNIT_STATUS=NOT_FOUND")
+        print("M1_BG_UNIT_PRESENCE=ABSENT_RESERVED_UNIT_ONLY")
+        return 0
+    print("M1_BG_UNIT_STATUS=BLOCKED_UNTRUSTED_PRESENT")
+    print("M1_BG_UNIT_BLOCK_REASON=UNIT_PROVENANCE_NOT_IMPLEMENTED")
+    return 2
+
+
 def plan() -> int:
     print("M1_BG_PLAN=USER_SYSTEMD_SUPERVISED_WORKER")
+    print("M1_BG_RESERVED_UNIT=" + BG_UNIT)
+    print("M1_BG_UNIT_STATUS_ACTION=READ_ONLY")
     print("M1_BG_MODE=DESIGN_AND_READ_ONLY_HOST_PROBE")
     print("M1_BG_START=NOT_IMPLEMENTED")
     print("M1_BG_STOP=NOT_IMPLEMENTED")
@@ -109,9 +177,13 @@ def plan() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("plan", "probe"))
+    parser.add_argument("action", choices=("plan", "probe", "unit-status"))
     args = parser.parse_args()
-    return plan() if args.action == "plan" else probe()
+    if args.action == "plan":
+        return plan()
+    if args.action == "probe":
+        return probe()
+    return unit_status()
 
 
 if __name__ == "__main__":

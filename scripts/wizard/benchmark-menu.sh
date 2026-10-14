@@ -220,6 +220,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 10 'Recover stopped M1 journal / 종료 기록 복구'
     wizard_menu_option 11 'Background supervisor plan (no start) / 백그라운드 설계'
     wizard_menu_option 12 'Background systemd host probe (read-only) / 호스트 검사'
+    wizard_menu_option 13 'Background user unit status (read-only) / 서비스 상태'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -244,6 +245,8 @@ wizard_benchmark_menu() {
             wizard_warning 'Background supervisor plan unavailable.' ;;
       12) python3 -B "${ROOT_DIR}/scripts/runtime/m1-background-probe.py" probe ||
             wizard_warning 'Background host probe blocked; no user-service or Docker changes.' ;;
+      13) python3 -B "${ROOT_DIR}/scripts/runtime/m1-background-probe.py" unit-status ||
+            wizard_warning 'Background unit query blocked/untrusted; no service or Docker changes.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac

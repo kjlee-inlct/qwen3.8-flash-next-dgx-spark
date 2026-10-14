@@ -26,6 +26,19 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## Actual DGX linger=no and P1b read-only unit inventory
+
+- At `56b51aa9` the actual DGX printed
+  `Linger=no`, `M1_BG_USER_LINGER=DISABLED`,
+  `M1_BG_USER_MANAGER=AVAILABLE` and
+  `M1_BG_BLOCK_REASON=USER_LINGER_DISABLED`.
+- The latest source-only Wizard **13** queries reserved user unit
+  presence without trusting an arbitrary MainPID or issuing any
+  service mutation. The background worker is **NOT_IMPLEMENTED**.
+- The owner has not approved the persistent `enable-linger` policy
+  change. The systemd user manager can be present during a login
+  yet terminate at logout without linger. Do not treat probe results
+  as independent worker lifetime or memory watchdog qualification.
 ## Actual DGX background probe outcome (2026-10-14)
 
 - Operator ran P1a plan and probe on source `9df9d08` in the

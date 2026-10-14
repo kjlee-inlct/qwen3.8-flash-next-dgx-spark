@@ -1,3 +1,16 @@
+> **2026-10-14 ACTUAL DGX USER SYSTEMD LINGER — CONFIRMED DISABLED:**
+> Source `56b51aa94a5db5b32ce0d8adc2397760bb026805` and original canonical checkout verified.
+> Physical `loginctl show-user ... --property=Linger` printed `Linger=no`.
+> P1a printed `M1_BG_USER_LINGER=DISABLED`,
+> `M1_BG_USER_MANAGER=AVAILABLE` and
+> `M1_BG_BLOCK_REASON=USER_LINGER_DISABLED`; host probe BLOCKED.
+> No Docker, user-service, linger, GPU or managed-release change.
+> Prior reason `NOT_ENABLED_OR_UNKNOWN` is superseded by exact read-only
+> evidence. Owner approval to modify persistent linger is **NOT GIVEN**.
+> P1b source adds read-only reserved unit inventory only; no worker
+> launch, stop, PID or exact-ID ownership qualification.
+> See [physical evidence and P1b design](MAZINB-M1-WIZARD.md).
+
 > **2026-10-14 ACTUAL DGX BACKGROUND P1a HOST PROBE: SAFELY BLOCKED**
 > At source `9df9d0823762b16a1316847b7804e178f8b1a494` on
 > the original Git checkout, operator executed read-only plan/probe.
