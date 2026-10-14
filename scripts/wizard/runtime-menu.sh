@@ -27,8 +27,21 @@ wizard_post_benchmark_shutdown() {
   wizard_warning 'Any OpenWebUI or LAN client using the managed API will lose its endpoint.'
   wizard_info 'No runtime will be started; changes use the installed settings rollback-capable transaction.'
   wizard_yes_no 'Open post-benchmark shutdown plan? / API·서비스 종료 계획을 확인합니까?' no || return 0
-  if ! bash "${ROOT_DIR}/install.sh" --lang "${UI_LANG}" --manage-settings --shutdown-access; then
+  if bash "${ROOT_DIR}/install.sh" --lang "${UI_LANG}" --manage-settings --shutdown-access; then
+    wizard_verify_managed_host_idle
+  else
     wizard_warning 'Shutdown was cancelled, blocked, or failed. Verify exact status before retrying.'
+  fi
+}
+
+wizard_verify_managed_host_idle() {
+  wizard_header 'Full post-benchmark host idle audit / 서비스·포트·자동기동 검증'
+  wizard_info 'Read-only: installed API policy, shared systemd units, Docker and configured ports.'
+  if python3 -B "${ROOT_DIR}/scripts/diagnostics/verify-managed-idle.py"; then
+    wizard_success 'No managed model runtime, API proxy listener, or auto-boot service remains.'
+  else
+    wizard_warning 'Host is NOT QUIESCENT or status cannot be verified.'
+    wizard_warning 'Do not confuse mazinb-only artifact cleanup PASS with full host-idle PASS.'
   fi
 }
 
@@ -42,6 +55,7 @@ wizard_runtime_menu() {
     wizard_menu_option 4 'API access / Docker & LAN ports / 포트 설정 변경'
     wizard_menu_option 5 'API proxy status (read-only) / 프록시 상태 조회'
     wizard_menu_option 6 'Post-benchmark API & boot shutdown / 벤치 후 프록시·자동 기동 해제'
+    wizard_menu_option 7 'Verify full host idle (read-only) / 서비스·포트·재부팅 대기 검증'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -61,6 +75,7 @@ wizard_runtime_menu() {
            wizard_warning 'Managed proxy not installed or status unavailable.'
          fi ;;
       6) wizard_post_benchmark_shutdown ;;
+      7) wizard_verify_managed_host_idle ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
