@@ -48,7 +48,7 @@ plan
 
 prune
   Safe cleanup:
-    - stopped qwen38-* experiment containers except the canonical qwen38-flash-next container
+    - stopped experiment containers are REPORT-ONLY (no automatic removal)
     - dangling Docker images
     - Docker builder cache older than N days (default 7)
     - immutable releases other than current/previous
@@ -324,10 +324,10 @@ print_plan() {
   printf '  experiments     : %s\n' "$([[ "${PRUNE_EXPERIMENTS}" == 1 ]] && printf remove-known-tags || printf keep)"
   printf '  volumes         : %s\n\n' "$([[ "${PRUNE_VOLUMES}" == 1 ]] && printf remove-unused-anonymous || printf keep)"
 
-  printf '[Stopped experiment containers]\n'
+  printf '[Stopped experiment containers: PRESERVED for logs/evidence]\n'
   while IFS= read -r name; do
     [[ -n "${name}" ]] || continue
-    found=1; printf '  remove %s\n' "${name}"
+    found=1; printf '  preserve %s\n' "${name}"
   done < <(stopped_experiment_containers)
   [[ "${found}" == 1 ]] || printf '  none\n'
 
@@ -389,7 +389,8 @@ print_plan() {
   printf '  current release  : %s\n' "${current_release:-none}"
   printf '  previous release : %s\n' "${previous_release:-none}"
   printf '  PLE swap and Hugging Face cache are report-only.\n'
-  printf '  Docker image sizes are logical sizes; shared layers mean actual reclaimed bytes may be smaller.\n'\n  printf '  Benchmark result files are preserved; automatic age-based deletion is forbidden.\n'
+  printf '  Docker image sizes are logical sizes; shared layers mean actual reclaimed bytes may be smaller.\n'
+  printf '  Benchmark result files are preserved; automatic age-based deletion is forbidden.\n'
 }
 
 run_or_echo() {
@@ -423,10 +424,9 @@ prune_storage() {
 
   printf '\nApplying storage cleanup\n'
 
-  while IFS= read -r name; do
-    [[ -n "${name}" ]] || continue
-    run_or_echo docker rm "${name}"
-  done < <(stopped_experiment_containers)
+  # Individual experiment containers may hold irreplaceable logs, labels
+  # and validation evidence. Never remove them through blanket storage prune.
+  printf 'EXPERIMENT_CONTAINER_PURGE=DISABLED_REQUIRES_EXACT_ID_ARCHIVE_AND_OWNER_APPROVAL\n'
 
   while IFS= read -r id; do
     [[ -n "${id}" ]] || continue
