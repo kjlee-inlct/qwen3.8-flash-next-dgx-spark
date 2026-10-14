@@ -1,3 +1,27 @@
+## 2026-10-15 — H6 PHYSICAL read-only forensics: watchdog trigger confirmed; RM unresolved
+
+At exact audit source `2e61645c59dc005c474139bde1b3313ff62728b8`
+the operator ran `hybrid-h6-forensics-readonly.py --latest`.
+Journal/stop marker/Docker exact ID matched and `RC=0` confirmed the
+protected `failed_stopped` Docker object. Five actual watchdog warnings
+(23:28:47–23:28:55 KST) confirm
+`noncmafree < 2GiB && swapgrowth >= 256MiB`
+with `noncma_available=27809–28282MiB`, `swapgrowth=3427MiB`,
+final `noncmafree=726MiB`; H6 legacy swap-growth response was active.
+The 10-GiB Available and 8-GiB SwapFree guards were not the trigger.
+This identifies the watchdog decision, **not proof of NVIDIA RM health**.
+
+Six raw trial/monitor/Docker files were copied into on-host directory
+`/home/inlc/h6-m1-evidence-20261014.dvQmt6eq` and
+`sha256sum -c` passed. No independent off-host backup verified.
+`sudo -n` failed due to password requirement; NVIDIA RM/Xid kernel
+window still NOT_CAPTURED. The attempted manual 14:18 interval was
+UTC, whereas the host monitor uses KST 23:18; use the local H6 journal
+`kernel_since` and actual stop time to bound a correct query.
+No H6 READY, inference, or benchmark. No rerun, protection loosening,
+deletion, or merge of Draft PRs #261/#259.
+[Detailed physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-14 — Actual H6 first GPU load MEMORY-PROTECTION STOP; benchmark NOT_MEASURED
 
 The operator physically ran approved Wizard **Benchmark 5→20** at

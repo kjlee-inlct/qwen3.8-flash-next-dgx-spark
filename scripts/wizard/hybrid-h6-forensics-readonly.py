@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -102,6 +103,53 @@ def monitor_events(path: Path) -> tuple[list[str], bool, int]:
             + list(other)), protect_seen, warnings
 
 
+def memory_trigger_path(events: list[str]) -> str:
+    """Classify the final logged protect sample using the logged guard thresholds.
+
+    This establishes the watchdog's *decision path*, not GPU/RM memory health.
+    Missing or contradictory log fields never become a guessed cause.
+    """
+    startup = next((e for e in events if "monitor started:" in e), "")
+    warning = next((e for e in reversed(events)
+                    if "WARNING memory margin low" in e), "")
+    progress = re.search(r"\bprotect=(\d+)/(\d+):", warning)
+    if not progress or progress.group(1) != progress.group(2):
+        return "UNCLASSIFIED_NO_FINAL_PROTECT_SAMPLE"
+
+    def field(line: str, key: str, unit: str) -> int | None:
+        match = re.search(r"(?:^|\s)" + re.escape(key) +
+                          r"=(\d+)" + unit + r"\b", line)
+        return int(match.group(1)) if match else None
+
+    limits = {
+        "free": field(startup, "noncma-free", "GiB"),
+        "available": field(startup, "free-gate", "GiB"),
+        "swap_growth": field(startup, "swap-growth", "MiB"),
+        "swap_available": field(startup, "swap-available-gate", "GiB"),
+        "swap_free": field(startup, "swapfree", "GiB"),
+    }
+    measured = {
+        "free": field(warning, "noncmafree", "MiB"),
+        "available": field(warning, "noncma_available", "MiB"),
+        "swap_growth": field(warning, "swapgrowth", "MiB"),
+        "swap_free": field(warning, "swapfree", "MiB"),
+    }
+    if any(v is None for v in (*limits.values(), *measured.values())):
+        return "UNCLASSIFIED_MISSING_GUARD_FIELDS"
+
+    reasons = []
+    if measured["swap_free"] < limits["swap_free"] * 1024:
+        reasons.append("LOW_SWAP_FREE")
+    if measured["free"] < limits["free"] * 1024:
+        if measured["available"] < limits["available"] * 1024:
+            reasons.append("LOW_FREE_AND_LOW_AVAILABLE")
+        if (measured["swap_growth"] >= limits["swap_growth"] and
+                (limits["swap_available"] == 0 or
+                 measured["available"] < limits["swap_available"] * 1024)):
+            reasons.append("LOW_FREE_AND_SWAP_GROWTH")
+    return "+".join(reasons) if reasons else "UNCLASSIFIED_THRESHOLD_LOG_CONFLICT"
+
+
 def inspect_exact(container_id: str, name: str, record: dict) -> dict:
     result = subprocess.run(["docker", "inspect", container_id], capture_output=True,
                             text=True, check=False, timeout=25)
@@ -122,18 +170,35 @@ def inspect_exact(container_id: str, name: str, record: dict) -> dict:
     return obj
 
 
-def kernel_summary(since: str) -> None:
-    """Best-effort evidence, not an admission PASS; never authenticate or write."""
+def kernel_summary(since: str, stop_at_utc: str) -> None:
+    """Read all-boot kernel transport, bounded to 60 seconds after H6 STOP.
+
+    'since' was saved in host-local time by the original H6 controller.
+    The stop marker uses UTC. Journal timestamps are compared in local time.
+    This is optional evidence; lack of sudo is never a clean RM verdict.
+    """
     if STAMP.fullmatch(since) is None:
         print("H6_FORENSIC_KERNEL=NOT_CHECKED_BAD_TIMESTAMP")
         return
     try:
+        since_local = datetime.strptime(since, "%Y-%m-%d %H:%M:%S")
+        stopped = datetime.strptime(stop_at_utc, "%Y-%m-%dT%H:%M:%SZ")
+        stopped = stopped.replace(tzinfo=timezone.utc)
+        until_local = (stopped + timedelta(seconds=60)).astimezone()
+        until = until_local.strftime("%Y-%m-%d %H:%M:%S")
+        if since_local.timestamp() > until_local.timestamp():
+            print("H6_FORENSIC_KERNEL=NOT_CHECKED_INVERTED_WINDOW")
+            return
+        print("H6_FORENSIC_KERNEL_SINCE_LOCAL=" + since)
+        print("H6_FORENSIC_KERNEL_UNTIL_LOCAL=" + until)
         result = subprocess.run(
-            ["sudo", "-n", "journalctl", "-k", "--since", since, "--no-pager"],
+            ["sudo", "-n", "journalctl", "_TRANSPORT=kernel",
+             "--since", since, "--until", until,
+             "--no-pager", "--output=short-iso-precise"],
             capture_output=True, text=True, check=False, timeout=40,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        print("H6_FORENSIC_KERNEL=NOT_CHECKED_PERMISSION_OR_TIMEOUT")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        print("H6_FORENSIC_KERNEL=NOT_CHECKED_PERMISSION_OR_TIMEOUT_OR_TIME")
         return
     if result.returncode:
         print("H6_FORENSIC_KERNEL=NOT_CHECKED_NO_NONINTERACTIVE_SUDO")
@@ -213,6 +278,7 @@ def main() -> int:
                 and state_obj.get("Running") is False, "candidate_not_proven_stopped")
         events, saw_protect, n_warning = monitor_events(trial_dir / "monitor.log")
         print(f"H6_FORENSIC_WARNING_EVENTS={n_warning}")
+        print("H6_FORENSIC_MEMORY_TRIGGER=" + memory_trigger_path(events))
         for line in events:
             print("H6_MONITOR_EVENT=" + line)
         marker = monitor_dir / "runtime-stop.env"
@@ -223,7 +289,7 @@ def main() -> int:
         print("H6_FORENSIC_STOP_AT=" + stop["UPDATED_AT"])
         print("H6_FORENSIC_PROTECT_LOG_PRESENT=" + str(saw_protect))
         print("H6_FORENSIC_DOCKER_OOM_INTERPRETATION=DOCKER_OOM_KILLED_FALSE_DOES_NOT_EXCLUDE_RM")
-        kernel_summary(str(record.get("kernel_since", "")))
+        kernel_summary(str(record.get("kernel_since", "")), stop["UPDATED_AT"])
         print("H6_FORENSIC_HOST_MUTATION=NONE")
         print("H6_FORENSIC_RELAUNCH=NOT_AUTHORIZED")
         print("H6_FIRST_BENCHMARK=NOT_MEASURED")

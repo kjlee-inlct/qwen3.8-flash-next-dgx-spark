@@ -84,9 +84,61 @@ class H6ForensicTests(unittest.TestCase):
             self.assertTrue(any("protect=5/5" in line for line in events))
             self.assertTrue(any("PROTECT stopping" in line for line in events))
 
+    def test_exact_physical_trigger_is_low_free_and_swap_growth(self):
+        events = [
+            "2026-10-14 23:18:04 monitor started: "
+            "noncma-free=2GiB free-gate=10GiB swap-growth=256MiB "
+            "swap-available-gate=0GiB swapfree=8GiB",
+            "2026-10-14 23:28:55 WARNING memory margin low protect=5/5: "
+            "noncma_available=28282MiB noncmafree=726MiB "
+            "swapfree=143000MiB swapgrowth=3427MiB",
+        ]
+        self.assertEqual(m.memory_trigger_path(events),
+                         "LOW_FREE_AND_SWAP_GROWTH")
+        self.assertEqual(m.memory_trigger_path(events[:1]),
+                         "UNCLASSIFIED_NO_FINAL_PROTECT_SAMPLE")
+        self.assertEqual(m.memory_trigger_path([events[0],
+                         events[1].replace("swapgrowth=3427MiB", "")]),
+                         "UNCLASSIFIED_MISSING_GUARD_FIELDS")
+        self.assertEqual(m.memory_trigger_path([events[0],
+                         events[1].replace("protect=5/5", "protect=4/5")]),
+                         "UNCLASSIFIED_NO_FINAL_PROTECT_SAMPLE")
+
+    def test_other_guard_paths_are_distinguished(self):
+        setup = ("monitor started: noncma-free=2GiB free-gate=10GiB "
+                 "swap-growth=256MiB swap-available-gate=0GiB swapfree=8GiB")
+        low_available = ("WARNING memory margin low protect=5/5: "
+                         "noncma_available=9000MiB noncmafree=800MiB "
+                         "swapfree=150000MiB swapgrowth=0MiB")
+        low_swap = ("WARNING memory margin low protect=5/5: "
+                    "noncma_available=28000MiB noncmafree=6000MiB "
+                    "swapfree=7000MiB swapgrowth=0MiB")
+        self.assertEqual(m.memory_trigger_path([setup, low_available]),
+                         "LOW_FREE_AND_LOW_AVAILABLE")
+        self.assertEqual(m.memory_trigger_path([setup, low_swap]),
+                         "LOW_SWAP_FREE")
+
+    def test_kernel_query_is_bounded_and_includes_prior_boots(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        output = StringIO()
+        with patch.object(m.subprocess, "run",
+                          return_value=subprocess.CompletedProcess([], 0, stdout="")) as run:
+            with redirect_stdout(output):
+                m.kernel_summary("2026-10-14 23:18:03", "2026-10-14T14:28:55Z")
+            args = run.call_args.args[0]
+            self.assertIn("_TRANSPORT=kernel", args)
+            self.assertNotIn("-k", args)
+            self.assertIn("--until", args)
+            self.assertIn("--since", args)
+            self.assertEqual(args[args.index("--since") + 1],
+                             "2026-10-14 23:18:03")
+            self.assertIn("H6_FORENSIC_KERNEL=REVIEW_MATCHED_WINDOW_ONLY",
+                          output.getvalue())
+
     def test_kernel_check_skips_bad_timestamp(self):
         with patch.object(m.subprocess, "run") as run:
-            m.kernel_summary("invalid")
+            m.kernel_summary("invalid", "2026-10-14T14:28:55Z")
             run.assert_not_called()
 
     def test_latest_missing_state_is_readonly_rejection(self):
