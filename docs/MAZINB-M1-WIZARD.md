@@ -1,5 +1,18 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## P1d physically executed in-memory simulation (2026-10-14)
+
+Operator executed the P1d `plan` and `simulate` commands at exact SHA
+`08f69beda51a7ee8d610774e260aae21bed911b0` on the DGX, after
+a clean Fast-forward sync and full SHA assertion. The simulation
+returned `PASS_IN_MEMORY`, and rejected unapproved STOP,
+`Linger=no`, nonce replay and expired synthetic requests.
+
+**Qualification is physically executed synthetic protocol only.**
+There is no actual STOP, IPC, kernel peer attestation, durable journal,
+persistent replay ledger, user service or real background worker.
+No Docker/managed model/GPU/linger mutation occurred.
+[Exact DGX output](MAZINB-M1-P1D-PHYSICAL-SYNTHETIC-20261014.md).
 ## P1d in-memory control-command admission — SOURCE ONLY
 
 Wizard Benchmark **15** runs `m1-supervisor-command-protocol.py simulate`,

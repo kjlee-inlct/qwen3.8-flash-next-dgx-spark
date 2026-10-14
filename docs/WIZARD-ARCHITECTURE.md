@@ -26,6 +26,14 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## P1d physical synthetic result (2026-10-14)
+
+- Canonical worktree at `08f69be`; actual DGX `plan` and `simulate`
+  printed `PASS_IN_MEMORY`, rejected unapproved STOP, `Linger=no`,
+  expired requests and nonce replays.
+- No real worker, persistent nonce/journal, IPC, Docker or service
+  changes; physical P1d success is **synthetic only**.
+- [Read-only physical evidence](MAZINB-M1-P1D-PHYSICAL-SYNTHETIC-20261014.md).
 ## P1d pure command-admission simulation (source only)
 
 - Wizard 15 runs a synthetic, memory-only request-envelope validator

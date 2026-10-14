@@ -1,3 +1,15 @@
+> **2026-10-14 ACTUAL DGX P1d COMMAND SIMULATION: PASS_IN_MEMORY**
+> At exact source `08f69beda51a7ee8d610774e260aae21bed911b0`
+> the operator ran the pure `m1-supervisor-command-protocol.py`
+> plan/simulate on the physical DGX (one canonical Git worktree).
+> P1d printed `PASS_IN_MEMORY`, and blocked default-NO STOP,
+> `Linger=no`, nonce replay and expired requests. Real STOP was
+> `NOT_PERFORMED`; real IPC, worker, OS peer attestation, Docker
+> action, user service and linger mutation all remain absent.
+> Source Push/PR CI for `08f69be` both SUCCESS, not a live
+> background supervisor qualification. `Linger=no` stays confirmed.
+> [Exact physical P1d evidence](MAZINB-M1-P1D-PHYSICAL-SYNTHETIC-20261014.md).
+
 > **2026-10-14 M1 SUPERVISOR P1d — PURE SYNTHETIC CONTROL GATES ONLY:**
 > Commit `5777ee4d2b63466b0db6a750a3a3f71e8bfb84df`
 > adds `m1-supervisor-command-protocol.py`, adversarial unit tests
