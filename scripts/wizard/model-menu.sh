@@ -115,6 +115,24 @@ wizard_hybrid_dependency_readonly() {
   fi
 }
 
+wizard_hybrid_h6_launch_admission() {
+  local sha root rc=0
+  wizard_header 'Hybrid H6 protected launch admission / 안전 기동 점검'
+  wizard_info 'Read-only only: no Docker start, downloads or service changes.'
+  sha="$(git -C "$ROOT_DIR" rev-parse HEAD)" || return 0
+  root="$ROOT_DIR/models"
+  if [[ -v QWEN38_PHASE0_MODELS_ROOT ]]; then
+    root="$QWEN38_PHASE0_MODELS_ROOT"
+  fi
+  python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-launch-admission.py" \
+    --models-root "$root" --expected-sha "$sha" || rc=$?
+  case "$rc" in
+    0) wizard_info 'Manual review REQUIRED; start is NOT authorized.' ;;
+    3) wizard_warning 'H6 launch BLOCKED pending safe lifecycle/protection controller.' ;;
+    *) wizard_warning 'H6 launch admission INVALID. Do not start.' ;;
+  esac
+}
+
 wizard_model_menu() {
   local choice
   while true; do
@@ -127,6 +145,7 @@ wizard_model_menu() {
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
     wizard_menu_option 7 'Hybrid H6 Phase-0 inventory (read-only) / Hybrid 사전 점검'
     wizard_menu_option 8 'Hybrid H3-H6 dependency blockers (read-only) / Hybrid 참조 차단 점검'
+    wizard_menu_option 9 'Hybrid H6 launch admission (read-only) / Hybrid 안전 기동 검증'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -138,6 +157,7 @@ wizard_model_menu() {
       6) wizard_mazinb_retirement_audit ;;
       7) wizard_hybrid_phase0_readonly ;;
       8) wizard_hybrid_dependency_readonly ;;
+      9) wizard_hybrid_h6_launch_admission ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac

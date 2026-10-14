@@ -1,3 +1,31 @@
+## 2026-10-14 — DGX dependency audit PHYSICAL PASS (retirement BLOCKED)
+
+At exact `443fd2bd01f0bd5314ee6a0dc66608d2059dfbf6`, operator
+performed the new physical Hybrid reference audit.
+`PROTECTED_PROFILE_REFERENCES=2` (H7 group metadata and H20
+ModelOpt conversion both alias the existing H6 checkpoint);
+`DOCKER_CONTAINERS_INSPECTED=24`;
+`DOCKER_REFERENCING_CONTAINERS=16` all exited, including
+`DOCKER_OTHER_ROOT_REVIEW_CONTAINERS=11` recorded with historical
+`/home/inlc/models` mounts.
+`HYBRID_REFERENCE_AUDIT=BLOCKED_KNOWN_REFERENCES`,
+`HYBRID_DELETION_AUTHORIZED=NO`, RC=3 **EXPECTED**.
+No models/services/containers changed; H6 first bench NOT_MEASURED.
+
+**Independent startup issue identified in source:** DGX installed manifest
+last reported `SERVICE_ENABLED=0`, while `install.sh` requires
+`SERVICE_ENABLED=1` AND `SERVICE_OWNED=1` for a real managed
+profile switch. The current shutdown state cannot safely be converted
+into a qualified live H6 switch by blindly running
+`install.sh --model orcarouter-hybrid`. Even restoring ownership
+requires careful no-boot/no-accidental-start planning. A source-only
+read-only Wizard **Models 3→9** admission checks this lifecycle
+restriction plus protective monitor/heartbeat and exact stopped
+predecessor, without any model start; physical check pending.
+Implement a protected isolated H6 trial or explicitly reviewed
+managed-service transition before 1st benchmark; **do not bypass
+with docker run**.
+
 ## 2026-10-14 PHYSICAL DGX Hybrid Phase-0: STATIC PASS / RECLAIM BLOCKED
 
 Operator executed exact source `8ca529ba62067cae10e7ccdfd457e890967a1133`
