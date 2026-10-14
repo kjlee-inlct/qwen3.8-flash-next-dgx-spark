@@ -1,3 +1,49 @@
+## 2026-10-14: mazinb source checkpoint-only retirement workflow (SOURCE IMPLEMENTED; PHYSICAL RECLAIM NOT_RUN)
+
+The owner requested: after completing the measured mazinb v0.29 M1 benchmark,
+reclaim the original mazinb model through the Wizard and verify it. This is
+**not** approval for broad container/image/model pruning. Real deletion
+is conditional on passing an exact-target admission and a new explicit Wizard
+confirmation; do not infer complete mazinb Legacy benchmarking or long-term
+host-stability qualification from the v0.29 result.
+
+Current implementation: `./wizard.sh` → **Models (3) → Reclaim mazinb (4)**.
+The Wizard performs a default-NO, read-only `manage-models.sh
+reclaim-mazinb --dry-run`; an actual apply requires the literal phrase
+`DELETE_MAZINB_SOURCE_CHECKPOINT`. It then delegates to the existing
+`manage-models.sh` checkpoint removal engine rather than introducing
+a second deletion implementation.
+
+The separate read-only gate `scripts/model/mazinb-reclaim-gate.py` must
+verify: complete pinned mazinb model manifest; nonactive completed managed
+installation; published physical M1 `smoke.json`, `mazinb.json`,
+`mazinb-report.md` SHA256 against **both** repository archived payloads
+and original DGX results; H3 pinned provenance and, when present, complete
+H3→H6 runtime-only validation; absence of symlinks into the removed
+checkpoint; complete Docker inventory with no running project Docker or
+restartable stopped mount references; exact protected OrcaRouter predecessor
+identity; M1 terminal journal and exact stopped container. The apply path
+adds the shared lifecycle and M1 benchmark locks and repeats checks before
+deletion. It preserves every existing Docker container, image, logger,
+historical M1/KV record, Hybrid stage, immutable release, PLE swap and
+benchmarked source evidence. Stopped mazinb containers mounting its
+checkpoint become archive-only/nonrestartable without re-download.
+
+After deletion, the manager checks that the exact directory is absent,
+Docker object inventory and protected predecessor ID are unchanged,
+benchmark archive audit still passes, and records filesystem available
+bytes before/after. Actual recovered bytes must come from that physical
+output, **not** the historical ~174 GiB directory snapshot.
+
+**Status:** GitHub source/host-free tests only until the owner runs a
+version-verified physical DGX Wizard dry-run and checks the result. Physical
+apply must remain blocked on any failed gate, stale source SHA, incomplete
+Hybrid link references, invalid Docker identity, unverified independent
+archive, or user cancellation. No model files have been deleted in this
+development session.
+
+See [mazinb source report](model-reports/mazinb.md).
+
 # Benchmark first — selective DGX model/Docker reclamation
 
 ## 2026-10-14 operator priority reset: run → benchmark → archive → targeted reclaim
