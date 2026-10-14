@@ -26,6 +26,17 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## P1d pure command-admission simulation (source only)
+
+- Wizard 15 runs a synthetic, memory-only request-envelope validator
+  without touching Docker, user services, supervisor processes, or files.
+- Explicit STOP consent, linger host gate, exact owner token and
+  candidate ID, supervisor PID/start ticks, invocation ID, peer UID,
+  one-shot nonce, bounded TTL, healthy monitor, and benchmark lease
+  are **mocked input constraints**—not real runtime attestations.
+- Actual IPC authentication, atomic replay ledger, physical worker
+  service and STOP action remain NOT_IMPLEMENTED; host policy remains
+  `Linger=no`. No physical P1d DGX run yet.
 ## P1c physical execution of synthetic protocol (2026-10-14)
 
 - Actual DGX invocation at `835be6f` printed `PASS_IN_MEMORY`,

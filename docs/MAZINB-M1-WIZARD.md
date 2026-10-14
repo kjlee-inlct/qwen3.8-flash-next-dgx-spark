@@ -1,5 +1,30 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## P1d in-memory control-command admission — SOURCE ONLY
+
+Wizard Benchmark **15** runs `m1-supervisor-command-protocol.py simulate`,
+a pure synthetic simulation of future VIEW_STATUS and REQUEST_STOP
+authorization. `plan` describes the frozen request contract.
+
+An injected immutable owner identity pins full candidate/predecessor
+Docker IDs, owner token, systemd invocation ID, supervisor PID and start
+ticks, and owner UID. A request must match the trusted identity, carry
+a unique nonce and supported protocol version, and be neither future
+nor expired (maximum 30,000 ms lifetime). Duplicate or exhausted
+nonces fail closed. REQUEST_STOP requires a simulated explicit consent,
+linger-enabled host gate, verified supervisor/watchdog and a free
+benchmark lease. VIEW_STATUS never authorizes mutation.
+
+**This is not authentication or an operating system peer check.** All
+parameters are injected; the immutable in-memory nonce state is not
+durably persisted or locked across concurrent requests. There is NO
+IPC socket, SO_PEERCRED, systemd user unit, real persistent owner-token
+storage, Docker start/stop, actual worker action or real operator STOP.
+Before any production worker, implement peer credential validation,
+atomic persistent replay protection and exact-ID watchdog/journal
+reconciliation with separate approval and real DGX evidence.
+On the single DGX, `Linger=no` remains verified and must not be
+silently changed.
 ## Physically executed P1c in-memory simulation — VERIFIED (2026-10-14)
 
 The operator synchronized the single canonical Git checkout to exact
