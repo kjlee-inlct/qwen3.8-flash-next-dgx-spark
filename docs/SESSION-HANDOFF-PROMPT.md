@@ -1,3 +1,18 @@
+> **CURRENT PHYSICAL HOST 2026-10-14, second M1 live start:**
+> Clean detached worktree at
+> `67f45d506cd773b2c5066659ddcb946970cc5ff1` verified.
+> User approved actual GPU start; terminal printed
+> `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261014003622-035e91fd`.
+> The new M1-only 12 GiB swapgrowth available gate is now in physical
+> trial. READY, 180s soak, inference, complete kernel RM and
+> llama-benchy measured throughput NOT_YET_REPORTED.
+> DO NOT start concurrent A/B or any other GPU model;
+> keep foreground Terminal A connected. Once
+> `M1_READY_FOR_BENCH` appears, pinned llama-benchy
+> via `scripts/wizard/m1-benchmark-lock.sh` in Terminal B,
+> preserve actual raw JSON/Markdown/SHA256, stop with `STOP`.
+> If M1 stops again, gather exact monitoring logs before retry.
+
 > **2026-10-14 critical M1 host diagnosis and next source branch:**
 > Exact 16-GiB M1 candidate
 > `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`

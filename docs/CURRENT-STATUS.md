@@ -1,3 +1,16 @@
+> **2026-10-14 M1 SECOND ACTUAL GPU START:** DGX detached source SHA
+> `67f45d506cd773b2c5066659ddcb946970cc5ff1` verified clean.
+> Owner approved Wizard Benchmark 5 -> 9 and obtained
+> `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261014003622-035e91fd`.
+> New M1-only swap-pressure availability gate is being physically
+> exercised. No second-run exact Docker ID/READY/soak/smoke/strict
+> RM outcome/llama-benchy metrics supplied yet. Preserve Terminal A.
+> Source SHA mistakenly entered for old Docker ID at initial 5 -> 8
+> was rejected (safe no-start); historical evidence submenu 9 was
+> rejected (safe no-start). Eventually correct full old Docker ID
+> acknowledged during live start. Historical A/B/managed preserved.
+> Benchmark only after `M1_READY_FOR_BENCH` in separate Terminal B.
+
 > **2026-10-14 M1 PHYSICAL FAILURE ROOT CAUSE CONFIRMED:** Actual new
 > model `qwen38-mazinb-m1-20261013235416-edd777eb` stopped via
 > `memory-protection`, exit 1, OOMKilled=false; reached 26/95 shards.

@@ -199,3 +199,32 @@ stored JSON `phase=stopped` because `stop_exact` overwrote the interim
 New code preserves `failed_stopped` and the cause for subsequent
 attempts. Historical immutable trial JSON must not be rewritten.
 
+## ACTUAL DGX second supervised M1 start — source mitigation under physical test
+
+After exact SHA verification in a detached clean worktree, operator ran
+`wizard.sh`, selected Benchmark 5 -> 8, but mistakenly entered the
+project source commit hash into the protected predecessor Docker-ID
+prompt. The Wizard safely printed `Exact predecessor ID mismatch; M1
+cancelled.` The operator later selected 5 -> 5 -> 9 in the historical
+evidence submenu; this was rejected as invalid and returned to the
+Benchmark menu. **Neither mistaken menu entry started a model.**
+
+The operator then selected **5 -> 9**, explicitly approved the new
+GPU load, re-entered the correct managed Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+typed the exact phrase `START_MAZINB_16G`, and authorized read-only
+sudo kernel evidence. The physical terminal showed:
+
+```text
+M1_UPDATED_SOURCE_VERIFIED=67f45d506cd773b2c5066659ddcb946970cc5ff1
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261014003622-035e91fd
+```
+
+**Classification at observation:** Real second M1 physical Docker
+start **CONFIRMED**, with the M1-only 12 GiB swap-pressure margin
+source active. No Docker exact ID, API READY, `M1_READY_FOR_BENCH`,
+180 s soak, inference smoke, fresh RM stability report or
+llama-benchy JSON/results were present in this submitted transcript.
+Terminal A remains supervising; do not declare startup/stability
+or performance success from `STARTED_UNQUALIFIED` alone.
+Do not overlap older A/B, managed OrcaRouter or other M1 sessions.
