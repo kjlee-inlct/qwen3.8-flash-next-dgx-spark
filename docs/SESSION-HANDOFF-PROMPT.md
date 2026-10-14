@@ -1,3 +1,14 @@
+> **2026-10-14 MAZINB CHECKPOINT RECLAIM PENDING PHYSICAL GATE:**
+> v0.29 M1 actual benchmark is MEASURED; original/archived evidence was SHA-verified.
+> New Wizard Model 3→4 and `manage-models.sh reclaim-mazinb --dry-run` provide
+> a source-only, precise mazinb checkpoint removal with default-NO consent,
+> exact phrase, archive/Hybrid/Docker/M1 journal checks and shared locks.
+> All Docker objects, shared image, Hybrid H3-H6, logs and benchmark results
+> are preserved. Stopped mazinb trial objects may no longer restart after
+> model data removal. **REAL DGX REMOVAL AND BYTES RECLAIMED: NOT_RUN.**
+> First verify new source SHA/CI, perform physical dry-run, and only apply
+> if every gate passes. [Exact scope](BENCHMARK-BEFORE-RECLAIM.md).
+
 > **2026-10-14 FRESH HYBRID H6 INSTALL ACCEPTANCE — SOURCE PATH PRESENT, E2E PENDING:**
 > Operator requires one Wizard selection on a new DGX Spark to prepare
 > the OrcaRouter + mazinb inputs, vLLM image and H3→H4→H5→H6 chain,
