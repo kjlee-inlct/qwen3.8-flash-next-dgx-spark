@@ -1,3 +1,44 @@
+## 2026-10-14 DGX physical mazinb checkpoint deletion — PASS; five Docker remnants — PENDING
+
+Actual user-provided DGX console from 2026-10-14 18:55 KST (source
+`72346806e9e9ed7438245761ae40b606eb6bc941`) shows successful
+Wizard **Models → 4** exact scoped deletion of
+`models/qwen3.8-flash-next-mazinb`. Five stopped mazinb experiment
+containers were intentionally preserved by the source-only implementation.
+Source/checkpoint and Hybrid evidence SHA passed independently after deletion.
+
+- MAZINB_RECLAIM_RESULT=`SOURCE_CHECKPOINT_REMOVED_VERIFIED`
+- Docker inventory result=`UNCHANGED` (expected for that original action)
+- FS before=`110587654144` bytes; after=`297037643776` bytes
+- FS available delta=`186449989632` bytes (about **173.65 GiB**)
+- H3, H4, H5, H6 all PRESERVED; protected predecessor Docker ID still pinned
+- Original `smoke.json`, `mazinb.json`, `mazinb-report.md` SHA all PASS
+- Five mazinb stopped IDs: `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`, `64a4dfacebc0369887742440b5f1a084420b4ca1dc65c4324de61be5d49a1be3`, `7af3966f3d0cae79f8277eaf9ad003fb04c1e15ea01f86574c2d8eeac396e7a1`, `b47e01628492da3f49d5aca2b677ed66dabde08680ae690df700926a37c0d631`, `e9107e3cbebecea9affe7e92dfaf13f711ebf84f8ed8e6e06b1ba16985c9e647`.
+
+**Correction:** Earlier source-only deletion never offered Docker removal.
+The requested new, independent cleanup is `./wizard.sh` → **Models (3)
+→ Retire five mazinb Docker containers (5)** or strictly read-only
+`./scripts/manage-models.sh retire-mazinb-containers --dry-run`.
+The new helper `scripts/model/retire-mazinb-containers.py` requires
+exact five 64-hex IDs and names, exit state, restart policies, matching
+previous checkpoint bind mount and vLLM image tag; protected predecessor;
+complete benchmark original/repo hash verification; M1 stopped journal;
+H3-H6 presence; full Docker inventory. An apply requires owner confirmation,
+the lifecycle and M1 benchmark locks, reruns the plan, and archives five
+sanitized inspect JSON metadata files + five complete bounded Docker logs +
+portable SHA256SUMS under private
+`~/.local/state/qwen38-spark/retirement-archives/` **before** performing
+only `docker rm <exact-container-ID>`. It never uses `-f` or `-v`,
+deletes no images/volumes, and checks other Docker object IDs unchanged.
+The historical M1 journals remain byte-identical; a separate
+`mazinb-m1/retired-docker.json` allows M1 status to report
+`M1_DOCKER_REMOVED=YES_ARCHIVED` after verified cleanup.
+
+**PHYSICAL FIVE-CONTAINER DOCKER REMOVAL: NOT_RUN**. Do not conflate
+source/CI passage with an actual DGX run. The shared
+`vllm-orcarouter-v029:v1` image must stay because H3–H6 and other trials
+share it. Docker global prune remains forbidden.
+
 ## 2026-10-14: mazinb source checkpoint-only retirement workflow (SOURCE IMPLEMENTED; PHYSICAL RECLAIM NOT_RUN)
 
 The owner requested: after completing the measured mazinb v0.29 M1 benchmark,
