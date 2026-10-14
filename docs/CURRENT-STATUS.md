@@ -1,3 +1,13 @@
+> **2026-10-14 PHYSICAL MAZINB SOURCE RECLAIM PASS / FIVE DOCKER REMNANTS PENDING:**
+> Physical Wizard 3→4 removed mazinb checkpoint and recovered
+> `186449989632` bytes of disk availability. Five stopped mazinb
+> Docker containers remain **by earlier explicit source-only scope**.
+> New Wizard Models 3→5 archives their full logs/sanitized metadata
+> before removing only those five exact stopped IDs. Shared Docker
+> image/volumes, Hybrid, releases and M1 journal preserved.
+> **New five-container cleanup PHYSICAL RUN: NOT_RUN**. CI is synthetic.
+> See [physical run and scoped cleanup](BENCHMARK-BEFORE-RECLAIM.md).
+
 > **2026-10-14 MAZINB CHECKPOINT RECLAIM PENDING PHYSICAL GATE:**
 > v0.29 M1 actual benchmark is MEASURED; original/archived evidence was SHA-verified.
 > New Wizard Model 3→4 and `manage-models.sh reclaim-mazinb --dry-run` provide
