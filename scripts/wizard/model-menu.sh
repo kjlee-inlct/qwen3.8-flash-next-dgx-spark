@@ -79,7 +79,7 @@ wizard_mazinb_docker_retire() {
 wizard_mazinb_retirement_audit() {
   wizard_header 'mazinb full post-removal audit / mazinb 서비스·프록시 포함 정리 검증'
   wizard_info 'Read-only: Docker archive, historical journal, dedicated system/user units, shared proxy/runtime and port 18889.'
-  if python3 -B "${ROOT_DIR}/scripts/diagnostics/verify-mazinb-retirement.py"; then
+  if python3 -B "${ROOT_DIR}/scripts/verify-mazinb-retirement.py"; then
     wizard_success 'mazinb-only Docker and service/proxy remnants absent; managed OrcaRouter shared assets preserved.'
   else
     wizard_warning 'INCONCLUSIVE/BLOCKED: inspect service, proxy and endpoint evidence; do not claim fully removed.'
