@@ -1,3 +1,20 @@
+> **2026-10-14 P1a BACKGROUND SUPERVISOR HOST PROBE — SOURCE ONLY:**
+> Source commit `38560326631d612c45ee0d1cde19dd9da927e62d`
+> adds Wizard Benchmark **11 plan** and **12 host probe**,
+> backed by `scripts/runtime/m1-background-probe.py` and synthetic tests.
+> User bus, loginctl linger, systemctl user manager, tool availability
+> and XDG runtime-dir ownership/mode are inspected **read-only**.
+> This does NOT enable lingering, install/start/stop systemd units,
+> create Docker containers, launch a background worker or start models.
+> `PASS_CAPABILITY_ONLY` is not detached lifecycle/host-stability proof.
+> Background start/stop and independently owned PID/unit/session token
+> remain **NOT_IMPLEMENTED / NOT_QUALIFIED**.
+> Existing Wizard 5→9 Foreground and 5→10 exact-ID Journal recovery
+> retain their prior implementation and safety gates.
+> [Detailed safety design](MAZINB-M1-WIZARD.md) and
+> [architecture](WIZARD-ARCHITECTURE.md).
+> Older proposed Background notes below are historical snapshots.
+
 > **2026-10-14 WORKSPACE / BENCHMARK EVIDENCE UPDATE:**
 > All three remaining detached experiment worktrees were safely removed;
 > `git worktree list` returned only the original canonical checkout
