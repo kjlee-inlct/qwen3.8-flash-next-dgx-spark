@@ -97,6 +97,24 @@ wizard_hybrid_phase0_readonly() {
   fi
 }
 
+wizard_hybrid_dependency_readonly() {
+  local sha root
+  wizard_header 'Hybrid H3-H6 external dependency audit / 참조 관계 점검'
+  wizard_warning 'This only lists blockers; no checkpoint, Docker, or service modification.'
+  sha="$(git -C "$ROOT_DIR" rev-parse HEAD)" || {
+    wizard_warning 'Unable to pin checkout SHA.'
+    return 0
+  }
+  root="$ROOT_DIR/models"
+  [[ -z "${QWEN38_PHASE0_MODELS_ROOT:-}" ]] || root="$QWEN38_PHASE0_MODELS_ROOT"
+  if python3 -B "$ROOT_DIR/scripts/wizard/hybrid-dependency-readonly.py" \
+       --models-root "$root" --expected-sha "$sha"; then
+    wizard_info 'No known registry/Docker references; deletion STILL NOT AUTHORIZED.'
+  else
+    wizard_warning 'Deletion BLOCKED: dependent profiles or Docker mounts, or incomplete audit.'
+  fi
+}
+
 wizard_model_menu() {
   local choice
   while true; do
@@ -108,6 +126,7 @@ wizard_model_menu() {
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
     wizard_menu_option 7 'Hybrid H6 Phase-0 inventory (read-only) / Hybrid 사전 점검'
+    wizard_menu_option 8 'Hybrid H3-H6 dependency blockers (read-only) / Hybrid 참조 차단 점검'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -118,6 +137,7 @@ wizard_model_menu() {
       5) wizard_mazinb_docker_retire ;;
       6) wizard_mazinb_retirement_audit ;;
       7) wizard_hybrid_phase0_readonly ;;
+      8) wizard_hybrid_dependency_readonly ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac

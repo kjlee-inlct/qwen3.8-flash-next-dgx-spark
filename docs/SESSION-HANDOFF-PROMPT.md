@@ -1,3 +1,21 @@
+## 2026-10-14 PHYSICAL DGX Hybrid Phase-0: STATIC PASS / RECLAIM BLOCKED
+
+Operator executed exact source `8ca529ba62067cae10e7ccdfd457e890967a1133`
+on the physical DGX. Host idle and pinned Hybrid H3→H6 runtime-only
+manifest validation PASS. Available disk **298422198272 B**.
+Allocated per directory: base **183535857664 B**, H3 **77543333888 B**,
+H4 **68014092288 B**, H5 **44912640 B**, H6 **35475456 B**.
+H3/H4/H5/H6 symlinks = 13/76/91/139; all five trees report zero
+regular files with >1 hard link. **H7/H20 registered profiles alias H6;
+16 exited Hybrid Docker experiments bind-mount H3/H4/H5/H6**
+(5 at repo-root, 11 historical `/home/inlc/models` paths).
+`PASS_STATIC_INVENTORY_ONLY` is not a deletion permit, runtime READY or
+measured benchmark. First H6 benchmark NOT_MEASURED; full deletion
+BLOCKED_KNOWN_REFERENCES. No asset or service removed.
+Source-only Wizard **Models 3→8** read-only external dependency audit
+added; physical execution of new audit NOT_RUN.
+See [HYBRID-BENCH-REBUILD-CYCLE.md](HYBRID-BENCH-REBUILD-CYCLE.md).
+
 ## 2026-10-14 — SOURCE ONLY: Hybrid Phase-0 Wizard entry
 
 Added Models **3→7** and `scripts/wizard/hybrid-phase0-readonly.sh`:

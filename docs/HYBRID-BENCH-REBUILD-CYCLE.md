@@ -1,3 +1,44 @@
+## 2026-10-14 physical DGX Phase-0 observed — static PASS / retirement blocked
+
+**Source:** operator terminal on
+`8ca529ba62067cae10e7ccdfd457e890967a1133`.
+Fast-forward from `2a2c222`; managed idle PASS: API local, boot/service
+disabled, no managed listeners or running Qwen containers. Pinned
+`--runtime-only` Hybrid H3→H6 validation PASS (base
+`c1209bda15a6bbc4c68b585e93d40c0d85f50306`, mazinb provenance
+`f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`).
+The operator log has the base/H3/H4/H5/H6 manifest and index SHA256.
+
+Physical `df -B1` available **298422198272 B**; FS 69% used.
+`du -s -B1` base **183535857664 B**, H3 **77543333888 B**,
+H4 **68014092288 B**, H5 **44912640 B**, H6 **35475456 B**.
+Stage symlinks H3=13, H4=76, H5=91, H6=139; multi-link regular
+file count zero for all five trees. Allocation is **not** certified
+reclaimable bytes (COW/reflink/shared extents, peak build disk usage,
+external references all require separate proof).
+
+**Blocking evidence:** model registry lists protected
+`hybrid-h7-group-metadata` and
+`hybrid-h20-modelopt-convert-diag` with the exact H6 checkpoint path.
+24 Docker containers were inspected, 22 exited; OpenWebUI and Portainer
+are the two unrelated running containers. **16 exited Hybrid trials**
+bind-mount all H3/H4/H5/H6 (five use repo-local model paths, eleven
+record historic `/home/inlc/models` paths). Historical mounts and H7/H20
+references must be preserved, reviewed and independently resolved;
+none may be deleted as a shortcut.
+
+**Verdicts:** `HYBRID_PHASE0_READONLY=PASS_STATIC_INVENTORY_ONLY`;
+H6 actual READY/inference/llama-benchy **NOT_RUN / NOT_MEASURED**;
+full H3→H6 retirement **BLOCKED_KNOWN_REFERENCES**; rebuild and
+second benchmark **NOT_RUN**. No GPU work or model deletion was performed.
+The new source-only Wizard **Models 3→8** uses
+`scripts/wizard/hybrid-dependency-readonly.py` to report protected
+registry aliases and all Docker bind mount references without changing
+host state. Physical test of the *new* audit remains NOT_RUN.
+This audit never authorizes deletion, even when no references are found.
+The next gate remains a protected H6 live-switch/start design with
+memory/RM monitors enabled, then first benchmark and independent archive.
+
 # Hybrid H6: benchmark → full retire → prove absence → rebuild → benchmark → final retire
 
 **Plan recorded:** 2026-10-14 KST. **Status: PLAN + physical idle PASS; Hybrid benchmark, rebuild and retire NOT_RUN.**
