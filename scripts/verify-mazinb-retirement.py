@@ -226,8 +226,8 @@ def processes_check() -> None:
     output = command("ps", "-eo", "pid=,args=")
     for line in output.splitlines():
         _, _, argv = line.strip().partition(" ")
-        if (re.search(r"(?:^|\s)mazinb-m1\.py\s+run(?:\s|$)", argv)
-                or re.search(r"(?:^|\s)mazinb-kv-ab\.sh\s+(?:start|run)(?:\s|$)", argv)
+        if (re.search(r"(?:^|[\s/])mazinb-m1\.py\s+run(?:\s|$)", argv)
+                or re.search(r"(?:^|[\s/])mazinb-kv-ab\.sh\s+(?:start|run)(?:\s|$)", argv)
                 or ("monitor-runtime.sh" in argv and
                     any(cid in argv for cid in RETIRE.EXPECTED.values()))
                 or "qwen3.8-flash-next-mazinb" in argv):
