@@ -16,6 +16,22 @@ wizard_installed_api_settings_entry() {
   fi
 }
 
+wizard_post_benchmark_shutdown() {
+  wizard_read_manifest
+  if [[ "${WIZARD_MANIFEST_STATE}" != valid || "${WIZARD_PHASE}" != complete ]]; then
+    wizard_warning 'Only a verified complete installation can be deactivated.'
+    return 0
+  fi
+  wizard_warning 'This disables and removes the currently managed shared API proxy and boot service.'
+  wizard_warning 'The installed model identity, Docker images, stopped containers, evidence and releases remain intact.'
+  wizard_warning 'Any OpenWebUI or LAN client using the managed API will lose its endpoint.'
+  wizard_info 'No runtime will be started; changes use the installed settings rollback-capable transaction.'
+  wizard_yes_no 'Open post-benchmark shutdown plan? / API·서비스 종료 계획을 확인합니까?' no || return 0
+  if ! bash "${ROOT_DIR}/install.sh" --lang "${UI_LANG}" --manage-settings --shutdown-access; then
+    wizard_warning 'Shutdown was cancelled, blocked, or failed. Verify exact status before retrying.'
+  fi
+}
+
 wizard_runtime_menu() {
   local choice
   while true; do
@@ -25,6 +41,7 @@ wizard_runtime_menu() {
     wizard_menu_option 3 'Manifest summary / 설치 요약'
     wizard_menu_option 4 'API access / Docker & LAN ports / 포트 설정 변경'
     wizard_menu_option 5 'API proxy status (read-only) / 프록시 상태 조회'
+    wizard_menu_option 6 'Post-benchmark API & boot shutdown / 벤치 후 프록시·자동 기동 해제'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -43,6 +60,7 @@ wizard_runtime_menu() {
          else
            wizard_warning 'Managed proxy not installed or status unavailable.'
          fi ;;
+      6) wizard_post_benchmark_shutdown ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
