@@ -39,6 +39,26 @@ class WizardMenuValidationTests(unittest.TestCase):
         )
         return root
 
+    def test_new_host_hybrid_selection_reaches_h6_plan(self) -> None:
+        """Menu choice 4 must reach the full H6 installer plan on an empty HOME."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            # Model=Hybrid, default model root; config override=no,
+            # monitor=yes, protection=yes, custom thresholds=no,
+            # API=local, service=yes, continue=yes.
+            answers = "4\n\nn\ny\ny\nn\n1\ny\ny\n"
+            result = self.run_wizard(home, answers)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("profile     : orcarouter-hybrid", result.stdout)
+            self.assertIn("model       : local/orcarouter-mazinb-h6-w4a16", result.stdout)
+            self.assertIn("revision    : h6-modelopt-w4a16-v1", result.stdout)
+            self.assertIn("hybrid base :", result.stdout)
+            self.assertIn("hybrid mix  :", result.stdout)
+            self.assertIn("protection  : enabled", result.stdout)
+            self.assertIn("DRY-RUN complete", result.stdout)
+            self.assertFalse((home / "state").exists())
+            self.assertFalse((home / "models").exists())
+
     def test_language_invalid_then_english(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
