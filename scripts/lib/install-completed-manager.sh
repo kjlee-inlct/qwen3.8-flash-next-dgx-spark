@@ -324,6 +324,16 @@ install_completed_orcarouter_ab_trial() {
 install_completed_choose_action() {
   local answer current_summary
 
+  if [[ "${INSTALL_COMPLETED_FORCE_SETTINGS:-0}" == 1 ]]; then
+    # Wizard runtime-management entry bypasses the profile switch menu.
+    # Reuse all normal settings staging, default-NO apply consent, 6/6 plan
+    # review and the existing recoverable settings transaction.
+    INSTALL_COMPLETED_ACTION=settings
+    install_completed_stage_settings
+    INSTALL_COMPLETED_SUPPRESS_PROFILE_SELECTION=1
+    return 0
+  fi
+
   if [[ "${REFRESH_PROFILE_DEFAULTS:-0}" == 1 ]]; then
     INSTALL_COMPLETED_ACTION=refresh
     INSTALL_COMPLETED_SUPPRESS_PROFILE_SELECTION=1
