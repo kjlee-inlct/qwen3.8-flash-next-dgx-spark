@@ -1,3 +1,17 @@
+> **2026-10-14 WORKSPACE / BENCHMARK EVIDENCE UPDATE:**
+> All three remaining detached experiment worktrees were safely removed;
+> `git worktree list` returned only the original canonical checkout
+> on `feature/wizard-modular-phase1-20261014` at `2f1cc08`.
+> The independent 36-KiB physical M1 benchmark output directory is
+> preserved. DGX operator checked all three archived data SHA-256 values:
+> `smoke.json` PASS, `mazinb.json` PASS, `mazinb-report.md` PASS.
+> Local `SHA256SUMS` lists absolute paths (436 bytes), archival manifest
+> lists relative paths (238 bytes); measured payload digests match.
+> [Operator evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+> Foreground-only M1 remains the qualified startup architecture;
+> Background Supervisor is **DESIGN ONLY** and requires separate safety
+> tests and DGX approval. No GPU/Docker changes in workspace cleanup.
+
 > **2026-10-14 KST M1 PHYSICAL JOURNAL RECONCILIATION: PASS_RECORDED_STOPPED**
 > Physical DGX operator ran Wizard Benchmark 5→10 on source
 > `4776a6118decabc7cb511e4e60e7b157d3a57bec` and confirmed `y`.

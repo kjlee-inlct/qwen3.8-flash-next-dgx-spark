@@ -9,8 +9,15 @@ TG128: **23.11 ± 1.05 tok/s (PP512)** and
 **22.54 ± 1.68 tok/s (PP2048)**. All other profiles and mazinb
 Legacy comparison remain NOT_MEASURED. Statements below that every
 profile is NOT_MEASURED are historical snapshots predating the M1 result.
-The exited M1 still needs journal recovery and no long-term host stability
-claim can be drawn. See [M1 guide](../MAZINB-M1-WIZARD.md).
+The physical M1 shutdown journal was successfully reconciled to `stopped`
+without Docker mutation. DGX independently SHA256-verified all three archived
+measurement payloads (`smoke.json`, `mazinb.json`, `mazinb-report.md`) against
+this repository on 2026-10-14. The original local absolute-path checksum
+manifest differs from the relative-path GitHub archival manifest (436 vs
+238 bytes), but all three data hashes match. Keep the original 36-KiB output
+folder and the two journal backups. Long-term host stability remains
+**INCONCLUSIVE**. See [M1 guide](../MAZINB-M1-WIZARD.md) and
+[physical evidence](../../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
 
 
 ## OrcaRouter A/B trial wizard implementation — SOURCE ONLY (2026-10-13)

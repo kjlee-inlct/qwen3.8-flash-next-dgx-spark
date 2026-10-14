@@ -46,3 +46,36 @@ This confirms the reconcile command's success output and subsequent stopped stat
 ## Operator workspace follow-up
 
 The operator requests no further per-operation worktree accumulation. Use `~/Workspace/llm/qwen3.8-flash-next-dgx-spark` as the routine working directory; after auditing `git worktree list --porcelain` and individual cleanliness, remove only Git-registered obsolete worktrees with `git worktree remove <exact-path>` and **never** `rm -rf` or force cleanup. Preserve all benchmark, checkpoint, Docker, release, swap and journal evidence.
+
+## Follow-up physical evidence: canonical workspace and benchmark copy verification (2026-10-14)
+
+The operator subsequently performed and supplied command output showing:
+
+- All **three** remaining disposable Git worktrees were removed with
+  `git worktree remove`, after verifying their expected detached commits
+  and only deleting each narrowly checked Python `.pyc` cache (if present).
+- `git worktree list` then reported **only** the original
+  `~/Workspace/llm/qwen3.8-flash-next-dgx-spark` checkout,
+  at `2f1cc08` on `feature/wizard-modular-phase1-20261014`.
+- The separately retained **36 KiB** physical M1 output directory
+  `~/Workspace/llm/qwen38-m1-bench-results/20261014T015805Z`
+  contains `smoke.json`, `mazinb.json`, `mazinb-report.md`, and `SHA256SUMS`.
+- The operator ran `sha256sum -c -` against the **GitHub archived hashes**.
+  All three data files printed `성공` (SUCCESS):
+
+```text
+0e7f42ef99c91098572558bb909c589ae7c470b3cb60f32599e394553cf1fafd  smoke.json
+377f5b5745aa16d454269490db408376d5f18d0289e576df8cd5a92a986fc23e  mazinb.json
+b3e8f2d88ddfdc6894a3ed3678769f95a115ab4b665a7b3eb31ced1991bb298a  mazinb-report.md
+```
+
+The local `SHA256SUMS` is **436 bytes** and records absolute physical DGX
+paths; the GitHub archival manifest is **238 bytes** and records relative
+filenames. The manifests' byte representation differs but all three
+payload digests have been independently checked against the published
+GitHub manifest. The 36-KiB physical evidence folder remains **preserved**;
+no checksum or folder deletion was performed as part of verification.
+
+**Evidence gate:** WORKSPACE_WORKTREE_CLEANUP=PASS_OBSERVED and
+MODEL_REPORT_PAYLOAD_SHA256=PASS_THREE_OF_THREE. No inference benchmark
+or host stability was repeated by these read-only/checkout housekeeping steps.

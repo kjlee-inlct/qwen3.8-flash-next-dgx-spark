@@ -1,5 +1,61 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## Proposed next stage: background/foreground supervisor — DESIGN ONLY
+
+**Status:** source design only; no background engine, automatic model boot,
+physical GPU start, or systemd unit change has been performed or qualified.
+The already-tested interactive `run` mode remains the only live start path.
+
+### Safety contract and lifecycle
+
+1. Keep the default `foreground` operator path intact. A new `background`
+   path must require Wizard default-NO consent, exact full protected old
+   Docker ID, immutable manifest/image/release checks, and an explicit
+   independent physical validation gate. Do not simply append `&`,
+   `nohup`, `setsid`, `disown`, or close the current TTY: `run` demands a
+   live TTY and currently relies on interactive `STOP` input.
+2. Background ownership must be an actual **supervised service** with
+   independently checkable PID / start time / unique session token /
+   exact Docker ID / matching journal and monitor identity. Evaluate
+   `systemd --user` availability, user bus and **linger** policy before
+   choosing it; refuse background start if terminal-detached lifetime
+   cannot be demonstrated. Do not change linger or install system
+   services without explicit operator authorization.
+3. Worker startup must be acknowledged **before** creating or starting
+   the trial Docker. Preserve create-only Docker object, dedicated HOME
+   and model caches, per-session locks, exact-ID detached fail-closed
+   watchdog **armed before Docker start**, and the same RM/host/180s
+   soak/API checks as foreground.
+4. `status` and `logs` must remain read-only. Expose distinct modes
+   for worker-present, worker-missing, candidate-running, monitor-stale,
+   shutdown-journal-incomplete; never assume worker status from PID alone.
+5. A `stop` request must require explicit default-NO approval, pin the
+   session/candidate identity, never stop an unknown/replaced Docker,
+   respect the exclusive benchmark lease, and durably write the final
+   journal and exact `ExitCode`. If stop confirmation fails, preserve
+   active evidence and the bounded watchdog; do not alter predecessor.
+6. A foreground terminal may display/tail **logs** of a background
+   worker, but detaching or closing that viewer must not affect worker
+   lifecycle. `attach` is observer-only unless a separately authenticated
+   explicit stop operation is requested.
+7. SIGTERM, SIGHUP, SIGKILL, worker crash, lost user bus, host reboot,
+   memory-protection shutdown and partial two-record journal writes
+   each need synthetic tests plus targeted DGX physical tests. On
+   SIGKILL or power loss reconciliation remains **fail-closed**;
+   the existing exact-ID `reconcile` is the documented recovery path.
+8. Background worker must have a bounded lifetime, no unexpected
+   automatic restart, no hidden model start on boot, and no launch of
+   concurrent historical A/B/managed GPU workloads.
+
+### Qualification stages
+
+`SOURCE_REVIEW` → `LOCAL_SYNTHETIC` → `GITHUB_CI` →
+`ACTUAL_DGX_READ_ONLY` → explicitly approved `ACTUAL_DGX_FUNCTIONAL` →
+`HOST_STABILITY` → `ACTUAL_DGX_BENCHMARK` if a new run is warranted.
+Do not promote the feature as physically qualified after CI alone.
+
+**Working directory:** reuse the original canonical Git checkout;
+new worktrees are exceptional and must have an agreed removal gate.
 ## Physical 2026-10-14 13:40 KST M1 journal reconciliation — VERIFIED
 
 Using verified runtime SHA `4776a6118decabc7cb511e4e60e7b157d3a57bec`,

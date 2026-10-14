@@ -26,6 +26,20 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## 2026-10-14 observed cleanup result and preserved output
+
+- DGX operator confirmed the three remaining detached temporary worktrees
+  were safely removed; only the canonical
+  `~/Workspace/llm/qwen3.8-flash-next-dgx-spark` checkout remains.
+- The canonical checkout was synced to `2f1cc08`,
+  `feature/wizard-modular-phase1-20261014`.
+- Independent 36-KiB `~/Workspace/llm/qwen38-m1-bench-results` is **not** a
+  worktree and **must remain preserved**. Its three benchmark payloads
+  passed `sha256sum -c` against the archived GitHub digests.
+- Source-only next stage is a durable Background/Foreground Supervisor,
+  **not yet implemented or physically qualified**. Do not replace
+  foreground live safety gates with shell-level detachment.
+- [Physical evidence ledger](../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
 ## Single canonical working directory; bounded Git worktrees (2026-10-14)
 
 - Routine operator commands, code edits and Wizard invocation should occur
