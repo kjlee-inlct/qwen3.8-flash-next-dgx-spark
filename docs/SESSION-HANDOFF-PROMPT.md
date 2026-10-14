@@ -1,3 +1,15 @@
+## 2026-10-14 — SOURCE ONLY: Hybrid Phase-0 Wizard entry
+
+Added Models **3→7** and `scripts/diagnostics/hybrid-phase0-readonly.sh`:
+strict read-only managed idle, H6 runtime validation, metadata SHA256,
+disk/link counts, Docker IDs and bind mounts. `PASS_STATIC_INVENTORY_ONLY`
+is **not** live-start or retirement authorization. Physical Phase-0 at
+this source revision: **NOT_RUN**. Full H7/H20/release reference closure
+remains NOT_QUALIFIED. New host-free regression tests cover missing-root
+rejection, non-mutation source contract and Wizard navigation. Also fixed
+the mazinb Docker retirement Wizard's misplaced `else` to prevent a
+misleading failure warning after successful cleanup.
+
 ## 2026-10-14 — NEXT: Hybrid H6 two-cycle benchmark / complete reclaim / rebuild
 
 Physical DGX mazinb reclaim and full managed host idle PASS are complete.

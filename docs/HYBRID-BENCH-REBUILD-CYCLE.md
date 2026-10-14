@@ -137,6 +137,22 @@ source checkpoints*, not the complete fresh-OS hardware bootstrap promise.
   active-model protections; finalize managed switch/uninstall without
   broad purge before touching that model.
 
+## Source-only Phase-0 Wizard entry (not physical qualification)
+
+Wizard Models **3 → 7** calls `scripts/diagnostics/hybrid-phase0-readonly.sh`
+and reuses the existing idle validator and H6 runtime-only chain validator.
+It prints manifest/index SHA256, actual disk/block metrics, per-stage symlink
+and hardlink counts, all Docker container IDs and mount references.
+A dirty checkout, missing or symlinked stage, failed validator or unavailable
+Docker fails closed. An alternate absolute model directory is permitted through
+`QWEN38_PHASE0_MODELS_ROOT` only for diagnostic inspection.
+
+**PASS_STATIC_INVENTORY_ONLY does not permit model start or deletion.**
+External H7/H20/release dependency closure, protected runtime stability,
+evidence archiving and the complete retire admission remain separate gates.
+The physical Phase-0 run is NOT_RUN until actual DGX output is received.
+The operator command below remains a minimal manual fallback.
+
 ## Current operator gate: READ ONLY
 
 Run from a clean physical DGX checkout, before any live activation.

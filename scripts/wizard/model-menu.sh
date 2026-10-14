@@ -71,7 +71,8 @@ wizard_mazinb_docker_retire() {
     wizard_success 'Five exact mazinb containers removed; archive verified and other objects preserved.'
     bash "${ROOT_DIR}/scripts/manage-models.sh" assets ||
       wizard_warning 'Post-retirement model inventory unavailable.'
-    wizard_mazinb_retirement_audit  else
+    wizard_mazinb_retirement_audit
+  else
     wizard_warning 'Cleanup BLOCKED or PARTIAL; inspect output and saved archives before any retry.'
   fi
 }
@@ -86,6 +87,16 @@ wizard_mazinb_retirement_audit() {
   fi
 }
 
+wizard_hybrid_phase0_readonly() {
+  wizard_header 'Hybrid H6 Phase-0 read-only inventory / 읽기 전용 점검'
+  wizard_info 'No model start, download, checkpoint deletion or service changes.'
+  if bash "$ROOT_DIR/scripts/diagnostics/hybrid-phase0-readonly.sh"; then
+    wizard_success 'Static inventory collected; benchmark and deletion are NOT authorized.'
+  else
+    wizard_warning 'Hybrid admission BLOCKED; inspect the audit before any live step.'
+  fi
+}
+
 wizard_model_menu() {
   local choice
   while true; do
@@ -96,6 +107,7 @@ wizard_model_menu() {
     wizard_menu_option 4 'Reclaim mazinb source checkpoint (evidence gated) / mazinb 원본 정리'
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
+    wizard_menu_option 7 'Hybrid H6 Phase-0 inventory (read-only) / Hybrid 사전 점검'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -105,6 +117,7 @@ wizard_model_menu() {
       4) wizard_mazinb_source_reclaim ;;
       5) wizard_mazinb_docker_retire ;;
       6) wizard_mazinb_retirement_audit ;;
+      7) wizard_hybrid_phase0_readonly ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
