@@ -1,3 +1,56 @@
+## 2026-10-14: final model-benchmark cleanup must also close shared API/boot exposure
+
+Owner's DGX after mazinb source+Docker retirement: `qwen38-flash-next.service`
+is **installed=yes, enabled=yes, active=no**; the **shared** OpenWebUI
+socket/service remain **installed/active** and listen on
+`172.17.0.1:8000` and `10.221.50.65:8000`. Port 8888 has no
+listener; dedicated mazinb M1 18889 has no listener. The old
+`verify-mazinb-retirement.py` correctly passes its narrower
+"mazinb-specific artifacts absent" contract, but **DOES NOT attest that
+the overall managed API host is idle or reboot-safe**.
+
+**Correct safety boundary:** Although the configured manifest is still
+`MODEL_PROFILE=orcarouter`, no project model is currently being served.
+Preserving a shared proxy install does not mean the proxy needs to
+remain active. Worse, enabled runtime service can start on reboot.
+Do not conflate preserved files/ownership with active network listeners,
+and do not blindly `systemctl disable` without reconciling
+`install.env`: the settings transaction verifies enabled/service
+consistency.
+
+**New Wizard flow:** Runtime/API/Ports/Service **4 → 6**,
+"Post-benchmark API & boot shutdown". This delegates to the existing
+`install.sh --manage-settings --shutdown-access` with an exact
+completed-install manifest and a separate default-NO entry confirmation,
+default-NO apply consent, final normalized plan review and
+`START=0` (never starts the 171G vLLM model). It reuses
+`settings-transition.sh` and its rollback semantics to set
+`API_ACCESS_MODE=local`, `SERVICE_ENABLED=0` and release
+installer-owned `qwen38-openwebui-proxy.socket/service` and
+`qwen38-flash-next.service` managed systemd units. It preserves
+model checkpoints, Docker containers, images, immutable releases,
+benchmarks and private archived evidence. New CLI selector cannot be
+used for fresh install, without `--manage-settings`, with `--yes`
+or mixed with model/setting override flags.
+
+Read-only preview:
+`bash install.sh --lang ko --manage-settings --shutdown-access --dry-run`.
+New Wizard **4 → 7** or
+`python3 -B scripts/diagnostics/verify-managed-idle.py` verifies
+completed manifest's local/no-boot policy, all three shared unit
+ActiveState/UnitFileState, managed backend/proxy/old trial ports and
+all running `qwen38-*` Docker containers, without modification.
+It prints `MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START`
+only when ALL layers are quiescent; missing/failed inspections block.
+
+**Physical host shutdown: NOT_RUN.** The available real DGX evidence
+only establishes active proxy and auto-boot while the user is idle.
+Do not claim full teardown or report output of the new audit until the
+operator syncs an exact passing CI SHA, previews the plan, explicitly
+approves shutdown and obtains physical audit PASS. On subsequent
+installs/benchmarks, the operator must deliberately re-enable service
+and API access via the existing Wizard settings transaction.
+
 ## 2026-10-14 Wizard installed API / LAN port configuration restored (source)
 
 **User finding:** prior installer supported setting Docker-app/LAN ports, but
