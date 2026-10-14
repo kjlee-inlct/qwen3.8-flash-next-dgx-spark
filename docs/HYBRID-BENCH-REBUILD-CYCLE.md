@@ -1,3 +1,25 @@
+## 2026-10-15 — H6 archived kernel scan: 13 lines, zero broad RM/GPU/OOM matches
+
+The operator rechecked all **seven** on-host SHA256 archive entries
+and independently scanned the already saved `kernel-window.log`
+**read-only**. `H6_KERNEL_LINES=13`, first timestamp
+`2026-10-14T23:18:03.922217+09:00` (Docker veth blocking state),
+last timestamp `2026-10-14T23:29:11.483687+09:00` (Docker veth
+disabled state), spanning watchdog STOP at 23:28:55 KST.
+`H6_KERNEL_BROAD_MATCHES=0` for
+`nvidia|nvrm|xid|gpu|allocat|fail|error|fault|oom|out of memory|memory pressure|smmu|iommu|gsp|uvm|dma`
+(case insensitive). These are **zero matches in 13 archived kernel
+messages**, not proof that unlogged GPU allocation failures
+could not happen or that memory protection was unnecessary.
+The first/last records bracket the stop but do not prove the
+kernel journal is complete. The other 11 raw lines have not been
+pasted for unfiltered review. Confirmed watchdog cause remains
+low non-CMA Free + >=256 MiB host-wide swap growth, 5/5 warnings.
+`H6_ROOT_CAUSE_PROTECTION_NECESSITY=INCONCLUSIVE`;
+`API_READY=NOT_OBSERVED`; `BENCHMARK=NOT_MEASURED`;
+`OFF_HOST_BACKUP=NOT_VERIFIED`; no restart/tuning/deletion/merge.
+[Detailed physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 kernel window physically archived; selected RM/OOM strings absent
 
 Owner-operated DGX evidence collection used interactive sudo and

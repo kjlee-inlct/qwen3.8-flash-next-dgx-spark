@@ -1,3 +1,15 @@
+## H6 kernel metadata — 2026-10-15 actual DGX read-only scan
+
+[Archived H6 protection-stop evidence and kernel-window scan](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):
+seven original archive checksum entries PASS; kernel window has 13
+lines with first/last `23:18:03.922–23:29:11.483 KST`;
+`H6_KERNEL_BROAD_MATCHES=0` across NVIDIA/RM/GPU/allocator/OOM
+search terms. Full unfiltered middle 11 lines were not supplied;
+zero patterns is not proof of safe GPU memory allocation.
+H6 stopped by watchdog low non-CMA Free + swap-growth heuristic,
+and remains not READY/not benchmarked. No rerun, deletion or
+off-host backup qualification.
+
 ## 2026-10-15 — H6 kernel window capture VERIFIED (no selected RM/OOM matches)
 
 [H6 physical watchdog-stop and amended kernel-window record](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):

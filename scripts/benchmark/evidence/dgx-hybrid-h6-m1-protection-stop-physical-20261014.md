@@ -1,5 +1,63 @@
 # Actual DGX H6 M1 memory-protection stop — 2026-10-14
 
+## 2026-10-15 — Physical full-window kernel metadata and expanded pattern scan
+
+**New actual DGX evidence:** after the seven-file on-host SHA256 audit
+passed again (each `active.json`, `trial.json`, `monitor.log`,
+`runtime-stop.env`, `docker-inspect.json`, `docker.log`, and
+`kernel-window.log`: `성공`), the operator ran a **read-only**
+Python scan of the already archived `kernel-window.log`. The resulting
+physical console printed:
+
+```text
+H6_KERNEL_LINES=13
+H6_KERNEL_FIRST=2026-10-14T23:18:03.922217+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered blocking state
+H6_KERNEL_LAST=2026-10-14T23:29:11.483687+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered disabled state
+H6_KERNEL_BROAD_MATCHES=0
+H6_ANALYSIS_READ_ONLY=YES
+```
+
+The searched expression was
+`nvidia|nvrm|xid|gpu|allocat|fail|error|fault|oom|out of memory|memory pressure|smmu|iommu|gsp|uvm|dma`
+(case insensitive). The scanner searched **all 13 lines** but
+reported only first/last and (if present) last 30 matches. There were
+**zero hits**. The first and last timestamps bracket the
+`2026-10-14 23:28:55 KST` watchdog stop, with the final kernel event
+~16 seconds later; this validates time coverage by the extracted
+records at its endpoints, but not continuity of kernel event
+retention/delivery between those records. The **middle 11 full
+lines have not been pasted**; do not claim to have reviewed their
+unfiltered contents, boot completeness, or absence of silent RM
+allocation errors.
+
+**Evidence interpretation:** kernel journal `_TRANSPORT=kernel`
+within 23:18:03–23:29:55 KST showed **no messages matching broad
+GPU/RM/allocator/OOM indicators**. This strengthens the explanation
+that the *observed* stop was the exact-ID protective watchdog using
+`noncmafree < 2GiB` plus host-wide `swapgrowth >= 256MiB` on 5/5
+samples, without a matching *logged* NVIDIA RM/Xid error.
+It does **not** distinguish a harmless cold-load transient from a
+protection event that prevented an imminent allocation failure.
+The watchdog likely stopped before the later failure could happen,
+so negative kernel matches cannot disprove an avoided failure.
+Therefore: `H6_KERNEL_ARCHIVE=HASH_VERIFIED_13_LINES`,
+`H6_KERNEL_BROAD_MATCHES=0`,
+`NVIDIA_RM_FATAL_EVENT_IN_CAPTURE=NOT_OBSERVED_BY_PATTERN`,
+`WATCHDOG_TRIGGER=CONFIRMED`,
+`ROOT_CAUSE_PROTECTION_NECESSITY=INCONCLUSIVE`,
+`RELAUNCH_AUTHORIZED=NO`,
+`H6_BENCHMARK=NOT_MEASURED`,
+`OFF_HOST_BACKUP=NOT_VERIFIED`.
+
+No Docker start/stop, checkpoint deletion, threshold change,
+new H6 load or benchmark was performed by this audit. The precise
+container, monitor, original raw evidence, H7/H20 aliases and
+historical mounts remain protected. A next **read-only** action is to
+review the 13 original kernel lines completely (not just regex
+matches), together with existing timestamped Docker log and
+monitor progression. This requires no new GPU run and no change
+to safety thresholds.
+
 ## 2026-10-15 — Physical kernel-window capture complete; known RM/OOM strings not found
 
 **Operator-provided physical DGX console** (not a GitHub CI result): after

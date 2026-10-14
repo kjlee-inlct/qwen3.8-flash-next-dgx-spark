@@ -1,3 +1,15 @@
+## 2026-10-15 — H6 13-line archived kernel window: no broad fault patterns; benchmark NOT_MEASURED
+
+Real DGX operator reverified seven on-host evidence checksums.
+Full saved kernel window contained 13 messages, timestamps spanning
+watchdog STOP: 23:18:03.922 to 23:29:11.483 KST. Broad RM/GPU/OOM/
+allocator pattern scan matched zero lines. Not proof of a healthy
+GPU allocator or that protection was unnecessary; the unfiltered
+middle 11 lines were not supplied. No H6 model READY,
+inference or llama-benchy measured. The stopped container and
+protected model references remain intact.
+[Evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 protection-stop kernel evidence archived, benchmark still NOT_MEASURED
 
 Owner-captured local kernel window 2026-10-14 23:18:03–23:29:55 KST
