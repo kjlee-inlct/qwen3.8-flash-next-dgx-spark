@@ -1,3 +1,27 @@
+## 2026-10-14 — NEXT: Hybrid H6 two-cycle benchmark / complete reclaim / rebuild
+
+Physical DGX mazinb reclaim and full managed host idle PASS are complete.
+The user requested **H6 benchmark → delete → verify absent → reinstall
+from source → repeat benchmark → delete again**, preserving research
+evidence and all unrelated Docker/shared assets.
+
+**Canonical runbook:** [HYBRID-BENCH-REBUILD-CYCLE.md](HYBRID-BENCH-REBUILD-CYCLE.md).
+It defines the first H6 reused-stage measurement, strict measured
+JSON/report/SHA and off-host backup, full H6→H5→H4→H3 generated-stage
+reclaim, independent absence/link/dependency/Docker/systemd checks,
+forced pinned mazinb source reacquisition for true reconstruction when H3
+is gone, full H3→H6 rebuild and matched benchmark, and final safe
+reclaim/host idle. H7/H20, old experimental containers, OrcaRouter base
+and images are **never broad-purged**.
+
+**BLOCKERS before live/destructive steps:** Hybrid `NOT_MEASURED`;
+past RM instability, modular Wizard live profile switch only preview;
+no implemented full-chain dependency-gated Hybrid removal; physically
+not qualified on clean new DGX. Current first action is ONLY Phase-0
+read-only script in the runbook; actual hybrid launch/reclaim/rebuild
+remain NOT_RUN. Do not use generic model `retire` or
+`uninstall.sh --purge-all` as shortcuts.
+
 ## 2026-10-14 20:43 KST — PHYSICAL DGX MANAGED HOST IDLE: PASS (final)
 
 **Evidence type: operator DGX terminal, not CI simulation.** The user fast-forwarded the
