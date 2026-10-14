@@ -202,9 +202,13 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
             require(record.get("phase") in ("stopped", "failed_stopped"),
                     "unfinished M1 session exists: recovery required; no overwrite")
             prior = inspect(record["name"])
-            require(prior is not None and prior["Id"] == record["id"] and
-                    not prior["State"]["Running"],
-                    "prior session identity requires recovery")
+            if prior is None:
+                require(retired_docker_marker(record, m1) is not None,
+                        "prior session identity requires recovery")
+            else:
+                require(prior["Id"] == record["id"] and
+                        not prior["State"]["Running"],
+                        "prior session identity requires recovery")
     model_path = Path(manifest["MODEL_DIR"]).resolve().parent / "qwen3.8-flash-next-mazinb"
     require(model_path.is_dir() and (model_path / "config.json").is_file()
             and (model_path / "model.safetensors.index.json").is_file(),
@@ -270,6 +274,46 @@ def pinned_candidate(record: dict) -> dict:
     require(d.get("HostConfig", {}).get("RestartPolicy", {}).get("Name") == "no",
             "candidate restart policy must be no")
     return d
+
+
+def retired_docker_marker(record: dict, m1: Path) -> dict | None:
+    """Recognize separately SHA-pinned, evidence-archived Docker retirement.
+
+    Original active/per-trial journals are never edited. An absent Docker
+    container without this marker is still a hard identity failure.
+    """
+    marker_path = m1 / "retired-docker.json"
+    if not marker_path.exists() and not marker_path.is_symlink():
+        return None
+    marker = read_json(marker_path)
+    require(marker.get("schema_version") == 1
+            and marker.get("state") == "archived_docker_removed"
+            and marker.get("id") == record["id"]
+            and marker.get("name") == record["name"],
+            "M1 Docker tombstone differs from original journal identity")
+    archive = Path(marker.get("archive_path", ""))
+    expected_root = m1.parent / "retirement-archives"
+    require(archive.is_absolute() and archive.parent == expected_root and
+            archive.name.startswith("mazinb-docker-"), "M1 archive path outside protected state")
+    require(archive.is_dir() and not archive.is_symlink(), "M1 Docker archive missing/unsafe")
+    sha_file = archive / "SHA256SUMS"
+    require(sha_file.is_file() and not sha_file.is_symlink(), "M1 Docker archive hash manifest missing")
+    sha = hashlib.sha256(sha_file.read_bytes()).hexdigest()
+    require(sha == marker.get("archive_sha256_manifest"), "M1 Docker archive hash manifest changed")
+    entries = sha_file.read_text(encoding="utf-8").splitlines()
+    require(len(entries) == 10, "M1 Docker retirement archive does not contain five log/metadata pairs")
+    seen = set()
+    for entry in entries:
+        match = re.fullmatch(r"([0-9a-f]{64})  ([0-9a-f]{16}\\.(?:log|json))", entry)
+        require(match is not None, "invalid M1 retirement manifest entry")
+        _, name = match.groups()
+        require(name not in seen, "duplicate M1 retirement manifest entry")
+        seen.add(name)
+        file = archive / name
+        require(file.is_file() and not file.is_symlink(), "M1 Docker archive file missing/unsafe")
+    require(inspect(record["name"]) is None,
+            "M1 tombstone exists but Docker candidate name still resolves")
+    return marker
 
 
 def watch_fresh(monitor: subprocess.Popen, monitor_dir: Path, candidate_id: str) -> None:
@@ -732,14 +776,22 @@ def status() -> None:
         print("M1_SESSION=ABSENT")
         return
     record = read_json(path)
-    candidate = pinned_candidate(record)
+    retired = retired_docker_marker(record, m1)
+    candidate = None if retired is not None else pinned_candidate(record)
     print(f"M1_SESSION_PHASE={record['phase']}")
     print(f"M1_SESSION_NAME={record['name']}")
     print(f"M1_CONTAINER_ID={record['id']}")
-    print(f"M1_RUNNING={candidate['State']['Running']}")
-    print(f"M1_EXIT_CODE={candidate['State'].get('ExitCode')}")
-    print(f"M1_STATE_DIR={m1}")
-    print("M1_DOCKER_REMOVED=NO")
+    if retired is not None:
+        print("M1_RUNNING=False")
+        print(f"M1_EXIT_CODE={record.get('exit_code')}")
+        print(f"M1_STATE_DIR={m1}")
+        print("M1_DOCKER_REMOVED=YES_ARCHIVED")
+        print(f"M1_DOCKER_ARCHIVE_PATH={retired['archive_path']}")
+    else:
+        print(f"M1_RUNNING={candidate['State']['Running']}")
+        print(f"M1_EXIT_CODE={candidate['State'].get('ExitCode')}")
+        print(f"M1_STATE_DIR={m1}")
+        print("M1_DOCKER_REMOVED=NO")
 
 
 def bench_admission() -> None:
