@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "scripts/diagnostics/verify-mazinb-retirement.py"
+SOURCE = ROOT / "scripts/verify-mazinb-retirement.py"
 SPEC = importlib.util.spec_from_file_location("mazinb_post_audit", SOURCE)
 assert SPEC and SPEC.loader
 AUDIT = importlib.util.module_from_spec(SPEC)
@@ -73,7 +73,7 @@ class MzinbPostAuditTests(unittest.TestCase):
                     AUDIT.processes_check()
         with mock.patch.object(AUDIT, "command", return_value=(
             "816 systemd-socket-proxyd 127.0.0.1:8888\n"
-            "817 python /repo/scripts/diagnostics/verify-mazinb-retirement.py\n")):
+            "817 python /repo/scripts/verify-mazinb-retirement.py\n")):
             AUDIT.processes_check()
 
     def test_retirement_archive_is_exact_five_pairs_and_all_hashes_are_rechecked(self):
