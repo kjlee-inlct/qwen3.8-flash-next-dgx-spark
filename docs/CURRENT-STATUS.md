@@ -1,3 +1,21 @@
+> **2026-10-14 M1 SUPERVISOR P1d — PURE SYNTHETIC CONTROL GATES ONLY:**
+> Commit `5777ee4d2b63466b0db6a750a3a3f71e8bfb84df`
+> adds `m1-supervisor-command-protocol.py`, adversarial unit tests
+> and Wizard Benchmark **15** (memory-only command simulation).
+> The mocked request includes owner token, exact Docker IDs, PID/start
+> ticks, systemd invocation ID, UID, a bounded TTL and nonce history.
+> Synthetic STOP requires explicit consent, linger gate, verified
+> worker/watchdog and free benchmark lease. Default-NO, `Linger=no`,
+> expired requests, nonce replay and owner drift reject admission.
+> All peer UID, supervisor, linger, heartbeat and approval values are
+> INJECTED INPUTS; no real kernel identity/authentication, IPC,
+> persistent nonce store, background worker, Docker or systemd action.
+> No physical DGX P1d execution yet; physical P1c IN_MEMORY_PASS and
+> actual DGX `Linger=no` remain recorded above/below.
+> Production real background lifecycle and logout persistence are
+> NOT_IMPLEMENTED / NOT_QUALIFIED. New CI results need separate check.
+> [Wizard P1d safety description](MAZINB-M1-WIZARD.md).
+
 > **2026-10-14 ACTUAL DGX P1c PURE SYNTHETIC PROTOCOL: PASS_IN_MEMORY**
 > At exact source `835be6f411abbb3e901992566d4459881853acf7`,
 > the operator synced the sole canonical worktree and ran P1c
