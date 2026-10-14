@@ -396,8 +396,7 @@ reclaim_mazinb_checkpoint() {
     die "POSTCHECK_FAILED: Docker post-snapshot unavailable"
   [[ "${before_ids}" == "${after_ids}" ]] ||
     die "POSTCHECK_FAILED: Docker container inventory changed; investigate"
-  [[ "$(docker inspect -f '{{.Id}}' qwen38-flash-next)" ==
-     f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24 ]] ||
+  [[ "$(docker inspect -f '{{.Id}}' qwen38-flash-next)" == "f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24" ]] ||
     die "POSTCHECK_FAILED: protected Docker identity changed"
   python3 -B "${SCRIPT_ROOT}/scripts/diagnostics/benchmark-reclaim-readiness.py" ||
     die "POSTCHECK_FAILED: preserved benchmark archive audit failed"
