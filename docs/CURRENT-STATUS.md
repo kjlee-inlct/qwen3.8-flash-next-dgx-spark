@@ -1,3 +1,21 @@
+> **2026-10-14 CURRENT M1 FACTS — supersedes historical NOT_MEASURED passages below:**
+> Actual isolated mazinb vLLM-v0.29/KV-16-GiB completed exact API READY,
+> 180s soak, inference smoke and pinned llama-benchy. TG128 was
+> **23.11 ± 1.05 tok/s (PP512)** and **22.54 ± 1.68 tok/s (PP2048)**.
+> Official [mazinb results](model-reports/mazinb.md) preserve raw
+> JSON, Markdown and SHA256; other models and mazinb Legacy-vLLM remain unmeasured.
+> Unique candidate ID `7af3966f3d0cae79f8277eaf9ad003fb04c1e15ea01f86574c2d8eeac396e7a1`
+> was later observed exited/ExitCode=0/OOMKilled=false at 11:41:14 KST;
+> predecessor retained. However active M1 journal remained `stopping`,
+> no protection marker was found, and terminal shutdown signal is unverified.
+> **RECOVERY_REQUIRED**: source-only Wizard Benchmark menu 10 (`reconcile`)
+> checks exact stopped identity, immutable provenance, predecessor, supervision,
+> watchdog and locks, backs up BOTH journals then performs atomic per-file updates.
+> It never starts/stops/removes Docker. Shutdown cause stays `UNDETERMINED`
+> without a matching marker; long-term HOST-STABILITY is not established.
+> This recovery has NOT YET been run on the physical DGX. PRs #259/#261
+> remain Draft/Unmerged. Older statements below are retained as history.
+
 > **2026-10-14 M1 SECOND ACTUAL GPU START:** DGX detached source SHA
 > `67f45d506cd773b2c5066659ddcb946970cc5ff1` verified clean.
 > Owner approved Wizard Benchmark 5 -> 9 and obtained

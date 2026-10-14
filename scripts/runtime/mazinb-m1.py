@@ -345,7 +345,26 @@ def verify_host(record: dict, snap: dict, state: Path, data: Path) -> None:
     require(not kernel_rm_since(record["kernel_since"]), "NVIDIA RM memory allocation error")
 
 
+@contextmanager
+def protect_stop_finalization_signals():
+    """Avoid catchable terminal signals interrupting exact Docker/journal finalization."""
+    previous = {}
+    for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        previous[signum] = signal.getsignal(signum)
+        signal.signal(signum, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
 def stop_exact(record: dict, m1: Path) -> None:
+    with protect_stop_finalization_signals():
+        _stop_exact_critical(record, m1)
+
+
+def _stop_exact_critical(record: dict, m1: Path) -> None:
     candidate = pinned_candidate(record)
     was_failed = record["phase"] in ("failed", "failed_stopped")
     failure_detail = str(record.get("detail", "")) if was_failed else ""

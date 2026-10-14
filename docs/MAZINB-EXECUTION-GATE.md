@@ -1,5 +1,16 @@
 # mazinb benchmark readiness: exact-ID admission before any live start
 
+## Current measured M1 (2026-10-14); recovery required
+
+The unique mazinb M1 reached API READY, smoke, 180-second soak, and
+llama-benchy measurement; see [mazinb report](model-reports/mazinb.md).
+Candidate Docker exited with code 0, OOMKilled false, while active journal
+remained `stopping`. Supervisor exit cause is NOT established.
+Use Wizard Benchmark menu 10 for evidence-attested journal reconciliation
+before a new M1 start; do not manually overwrite JSON or delete Docker.
+The recovery code is SOURCE_ONLY pending actual DGX qualification.
+
+
 ## Physical DGX result — 2026-10-14 (A and B both historical)
 
 The owner entered Wizard -> Benchmark -> 4. Actual Docker status was:

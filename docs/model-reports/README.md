@@ -1,5 +1,18 @@
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
 
+## 2026-10-14: actual mazinb benchmark MEASURED
+
+Using a single DGX Spark, vLLM v0.29 experimental runtime and 16-GiB KV:
+[mazinb results](mazinb.md) and
+[original JSON/Markdown/SHA256](evidence/mazinb/20261014T015805Z/).
+TG128: **23.11 ± 1.05 tok/s (PP512)** and
+**22.54 ± 1.68 tok/s (PP2048)**. All other profiles and mazinb
+Legacy comparison remain NOT_MEASURED. Statements below that every
+profile is NOT_MEASURED are historical snapshots predating the M1 result.
+The exited M1 still needs journal recovery and no long-term host stability
+claim can be drawn. See [M1 guide](../MAZINB-M1-WIZARD.md).
+
+
 ## OrcaRouter A/B trial wizard implementation — SOURCE ONLY (2026-10-13)
 
 **Progress since A/B preview:** A separate, experimental installed-setup

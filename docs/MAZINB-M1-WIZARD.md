@@ -1,5 +1,31 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## 2026-10-14 update: successful physical benchmark, orphaned shutdown journal
+
+Unique M1 reached exact API READY, completed 180s soak, inference smoke,
+and pinned llama-benchy on one DGX Spark (vLLM v0.29, KV 16 GiB).
+[Unmodified measurements and checksums](model-reports/mazinb.md):
+TG128 23.11 ± 1.05 tok/s at PP512, 22.54 ± 1.68 tok/s at PP2048.
+The M1 Docker subsequently exited, code 0, OOMKilled false, with no
+protective stop marker. Its `active.json` remained `phase=stopping` after
+terminal closure. This does NOT establish an operator STOP signal or long-term
+host stability. Historical NOT_REACHED/NOT_MEASURED statements below refer
+to older pre-success snapshots.
+
+Wizard Benchmark **menu 10** runs `mazinb-m1.py reconcile` only after
+explicit approval, with no Docker start/stop/remove. It validates
+correct active/per-trial JSON owner and immutable identity, stopped exact
+Docker ID/labels/image/restart policy, unchanged inactive predecessor,
+monitor arm/heartbeat/termination evidence, absence of live supervisor/
+watchdog, and exclusive benchmark lease. Two immutable byte-level `.bak`
+files are saved before journal replacement. Unknown termination is written
+as `UNDETERMINED` and host stability as `INCONCLUSIVE`.
+
+**Implementation is SOURCE_ONLY; physical DGX recovery NOT_RUN.**
+Do not start another M1 before verifying and reconciling its prior journal.
+Background supervision is still a separate, unimplemented stage.
+
+
 **2026-10-14** · Target DGX Spark / Qwen3.8 Flash Next · Branch
 `feature/wizard-modular-phase1-20261014` / Draft PR #261.
 
