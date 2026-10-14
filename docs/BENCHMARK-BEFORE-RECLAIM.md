@@ -1,3 +1,47 @@
+## 2026-10-14 physical mazinb five-container retirement — PASS, final service/proxy audit pending
+
+**Physical operator console (2026-10-14 ~19:37 KST), source SHA `c89b481562f0e53cc49bc5212b4cb645b5618fd2`:**
+`manage-models.sh retire-mazinb-containers --dry-run` passed. Wizard
+**Models 3 → 5** archived exact five mazinb stopped containers' logs and
+sanitized inspect metadata BEFORE removal; the SHA manifest verified all
+10 payloads. Exact five containers were removed and all other Docker IDs
+remained unchanged. The protected OrcaRouter predecessor and shared
+`vllm-orcarouter-v029:v1` image remained intact.
+
+- `MAZINB_DOCKER_ARCHIVE_SHA256=PASS_10_FILES`
+- archive: `/home/inlc/.local/state/qwen38-spark/retirement-archives/mazinb-docker-20261014T103718Z-7e238b9aeb`
+- separate M1 tombstone: `/home/inlc/.local/state/qwen38-spark/mazinb-m1/retired-docker.json`
+- `MAZINB_DOCKER_REMOVED_COUNT=5`; `MAZINB_DOCKER_RETIRE_RESULT=REMOVED_FIVE_VERIFIED`
+- available filesystem delta `1397395456` bytes (~1.30 GiB)
+- Docker container inventory: 29 → 24 total; other Docker IDs unchanged.
+- original mazinb source checkpoint was already reclaimed (~173.65 GiB
+  disk availability improvement) with all H3–H6 stages retained.
+
+**Remaining closure:** physical service, proxy, socket, process and
+listener audit was **NOT_RUN** in that output. The single managed
+`qwen38-flash-next.service` and `qwen38-openwebui-proxy.socket` /
+`qwen38-openwebui-proxy.service` are **SHARED OrcaRouter runtime/API
+components**; do not remove them merely because mazinb is retired.
+M1 uniquely used port **18889**. The managed backend **8888** and shared
+proxy's default **8000** / optional LAN port are not inherently mazinb
+remnants. The reserved future `qwen38-mazinb-m1-background.service`
+was never implemented as a running user worker; verify no unexpected
+user/system unit appeared.
+
+New permanent read-only closer:
+`python3 -B scripts/diagnostics/verify-mazinb-retirement.py` and Wizard
+**Models (3) → 6: final mazinb audit**. It verifies complete original
+benchmark archive, all ten retired Docker archive files and their
+metadata/IDs, the M1 tombstone, absence of mazinb-labelled/owned Docker
+containers, preserved predecessor and shared image, system AND user
+systemd dedicated units (including on-disk unit inventory), unit text
+of known shared runtime/proxy, listening **18889**, and host worker/
+watchdog processes. It prints shared runtime and proxy status without
+deleting them. A failed/unavailable inspection is BLOCKED/INCONCLUSIVE
+rather than a false PASS. This script never changes units, sockets,
+containers, images, proxies or data. After CI, perform physical host
+read-only verification; final complete teardown is not yet attested.
+
 ## 2026-10-14 DGX physical mazinb checkpoint deletion — PASS; five Docker remnants — PENDING
 
 Actual user-provided DGX console from 2026-10-14 18:55 KST (source
