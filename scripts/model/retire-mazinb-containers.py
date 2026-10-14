@@ -200,16 +200,19 @@ def capture_log(cid: str, path: Path) -> None:
             file.flush()
             os.fsync(file.fileno())
         except BaseException:
-            p.kill()
+            if p.poll() is None:
+                p.kill()
             p.wait()
             raise
 
 
 def save_all_logs_and_metadata(state: Path, entries: dict[str, dict]) -> Path:
     root = safe_archive_parent(state)
-    folder = root / ("mazinb-docker-" +
+    name = ("mazinb-docker-" +
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:10])
-    # Entire evidence set is persisted BEFORE removing even one container.
+    folder = root / (".pending-" + name)
+    final = root / name
+    # Atomic publication: an incomplete archive is never presented as ready.
     folder.mkdir(mode=0o700)
     manifest = []
     for name, cid in EXPECTED.items():
@@ -235,9 +238,36 @@ def save_all_logs_and_metadata(state: Path, entries: dict[str, dict]) -> Path:
     for row in manifest:
         expected_hash, name = row.strip().split("  ", 1)
         require(digest(folder / name) == expected_hash, "archive verification failed")
-    print("MAZINB_DOCKER_ARCHIVED_PATH=" + str(folder))
+    folder.rename(final)
+    print("MAZINB_DOCKER_ARCHIVED_PATH=" + str(final))
     print("MAZINB_DOCKER_ARCHIVE_SHA256=PASS_10_FILES")
-    return folder
+    return final
+
+
+def write_m1_retirement_marker(state: Path, archived: Path) -> None:
+    """Preserve immutable journals, write a separate, pinned Docker tombstone."""
+    directory = state / "mazinb-m1"
+    require(is_directory(directory), "M1 journal directory missing")
+    marker = directory / "retired-docker.json"
+    require(not marker.exists() and not marker.is_symlink(), "M1 Docker tombstone already exists")
+    sha_file = archived / "SHA256SUMS"
+    require(is_regular(sha_file), "archive checksum manifest missing")
+    record = json.loads((directory / "active.json").read_text(encoding="utf-8"))
+    expected_name = "qwen38-mazinb-m1-20261014013811-16ced779"
+    require(record.get("name") == expected_name and
+            record.get("id") == EXPECTED[expected_name] and
+            record.get("phase") == "stopped", "original M1 record changed")
+    data = {
+        "schema_version": 1,
+        "id": record["id"],
+        "name": record["name"],
+        "archive_path": str(archived),
+        "archive_sha256_manifest": digest(sha_file),
+        "retired_at": datetime.now(timezone.utc).isoformat(),
+        "state": "archived_docker_removed",
+    }
+    write_bytes(marker, (json.dumps(data, sort_keys=True, indent=2) + "\n").encode())
+    print("MAZINB_DOCKER_M1_TOMBSTONE=" + str(marker))
 
 
 def apply(home: Path, root: Path, state: Path) -> None:
@@ -247,6 +277,9 @@ def apply(home: Path, root: Path, state: Path) -> None:
     candidate = root / "qwen3.8-flash-next-mazinb"
     evidence(home, root, state)
     before, before_ids = inventory(candidate)
+    tombstone = state / "mazinb-m1/retired-docker.json"
+    require(not tombstone.exists() and not tombstone.is_symlink(),
+            "historical M1 Docker retirement marker already exists")
     free_before = shutil.disk_usage(root).free
     archived = save_all_logs_and_metadata(state, before)
     # Changes between evidence archival and deletion must fail closed.
@@ -272,6 +305,7 @@ def apply(home: Path, root: Path, state: Path) -> None:
             "protected Docker predecessor changed")
     docker("image", "inspect", EXPECTED_IMAGE)
     evidence(home, root, state)
+    write_m1_retirement_marker(state, archived)
     free_after = shutil.disk_usage(root).free
     print("MAZINB_DOCKER_REMOVED_COUNT=" + str(count))
     print("MAZINB_DOCKER_OBJECTS_OTHER_THAN_FIVE=UNCHANGED")
