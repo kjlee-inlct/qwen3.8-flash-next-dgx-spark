@@ -24,6 +24,7 @@ Usage:
   ./scripts/manage-models.sh assets
   ./scripts/manage-models.sh remove PATH [--yes] [--dry-run]
   ./scripts/manage-models.sh retire PROFILE [--yes] [--dry-run]
+  ./scripts/manage-models.sh reclaim-mazinb [--yes] [--dry-run]
   ./scripts/manage-models.sh migrate-orcarouter [--yes] [--dry-run]
   ./scripts/manage-models.sh relocate-root [--source PATH] [--destination PATH] [--yes] [--dry-run]
 
@@ -44,6 +45,13 @@ retire:
   profile-owned disposable images/checkpoints are removed when safe. Active
   installation assets, running containers, and assets required by another
   present profile are protected. Use --dry-run to inspect the plan first.
+
+reclaim-mazinb:
+  Removes ONLY the pinned mazinb source checkpoint after physical M1 archive
+  SHA verification, Hybrid H3/H6 proof, stopped-container inspection, and
+  exact managed-state checks. ALL Docker objects, experiment logs, shared
+  images, Hybrid stages and benchmark evidence are preserved. This is not
+  retire mazinb; an exact, independent user acknowledgement is required.
 
 migrate-orcarouter:
   Moves a complete pinned repository-local ./model checkpoint to the historical
@@ -300,6 +308,92 @@ retire_profile() {
   printf 'Profile retirement complete/planned: %s\n' "$profile"
 }
 
+reclaim_mazinb_checkpoint() {
+  local checkpoint model_root answer before_ids after_ids candidate_inode
+  [[ "${INSTALL_PHASE}" == complete && -n "${ACTIVE_PROFILE}" ]] ||
+    die "strict completed managed installation is required; invalid/absent manifest blocks reclaim"
+  [[ "${ACTIVE_PROFILE}" != mazinb ]] ||
+    die "mazinb is the active managed profile; do not remove it"
+  [[ ! -e "${STATE_DIR}/runtime-transition.env" && ! -L "${STATE_DIR}/runtime-transition.env" ]] ||
+    die "runtime transition present; reclaim blocked"
+  [[ ! -e "${STATE_DIR}/update-transition.env" && ! -L "${STATE_DIR}/update-transition.env" ]] ||
+    die "update transition present; reclaim blocked"
+  [[ ! -e "${STATE_DIR}/mazinb-m1/active.json" || -f "${STATE_DIR}/mazinb-m1/active.json" ]] ||
+    die "M1 session journal is unsafe"
+  model_root="$(model_asset_root)"
+  checkpoint="${model_root}/qwen3.8-flash-next-mazinb"
+  [[ -d "${model_root}" && ! -L "${model_root}" &&
+     -d "${checkpoint}" && ! -L "${checkpoint}" ]] ||
+    die "mazinb model root/checkpoint must exist as actual non-symlink directories"
+  [[ -z "${ACTIVE_MODEL}" || "$(realpath -m -- "${ACTIVE_MODEL}")" != "${checkpoint}" ]] ||
+    die "refusing active installation checkpoint"
+  [[ "${model_root}" == "$(realpath -m -- "${model_root}")" ]] ||
+    die "model root must be canonical"
+
+  if [[ "${DRY_RUN}" != 1 ]]; then
+    [[ -r "${SCRIPT_ROOT}/scripts/lib/operation-lock.sh" ]] ||
+      die "lifecycle lock helper missing"
+    # shellcheck source=scripts/lib/operation-lock.sh
+    source "${SCRIPT_ROOT}/scripts/lib/operation-lock.sh"
+    acquire_operation_lock "${STATE_DIR}" "mazinb source checkpoint reclaim" ||
+      die "lifecycle operation lock not acquired"
+    local bench_lock="${STATE_DIR}/mazinb-m1/benchmark.lock"
+    [[ -f "${bench_lock}" && ! -L "${bench_lock}" ]] ||
+      die "M1 benchmark lock missing or unsafe"
+    exec {MAZINB_BENCH_FD}<>"${bench_lock}" ||
+      die "M1 benchmark lock cannot be opened"
+    flock -n "${MAZINB_BENCH_FD}" ||
+      die "M1 benchmark is active; cannot reclaim source checkpoint"
+  fi
+
+  python3 -B "${SCRIPT_ROOT}/scripts/model/mazinb-reclaim-gate.py" \
+    "${HOME}" "${model_root}" "${STATE_DIR}" ||
+    die "mazinb read-only evidence, Hybrid or Docker identity gate blocked"
+
+  printf 'MAZINB_RECLAIM_SCOPE=ORIGINAL_CHECKPOINT_ONLY\n'
+  printf 'MAZINB_RECLAIM_KEEP=ALL_DOCKER_OBJECTS_IMAGES_H3_H4_H5_H6_M1_AND_BENCHMARK_ARCHIVES\n'
+  if [[ "${DRY_RUN}" == 1 ]]; then
+    printf 'MAZINB_RECLAIM_PLAN=PASS_READ_ONLY_NOT_AUTHORIZED_TO_DELETE\n'
+    printf 'MAZINB_RECLAIM_CHECKPOINT=%s\n' "${checkpoint}"
+    return 0
+  fi
+  if [[ "${YES}" != 1 ]]; then
+    printf '\nPermanent deletion ONLY of the verified original mazinb checkpoint:\n  %s\n' "${checkpoint}"
+    printf 'This will make STOPPED mazinb trial containers non-restartable without re-downloading weights.\n'
+    read -r -p 'Type DELETE_MAZINB_SOURCE_CHECKPOINT to approve exactly this directory: ' answer
+    [[ "${answer}" == DELETE_MAZINB_SOURCE_CHECKPOINT ]] || die "mazinb reclaim cancelled"
+  fi
+
+  # Repeat admission under the shared lifecycle + benchmark locks directly
+  # before deletion. Reuse the existing manager's single checkpoint remover.
+  python3 -B "${SCRIPT_ROOT}/scripts/model/mazinb-reclaim-gate.py" \
+    "${HOME}" "${model_root}" "${STATE_DIR}" ||
+    die "rechecked admission failed; nothing removed"
+  before_ids="$(docker ps -aq --no-trunc | sort)" ||
+    die "Docker before-snapshot unavailable; nothing removed"
+  candidate_inode="$(stat -c '%d:%i' -- "${checkpoint}")"
+  [[ -n "${candidate_inode}" ]] || die "candidate inode could not be pinned"
+  TARGET="${checkpoint}"
+  local old_yes="${YES}"
+  YES=1
+  remove_model
+  YES="${old_yes}"
+  [[ ! -e "${checkpoint}" && ! -L "${checkpoint}" ]] ||
+    die "POSTCHECK_FAILED: mazinb checkpoint still present"
+  after_ids="$(docker ps -aq --no-trunc | sort)" ||
+    die "POSTCHECK_FAILED: Docker post-snapshot unavailable"
+  [[ "${before_ids}" == "${after_ids}" ]] ||
+    die "POSTCHECK_FAILED: Docker container inventory changed; investigate"
+  [[ "$(docker inspect -f '{{.Id}}' qwen38-flash-next)" ==
+     f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24 ]] ||
+    die "POSTCHECK_FAILED: protected Docker identity changed"
+  python3 -B "${SCRIPT_ROOT}/scripts/diagnostics/benchmark-reclaim-readiness.py" ||
+    die "POSTCHECK_FAILED: preserved benchmark archive audit failed"
+  printf 'MAZINB_RECLAIM_RESULT=SOURCE_CHECKPOINT_REMOVED_VERIFIED\n'
+  printf 'MAZINB_RECLAIM_DOCKER_OBJECTS=UNCHANGED\n'
+  printf 'MAZINB_RECLAIM_EXACT_DELETED_PATH=%s\n' "${checkpoint}"
+}
+
 discover() {
   declare -A seen=()
   local -a candidates=()
@@ -418,6 +512,7 @@ case "${ACTION}" in
   assets) [[ -z "${TARGET}" ]] || die "assets takes no target"; list_assets ;;
   remove) remove_model ;;
   retire) retire_profile ;;
+  reclaim-mazinb) [[ -z "${TARGET}" ]] || die 'reclaim-mazinb takes no target'; reclaim_mazinb_checkpoint ;;
   migrate-orcarouter) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "migrate-orcarouter takes no target"; migrate_orcarouter ;;
   relocate-root) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "relocate-root takes flags, not a positional target"; relocate_model_root ;;
   -h|--help|help) usage ;;
