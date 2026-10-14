@@ -84,7 +84,7 @@ class M1BackgroundHostProbeTests(unittest.TestCase):
 
     def test_unrecognized_linger_is_distinct_from_disabled(self):
         def command(*argv):
-            value = "maybe\n" if argv[0] == "loginctl" else "Version=255\\n"
+            value = "maybe\n" if argv[0] == "loginctl" else "Version=255\n"
             return subprocess.CompletedProcess(argv, 0, stdout=value, stderr="")
         with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/tool"), \
                 mock.patch.object(PROBE, "command", side_effect=command):
