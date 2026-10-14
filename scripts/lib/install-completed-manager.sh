@@ -27,7 +27,7 @@ install_completed_current_config_label() {
 }
 
 install_completed_stage_settings() {
-  local answer monitor_default protect_default service_default api_default detected_lan
+  local answer monitor_default protect_default service_default api_default detected_lan restart_default
   INSTALL_COMPLETED_CLI_DRY_RUN="${DRY_RUN:-0}"
 
   INSTALL_COMPLETED_CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
@@ -185,12 +185,16 @@ install_completed_stage_settings() {
     return 0
   fi
 
+  # Direct Wizard API/port edits must not activate a previously stopped 171G
+  # model by accidental Enter; explicit yes is required for any restart.
+  restart_default=yes
+  [[ "${INSTALL_COMPLETED_FORCE_SETTINGS:-0}" != 1 ]] || restart_default=no
   if [[ "${UI_LANG}" == ko ]]; then
     if wizard_yes_no '최종 계획 확인 후 이 설정을 실제로 적용합니까?' no; then
       INSTALL_COMPLETED_SETTINGS_APPLY=1
       INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
       DRY_RUN=0
-      wizard_yes_no 'runtime 설정을 지금 재시작하여 적용합니까?' yes && START=1 || START=0
+      wizard_yes_no 'runtime 설정을 지금 재시작하여 적용합니까?' "${restart_default}" && START=1 || START=0
     else
       DRY_RUN=1
     fi
@@ -199,7 +203,7 @@ install_completed_stage_settings() {
       INSTALL_COMPLETED_SETTINGS_APPLY=1
       INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
       DRY_RUN=0
-      wizard_yes_no 'Restart the runtime now to apply runtime settings?' yes && START=1 || START=0
+      wizard_yes_no 'Restart the runtime now to apply runtime settings?' "${restart_default}" && START=1 || START=0
     else
       DRY_RUN=1
     fi
