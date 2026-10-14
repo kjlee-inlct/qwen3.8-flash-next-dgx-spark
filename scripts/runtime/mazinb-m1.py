@@ -22,6 +22,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
+import stat
 import select
 import signal
 import socket
@@ -360,6 +362,178 @@ def stop_exact(record: dict, m1: Path) -> None:
     print("M1_DOCKER_REMOVED=NO")
 
 
+
+def recovery_file(path: Path) -> bytes:
+    require(path.is_file() and not path.is_symlink(), f"unsafe M1 evidence path: {path}")
+    st = path.stat()
+    require(st.st_uid == os.getuid() and stat.S_ISREG(st.st_mode)
+            and not st.st_mode & 0o077 and 0 < st.st_size < 1024 * 1024,
+            f"unsafe M1 evidence ownership/mode/size: {path}")
+    return path.read_bytes()
+
+
+def assert_supervision_absent(record: dict) -> None:
+    """Reject concurrent terminal supervisor or exact-ID watchdog."""
+    for line in call("ps", "-ww", "-eo", "args=").stdout.splitlines():
+        try:
+            argv = shlex.split(line)
+        except ValueError:
+            require("mazinb-m1.py" not in line and record["id"] not in line,
+                    "unparseable M1-related process")
+            continue
+        programs = {Path(arg).name for arg in argv}
+        require(not ("mazinb-m1.py" in programs and "run" in argv),
+                "M1 supervisor process is still active")
+        require(not ("monitor-runtime.sh" in programs and
+                     "--expected-id" in argv and record["id"] in argv),
+                "M1 exact-ID watchdog process is still active")
+
+
+def recovery_marker(record: dict, monitor: Path) -> str:
+    marker = monitor / "runtime-stop.env"
+    require(not marker.is_symlink(), "unsafe M1 stop marker symlink")
+    if not marker.exists():
+        return "UNDETERMINED"
+    fields = {}
+    for line in recovery_file(marker).decode("utf-8").splitlines():
+        key, sep, value = line.partition("=")
+        require(bool(sep) and key not in fields, "malformed stop marker")
+        fields[key] = value
+    require(fields.get("RUNTIME_STOP_SCHEMA_VERSION") == "1" and
+            fields.get("STOP_REASON") == "memory-protection" and
+            fields.get("STOP_CONTAINER_NAME") == record["name"] and
+            fields.get("STOP_CONTAINER_ID") == record["id"],
+            "stop marker not pinned to this M1 Docker")
+    return "MEMORY_PROTECTION_MARKER"
+
+
+def reconcile() -> None:
+    """Reconcile a stopped exact-ID M1; NEVER start/stop/remove containers."""
+    state, data, m1 = state_paths()
+    with operation_lock(state):
+        safe_dir(data)
+        safe_dir(m1)
+        active = m1 / "active.json"
+        record = json.loads(recovery_file(active))
+        require(isinstance(record, dict), "active M1 journal must be an object")
+        require(record.get("schema") == 1 and
+                bool(NAME_RE.fullmatch(str(record.get("name", "")))) and
+                bool(HEX64.fullmatch(str(record.get("id", "")))) and
+                bool(HEX64.fullmatch(str(record.get("old_id", "")))),
+                "active M1 schema or identity invalid")
+        per_trial = m1 / (record["name"] + ".json")
+        other = json.loads(recovery_file(per_trial))
+        require(isinstance(other, dict), "per-trial M1 journal must be an object")
+        immutable_keys = ("schema", "name", "id", "old_id", "old_image_id",
+                          "image_id", "release", "manifest_sha256", "model",
+                          "port", "kv_bytes", "monitor_dir", "trial_home",
+                          "started_at", "kernel_since")
+        require(all(record.get(key) == other.get(key) for key in immutable_keys),
+                "M1 journal immutable provenance diverged")
+        phases = ("stopping", "failed", "ready_for_bench", "stopped", "failed_stopped")
+        require(record.get("phase") in phases and other.get("phase") in phases,
+                "M1 journals have an unrecognized phase")
+        require(record.get("model") == MODEL and record.get("port") == PORT
+                and record.get("kv_bytes") == KV_BYTES,
+                "M1 benchmark configuration changed")
+        lock = m1 / "benchmark.lock"
+        require(lock.is_file() and not lock.is_symlink()
+                and lock.stat().st_uid == os.getuid()
+                and not lock.stat().st_mode & 0o077,
+                "M1 benchmark lock missing or unsafe")
+        with lock.open("rb") as fd:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as err:
+                raise M1Error("M1 benchmark currently holds lease") from err
+            for marker in MARKERS:
+                require(not (state / marker).exists() and not (state / marker).is_symlink(),
+                        f"unfinished managed lifecycle marker: {marker}")
+            _, digest = read_manifest(state)
+            require(digest == record.get("manifest_sha256"), "managed manifest changed")
+            current = data / "current"
+            require(current.is_symlink() and str(current.resolve()) == record.get("release"),
+                    "immutable managed release changed")
+            require(call("systemctl", "is-active", SERVICE, check=False).stdout.strip() == "inactive",
+                    "managed systemd service active/unknown")
+            old = snapshot_old(record["old_id"])
+            require(old["Image"] == record.get("old_image_id"),
+                    "managed predecessor immutable image changed")
+            check_trial_history()
+            trial = m1 / record["name"]
+            monitor = trial / "monitor"
+            safe_dir(trial)
+            safe_dir(trial / "home")
+            safe_dir(monitor)
+            require(record.get("monitor_dir") == str(monitor)
+                    and record.get("trial_home") == str(trial / "home"),
+                    "M1 forensic path mismatch")
+            arm = monitor / "armed"
+            hb = monitor / "heartbeat"
+            require(arm.is_file() and not arm.is_symlink()
+                    and arm.read_text(encoding="utf-8").strip() == record["id"],
+                    "M1 exact-ID watchdog arm missing")
+            require(hb.is_file() and not hb.is_symlink()
+                    and hb.read_text(encoding="utf-8").strip().isdigit(),
+                    "M1 watchdog heartbeat evidence missing")
+            monitor_log = trial / "monitor.log"
+            require(monitor_log.is_file() and not monitor_log.is_symlink()
+                    and monitor_log.stat().st_uid == os.getuid()
+                    and monitor_log.stat().st_size < 128 * 1024 * 1024,
+                    "M1 monitor log missing or unsafe")
+            log_tail = monitor_log.read_text(encoding="utf-8")[-8192:]
+            require("container is no longer running; monitor exiting" in log_tail,
+                    "M1 watchdog termination evidence missing")
+            reason = recovery_marker(record, monitor)
+            require(not ("PROTECT stopping" in log_tail and reason == "UNDETERMINED"),
+                    "M1 protective stop has no matching marker")
+            assert_supervision_absent(record)
+            docker = pinned_candidate(record)
+            final = docker["State"]
+            require(final.get("Status") == "exited" and final.get("Running") is False,
+                    "M1 candidate not proved exited")
+            exit_code = final.get("ExitCode")
+            require(type(exit_code) is int and 0 <= exit_code <= 255,
+                    "M1 exact Docker exit code invalid")
+            require(type(final.get("OOMKilled")) is bool
+                    and str(final.get("FinishedAt", "")).startswith("20"),
+                    "M1 Docker completion evidence missing")
+            assert_supervision_absent(record)
+            phase = ("failed_stopped" if final["OOMKilled"] or exit_code != 0
+                     or reason == "MEMORY_PROTECTION_MARKER"
+                     or record["phase"] in ("failed", "failed_stopped")
+                     else "stopped")
+            if (record == other and record.get("phase") == phase and
+                    record.get("exit_code") == exit_code and
+                    record.get("recovery_shutdown_cause") == reason):
+                print("M1_RECONCILE=ALREADY_CONSISTENT")
+                print(f"M1_STOPPED_EXACT_ID={record['id']}")
+                return
+            # Preserve raw original bytes of BOTH journals before replacing either.
+            tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(6)
+            for path in (active, per_trial):
+                backup = path.with_name(path.name + ".pre-reconcile-" + tag + ".bak")
+                with backup.open("xb") as output:
+                    os.chmod(backup, 0o600)
+                    output.write(recovery_file(path))
+                    output.flush()
+                    os.fsync(output.fileno())
+            record["recovery_previous_detail"] = record.get("detail", "")
+            record["recovery_shutdown_cause"] = reason
+            record["recovery_docker_finished_at"] = final["FinishedAt"]
+            record["recovery_docker_oom_killed"] = final["OOMKilled"]
+            record["recovery_host_stability"] = "INCONCLUSIVE"
+            record["exit_code"] = exit_code
+            detail = ("Reconciled after interrupted supervisor shutdown; STOP signal unverified"
+                      if reason == "UNDETERMINED" else
+                      "Reconciled with exact-ID memory-protection stop marker")
+            journal(m1, record, phase, detail)
+            print(f"M1_RECONCILE=RECORDED_{phase.upper()}")
+            print(f"M1_STOPPED_EXACT_ID={record['id']}")
+            print(f"M1_EXIT_CODE={exit_code}")
+            print(f"M1_SHUTDOWN_CAUSE={reason}")
+            print("M1_DOCKER_START_STOP_REMOVE=NOT_PERFORMED")
+
 def run_session(expected: str) -> None:
     require(os.environ.get("QWEN38_M1_WIZARD_APPROVED") == "1",
             "live M1 requires Wizard default-NO operator approval")
@@ -581,7 +755,7 @@ def bench_admission() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Internal Wizard mazinb M1 controller")
-    parser.add_argument("action", choices=("plan", "status", "preflight", "run", "bench-admission"))
+    parser.add_argument("action", choices=("plan", "status", "preflight", "run", "bench-admission", "reconcile"))
     parser.add_argument("--expected-old-id", default="")
     args = parser.parse_args()
     try:
@@ -597,6 +771,8 @@ def main() -> int:
             status()
         elif args.action == "bench-admission":
             bench_admission()
+        elif args.action == "reconcile":
+            reconcile()
         elif args.action == "preflight":
             state, data, m1 = state_paths()
             with operation_lock(state):

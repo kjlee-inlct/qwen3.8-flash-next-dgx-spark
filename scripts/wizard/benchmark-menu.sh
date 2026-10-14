@@ -194,11 +194,20 @@ wizard_m1_run() {
   fi
 }
 
+wizard_m1_recover() {
+  wizard_header 'Stopped M1 journal recovery / 종료 기록 복구'
+  wizard_warning 'Exact stopped Docker only; no start, stop, deletion or service changes.'
+  wizard_yes_no 'Verify and reconcile M1 journal? / 기록 복구 진행' no || return 0
+  if ! python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" reconcile; then
+    wizard_warning 'Recovery BLOCKED. Preserve original state and inspect evidence.'
+  fi
+}
+
 wizard_benchmark_menu() {
   local choice
   while true; do
     wizard_header 'Benchmark / 벤치마크'
-    wizard_info 'Old A/B are preserved. M1 is source-implemented; DGX live qualification is pending.'
+    wizard_info 'Old A/B are preserved. M1 first physical benchmark is measured; Background supervision is not yet qualified.'
     wizard_menu_option 1 'mazinb preflight (read-only) / 사전 점검'
     wizard_menu_option 2 'New mazinb B admission (read-only; blocked if B exists)'
     wizard_menu_option 3 'Report tools / 보고서 도구'
@@ -208,6 +217,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 7 'mazinb M1 status (no mutation) / M1 상태'
     wizard_menu_option 8 'mazinb M1 physical read-only preflight / 신규 M1 사전 검증'
     wizard_menu_option 9 'mazinb M1 experimental live start (explicit approval) / 새 모델 기동'
+    wizard_menu_option 10 'Recover stopped M1 journal / 종료 기록 복구'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -227,6 +237,7 @@ wizard_benchmark_menu() {
            wizard_warning 'M1 status invalid; forensic investigation required.' ;;
       8) wizard_m1_preflight ;;
       9) wizard_m1_run ;;
+      10) wizard_m1_recover ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
