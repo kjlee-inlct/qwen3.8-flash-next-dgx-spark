@@ -29,7 +29,7 @@ from state_file import parse_install  # noqa: E402
 
 UNIT = "qwen38-flash-next.service"
 SOCKET_PROXY = ("qwen38-openwebui-proxy.socket", "qwen38-openwebui-proxy.service")
-DEDICATED_UNIT = re.compile(r"^qwen38[-_]mazinb(?:[-_].*)?\.(?:service|socket|timer|path)$")
+DEDICATED_UNIT = re.compile(r"^[a-z0-9_.@-]*mazinb[a-z0-9_.@-]*\.(?:service|socket|timer|path)$", re.I)
 ARCHIVE_NAME = re.compile(r"([0-9a-f]{16})\.(json|log)\Z")
 M1_PORT = 18889
 SHARED_PORTS = (8888, 8000, 8001)
@@ -180,7 +180,7 @@ def systemd_check(home: Path) -> None:
     found_files = []
     for root in dirs:
         if root.is_dir():
-            for candidate in root.glob("qwen38*"):
+            for candidate in root.glob("*mazinb*"):
                 if DEDICATED_UNIT.fullmatch(candidate.name):
                     found_files.append(str(candidate))
     require(not (system_found or user_found or found_files),
