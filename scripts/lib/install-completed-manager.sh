@@ -46,6 +46,34 @@ install_completed_stage_settings() {
   INSTALL_COMPLETED_API_LAN_PORT="${API_LAN_PORT:-8001}"
   INSTALL_COMPLETED_SERVICE_ENABLED="${SERVICE_ENABLED:-1}"
 
+  if [[ "${INSTALL_COMPLETED_SHUTDOWN_ACCESS:-0}" == 1 ]]; then
+    # Post-benchmark teardown: mutate the managed configuration, not just
+    # systemctl state. A bare systemctl disable leaves install.env out of
+    # sync and can make later settings transactions/recovery fail.
+    # Keep all model, image, journal, release and monitor settings unchanged.
+    INSTALL_COMPLETED_API_ACCESS_MODE=local
+    INSTALL_COMPLETED_API_LAN_ADDRESS=""
+    INSTALL_COMPLETED_SERVICE_ENABLED=0
+    INSTALL_COMPLETED_PENDING_SETTINGS=1
+    INSTALL_COMPLETED_SETTINGS_APPLY=0
+    INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=1
+    START=0
+    wizard_warning 'This closes managed Docker/LAN API access and removes the owned boot runtime service.'
+    wizard_warning 'All checkpoints, stopped containers, evidence, images and immutable releases remain untouched.'
+    wizard_info 'This changes install.env transactionally. A future model session must explicitly re-enable API/service.'
+    if [[ "${INSTALL_COMPLETED_CLI_DRY_RUN}" == 1 ]]; then
+      DRY_RUN=1
+      wizard_info 'Read-only plan: nothing will be stopped or reconfigured.'
+    elif wizard_yes_no 'Apply post-benchmark API/service shutdown after reviewing the complete plan? / 최종 계획 확인 후 API·서비스를 비활성화합니까?' no; then
+      INSTALL_COMPLETED_SETTINGS_APPLY=1
+      INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
+      DRY_RUN=0
+    else
+      DRY_RUN=1
+    fi
+    return 0
+  fi
+
   if [[ "${UI_LANG}" == ko ]]; then
     wizard_info "현재 config: $(install_completed_current_config_label)"
     wizard_menu_option 1 '현재 config 설정 유지'
