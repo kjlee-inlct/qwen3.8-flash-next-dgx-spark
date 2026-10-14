@@ -170,6 +170,44 @@ class ModularWizardTests(unittest.TestCase):
                     self.assertEqual("reclaim-mazinb --yes" in calls, expected_apply)
             self.assertFalse((home / "xdg").exists())
 
+    def test_mazinb_docker_retirement_is_default_no_and_requires_exact_phrase(self) -> None:
+        """Model-menu 5 does not remove containers without explicit two-stage consent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            fake = home / "bin"
+            fake.mkdir()
+            stub = fake / "bash"
+            stub.write_text(
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$HOME/calls"\n'
+                'if [ "$2" = retire-mazinb-containers ]; then\n'
+                '  echo MAZINB_DOCKER_RETIRE_PLAN=PASS_NO_MUTATION\n'
+                'fi\n'
+                'exit 0\n', encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env = {**os.environ, "HOME": str(home),
+                   "XDG_STATE_HOME": str(home / "xdg"),
+                   "PATH": str(fake) + os.pathsep + os.environ.get("PATH", "")}
+            for consent, applied in (
+                ("\n", False),
+                ("y\nWRONG_PHRASE\n", False),
+                ("y\nDELETE_FIVE_MAZINB_CONTAINERS\n", True),
+            ):
+                with self.subTest(consent=consent):
+                    (home / "calls").unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                        cwd=ROOT, env=env,
+                        input="3\n5\n" + consent + "0\n0\n",
+                        text=True, capture_output=True, timeout=20, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    calls = (home / "calls").read_text()
+                    self.assertIn("retire-mazinb-containers --dry-run", calls)
+                    self.assertEqual("retire-mazinb-containers --yes" in calls, applied)
+                    self.assertFalse((home / "xdg").exists())
+
     def test_eof_aborts_before_default_choice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_case(Path(tmp), ["--lang", "en"])
