@@ -141,6 +141,26 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("benchmark_candidates()", script)
         self.assertIn("benchmark result files are ALWAYS PRESERVED", script)
 
+    def test_mazinb_reclaim_flags_fail_closed_without_managed_manifest(self) -> None:
+        # Even --yes is not an override for the managed-state/archive gate.
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            for flag in ("--dry-run", "--yes"):
+                result = subprocess.run(
+                    ["bash", str(MODEL_MANAGER), "reclaim-mazinb", flag],
+                    cwd=ROOT,
+                    env={**os.environ, "HOME": tmp,
+                         "XDG_STATE_HOME": str(Path(tmp) / "xdg"),
+                         "QWEN38_MODEL_ROOT": str(Path(tmp) / "models")},
+                    text=True, capture_output=True, check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("strict completed managed installation is required",
+                              result.stderr)
+                self.assertNotIn("takes no positional target", result.stderr)
+                self.assertFalse((Path(tmp) / "xdg").exists())
+
     def test_model_manager_exposes_profile_asset_lifecycle(self) -> None:
         script = MODEL_MANAGER.read_text(encoding="utf-8")
         registry = (ROOT / "scripts" / "model-assets.sh").read_text(encoding="utf-8")
