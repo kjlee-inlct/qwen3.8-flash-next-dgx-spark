@@ -88,6 +88,60 @@ class M1SafetyTests(unittest.TestCase):
             self.assertEqual(M1.read_json(root / "active.json")["phase"], "stopped")
             self.assertEqual(M1.read_json(root / (name+".json"))["phase"], "stopped")
 
+    def test_protect_stop_records_failed_stopped_not_clean_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            name = "qwen38-mazinb-m1-20261014070000-1234abcd"
+            rec = {"name": name, "id": "a"*64, "phase": "failed",
+                   "detail": "candidate triggered memory-protection stop"}
+            running = {"Id": rec["id"], "State": {"Running": True, "ExitCode": 1}}
+            stopped = {"Id": rec["id"], "State": {"Running": False, "ExitCode": 1}}
+            with mock.patch.object(M1, "pinned_candidate", side_effect=[running, stopped]), \
+                 mock.patch.object(M1, "call") as cmd:
+                M1.stop_exact(rec, Path(tmp))
+            cmd.assert_called_once_with("docker", "stop", "--timeout", "30", "a"*64)
+            self.assertEqual(M1.read_json(Path(tmp) / "active.json")["phase"],
+                             "failed_stopped")
+
+    def test_m1_swap_pressure_available_guard_regression(self) -> None:
+        # Execute the real source predicate in an isolated Bash snippet.
+        # There is no Docker, kernel, or model side effect in this test.
+        monitor = (ROOT / "scripts/runtime/monitor-runtime.sh").read_text()
+        section = monitor.split("  if (( noncma_free < free_floor )); then", 1)[1]
+        predicate = "  if (( noncma_free < free_floor )); then" + section.split(
+            "\n  if (( warning_low == 1 )); then", 1
+        )[0]
+        cases = (
+            # observed DGX: 38 GiB available, swap growth 411 MiB => warn-only
+            (1496, 38698, 411, 12, "0"),
+            # historical behavior remains protected if guard explicitly off
+            (1496, 38698, 411, 0, "1"),
+            # near-pressure even when free below 2 GiB + 256 MiB swapped
+            (1496, 11264, 411, 12, "1"),
+            # primary <10 GiB gate is unchanged without swap activity
+            (1496, 9216, 0, 12, "1"),
+            # high non-CMA free does not trip the low-free condition
+            (3072, 9216, 411, 12, "0"),
+        )
+        for free_mib, available_mib, growth_mib, gate_gib, expected in cases:
+            with self.subTest(free=free_mib, available=available_mib,
+                              growth=growth_mib, gate=gate_gib):
+                env = "\n".join((
+                    f"noncma_free={free_mib * 1024}",
+                    f"noncma_available={available_mib * 1024}",
+                    f"swap_consumed={growth_mib * 1024}",
+                    "free_floor=2097152",
+                    "free_gate=10485760",
+                    "swap_activity_gate=262144",
+                    f"swap_pressure_available_floor={gate_gib * 1048576}",
+                    "warning_low=0",
+                    "protection_low=0",
+                ))
+                p = subprocess.run(["bash", "-c", env+"\n"+predicate+
+                                   '\nprintf "%s" "$protection_low"'],
+                                   check=False, capture_output=True, text=True)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertEqual(p.stdout, expected)
+
     def test_wizard_m1_live_default_no_never_activates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             env = {**os.environ, "HOME": tmp, "XDG_STATE_HOME": str(Path(tmp)/"xdg")}

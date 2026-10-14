@@ -1,3 +1,20 @@
+> **2026-10-14 M1 PHYSICAL FAILURE ROOT CAUSE CONFIRMED:** Actual new
+> model `qwen38-mazinb-m1-20261013235416-edd777eb` stopped via
+> `memory-protection`, exit 1, OOMKilled=false; reached 26/95 shards.
+> Five consecutive samples at KST 08:59:10–18: non-CMA free
+> 1192,1233,2045,1436,1496 MiB; non-CMA available 37.6–38.7 GiB;
+> swap growth 279–411 MiB. Low free <2 GiB AND swap growth >256 MiB
+> triggered despite high available memory and ~143 GiB swap-free.
+> Filtered kernel RM/OOM result EMPTY (not exhaustive).
+> Subsequent SOURCE-ONLY change: pinned M1-only swap-growth protection
+> additionally needs available <12 GiB; primary 10 GiB available
+> and 8 GiB swapfree guards unchanged, RM inspection still strict.
+> Fix failure phase recorded as failed_stopped with failure cause;
+> previous `phase=stopped` historical trial remains immutable.
+> NEXT: source CI + exact DGX SHA, guard verification and
+> explicit owner-supervised fresh M1/llama-benchy only if safe.
+> No fresh runtime or performance numbers yet.
+
 > **2026-10-14 ACTUAL DGX first M1 live started but MEMORY-PROTECTION STOPPED:**
 > Exact source SHA `72982e0e1bb53cdf8bb66a641356eb4a7e743320`,
 > operator approved Wizard 5 -> 9 and launched

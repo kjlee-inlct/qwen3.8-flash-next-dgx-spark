@@ -8,6 +8,9 @@ MIN_FREE_GIB=2
 FREE_GATE_GIB=10
 MIN_SWAP_FREE_GIB=8
 SWAP_ACTIVITY_GATE_MIB=256
+# 0 retains the historical swap-growth response. An explicit positive
+# available-memory gate is only permitted for an exact-ID mazinb M1 trial.
+SWAP_PRESSURE_AVAILABLE_GIB=0
 CONSECUTIVE=5
 INTERVAL=2
 HEARTBEAT=60
@@ -57,6 +60,7 @@ Usage: ./scripts/monitor-runtime.sh [options]
   --free-gate-gib N            Non-CMA available gate for immediate low-free protection (default: 10)
   --min-swap-free-gib N        SwapFree protection floor (default: 8)
   --swap-activity-gate-mib N   Swap consumption since monitor start that arms high-available low-free protection (default: 256)
+  --swap-pressure-available-gib N  M1 only: require non-CMA available < N GiB before swap-growth alone triggers protection (default: 0/legacy)
   --consecutive N              Consecutive low samples before protection (default: 5)
   --interval N                 Sampling interval in seconds (default: 2)
   --heartbeat N                Healthy status interval in seconds; 0 disables (default: 60)
@@ -96,6 +100,7 @@ while [[ $# -gt 0 ]]; do
     --free-gate-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; FREE_GATE_GIB="$2"; shift ;;
     --min-swap-free-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; MIN_SWAP_FREE_GIB="$2"; shift ;;
     --swap-activity-gate-mib) [[ $# -ge 2 ]] || die "$1 requires a value"; SWAP_ACTIVITY_GATE_MIB="$2"; shift ;;
+    --swap-pressure-available-gib) [[ $# -ge 2 ]] || die "$1 requires a value"; SWAP_PRESSURE_AVAILABLE_GIB="$2"; shift ;;
     --consecutive) [[ $# -ge 2 ]] || die "$1 requires a value"; CONSECUTIVE="$2"; shift ;;
     --interval) [[ $# -ge 2 ]] || die "$1 requires a value"; INTERVAL="$2"; shift ;;
     --heartbeat) [[ $# -ge 2 ]] || die "$1 requires a value"; HEARTBEAT="$2"; shift ;;
@@ -116,10 +121,16 @@ for value in "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${MIN_
   positive_integer "${value}" || die "thresholds and intervals must be positive integers"
 done
 nonnegative_integer "${HEARTBEAT}" || die "heartbeat must be a non-negative integer"
+nonnegative_integer "${SWAP_PRESSURE_AVAILABLE_GIB}" || die "swap-pressure-available-gib must be a non-negative integer"
 nonnegative_integer "${WAIT_RUNNING}" || die "wait-running must be a non-negative integer"
 positive_integer "${TRIAL_RUNTIME_LIMIT}" || die "trial runtime limit must be a positive integer"
 (( TRIAL_RUNTIME_LIMIT <= 7200 )) || die "trial runtime limit must be at most 7200 seconds"
 [[ -z "${EXPECTED_ID}" || "${EXPECTED_ID}" =~ ^[a-f0-9]{64}$ ]] || die "invalid expected trial ID"
+if (( SWAP_PRESSURE_AVAILABLE_GIB > 0 )); then
+  [[ -n "${EXPECTED_ID}" && "${PROTECT}" == 1 ]] || die "M1 swap-pressure gate requires pinned protected trial"
+  (( SWAP_PRESSURE_AVAILABLE_GIB > FREE_GATE_GIB && SWAP_PRESSURE_AVAILABLE_GIB <= 32 )) ||
+    die "M1 swap-pressure gate must be above base free-gate and at most 32 GiB"
+fi
 if [[ -n "${EXPECTED_ID}" ]]; then
   [[ -n "${ARMED_FILE}" && -n "${HEARTBEAT_FILE}" && "${WAIT_RUNNING}" -gt 0 && "${PROTECT}" == 1 ]] ||
     die "pinned trial monitor requires arm, heartbeat, wait-running and protect"
@@ -135,6 +146,13 @@ if [[ -n "${EXPECTED_ID}" ]]; then
   actual_id="$(docker inspect --format '{{.Id}}' "${CONTAINER}")"
   [[ "${actual_id}" == "${EXPECTED_ID}" ]] || die "trial container ID drift before arm"
   [[ -d "${STATE_DIR}" && ! -L "${STATE_DIR}" ]] || die "separate monitor state directory missing or unsafe"
+  if (( SWAP_PRESSURE_AVAILABLE_GIB > 0 )); then
+    # Never permit a less conservative policy on the managed predecessor
+    # or an old A/B experiment; only our new pinned mazinb M1 object.
+    trial_labels="$(docker inspect --format '{{index .Config.Labels "qwen38.abtrial"}}|{{index .Config.Labels "qwen38.variant"}}' "${EXPECTED_ID}")" ||
+      die "cannot verify M1 trial labels for swap-pressure gate"
+    [[ "${trial_labels}" == "mazinb|m1" ]] || die "swap-pressure gate allowed for mazinb M1 labels only"
+  fi
 fi
 if [[ -n "${ARMED_FILE}" ]]; then
   umask 077
@@ -159,14 +177,15 @@ free_floor=$((MIN_FREE_GIB * 1048576))
 free_gate=$((FREE_GATE_GIB * 1048576))
 swap_free_floor=$((MIN_SWAP_FREE_GIB * 1048576))
 swap_activity_gate=$((SWAP_ACTIVITY_GATE_MIB * 1024))
+swap_pressure_available_floor=$((SWAP_PRESSURE_AVAILABLE_GIB * 1048576))
 initial_swap_free="$(awk '$1=="SwapFree:" {print $2}' "${MEMINFO_PATH}")"
 [[ -n "${initial_swap_free}" ]] || die "SwapFree is missing from ${MEMINFO_PATH}"
 low_count=0
 warning_active=0
 mode="warn-only"; [[ "${PROTECT}" == 1 ]] && mode="protect"
 TRIAL_RUNNING_START="${SECONDS}"
-printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free=%sGiB free-gate=%sGiB swap-growth=%sMiB swapfree=%sGiB\n' \
-  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${SWAP_ACTIVITY_GATE_MIB}" "${MIN_SWAP_FREE_GIB}"
+printf '%s monitor started: container=%s mode=%s available-warn=%sGiB noncma-free=%sGiB free-gate=%sGiB swap-growth=%sMiB swap-available-gate=%sGiB swapfree=%sGiB\n' \
+  "$(date '+%F %T')" "${CONTAINER}" "${mode}" "${MIN_AVAILABLE_GIB}" "${MIN_FREE_GIB}" "${FREE_GATE_GIB}" "${SWAP_ACTIVITY_GATE_MIB}" "${SWAP_PRESSURE_AVAILABLE_GIB}" "${MIN_SWAP_FREE_GIB}"
 next_heartbeat=$((SECONDS + HEARTBEAT))
 
 while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || true)" == true ]]; do
@@ -204,7 +223,15 @@ while [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null ||
   # failures that appeared after swap activity began.
   if (( noncma_free < free_floor )); then
     warning_low=1
-    if (( noncma_available < free_gate || swap_consumed >= swap_activity_gate )); then
+    if (( noncma_available < free_gate )); then
+      protection_low=1
+    elif (( swap_consumed >= swap_activity_gate &&
+            (swap_pressure_available_floor == 0 ||
+             noncma_available < swap_pressure_available_floor) )); then
+      # The extra gate is M1-only. Historical managed / A-B trials retain
+      # the original unconditional swap-growth response (0/legacy).
+      # Persistent shortage (<10 GiB), low swap, exact-ID protection and
+      # independent kernel-RM fail-closed checks remain unchanged.
       protection_low=1
     fi
   fi

@@ -345,14 +345,17 @@ def verify_host(record: dict, snap: dict, state: Path, data: Path) -> None:
 
 def stop_exact(record: dict, m1: Path) -> None:
     candidate = pinned_candidate(record)
+    was_failed = record["phase"] in ("failed", "failed_stopped")
+    failure_detail = str(record.get("detail", "")) if was_failed else ""
     if candidate["State"]["Running"]:
         journal(m1, record, "stopping", "operator end or protective error")
         call("docker", "stop", "--timeout", "30", candidate["Id"])
     final = pinned_candidate(record)
     require(not final["State"]["Running"], "candidate did not stop")
     record["exit_code"] = final["State"].get("ExitCode")
-    phase = "failed_stopped" if record["phase"] == "failed" else "stopped"
-    journal(m1, record, phase, "Docker object and forensic files preserved")
+    phase = "failed_stopped" if was_failed else "stopped"
+    journal(m1, record, phase,
+            failure_detail if was_failed else "Docker object and forensic files preserved")
     print(f"M1_STOPPED_EXACT_ID={record['id']}")
     print("M1_DOCKER_REMOVED=NO")
 
@@ -435,6 +438,9 @@ def run_session(expected: str) -> None:
                 "--free-gate-gib", snap["monitor"]["MONITOR_FREE_GATE_GIB"],
                 "--min-swap-free-gib", snap["monitor"]["MONITOR_MIN_SWAP_FREE_GIB"],
                 "--consecutive", snap["monitor"]["MONITOR_CONSECUTIVE"],
+                # Source-scoped to M1 only: historical managed monitor keeps
+                # its original 256-MiB swap-growth emergency behavior.
+                "--swap-pressure-available-gib", "12",
                 "--heartbeat", snap["monitor"]["MONITOR_HEARTBEAT"], "--protect",
             ]
             with (trial_dir / "monitor.log").open("a", encoding="utf-8") as output:

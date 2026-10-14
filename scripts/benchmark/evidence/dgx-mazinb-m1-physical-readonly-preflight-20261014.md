@@ -137,3 +137,65 @@ until the numeric cause of the memory-protection transition is known.
 `>= 256 MiB`, for 5 consecutive samples 2 seconds apart.
 Monitor log values determine which path actually triggered.
 
+## ACTUAL DGX first live M1 monitor diagnostics — protection trigger established
+
+**The actual second read-only diagnostic paste resolves the former uncertainty.**
+Exact candidate ID `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`
+was `exited`, `RUNNING=false`, `EXIT=1`, `OOMKilled=false`, Docker started
+`2026-10-13T23:54:16.608663358Z` and stopped
+`2026-10-13T23:59:28.100236951Z`. Independent
+`monitor/runtime-stop.env` pins the same Docker ID and
+`STOP_REASON=memory-protection` at `2026-10-13T23:59:18Z`.
+Model loader reached **26 / 95 safetensors shards (~27%)**,
+then vLLM printed `KeyboardInterrupt: terminated` after the watchdog
+stop. The traceback was caused by the explicit SIGTERM/shutdown; it is
+not evidence of an independent checkpoint/model failure.
+
+### Exact 2-second protection series (local KST)
+
+| Time | Non-CMA free MiB | Non-CMA available MiB | Swap growth MiB | Protect |
+| --- | ---: | ---: | ---: | --- |
+| 08:59:10 | 1192 | 37855 | 279 | 1/5 |
+| 08:59:12 | 1233 | 37616 | 331 | 2/5 |
+| 08:59:14 | 2045 | 38684 | 331 | 3/5 |
+| 08:59:16 | 1436 | 38373 | 331 | 4/5 |
+| 08:59:18 | 1496 | 38698 | 411 | 5/5 |
+
+Trigger was **non-CMA free < 2048 MiB (even 2045 MiB is below 2 GiB)**
+PLUS **swap growth >= 256 MiB**. Available memory was 37-38 GiB
+and SwapFree ~146031 MiB during stop, so this was **not**
+SwapFree exhaustion or the primary non-CMA available < 10 GiB guard.
+Earlier samples repeatedly printed `protect=0/5` despite
+non-CMA free below 2 GiB because swap growth was < 256 MiB.
+
+The diagnostic `sudo -n journalctl -k ... | grep -Ei ...`
+section returned no matching lines for its selected time window;
+this is *not* an exhaustive proof of no kernel issues elsewhere.
+After stop, the host showed `121Gi` RAM total, ~`118Gi` available,
+`/swap-ple.img` 128 GiB active (~1022 MiB used), and a separate
+`/swap.img` 16 GiB active (0 used). Never modify existing swaps as
+a response to this initial trace.
+
+### Targeted source policy for next experimental M1 (NOT YET PHYSICALLY RUN)
+
+The subsequent **new code** keeps monitor historical defaults unchanged
+but permits `--swap-pressure-available-gib 12` **only** with pinned
+protected Docker labels `qwen38.abtrial=mazinb` and
+`qwen38.variant=m1`. New M1 passes 12. Thus swap growth
+>= 256 MiB plus non-CMA free < 2 GiB does **not alone**
+trigger protection while non-CMA available >= 12 GiB.
+The original primary low-available gate of **10 GiB**,
+SwapFree floor **8 GiB**, five consecutive samples at 2 seconds,
+exact-ID stop, strict `/health`/model ID, guarded READY/180s soak,
+and host-side strict NVIDIA RM check remain in effect.
+The 12-GiB extra gate is a narrowly scoped mitigation, **not**
+proof that all 38-GiB available states are safe or that a fresh
+model/benchmark will pass. A future observed NVIDIA RM memory event
+continues to disqualify strict host stability.
+
+**State bookkeeping issue also found:** The original failed live run
+stored JSON `phase=stopped` because `stop_exact` overwrote the interim
+`failed` phase with `stopping` before deriving its final label.
+New code preserves `failed_stopped` and the cause for subsequent
+attempts. Historical immutable trial JSON must not be rewritten.
+

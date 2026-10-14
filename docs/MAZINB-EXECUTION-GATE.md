@@ -105,6 +105,25 @@ Keep source/forensics intact. Before any retry, obtain actual
 evidence. A protection stop does not alone establish a kernel OOM or
 `NV_ERR_NO_MEMORY`. See the first live update in
 [physical M1 evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md).
+### Current-host root cause from actual M1 first-run monitor (2026-10-14)
+
+Physical Docker was `exited`, exit 1, `OOMKilled=false` and
+the exact-ID `runtime-stop.env` said `STOP_REASON=memory-protection`.
+After 26/95 safetensors shards, the monitor collected five
+low non-CMA free samples (1192/1233/2045/1436/1496 MiB) with
+swap growth >=256 MiB but non-CMA available around 38 GiB;
+SwapFree remained >142 GiB. The watchdog triggered from the **swap-
+growth + low-free** branch, not the <10 GiB available or exhausted
+swap branch. Kernel filter in the supplied transcript printed no
+matching RM/OOM events, not an exhaustive kernel guarantee.
+
+Subsequent source adds a **pinned-label M1-only extra available
+gate of 12 GiB** for the swapgrowth branch. Original monitor defaults
+are unchanged, and low-available (<10 GiB), swap-free (<8 GiB),
+strict RM checks and exact-ID stop remain mandatory. This is only
+source-level risk mitigation, not physical M1 qualification; no
+new READY/inference/benchmark was measured. See
+[M1 physical evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md).
 ## Priority and sequencing (2026-10-14)
 
 The next **actual DGX model test** should be mazinb; finishing the entire

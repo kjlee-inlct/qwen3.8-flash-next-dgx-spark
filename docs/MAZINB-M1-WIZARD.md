@@ -13,6 +13,13 @@ the complete inspected managed-Docker 64-character ID, a second exact
 **no automatic model start** from this repository change or from CI.
 
 The source implementation is **NOT ACTUAL_DGX_LIVE_QUALIFIED**.
+The first real M1 startup (2026-10-14) reached 26/95 safetensors shards,
+then five low non-CMA free / swapgrowth samples triggered a supervised
+memory-protection stop. The object was retained, Docker OOMKilled=false,
+and no model READY or llama-benchy has yet been measured. Newer source
+mitigates high-available swapgrowth false positives only for pinned M1
+while retaining existing managed/A-B monitor behavior. Verify exact
+commit/CI and read-only preflight before a fresh owner-approved run.
 **Actual DGX M1 read-only preflight PASS** on 2026-10-14 at source SHA
 `2dfa74dacedfe50fe1c28ca309939ed9d61b8123`, with protected Docker
 ID and immutable release/image. Live launch, READY and llama-benchy remain
@@ -56,17 +63,23 @@ See [physical M1 preflight evidence](../scripts/benchmark/evidence/dgx-mazinb-m1
    benchmark uses the explicit `m1-benchmark-lock.sh`
    shared-lifecycle / exclusive-benchmark pair after independent
    source-level `bench-admission` identity and current-host checks.
-5. Before READY: strict `/health` HTTP 200, *exact one* expected
+5. The M1-only `--swap-pressure-available-gib 12` requires an exact-ID
+   `mazinb|m1` Docker provenance. It adds a 12-GiB non-CMA available
+   margin condition to the 256-MiB swapgrowth protect path. Existing
+   primary 10-GiB free gate, 8-GiB SwapFree, 2-GiB free warning,
+   strict RM and exact-ID protection stay active. Managed and historical
+   A/B monitor policy is unchanged. Source mitigation NOT live qualified.
+6. Before READY: strict `/health` HTTP 200, *exact one* expected
    `/v1/models` ID and **180-second post-ready soak**. Any sampled
    `NV_ERR_NO_MEMORY` / `_memdescAllocInternal`, stale watchdog
    heartbeat, triggered protection, identity drift, stop or failing
    sudo kernel collection fails closed and stops only the new candidate.
-6. After READY: Terminal A remains supervising, repeatedly checking
+7. After READY: Terminal A remains supervising, repeatedly checking
    Docker/monitor/kernel/immutable managed identity. **Type STOP**
    to end. STOP is deferred if Terminal B holds the benchmark lock.
    Session ends automatically no later than **5400 s of post-start
    supervision**, under the 7200-second watchdog maximum.
-7. On normal STOP/error/interactive SIGHUP or SIGTERM, only the
+8. On normal STOP/error/interactive SIGHUP or SIGTERM, only the
    **exact pinned candidate ID** may be stopped. No `docker rm`,
    `docker image rm`, `docker system prune`, swap changes or
    protected managed service actions are implemented. Records are
@@ -135,8 +148,9 @@ must remain on during M1.
 | Safe default NO / two-step live approval | SOURCE IMPLEMENTED |
 | Foreground shared lifecycle lock / benchmark exclusive lock | SOURCE IMPLEMENTED |
 | Exact-ID detached watchdog with bounded TTL | SOURCE IMPLEMENTED; boot-persistent guarantee NOT_PROVEN |
-| Actual DGX M1 read-only preflight | PASS_READ_ONLY on original SHA 2dfa74d; retest later hardening commit |
-| Actual DGX new M1 model start and exact API READY | NOT_RUN |
+| Actual DGX M1 read-only preflight | PASS_READ_ONLY twice; second HEAD not included in pasted preflight, later live run exact SHA 72982e0 verified |
+| Actual DGX initial new M1 start | STARTED, stopped by memory protection at 26/95 shards; Docker OOM=false |
+| Actual DGX new M1 exact API READY | NOT_REACHED, source-only M1 swapgrowth mitigation pending physical recheck |
 | Actual DGX fresh 180s soak / strict RM stability | NOT_RUN |
 | Pinned llama-benchy JSON/report/SHA256/off-host backup | NOT_MEASURED / NOT_VERIFIED |
 | A/B historical and managed Docker removal | FORBIDDEN / NOT_PERFORMED |

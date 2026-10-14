@@ -1,3 +1,22 @@
+> **2026-10-14 critical M1 host diagnosis and next source branch:**
+> Exact 16-GiB M1 candidate
+> `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`
+> was protect-stopped, exit 1, `OOMKilled=false`, at 26/95 shards.
+> `monitor.log` proves five samples free 1192/1233/2045/1436/1496 MiB
+> + swapgrowth 279/331/331/331/411 MiB, with non-CMA available
+> ~37–38 GiB and huge SwapFree; no matching filtered kernel RM lines.
+> Root = 256 MiB swapgrowth branch of low free monitor, not exhausted
+> available memory or exhausted swap. Documented actual table:
+> `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+> New source-only M1-specific `--swap-pressure-available-gib 12`
+> keeps original monitor defaults for managed and old A/B, while
+> blocking swap-based stops above 12 GiB available for M1 only.
+> Keeps 10-GiB primary and 8-GiB SwapFree guards, RM, monitor and
+> exact-ID stops. Fix `phase=failed_stopped` preservation; prior
+> first attempt erroneously journaled `phase=stopped` and is left intact.
+> Reverify fresh SHA/source CI; any new live attempt is still not
+> physically qualified. Actual eugr/llama-benchy metrics NOT_MEASURED.
+
 > **2026-10-14 physical M1 FIRST LIVE ATTEMPT — blocked:**
 > Source verified clean SHA `72982e0e1bb53cdf8bb66a641356eb4a7e743320`.
 > Wizard 5 -> 9 explicit approval; candidate
