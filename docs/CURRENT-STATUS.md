@@ -1,6 +1,6 @@
 ## 2026-10-14 — SOURCE ONLY: Hybrid Phase-0 Wizard entry
 
-Added Models **3→7** and `scripts/diagnostics/hybrid-phase0-readonly.sh`:
+Added Models **3→7** and `scripts/wizard/hybrid-phase0-readonly.sh`:
 strict read-only managed idle, H6 runtime validation, metadata SHA256,
 disk/link counts, Docker IDs and bind mounts. `PASS_STATIC_INVENTORY_ONLY`
 is **not** live-start or retirement authorization. Physical Phase-0 at

@@ -90,7 +90,7 @@ wizard_mazinb_retirement_audit() {
 wizard_hybrid_phase0_readonly() {
   wizard_header 'Hybrid H6 Phase-0 read-only inventory / 읽기 전용 점검'
   wizard_info 'No model start, download, checkpoint deletion or service changes.'
-  if bash "$ROOT_DIR/scripts/diagnostics/hybrid-phase0-readonly.sh"; then
+  if bash "$ROOT_DIR/scripts/wizard/hybrid-phase0-readonly.sh"; then
     wizard_success 'Static inventory collected; benchmark and deletion are NOT authorized.'
   else
     wizard_warning 'Hybrid admission BLOCKED; inspect the audit before any live step.'

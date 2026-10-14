@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts/diagnostics/hybrid-phase0-readonly.sh"
+SCRIPT = ROOT / "scripts/wizard/hybrid-phase0-readonly.sh"
 MENU = ROOT / "scripts/wizard/model-menu.sh"
 
 class HybridPhase0Tests(unittest.TestCase):

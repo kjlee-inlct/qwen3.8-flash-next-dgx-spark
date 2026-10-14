@@ -139,7 +139,7 @@ source checkpoints*, not the complete fresh-OS hardware bootstrap promise.
 
 ## Source-only Phase-0 Wizard entry (not physical qualification)
 
-Wizard Models **3 → 7** calls `scripts/diagnostics/hybrid-phase0-readonly.sh`
+Wizard Models **3 → 7** calls `scripts/wizard/hybrid-phase0-readonly.sh`
 and reuses the existing idle validator and H6 runtime-only chain validator.
 It prints manifest/index SHA256, actual disk/block metrics, per-stage symlink
 and hardlink counts, all Docker container IDs and mount references.
