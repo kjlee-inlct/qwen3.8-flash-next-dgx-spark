@@ -1,3 +1,15 @@
+> **2026-10-14 FRESH HYBRID H6 INSTALL ACCEPTANCE — SOURCE PATH PRESENT, E2E PENDING:**
+> Operator requires one Wizard selection on a new DGX Spark to prepare
+> the OrcaRouter + mazinb inputs, vLLM image and H3→H4→H5→H6 chain,
+> then enter the managed runtime path automatically. Existing `install.sh`
+> already contains this conditional flow; a disposable-HOME dry-run/CLI
+> replay and source-contract regression were added. These are host-free
+> tests, not proof of clean-host downloads, builds, inference or RM safety.
+> Physical DGX installation/start requires separate approval and evidence.
+> [Fresh-host Hybrid E2E acceptance gate](HYBRID-FRESH-INSTALL-ACCEPTANCE.md).
+> OrcaRouter A/B benchmark is deferred; current priority remains
+> actual other-model measurement → verified archive → targeted reclaim.
+
 > **2026-10-14 PRIORITY: REAL MODEL BENCHMARK → ARCHIVE → TARGETED SPACE RECOVERY**
 > User explicitly clarified the goal is to test models, preserve actual
 > llama-benchy results, then recover memory/disk by selective removal;
