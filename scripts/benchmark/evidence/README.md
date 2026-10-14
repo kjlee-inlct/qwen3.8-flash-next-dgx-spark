@@ -1,3 +1,16 @@
+## 2026-10-15 — Full H6 kernel window 13/13 reviewed: Docker veth lifecycle only
+
+[Detailed H6 physical kernel transcript](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md)
+now preserves all 13 numbered kernel messages. Seven on-host
+archive checksum entries PASS. A `docker0`/veth link was configured
+at 23:18:03.922–.928 KST and unregistered at 23:29:11.449–.484,
+about 16.5 seconds after independently recorded 23:28:55 H6
+watchdog stop marker. No GPU/RM/Xid/OOM errors appear in the 13
+lines. The kernel lines do not independently map veth to H6 Docker
+ID or establish journal completeness/absence of averted OOM.
+No READY/bench measured; stopped Docker and historical references
+preserved; no guard weakening or restart authorized.
+
 ## H6 kernel metadata — 2026-10-15 actual DGX read-only scan
 
 [Archived H6 protection-stop evidence and kernel-window scan](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):

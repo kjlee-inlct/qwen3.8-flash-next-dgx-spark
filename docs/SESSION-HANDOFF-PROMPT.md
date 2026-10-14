@@ -1,3 +1,24 @@
+## 2026-10-15 — H6 kernel all 13 physical lines reviewed: Docker veth only
+
+Owner again confirmed **7/7 on-host SHA256 PASS** and pasted all
+13 unfiltered saved kernel messages from H6 window. Rows 1–7 at
+`23:18:03.922–.928 KST` are `docker0`/veth attach and
+`forwarding`. A separate H6 watchdog stop marker is at
+`23:28:55 KST`. Rows 8–13 at `23:29:11.449–.484 KST`
+are the same interface rename/disable/unregister, **~16.45–16.48 s**
+after the stop marker. Thus the logged kernel events are exclusively
+Docker virtual-network lifecycle, and **no NVIDIA RM/Xid/GPU allocator/
+OOM errors were recorded in these 13 lines**. The log itself has no
+Docker container ID; interface-to-H6 association is temporal, not
+independently ID-pinned by kernel text. No entries exist between the
+two event clusters, which is NOT proof of complete event retention,
+absence of silent GPU failures, or an unnecessary watchdog.
+The established low non-CMA Free + host-wide swap-growth 5/5
+protective stop stands; necessity/false-positive classification is
+**INCONCLUSIVE**. No READY, inference, bench, off-host backup,
+restart, threshold weakening, deletion, or merge authorized.
+[Full 13-line transcript](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 archived kernel scan: 13 lines, zero broad RM/GPU/OOM matches
 
 The operator rechecked all **seven** on-host SHA256 archive entries

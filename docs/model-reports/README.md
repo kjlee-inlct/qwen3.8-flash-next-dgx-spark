@@ -1,3 +1,15 @@
+## 2026-10-15 — H6 all 13 kernel rows inspected; benchmark NOT_MEASURED
+
+Seven on-host archived evidence files passed SHA256 again. All 13
+physical kernel-window records are Docker bridge/veth bring-up
+(`23:18:03`) and teardown (`23:29:11`) messages; no NVIDIA
+RM/Xid/GPU allocator/OOM text. Teardown appears ~16.5 s after
+the separate H6 memory-protection stop marker at `23:28:55 KST`.
+Neither healthy GPU allocations nor unnecessary protection can
+be proven from an event-only kernel log. H6 remains
+`failed_stopped`, not READY and not benchmarked.
+[Full physical 13-line transcript](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 13-line archived kernel window: no broad fault patterns; benchmark NOT_MEASURED
 
 Real DGX operator reverified seven on-host evidence checksums.

@@ -1,5 +1,87 @@
 # Actual DGX H6 M1 memory-protection stop — 2026-10-14
 
+## 2026-10-15 — Complete physical H6 kernel journal reviewed, all 13 lines
+
+**Evidence class:** actual owner-pasted DGX stdout, from an unchanged
+on-host `kernel-window.log`; the complete numbered output is transcribed
+below. All **seven** files in the on-host evidence archive
+`/home/inlc/h6-m1-evidence-20261014.dvQmt6eq` again passed
+`sha256sum -c SHA256SUMS.txt` before `nl -ba -- kernel-window.log`.
+This is the first **complete unfiltered 13-line kernel log review**
+(previous reports relied on patterns and first/last lines). This
+transcription in GitHub is a selective derived record; the physical
+hash-pinned raw `kernel-window.log` remains on the owner host. No
+off-host backup has been verified.
+
+```text
+     1  2026-10-14T23:18:03.922217+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered blocking state
+     2  2026-10-14T23:18:03.922312+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered disabled state
+     3  2026-10-14T23:18:03.922341+09:00 lc-gx10-pc kernel: vethd3bc075: entered allmulticast mode
+     4  2026-10-14T23:18:03.922359+09:00 lc-gx10-pc kernel: vethd3bc075: entered promiscuous mode
+     5  2026-10-14T23:18:03.927209+09:00 lc-gx10-pc kernel: eth0: renamed from veth7a138b9
+     6  2026-10-14T23:18:03.928208+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered blocking state
+     7  2026-10-14T23:18:03.928234+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered forwarding state
+     8  2026-10-14T23:29:11.449309+09:00 lc-gx10-pc kernel: veth7a138b9: renamed from eth0
+     9  2026-10-14T23:29:11.467208+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered disabled state
+    10  2026-10-14T23:29:11.483621+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered disabled state
+    11  2026-10-14T23:29:11.483641+09:00 lc-gx10-pc kernel: vethd3bc075 (unregistering): left allmulticast mode
+    12  2026-10-14T23:29:11.483665+09:00 lc-gx10-pc kernel: vethd3bc075 (unregistering): left promiscuous mode
+    13  2026-10-14T23:29:11.483687+09:00 lc-gx10-pc kernel: docker0: port 2(vethd3bc075) entered disabled state
+```
+
+**Forensic interpretation, carefully bounded:**
+- Rows **1–7**, `23:18:03.922–.928 KST`: `vethd3bc075`
+  attached/configured and Docker bridge entered `forwarding`
+  state. These correlate temporally with the H6 trial start;
+  the kernel text does not itself include the Docker 64-hex ID,
+  so **network-interface-to-H6 identity is not independently
+  proved by the 13 lines alone**.
+- Independent archived watchdog samples show five protective
+  warnings at `23:28:47, :49, :51, :53, :55 KST`, ending at
+  the confirmed `memory-protection` marker at
+  `2026-10-14T14:28:55Z` = `23:28:55 KST`.
+- Rows **8–13**, `23:29:11.449–.484 KST`: the same `veth`
+  names reverse/disable/unregister. The first visible teardown
+  event is **about 16.45 s** and last event **about 16.48 s**
+  after the watchdog's second-resolution stop marker.
+  This is consistent with subsequent container networking
+  teardown; the exact runtime-stop command time and Docker
+  cause are not independently supplied by the kernel events.
+- **All thirteen rows are Docker bridge/veth networking events.**
+  No recorded line describes NVIDIA, NVRM, Xid, GPU, GPU
+  allocation failure, OOM or memory failure; the earlier
+  expanded regex also matched **0/13**. There are no kernel
+  entries between the two veth event clusters, approximately
+  **11 min 7 s** apart: no *recorded* event is not proof of
+  complete journal coverage or successful GPU allocation.
+  The watchdog itself may have prevented an otherwise
+  imminent failure. No claim that the watchdog was an
+  unnecessary/false-positive stop is substantiated.
+
+**Updated precise labels:**
+`KERNEL_CAPTURE=HASH_VERIFIED`;
+`KERNEL_ALL_13_LINES_REVIEWED=YES`;
+`KERNEL_EVENT_TYPE=DOCKER_VETH_ONLY`;
+`KERNEL_RECORDED_RM_GPU_OOM_EVENTS=NONE_IN_CAPTURE`;
+`WATCHDOG_MEMORY_PROTECTION_STOP=CONFIRMED`;
+`WATCHDOG_NECESSITY=INCONCLUSIVE`;
+`H6_READY=NOT_OBSERVED`;
+`H6_BENCHMARK=NOT_MEASURED`;
+`OFF_HOST_BACKUP=NOT_VERIFIED`;
+`MODEL_RELAUNCH_AUTHORIZED=NO`;
+`GUARD_WEAKENING_AUTHORIZED=NO`;
+`CLEANUP_AUTHORIZED=NO`.
+
+**Safe next analysis only:** correlate preexisting
+`monitor.log` and `docker.log` event timestamps around
+`23:28:47–23:29:11 KST`, and audit the existing protection
+decision algorithm/source for a future separately reviewed
+safe redesign. Do not restart H6, bypass/reduce the watchdog,
+delete preserved Docker/checkpoints, modify H7/H20 dependencies,
+or merge draft PR #261/#259. Even a proposed mitigation needs
+independent safety gates and explicit owner permission before
+physical GPU load.
+
 ## 2026-10-15 — Physical full-window kernel metadata and expanded pattern scan
 
 **New actual DGX evidence:** after the seven-file on-host SHA256 audit
