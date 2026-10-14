@@ -49,6 +49,33 @@ wizard_mazinb_source_reclaim() {
   fi
 }
 
+wizard_mazinb_docker_retire() {
+  local confirmed
+  wizard_header 'mazinb stopped Docker retirement / mazinb Docker 종료 컨테이너 정리'
+  wizard_warning 'This is separate from source checkpoint deletion (already completed).'
+  wizard_warning 'Exactly five stopped mazinb experiment containers are candidates; all other Docker objects stay.'
+  wizard_warning 'Original container logs and metadata will be archived privately and SHA256-verified BEFORE any Docker removal.'
+  wizard_warning 'Shared vLLM Docker image, volumes, M1 journals, Hybrid H3-H6 and benchmark files are protected.'
+  if ! bash "${ROOT_DIR}/scripts/manage-models.sh" retire-mazinb-containers --dry-run; then
+    wizard_warning 'Docker cleanup BLOCKED; no containers removed. Review the evidence and exact IDs.'
+    return 0
+  fi
+  wizard_yes_no 'Permanently delete ONLY these five stopped mazinb containers after log archival? / 5개만 제거합니까?' no ||
+    return 0
+  wizard_input confirmed 'Type DELETE_FIVE_MAZINB_CONTAINERS exactly / 정확히 입력' ''
+  [[ "${confirmed}" == DELETE_FIVE_MAZINB_CONTAINERS ]] || {
+    wizard_warning 'Exact approval mismatch; Docker containers preserved.'
+    return 0
+  }
+  if bash "${ROOT_DIR}/scripts/manage-models.sh" retire-mazinb-containers --yes; then
+    wizard_success 'Five exact mazinb containers removed; archive verified and other objects preserved.'
+    bash "${ROOT_DIR}/scripts/manage-models.sh" assets ||
+      wizard_warning 'Post-retirement model inventory unavailable.'
+  else
+    wizard_warning 'Cleanup BLOCKED or PARTIAL; inspect output and saved archives before any retry.'
+  fi
+}
+
 wizard_model_menu() {
   local choice
   while true; do
@@ -57,6 +84,7 @@ wizard_model_menu() {
     wizard_menu_option 2 'Model assets / 자산 상태'
     wizard_menu_option 3 'Switch preview only / 전환 미리보기'
     wizard_menu_option 4 'Reclaim mazinb source checkpoint (evidence gated) / mazinb 원본 정리'
+    wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -64,6 +92,7 @@ wizard_model_menu() {
       2) bash "${ROOT_DIR}/scripts/manage-models.sh" assets ;;
       3) wizard_profile_preview ;;
       4) wizard_mazinb_source_reclaim ;;
+      5) wizard_mazinb_docker_retire ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
