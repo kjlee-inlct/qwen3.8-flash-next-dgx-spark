@@ -22,7 +22,7 @@ M1_DOCKER_START_STOP_REMOVE=NOT_PERFORMED
 
 ## Post-recovery read-only validation
 
-Operator ran `python3 .../scripts/runtime/mazinb-m1.py status` and listed the journal backup glob.
+Operator ran the M1 runtime controller's read-only `status` subcommand using `python3` and listed the journal backup glob.
 
 ```text
 M1_SESSION_PHASE=stopped
