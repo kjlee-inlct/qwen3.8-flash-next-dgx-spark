@@ -309,7 +309,7 @@ retire_profile() {
 }
 
 reclaim_mazinb_checkpoint() {
-  local checkpoint model_root answer before_ids after_ids candidate_inode
+  local checkpoint model_root answer before_ids after_ids candidate_inode before_bytes after_bytes
   [[ "${INSTALL_PHASE}" == complete && -n "${ACTIVE_PROFILE}" ]] ||
     die "strict completed managed installation is required; invalid/absent manifest blocks reclaim"
   [[ "${ACTIVE_PROFILE}" != mazinb ]] ||
@@ -373,6 +373,12 @@ reclaim_mazinb_checkpoint() {
     die "Docker before-snapshot unavailable; nothing removed"
   candidate_inode="$(stat -c '%d:%i' -- "${checkpoint}")"
   [[ -n "${candidate_inode}" ]] || die "candidate inode could not be pinned"
+  before_bytes="$(df -B1 --output=avail -- "${model_root}" | tail -n 1 | tr -d ' ')"
+  [[ "${before_bytes}" =~ ^[0-9]+$ ]] || die "free space baseline unavailable"
+  # A swapped directory or symlink after admission is never a deletion target.
+  [[ -d "${checkpoint}" && ! -L "${checkpoint}" &&
+     "$(stat -c '%d:%i' -- "${checkpoint}")" == "${candidate_inode}" ]] ||
+    die "candidate changed after admission; refusing deletion"
   TARGET="${checkpoint}"
   local old_yes="${YES}"
   YES=1
@@ -380,6 +386,12 @@ reclaim_mazinb_checkpoint() {
   YES="${old_yes}"
   [[ ! -e "${checkpoint}" && ! -L "${checkpoint}" ]] ||
     die "POSTCHECK_FAILED: mazinb checkpoint still present"
+  after_bytes="$(df -B1 --output=avail -- "${model_root}" | tail -n 1 | tr -d ' ')"
+  [[ "${after_bytes}" =~ ^[0-9]+$ ]] ||
+    die "POSTCHECK_FAILED: free space post snapshot unavailable"
+  printf 'MAZINB_RECLAIM_FS_AVAILABLE_BEFORE_BYTES=%s\n' "${before_bytes}"
+  printf 'MAZINB_RECLAIM_FS_AVAILABLE_AFTER_BYTES=%s\n' "${after_bytes}"
+  printf 'MAZINB_RECLAIM_FS_AVAILABLE_DELTA_BYTES=%s\n' "$((after_bytes-before_bytes))"
   after_ids="$(docker ps -aq --no-trunc | sort)" ||
     die "POSTCHECK_FAILED: Docker post-snapshot unavailable"
   [[ "${before_ids}" == "${after_ids}" ]] ||
