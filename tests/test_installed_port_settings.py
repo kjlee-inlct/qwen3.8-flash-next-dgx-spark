@@ -77,6 +77,49 @@ class InstalledPortSettingsTests(unittest.TestCase):
         menu = MENU.read_text()
         self.assertIn("bash \"${ROOT_DIR}/install.sh\" --lang \"${UI_LANG}\" --manage-settings", menu)
 
+    def test_post_benchmark_shutdown_previews_api_local_and_no_boot_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            manifest = manifest_for(home)
+            before = manifest.read_bytes()
+            result = self.installer(
+                home, ["--manage-settings", "--shutdown-access",
+                       "--lang", "en", "--dry-run"], "y\n",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr + "\n" + result.stdout[-1700:])
+            self.assertIn("Post-benchmark", result.stdout)
+            self.assertIn("local only: 127.0.0.1:8888", result.stdout)
+            self.assertIn("service     : Docker container via immutable current release",
+                          result.stdout)
+            self.assertIn("DRY-RUN complete", result.stdout)
+            self.assertEqual(before, manifest.read_bytes())
+            self.assertFalse((home / "models").exists())
+            self.assertFalse((home / "state/qwen38-spark/operation.lock").exists())
+
+    def test_shutdown_flag_requires_manage_settings_and_refuses_auto_approve(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            manifest = manifest_for(home)
+            before = manifest.read_bytes()
+            for args, needle in (
+                (["--shutdown-access", "--dry-run"], "requires --manage-settings"),
+                (["--manage-settings", "--shutdown-access", "--yes", "--dry-run"],
+                 "cannot combine"),
+                (["--manage-settings", "--shutdown-access", "--model", "nvidia", "--dry-run"],
+                 "cannot combine"),
+            ):
+                with self.subTest(args=args):
+                    result = self.installer(home, args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(needle, result.stderr)
+                    self.assertEqual(before, manifest.read_bytes())
+            helper = (ROOT / "scripts/lib/install-completed-manager.sh").read_text()
+            self.assertIn("INSTALL_COMPLETED_API_ACCESS_MODE=local", helper)
+            self.assertIn("INSTALL_COMPLETED_SERVICE_ENABLED=0", helper)
+            self.assertIn("START=0", helper)
+            self.assertIn("wizard_yes_no 'Apply post-benchmark", helper)
+            self.assertIn("install_completed_execute_settings_transaction", helper)
+
     def test_manage_settings_dry_run_requires_completed_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
