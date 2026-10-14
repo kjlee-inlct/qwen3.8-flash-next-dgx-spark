@@ -68,6 +68,15 @@ class InstalledPortSettingsTests(unittest.TestCase):
                               input=answers, capture_output=True, text=True,
                               check=False, timeout=30)
 
+    def test_modular_port_editor_defaults_to_no_runtime_restart(self):
+        helper = (ROOT / "scripts/lib/install-completed-manager.sh").read_text()
+        self.assertIn('restart_default=no', helper)
+        self.assertIn('INSTALL_COMPLETED_FORCE_SETTINGS:-0', helper)
+        self.assertIn("wizard_yes_no 'Restart the runtime now to apply runtime settings?' \"\${restart_default}\"", helper)
+        self.assertIn('INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=1', helper)
+        menu = MENU.read_text()
+        self.assertIn("bash \"\${ROOT_DIR}/install.sh\" --lang \"\${UI_LANG}\" --manage-settings", menu)
+
     def test_manage_settings_dry_run_requires_completed_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
