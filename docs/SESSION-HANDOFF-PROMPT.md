@@ -1,3 +1,15 @@
+> **2026-10-14 PHYSICAL MAZINB CHECKPOINT + FIVE DOCKER REMOVAL PASS; SERVICES/PROXY AUDIT PENDING.**
+> Checkpoint recovered 186449989632 B (~173.65 GiB); Docker five-container
+> archive PASS_10_FILES then `REMOVED_FIVE_VERIFIED`, 1397395456 B (~1.30 GiB)
+> additionally recovered, all other Docker IDs unchanged. Known shared
+> `qwen38-flash-next.service`, `qwen38-openwebui-proxy.socket/service`,
+> and shared vLLM image MUST NOT be removed simply for mazinb.
+> New Wizard Model 3→6 calls read-only `scripts/diagnostics/verify-mazinb-retirement.py`
+> to audit system/user units, processes, M1 port 18889, shared proxy/runtime,
+> benchmark SHA, retired Docker tombstone and 10 archived files.
+> **ACTUAL DGX FULL SERVICE/PROXY AUDIT: NOT_RUN**. Exact details in
+> [Benchmark before reclaim](BENCHMARK-BEFORE-RECLAIM.md).
+
 > **2026-10-14 PHYSICAL MAZINB SOURCE RECLAIM PASS / FIVE DOCKER REMNANTS PENDING:**
 > Physical Wizard 3→4 removed mazinb checkpoint and recovered
 > `186449989632` bytes of disk availability. Five stopped mazinb
