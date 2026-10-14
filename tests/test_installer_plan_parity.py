@@ -258,6 +258,59 @@ install_plan_render_cli_preview
             self.assertIn("--dry-run", argv)
             self.assertNotIn("--no-start", argv)
 
+    def test_fresh_hybrid_h6_plan_is_non_mutating(self) -> None:
+        """A clean-host Hybrid choice must resolve its H6 recipe without host I/O."""
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            models = home / "new-models"
+            args = [
+                "--lang", "en", "--model", "orcarouter-hybrid",
+                "--model-root", str(models), "--no-start", "--yes", "--dry-run",
+            ]
+            preview = self.run_installer(home, args)
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            plan = self.extract_plan(preview.stdout)
+            self.assertEqual(plan["profile"], "orcarouter-hybrid")
+            self.assertEqual(plan["model"], "local/orcarouter-mazinb-h6-w4a16")
+            self.assertEqual(plan["revision"], "h6-modelopt-w4a16-v1")
+            self.assertEqual(plan["image"], "vllm-orcarouter-v029:v1")
+            self.assertEqual(plan["directory"], str(models / "qwen3.8-h6-modelopt-w4a16"))
+            self.assertIn(f"hybrid base : {models / 'qwen3.8-flash-next-orcarouter'}", preview.stdout)
+            self.assertIn(f"hybrid mix  : {models / 'qwen3.8-flash-next-mazinb'}", preview.stdout)
+            self.assertEqual(plan["protection"], "enabled")
+            self.assertIn("DRY-RUN complete", preview.stdout)
+
+            equivalent = self.extract_equivalent_cli(preview.stdout)
+            self.assertIn("--model", equivalent)
+            self.assertIn("orcarouter-hybrid", equivalent)
+            self.assertIn("--dry-run", equivalent)
+            replay = self.run_installer(home, equivalent[1:])
+            self.assertEqual(replay.returncode, 0, replay.stderr)
+            self.assertEqual(self.extract_plan(replay.stdout), plan)
+            self.assertFalse((home / "state").exists())
+            self.assertFalse(models.exists())
+
+    def test_fresh_hybrid_source_covers_dependencies_build_and_validation(self) -> None:
+        """Keep the complete H6 fresh-install path reachable from the installer."""
+        source = (ROOT / "install.sh").read_text(encoding="utf-8")
+        for required in (
+            'if [[ "${PROFILE_LOCAL_BUILD:-0}" == 1 ]]; then',
+            'MODEL_PROFILE=orcarouter REPO= REVISION= DEST="${HYBRID_BASE_DIR}"',
+            'MODEL_PROFILE=mazinb REPO= REVISION= DEST="${HYBRID_OVERLAY_DIR}"',
+            'docker build -t vllm-orcarouter-v029:v1',
+            'bash "${ROOT_DIR}/scripts/model/prepare-orcarouter-hybrid.sh" build',
+            'python3 "${ROOT_DIR}/scripts/model/validate-orcarouter-hybrid.py"',
+            'write_state weights_ready',
+        ):
+            self.assertIn(required, source)
+        wrapper = (ROOT / "scripts/model/prepare-orcarouter-hybrid.sh").read_text(
+            encoding="utf-8"
+        )
+        for required in ("reuse_h3_ok", "require_empty_or_stage", "run_validator",
+                         '"${H3}"', '"${H4}"', '"${H5}"', '"${OUTPUT}"'):
+            self.assertIn(required, wrapper)
+        self.assertNotIn("rm -rf", wrapper)
+
     def test_fresh_cli_and_wizard_build_same_plan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
