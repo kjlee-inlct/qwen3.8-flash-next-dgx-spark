@@ -1,5 +1,25 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## Physical P1b user-unit status confirmed (2026-10-14) — NO WORKER
+
+On the single canonical checkout, source SHA
+`e542f99fa711a61a1713fa0c10341f47934e7866`, the owner ran the
+read-only `unit-status` probe after an exact source-SHA assertion.
+The reserved user unit `qwen38-mazinb-m1-background.service` was
+**NOT_FOUND** (`M1_BG_UNIT_PRESENCE=ABSENT_RESERVED_UNIT_ONLY`).
+The command also printed `M1_BG_WORKER_IMPLEMENTED=NO`,
+`M1_BG_WORKER_IDENTITY_VERIFIED=NO`,
+`M1_BG_DOCKER_ACTION=NONE`, and
+`M1_BG_USER_SERVICE_MUTATION=NONE`.
+
+**ACTUAL_DGX_READ_ONLY_UNIT_INVENTORY=PASS_NOT_FOUND** does not imply
+a deployed Supervisor, a PID/unit ownership attestation, host stability,
+or the absence of other system units and processes. Independent P1a
+evidence remains `Linger=no`, so durable logout-independent background
+admission is blocked. Do not silently enable lingering, change user
+units or start a Docker model. Background start/stop remains UNIMPLEMENTED.
+
+[Exact operator terminal result](MAZINB-M1-P1B-PHYSICAL-UNIT-STATUS-20261014.md)
 ## 2026-10-14 ACTUAL DGX P1a linger policy — READ_ONLY CONFIRMED
 
 On the original canonical Git checkout at source `56b51aa94a5db5b32ce0d8adc2397760bb026805`,

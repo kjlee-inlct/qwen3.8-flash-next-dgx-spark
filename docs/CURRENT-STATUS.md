@@ -1,3 +1,17 @@
+> **2026-10-14 ACTUAL DGX P1b READ-ONLY USER UNIT INVENTORY: PASS_NOT_FOUND**
+> At exact source `e542f99fa711a61a1713fa0c10341f47934e7866`,
+> the owner fetched and fast-forwarded the single canonical checkout and
+> ran `m1-background-probe.py unit-status` without mutation.
+> The reserved `qwen38-mazinb-m1-background.service` returned
+> `M1_BG_UNIT_STATUS=NOT_FOUND`, `ABSENT_RESERVED_UNIT_ONLY`.
+> `M1_BG_WORKER_IMPLEMENTED=NO`, `M1_BG_WORKER_IDENTITY_VERIFIED=NO`,
+> `M1_BG_DOCKER_ACTION=NONE`, `M1_BG_USER_SERVICE_MUTATION=NONE`.
+> This proves only that specific reserved user unit was not found;
+> no background worker/lifetime is qualified and no other process or
+> unit inventory can be inferred. Earlier `Linger=no` remains confirmed.
+> NO Docker/service/linger changes and no GPU startup were performed.
+> [Exact physical evidence](MAZINB-M1-P1B-PHYSICAL-UNIT-STATUS-20261014.md); PR #261 Draft/unmerged.
+
 > **2026-10-14 ACTUAL DGX USER SYSTEMD LINGER — CONFIRMED DISABLED:**
 > Source `56b51aa94a5db5b32ce0d8adc2397760bb026805` and original canonical checkout verified.
 > Physical `loginctl show-user ... --property=Linger` printed `Linger=no`.

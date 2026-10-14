@@ -26,6 +26,17 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## P1b physical read-only reserved unit result (2026-10-14)
+
+- At source `e542f99`, operator synchronized original sole worktree
+  and ran Wizard-equivalent read-only `unit-status`: reserved
+  `qwen38-mazinb-m1-background.service` reported `NOT_FOUND`.
+- `M1_BG_WORKER_IMPLEMENTED=NO`; `M1_BG_WORKER_IDENTITY_VERIFIED=NO`;
+  no Docker or systemd user-service mutation.
+- P1a host policy separately and explicitly confirmed `Linger=no`.
+  No owner approval to change linger has been given. A user unit absent
+  today does not establish safety of a future worker or all host processes.
+- [Physical P1b evidence](MAZINB-M1-P1B-PHYSICAL-UNIT-STATUS-20261014.md).
 ## Actual DGX linger=no and P1b read-only unit inventory
 
 - At `56b51aa9` the actual DGX printed
