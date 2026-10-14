@@ -523,7 +523,7 @@ case "${ACTION}" in
   assets) [[ -z "${TARGET}" ]] || die "assets takes no target"; list_assets ;;
   remove) remove_model ;;
   retire) retire_profile ;;
-  reclaim-mazinb) [[ -z "${TARGET}" ]] || die 'reclaim-mazinb takes no target'; reclaim_mazinb_checkpoint ;;
+  reclaim-mazinb) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die 'reclaim-mazinb takes no positional target'; reclaim_mazinb_checkpoint ;;
   migrate-orcarouter) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "migrate-orcarouter takes no target"; migrate_orcarouter ;;
   relocate-root) [[ -z "${TARGET}" || "${TARGET}" == --* ]] || die "relocate-root takes flags, not a positional target"; relocate_model_root ;;
   -h|--help|help) usage ;;
