@@ -1,5 +1,37 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## Physical DGX P1a host admission result — 2026-10-14 (owner output)
+
+On the original single Git checkout, source `9df9d0823762b16a1316847b7804e178f8b1a494`,
+the operator ran the `plan` and `probe` subcommands **read-only**.
+Plan output confirmed `START=NOT_IMPLEMENTED`, `STOP=NOT_IMPLEMENTED`,
+`AUTO_START=DISABLED`, `USER_LINGER_CHANGE=FORBIDDEN`.
+Probe output included:
+
+```text
+M1_BG_SUPERVISOR_IMPLEMENTED=NO
+M1_BG_DOCKER_ACTION=NONE
+M1_BG_USER_SERVICE_MUTATION=NONE
+M1_BG_AUTO_START=DISABLED
+M1_BG_HOST_PROBE=BLOCKED
+M1_BG_BLOCK_REASON=USER_LINGER_NOT_ENABLED_OR_UNKNOWN
+```
+
+**PHYSICAL_DGX_BG_P1A_READ_ONLY=BLOCKED_AS_DESIGNED.** The original
+probe combined absent/disabled/unknown linger into one reason, so do
+**not** infer the exact `Linger=no` response from this transcript alone.
+No XDG runtime-dir/tool/user-manager problem was emitted; this is not a
+substitute for a full user manager / session lifetime qualification.
+No user linger setting or service was changed, and no Docker action occurred.
+
+The next source revision distinguishes **DISABLED** (explicit `no`)
+from **UNKNOWN** (failed/unrecognized response), while still blocking
+background launch. The operator may perform read-only
+`loginctl show-user "$(id -u)" -p Linger` and
+`systemctl --user show -p Version` for independent confirmation.
+Enabling lingering is a **persistent host-policy change** and requires
+separate explicit operator authorization; do not turn it on as part
+of an automated test or Wizard invocation.
 ## P1a background supervisor: read-only user-service host probe (2026-10-14)
 
 Source now provides `scripts/runtime/m1-background-probe.py plan|probe` and

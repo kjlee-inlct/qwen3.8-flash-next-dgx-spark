@@ -47,23 +47,39 @@ def probe() -> int:
                if not shutil.which(name)]
     if missing:
         issues.append("MISSING_SYSTEMD_TOOLS:" + ",".join(missing))
+    linger_state = "NOT_CHECKED"
+    manager_state = "NOT_CHECKED"
     if not issues:
         try:
             linger = command("loginctl", "show-user", str(os.getuid()),
                              "--property=Linger", "--value")
-            if linger.returncode != 0 or linger.stdout.strip().lower() not in (
-                "yes", "linger=yes"
-            ):
-                issues.append("USER_LINGER_NOT_ENABLED_OR_UNKNOWN")
+            reported = linger.stdout.strip().lower()
+            if linger.returncode != 0:
+                linger_state = "UNKNOWN"
+                issues.append("USER_LINGER_QUERY_FAILED")
+            elif reported in ("yes", "linger=yes"):
+                linger_state = "ENABLED"
+            elif reported in ("no", "linger=no"):
+                linger_state = "DISABLED"
+                issues.append("USER_LINGER_DISABLED")
+            else:
+                linger_state = "UNKNOWN"
+                issues.append("USER_LINGER_RESPONSE_UNRECOGNIZED")
             manager = command("systemctl", "--user", "show",
                               "--property=Version", "--no-pager")
-            if manager.returncode != 0 or not any(
+            if manager.returncode == 0 and any(
                 line.startswith("Version=") and line[len("Version="):].strip()
                 for line in manager.stdout.splitlines()
             ):
+                manager_state = "AVAILABLE"
+            else:
+                manager_state = "UNAVAILABLE"
                 issues.append("USER_SERVICE_MANAGER_UNAVAILABLE")
         except (OSError, subprocess.TimeoutExpired):
             issues.append("USER_SERVICE_INSPECTION_FAILED")
+    print("M1_BG_USER_LINGER=" + linger_state)
+    print("M1_BG_USER_MANAGER=" + manager_state)
+    print("M1_BG_LINGER_POLICY_CHANGE=NOT_PERFORMED")
     print("M1_BG_SUPERVISOR_IMPLEMENTED=NO")
     print("M1_BG_DOCKER_ACTION=NONE")
     print("M1_BG_USER_SERVICE_MUTATION=NONE")

@@ -1,3 +1,16 @@
+> **2026-10-14 ACTUAL DGX BACKGROUND P1a HOST PROBE: SAFELY BLOCKED**
+> At source `9df9d0823762b16a1316847b7804e178f8b1a494` on
+> the original Git checkout, operator executed read-only plan/probe.
+> `M1_BG_HOST_PROBE=BLOCKED` with
+> `M1_BG_BLOCK_REASON=USER_LINGER_NOT_ENABLED_OR_UNKNOWN`.
+> No Docker/systemd user-service/linger mutation performed; background
+> worker and start/stop remain NOT_IMPLEMENTED. This old combined
+> reason does not by itself prove `Linger=no` rather than query failure.
+> New source distinguishes DISABLED / UNKNOWN; read-only DGX recheck
+> is necessary. Operator must explicitly authorize any persistent
+> `loginctl enable-linger` change; do not silently change host policy.
+> [Physical P1a evidence and safe next steps](MAZINB-M1-WIZARD.md).
+
 > **2026-10-14 P1a BACKGROUND SUPERVISOR HOST PROBE — SOURCE ONLY:**
 > Source commit `38560326631d612c45ee0d1cde19dd9da927e62d`
 > adds Wizard Benchmark **11 plan** and **12 host probe**,

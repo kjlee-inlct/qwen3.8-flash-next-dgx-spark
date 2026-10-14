@@ -26,6 +26,19 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## Actual DGX background probe outcome (2026-10-14)
+
+- Operator ran P1a plan and probe on source `9df9d08` in the
+  original canonical checkout. Admission returned **BLOCKED**:
+  `USER_LINGER_NOT_ENABLED_OR_UNKNOWN`; no Docker or service mutation.
+- The revision of P1a used on DGX did not distinguish a confirmed
+  `no` answer from an unrecognized/failed linger query. New source
+  separates `USER_LINGER_DISABLED`, `USER_LINGER_QUERY_FAILED` and
+  `USER_LINGER_RESPONSE_UNRECOGNIZED` with explicit status output.
+- **Never automatically enable lingering**. Linger changes are
+  persistent user-host policy and need separate owner authorization.
+- Non-lingering user units may be terminated after the last logout;
+  a passing user-manager query while signed in is not enough.
 ## Background supervisor capability probe — P1a (source only)
 
 - Wizard Benchmark **11** prints a plan and **12** inspects (read-only)

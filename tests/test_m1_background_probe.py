@@ -77,7 +77,35 @@ class M1BackgroundHostProbeTests(unittest.TestCase):
                 mock.patch.object(PROBE, "command", side_effect=command):
             code, output = self.invoke()
         self.assertEqual(code, 2)
-        self.assertIn("USER_LINGER_NOT_ENABLED_OR_UNKNOWN", output)
+        self.assertIn("USER_LINGER_DISABLED", output)
+        self.assertIn("M1_BG_USER_LINGER=DISABLED", output)
+        self.assertIn("M1_BG_USER_MANAGER=AVAILABLE", output)
+        self.assertIn("M1_BG_LINGER_POLICY_CHANGE=NOT_PERFORMED", output)
+
+    def test_unrecognized_linger_is_distinct_from_disabled(self):
+        def command(*argv):
+            value = "maybe\n" if argv[0] == "loginctl" else "Version=255\\n"
+            return subprocess.CompletedProcess(argv, 0, stdout=value, stderr="")
+        with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/tool"), \
+                mock.patch.object(PROBE, "command", side_effect=command):
+            code, output = self.invoke()
+        self.assertEqual(code, 2)
+        self.assertIn("M1_BG_USER_LINGER=UNKNOWN", output)
+        self.assertIn("USER_LINGER_RESPONSE_UNRECOGNIZED", output)
+        self.assertNotIn("USER_LINGER_DISABLED", output)
+
+    def test_failed_linger_query_is_not_misreported_as_disabled(self):
+        def command(*argv):
+            if argv[0] == "loginctl":
+                return subprocess.CompletedProcess(argv, 1, stdout="", stderr="unavailable")
+            return subprocess.CompletedProcess(argv, 0, stdout="Version=255\n", stderr="")
+        with mock.patch.object(PROBE.shutil, "which", return_value="/usr/bin/tool"), \
+                mock.patch.object(PROBE, "command", side_effect=command):
+            code, output = self.invoke()
+        self.assertEqual(code, 2)
+        self.assertIn("M1_BG_USER_LINGER=UNKNOWN", output)
+        self.assertIn("USER_LINGER_QUERY_FAILED", output)
+        self.assertNotIn("USER_LINGER_DISABLED", output)
 
     def test_dead_user_manager_blocks(self):
         def command(*argv):
