@@ -180,7 +180,7 @@ def systemd_check(home: Path) -> None:
     found_files = []
     for root in dirs:
         if root.is_dir():
-            for candidate in root.glob("*mazinb*"):
+            for candidate in root.rglob("*mazinb*"):
                 if DEDICATED_UNIT.fullmatch(candidate.name):
                     found_files.append(str(candidate))
     require(not (system_found or user_found or found_files),
