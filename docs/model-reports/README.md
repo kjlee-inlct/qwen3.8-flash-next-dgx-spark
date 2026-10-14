@@ -1,3 +1,14 @@
+## 2026-10-15 — H6 protection-stop kernel evidence archived, benchmark still NOT_MEASURED
+
+Owner-captured local kernel window 2026-10-14 23:18:03–23:29:55 KST
+includes H6 protection STOP 23:28:55. New nonempty
+`kernel-window.log` and six earlier files passed on-host SHA256.
+No lines matched selected RM/Xid/OOM expressions; this does NOT
+independently prove fault-free NVIDIA RM or justify a model restart.
+H6 remained `failed_stopped` / NOT_READY / NOT_MEASURED;
+no independent off-host backup.
+[Physical evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-14 — Actual H6 first GPU load MEMORY-PROTECTION STOP; benchmark NOT_MEASURED
 
 The operator physically ran approved Wizard **Benchmark 5→20** at

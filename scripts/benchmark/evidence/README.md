@@ -1,3 +1,15 @@
+## 2026-10-15 — H6 kernel window capture VERIFIED (no selected RM/OOM matches)
+
+[H6 physical watchdog-stop and amended kernel-window record](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):
+H6 watchdog was triggered by `noncmafree < 2GiB` and host-wide
+`swapgrowth >= 256MiB` on 5 consecutive polls. The KST kernel interval
+23:18:03–23:29:55 was subsequently saved as `kernel-window.log`
+using interactive sudo; seven on-host evidence files passed SHA256.
+Selected `NVRM/Xid/NV_ERR_NO_MEMORY/OOM` regexes had no matches in
+the captured file, but RM safety and completeness of broader kernel
+review are **NOT** established. No H6 READY/llama-benchy, no
+relaunch/deletion permission; no off-host backup verification.
+
 ## PHYSICAL_M1_JOURNAL_RECONCILE=PASS_RECORDED_STOPPED — 2026-10-14
 
 Actual owner-operated Wizard 5 → 10 returned successful reconciled stopped

@@ -1,5 +1,64 @@
 # Actual DGX H6 M1 memory-protection stop — 2026-10-14
 
+## 2026-10-15 — Physical kernel-window capture complete; known RM/OOM strings not found
+
+**Operator-provided physical DGX console** (not a GitHub CI result): after
+the earlier noninteractive sudo failure, the operator used **interactive
+`sudo -v`**, then ran
+`journalctl _TRANSPORT=kernel --since ... --until ... --no-pager
+--quiet --output=short-iso-precise`. The bounds were computed rather
+than guessed: `kernel_since` from archived `active.json`, and the UTC
+`UPDATED_AT` in `runtime-stop.env` plus 60 seconds converted to the
+host-local time zone. Actual printed bounds:
+`2026-10-14 23:18:03` to `2026-10-14 23:29:55` (KST).
+The watchdog stop at `2026-10-14 23:28:55` KST falls inside.
+
+- Original evidence archive:
+  `/home/inlc/h6-m1-evidence-20261014.dvQmt6eq`.
+- Existing six archived files were reverified using
+  `sha256sum -c SHA256SUMS.txt` **before** kernel collection: six PASS.
+- New **nonempty** `kernel-window.log` saved inside the same on-host
+  archive. The operator added its checksum to `SHA256SUMS.txt`,
+  reran `sha256sum -c`, and observed all **seven** PASS.
+  Individual file digests and the raw kernel text were **not** pasted
+  into chat or GitHub; do not fabricate them.
+- `grep -Ein 'NVRM|Xid|NV_ERR_NO_MEMORY|_memdescAllocInternal|oom-killer|out of memory'
+  kernel-window.log` printed **no matching lines**. Thus the result
+  is `KERNEL_WINDOW_CAPTURED_HASH_VERIFIED` and
+  `SELECTED_NVRM_XID_OOM_PATTERNS=ZERO_MATCHES_IN_CAPTURE`,
+  **not** `NVIDIA_RM_ERRORS_ABSENT`. Journal completeness across
+  the time window, potentially different fault text, and other
+  device-allocation failures have **not** been independently reviewed.
+- The operator printed `H6_MODEL_RESTARTED=NO`; no Docker/model
+  start, stop, delete, source change, or watchdog tuning occurred
+  during evidence capture.
+
+**Important qualification:** previous lines below saying
+`NOT_CAPTURED` refer to the *earlier failed `sudo -n` attempt* and are
+historical, superseded with respect to archive presence only.
+`WATCHDOG_TRIGGER_PATH=LOW_FREE_AND_SWAP_GROWTH` remains physically
+supported by monitor events, but **false-positive versus necessary
+protection is UNRESOLVED**. The high non-CMA MemAvailable (~27–28 GiB)
+and large host-wide swap-growth (~3.4 GiB) cannot prove a GPU memory
+allocation succeeded or that host memory was safe at every point.
+`API_READY=NOT_OBSERVED`,
+`INFERENCE_SMOKE=NOT_COMPLETED`,
+`BENCHMARK=NOT_MEASURED`,
+`OFF_HOST_BACKUP=NOT_VERIFIED`,
+`RELAUNCH_AUTHORIZED=NO`,
+`RETIREMENT_AUTHORIZED=NO`.
+Do not touch the stopped H6 trial, historical Docker references,
+H7/H20 dependencies, or PR #261/#259 merge status.
+
+**Next read-only discriminator:** review non-sensitive metadata about
+the captured kernel file (line count, first/last timestamps, boot IDs
+or journal retention where available), and perform a broader *inspection*
+of full log text for `nvidia`, `alloc`, `fail`, `fault`, `memory`,
+`gpu`, `iomm` / `smmu`, not a claim of zero errors solely because
+the selected six patterns had no hits. Independent off-host backup
+with reverified hashes remains a separate prerequisite for later
+checkpoint retirement.
+
 ## 2026-10-15 — Physical read-only forensic PASS; precise watchdog path classified
 
 **Evidence class:** operator-pasted actual DGX console; source at audit

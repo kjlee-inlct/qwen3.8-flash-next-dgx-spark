@@ -1,3 +1,28 @@
+## 2026-10-15 — H6 kernel window physically archived; selected RM/OOM strings absent
+
+Owner-operated DGX evidence collection used interactive sudo and
+verified a nonempty local kernel journal interval
+**2026-10-14 23:18:03–23:29:55 KST** (stop was 23:28:55 KST).
+The original six forensic evidence files and new
+`kernel-window.log` passed all **seven** entries in the on-host
+`SHA256SUMS.txt` check at
+`/home/inlc/h6-m1-evidence-20261014.dvQmt6eq`.
+The specified `NVRM|Xid|NV_ERR_NO_MEMORY|_memdescAllocInternal|oom-killer|out of memory`
+grep emitted **zero matches**. This is a *captured-window limited
+negative pattern search*, NOT proof of healthy NVIDIA RM or that
+all kernel error text/coverage has been exhaustively reviewed.
+The preceding `NOT_CAPTURED` statements below describe an earlier
+failed `sudo -n` attempt, now superseded **for capture status only**.
+Known H6 low-non-CMA-Free/swap-growth watchdog trigger remains
+confirmed; false-positive versus necessary protection remains
+`INCONCLUSIVE`. Original run source `a30fe34b...`; physical
+read-only forensic audit source `2e61645c...`; follow-up source
+hardening head `6936f8c9...` (CI PASS, **not yet physically
+requalified by the new script**). No model restart, benchmark, deletion,
+protection relaxation or off-host backup verification. PR #261 and
+PR #259 remain Draft/unmerged.
+[Full selective evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 PHYSICAL read-only forensics: watchdog trigger confirmed; RM unresolved
 
 At exact audit source `2e61645c59dc005c474139bde1b3313ff62728b8`
