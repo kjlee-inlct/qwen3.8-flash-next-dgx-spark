@@ -26,6 +26,17 @@
 
 # Modular DGX Spark Wizard: architecture and migration ledger
 
+## P1c synthetic supervisor contract — no host effects
+
+- Wizard Benchmark 14 only executes `m1-supervisor-protocol.py simulate`
+  with local, injected in-memory values. No real Docker/systemd process
+  calls, no user service, no persistent state or model start.
+- Exact-ID journal/watchdog/owner token, PID start ticks and systemd
+  invocation binding guard the simulated state machine. Explicit STOP
+  approval and benchmark lease are mandatory; lost supervisor goes
+  to RECOVERY_REQUIRED, not unverified STOP.
+- This is design + synthetic tests only. The actual DGX remains
+  `Linger=no` and background Worker remains NOT_IMPLEMENTED.
 ## P1b physical read-only reserved unit result (2026-10-14)
 
 - At source `e542f99`, operator synchronized original sole worktree

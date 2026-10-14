@@ -1,5 +1,35 @@
 # mazinb M1: Wizard-owned isolated session — source implementation
 
+## P1c source-only supervisor protocol simulator — NOT A WORKER
+
+Wizard Benchmark **14** and `scripts/runtime/m1-supervisor-protocol.py simulate`
+exercise only in-memory synthetic values; `plan` prints the contract.
+Neither command accesses Docker, systemd, host PID tables, persistent
+journals, GPU, user-linger policy or the filesystem beyond loading Python
+source. No background Worker, service unit, start or stop is implemented.
+
+The pure transition protocol requires an immutable owner tuple of the
+exact full trial and predecessor Docker IDs, owner token, unit identity,
+supervisor PID **and its start ticks**, systemd invocation ID, matching
+synthetic journal token/candidate and exact-ID watchdog arm.
+State transitions are `CREATED → ARMED → RUNNING → STOP_REQUESTED →
+STOPPED/FAILED_STOPPED`, and `SUPERVISOR_LOST → RECOVERY_REQUIRED →
+STOPPED/FAILED_STOPPED`. Transitions accept **injected evidence only**;
+they are not commands to start/stop anything.
+
+Stop requires explicit approval, free benchmark lease, a live pinned
+watchdog/heartbeat and supervised candidate. Finalization requires
+synthetic exact-stop acknowledgement, proven Docker exit, ended
+watchdog evidence and an available lease. Reconciliation after owner
+loss must not infer STOP from a clean Docker exit; an unmarked exit
+retains `UNDETERMINED`. PID reuse, token/invocation drift, stale
+watchdogs, and illegal event replay fail closed.
+
+**Qualification:** SOURCE_ONLY until source CI passes; no real user
+service deployed and no DGX live, logout persistence or host stability
+qualification performed. Independently observed `Linger=no` continues
+to block actual durable background admission and no policy mutation
+is authorized.
 ## Physical P1b user-unit status confirmed (2026-10-14) — NO WORKER
 
 On the single canonical checkout, source SHA
