@@ -38,7 +38,11 @@ def inventory(ids: str, raw: str) -> list[dict]:
         obj = by_id[cid]
         name = obj.get("Name")
         if name == PROTECTED_NAME:
-            continue
+            # Do not silently omit protected managed containers from inventory.
+            # Their mounts are reported explicitly but never removal candidates.
+            protected = True
+        else:
+            protected = False
         mounts = obj.get("Mounts")
         if not isinstance(mounts, list):
             raise ValueError("missing mounts on " + cid)
@@ -52,7 +56,7 @@ def inventory(ids: str, raw: str) -> list[dict]:
             status = (obj.get("State") or {}).get("Status")
             output.append({"id": cid, "name": name, "status": status,
                            "hybrid_mounts": relevant,
-                           "protected": False,
+                           "protected": protected,
                            "review_required": True})
     return output
 
