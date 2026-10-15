@@ -1,3 +1,30 @@
+## 2026-10-15 — Exact 17-container local archive preparation
+
+Actual DGX operator read `docker logs --timestamps` from all 17 exited
+Hybrid research containers: total **1,351,619 bytes**, **FAILED=0**.
+Direct access to Docker's root-owned JSON log paths returned
+`NOT_ACCESSIBLE`; this is not evidence of missing Docker logs.
+
+A new **archive-only** operator tool,
+`python3 scripts/model/archive-hybrid-docker-evidence.py`, pins all 17
+observed full 64-hex Docker IDs, requires the inventory to match exactly and
+all candidates to be exited/unprotected, captures bounded rendered Docker
+logs and selected mount/state metadata (not raw Docker inspect/environment),
+writes 34 checksummed files plus SHA256SUMS in a private state folder, verifies
+all digests, and rechecks inventory before publishing. Destination:
+`~/.local/state/qwen38-spark/retirement-archives/hybrid-docker-17-20261015`.
+Destination-exists or drift blocks; it never invokes Docker deletion or
+checkpoint removal. The resulting archive is **local and potentially contains
+sensitive log content**: do NOT add raw logs to Git without redaction/review.
+
+Host execution of the new archival tool is NOT_OBSERVED. The prior original
+H6 archive (7/7 PASS) and six-container archive (7/7 PASS) remain preserved,
+and the sanitized 17-ID inventory is recorded in the dedicated research
+evidence document. Git preservation of sanitized study findings is distinct
+from backing up every raw Docker log. Hybrid weights may be locally retired
+per explicit operator policy, but removal requires its own reviewed and
+authorized exact-target operation.
+
 ## 2026-10-15 — Operator clarified local Hybrid retirement scope
 
 Operator states that local Hybrid research artifacts/checkpoints may be deleted,
