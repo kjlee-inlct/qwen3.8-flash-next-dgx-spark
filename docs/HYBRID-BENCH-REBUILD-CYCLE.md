@@ -1,3 +1,21 @@
+## 2026-10-15 — Exact six-container removal PLAN (source only, no deletion)
+
+Operator's combined Hybrid preflight on the DGX confirmed 7/7 SHA PASS for
+both local evidence bundles and 6/6 precise exited identities. H3, H4 and
+H5 each have 7 registry/Docker reference observations; H6 has 9 including
+H7/H20 aliases. This is **30 observations, not 30 separate Docker objects**.
+Off-host backup remains NOT_VERIFIED; all objects remain intact.
+
+`python3 scripts/model/hybrid-container-retirement-plan.py` now provides an
+**independent read-only full-Docker-ID inventory** for exactly the six old
+Hybrid containers. It checks full 64-character pinned IDs, exact names,
+exited/not-running state, disabled AutoRemove/restart, and Docker mounts for
+other objects. It emits `HYBRID_CONTAINER_DELETE=NOT_AUTHORIZED` regardless
+of result and does NOT execute `docker rm`. This source-only plan still needs
+physical DGX execution; no deletion, registry edit, model cleanup, or PR merge
+was performed. Plan PASS is necessary but insufficient for container removal;
+external evidence redundancy and explicit separate approval are still required.
+
 ## 2026-10-15 — Combined read-only Hybrid retirement preflight
 
 Actual DGX operator ran `verify-hybrid-retirement-evidence.py`: local original H6
