@@ -1,3 +1,20 @@
+## 2026-10-15 — H6 second-shard-pass watchdog STOP, still NOT_MEASURED
+
+Real read-only `monitor.log` + `docker.log` evidence:
+a second `0/81` safetensors pass was underway around
+23:28:46 KST with an EXT4/173.59GiB checkpoint
+auto-prefetch **disabled INFO**. Five 2-second
+watchdog protection warnings from 23:28:47–55 were
+followed by vLLM API graceful shutdown messaging at
+23:28:58. Non-CMA Free reached 726MiB; swap growth
+3427MiB, with >28GiB reclaimable Available reported.
+No recorded NVRM/Xid/OOM text in 13 physical kernel events,
+but this cannot certify an allocation would have succeeded
+without protection. No API READY/inference or benchmark;
+no physical relaunch, guard change, cleanup or off-host
+backup qualification.
+[Detailed physical correlation](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 all 13 kernel rows inspected; benchmark NOT_MEASURED
 
 Seven on-host archived evidence files passed SHA256 again. All 13

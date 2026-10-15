@@ -1,5 +1,109 @@
 # Actual DGX H6 M1 memory-protection stop — 2026-10-14
 
+## 2026-10-15 — Physical H6 monitor/Docker last-loading-window cross-check (7/7 archive PASS)
+
+**Evidence type:** real owner-pasted **read-only** analysis of the
+unchanged on-host `monitor.log` (270 lines, regex matches 17) and
+`docker.log` (336 lines, regex matches 225). All seven archived files
+passed `sha256sum -c SHA256SUMS.txt` again before inspection.
+The operator's script displayed **only the last 35 regex matches** per
+file, truncating lines to 400 characters. This is a selective transcript,
+NOT full Docker traceback or proof that other unprinted log lines
+contained no diagnostic errors.
+
+**Cross-clock interpretation:** monitor timestamps are **KST (+09:00)**,
+while vLLM's `docker.log` timestamps `10-14 14:28:46/58` are
+**UTC as reconciled with the monitor/stop UTC marker**, thus
+23:28:46/58 KST. The printed application log format itself has no
+explicit timezone offset, so this mapping is corroborated by the
+known stop/sequence, not independently certified by the log prefix.
+
+| Actual H6 timeline (KST) | Observed contents |
+|---|---|
+| 23:18:04 | `monitor started`, `mode=protect`; `noncma-free=2GiB`, `free-gate=10GiB`, `swap-growth=256MiB`, `swap-available-gate=0GiB`, `swapfree=8GiB`. |
+| 23:19:05–23:28:13 | Ten recorded healthy heartbeats (roughly 61 s intervals). |
+| 23:28:13 | Last healthy heartbeat: non-CMA Available **42,581 MiB**, non-CMA Free **4,025 MiB**, SwapFree **143,030 MiB**. |
+| 23:28:46 | `(Worker pid=486)` emitted **`Auto-prefetch is disabled`**: EXT4 is not recognized as NFS/Lustre and checkpoint size **173.59 GiB** exceeds 90% of reported available RAM **27.19 GiB**. This is an INFO message about prefetch admission, **not an OOM/CUDA error**. Second `Loading safetensors checkpoint shards: 0/81` pass is visible nearby. |
+| 23:28:47 | `protect=1/5`; non-CMA Available **27,809 MiB**, Free **1,795 MiB**, swap-growth **3,427 MiB**, SwapFree **142,999 MiB**. |
+| 23:28:49, :51, :53 | `protect=2/5,3/5,4/5`; non-CMA Free **942, 791, 804 MiB**. |
+| 23:28:55 | `protect=5/5`; non-CMA Free **726 MiB**, non-CMA Available **28,282 MiB**, SwapFree **143,000 MiB**, swap-growth **3,427 MiB**. Monitor printed `PROTECT stopping qwen38-hybrid-h6-m1-20261014141803-69ef3492 gracefully`. |
+| 23:28:55 | Exact-ID protected `runtime-stop.env` time `2026-10-14T14:28:55Z`. |
+| 23:28:58 | vLLM `(APIServer pid=55)` logged `[shutdown] Process manager: send sigterm to process EngineCore` and a subsequent Python traceback. The excerpt does **not** include the traceback's terminal exception text; do not label it a spontaneous CUDA failure or independently prove its final exception from this excerpt. |
+| 23:29:11.449–.484 | Existing 13-line kernel archive's Docker veth teardown events (about 16.5 s after 23:28:55). |
+
+**Direct observed change:** From the 23:28:13 heartbeat to
+23:28:47 warning (**34 seconds**), non-CMA Available decreased
+**42,581 → 27,809 MiB** (**14,772 MiB**), while non-CMA Free
+decreased **4,025 → 1,795 MiB** (**2,230 MiB**).
+By 23:28:55, non-CMA Free was **726 MiB**; from 23:28:13
+this is a total fall of **3,299 MiB**. The higher
+`MemAvailable` is reclaimability estimation, not guaranteed
+contiguous/unified GPU allocation headroom.
+
+**Watchdog causal rule, source-identity checked:** GitHub
+`scripts/runtime/monitor-runtime.sh` has identical Git blob
+`017451b75b69da00bb10d9aec591a161a56862dc`
+at the actual physical run commit
+`a30fe34b8c2fd3ad511d79876ac95ad69ac32523`
+and this documentation's parent
+`ca1cb0c9e1855d8dac22d4247f7b28b43275e07a`.
+The H6 controller `scripts/wizard/hybrid-h6-m1.py`
+likewise is identical, blob
+`19dd0823dc71d468890e334e4d484a34a1e1f56d`.
+The monitor samples host `MemFree - CmaFree`,
+`MemAvailable - CmaFree`, and **host-wide**
+initial-minus-current `SwapFree`. Under the historical
+H6 `swap-pressure-available-gib=0` behavior, consecutive
+`noncmafree <2GiB && swapgrowth >=256MiB` triggers the
+stop even with non-CMA Available >10GiB. Since SwapFree
+was already approximately **3.4 GiB below** its initial
+~146,426MiB level at the 23:28:13 heartbeat, this is an
+**accumulated swap-activity arm** plus a subsequent
+low-immediately-Free crossing, **not proof of an abrupt swap
+spike at 23:28:47**. Host-wide swap consumption cannot be
+attributed uniquely to H6.
+
+**Source stop ordering:** the watchdog writes its
+`PROTECT stopping` line, runs `docker logs --tail 1000`
+(which accounts for application logs duplicated into
+`monitor.log`), pins/rechecks the exact Docker ID, writes
+`runtime-stop.env`, and issues
+`docker stop --timeout 30`. In the preserved Docker log,
+`[shutdown] ... SIGTERM` appears ~3s after the stop marker,
+consistent with a watchdog-triggered graceful shutdown;
+the precise Docker daemon invocation time is not
+independently timestamped. Some later shard progress rows
+(6/81→9/81) are printed **after** the API shutdown line
+in the saved Docker stream; vLLM progress-bar updates /
+concurrent stdout may be buffered or interleaved and
+must not be used as proof that model loading persisted
+after container termination. Previously observed
+81/81 first-pass success does not mean H6 was READY.
+
+**Final bounded attribution:**
+`DIRECT_STOP=CONFIRMED_WATCHDOG_MEMORY_PROTECTION`;
+`SECOND_SHARD_PASS_ACTIVE_AT_STOP=SUPPORTED_BY_LOG`;
+`PREFETCH_INFO_MESSAGE=NOT_CAUSAL_ERROR_PROVEN`;
+`API_SHUTDOWN_AFTER_WATCHDOG=OBSERVED`;
+`KERNEL_13_LINES=DOCKER_VETH_ONLY_NO_RECORDED_RM_ERROR`;
+`NVIDIA_RM_SAFETY=UNDETERMINED`;
+`WAS_WATCHDOG_UNNECESSARY=UNDETERMINED`;
+`H6_API_READY=NOT_OBSERVED`;
+`H6_BENCHMARK=NOT_MEASURED`;
+`OFF_HOST_BACKUP=NOT_VERIFIED`;
+`H6_RELAUNCH_AUTHORIZED=NO`;
+`WATCHDOG_RELAXATION_AUTHORIZED=NO`;
+`DOCKER_CHECKPOINT_CLEANUP_AUTHORIZED=NO`.
+
+**Next safe read-only discriminator:** inspect
+`docker.log` lines ~235–336 *without regex truncation*,
+especially the complete traceback tail (~255–328),
+and `monitor.log` 13–25 (actual STOP and beginning of
+copied Docker output), verifying checksums first.
+Do not copy credentials. If additional physical diagnostics
+are proposed, they must not start Docker, load GPU, delete
+models or change protection policy.
+
 ## 2026-10-15 — Complete physical H6 kernel journal reviewed, all 13 lines
 
 **Evidence class:** actual owner-pasted DGX stdout, from an unchanged

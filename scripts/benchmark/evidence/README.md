@@ -1,3 +1,19 @@
+## 2026-10-15 — H6 protected-stop Docker/monitor time correlation
+
+[Detailed physical H6 forensic event chronology](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):
+seven owner-archived files SHA256 PASS; monitoring healthy at
+23:28:13 KST, second 81-shard loading pass and
+auto-prefetch disabled INFO at 23:28:46, memory-protect
+1/5–5/5 at 23:28:47–55 (Free down to 726MiB,
+swap-growth 3427MiB), graceful stop requested at 23:28:55,
+vLLM API shutdown at 23:28:58, and network teardown
+at 23:29:11. The monitor and H6 controller Git blobs
+are exactly unchanged from physical-run source to current
+audit head. H6 direct stop cause established; NVIDIA
+allocation health and protection necessity inconclusive;
+no READY, inference, benchmark, restart, threshold
+weakening, deletion or merge authorized.
+
 ## 2026-10-15 — Full H6 kernel window 13/13 reviewed: Docker veth lifecycle only
 
 [Detailed H6 physical kernel transcript](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md)

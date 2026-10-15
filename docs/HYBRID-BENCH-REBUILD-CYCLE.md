@@ -1,3 +1,38 @@
+## 2026-10-15 — H6 terminal cross-check: watchdog stop during second shard pass
+
+Actual operator read-only analysis, seven on-host SHA256 entries
+PASS. `monitor.log`: 270 lines/17 selected regex matches.
+`docker.log`: 336 lines/225 regex matches (only last 35 printed,
+400 chars each; full traceback not yet reviewed). Last healthy
+heartbeat at **23:28:13 KST** had non-CMA Available
+**42,581 MiB**, Free **4,025 MiB**, SwapFree **143,030 MiB**.
+At **23:28:46 KST** (`14:28:46` vLLM UTC timestamp), Worker
+logged EXT4/checkpoint **173.59 GiB**/RAM **27.19 GiB**
+auto-prefetch **disabled INFO**, with a new 0/81 checkpoint-shard
+pass. At **23:28:47**, Available fell to **27,809 MiB**
+(−14,772 MiB in 34s), Free **1,795 MiB**, and host-wide
+swap-growth **3,427 MiB**; protection 1/5 to 5/5 ran
+23:28:47–55 (last Free **726 MiB**), followed by
+`PROTECT stopping` **23:28:55**. API Server shutdown
+`send sigterm to EngineCore` at **23:28:58 KST**;
+Docker veth teardown **23:29:11 KST**. Exact physical
+source `a30fe34...` and audited head `ca1cb0c9...`
+have **identical** monitor script blob
+`017451b75b69da00bb10d9aec591a161a56862dc`
+and H6 controller blob
+`19dd0823dc71d468890e334e4d484a34a1e1f56d`.
+Host-wide swap usage was already accumulated (~3.4GiB)
+by last healthy heartbeat; crossing the 2GiB non-CMA
+immediately-Free threshold armed the established legacy
+swap-growth protection. Model loader INFO is not a
+GPU allocation failure; truncated Python traceback
+does not establish an independent model crash.
+Watchdog **direct stop reason CONFIRMED**, necessity/false
+positive and NVIDIA RM allocation safety **INCONCLUSIVE**;
+no H6 READY/bench or independently verified off-host backup.
+No GPU rerun, guard relaxation, deletion, or PR merge.
+[Detailed forensic correlation](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 kernel all 13 physical lines reviewed: Docker veth only
 
 Owner again confirmed **7/7 on-host SHA256 PASS** and pasted all
