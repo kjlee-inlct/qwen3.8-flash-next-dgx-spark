@@ -1,5 +1,104 @@
 # Actual DGX H6 M1 memory-protection stop — 2026-10-14
 
+## 2026-10-15 — Complete CR/LF-aware Docker tail audit: traceback and second shard pass
+
+**Physical, read-only operator evidence:** all **seven** on-host H6
+evidence archive files passed `sha256sum -c SHA256SUMS.txt` again,
+then Python read the unchanged archived `docker.log` as bytes:
+`raw.decode("utf-8", errors="replace").splitlines()`.
+The actual output was:
+
+```text
+RAW_LF_COUNT=244
+RAW_CR_COUNT=97
+PYTHON_LOGICAL_LINES=336
+H6_LOG_READ_ONLY=YES
+```
+
+This confirms that `\r`-based safetensors/tqdm progress display
+explains why the earlier `nl -ba`/newline-only row numbers
+did not match Python `splitlines()` rows. The 97 CRs,
+244 LFs and 336 universal-newline logical rows are **actual**
+recorded counts; do not assume the two delimiter counts can be
+summed without accounting for CRLF pairs or the final terminator.
+The earlier shell view of `nl` line 240 ending in
+`KeyboardInterrupt: terminated` was not Python logical line 240.
+
+**Python-indexed definitive final sequence:**
+
+| Python logical row(s) | Observed vLLM/Worker record |
+|---|---|
+| 225–232 | Worker safetensors **78/81 → 81/81** in first pass. |
+| 234 | `2026-10-14 14:28:33`: first weight load took **577.40 seconds**. |
+| 235–240 | FP4/ModelOpt warnings and engine backend/fusion INFO; not independent OOM diagnostics. |
+| 241–242 | `14:28:46`: EXT4, **173.59 GiB** checkpoint, **27.19 GiB** available RAM; auto-prefetch disabled INFO. |
+| 243–254 | New safetensors **0/81 → 5/81** second pass (progress elapsed time 0–10s). |
+| 255 | API at `14:28:58`: `[shutdown] Process manager: send sigterm to process EngineCore`. |
+| 256–325 | One continuous API-server Python traceback through engine initialization: `build_async_engine_client`, `AsyncLLM`, `AsyncMPClient`, `sync_input_socket.poll` and ZeroMQ `zmq_poll`. |
+| 326 | vLLM API entry `entry.py`, function `_interrupt_init`, line 171. |
+| 327–328 | `raise KeyboardInterrupt("terminated")`; final exception `KeyboardInterrupt: terminated`. |
+| 329–336 | Worker safetensors second-pass **6/81 → 9/81** progress output interleaved **after traceback in the captured stream** (elapsed progress duration up to 22s). |
+
+**Cross-event alignment (vLLM timestamps UTC, monitor KST):**
+first pass 81/81 and loader 577.40s at ~**23:28:33 KST**;
+new pass and prefetch INFO ~**23:28:46**;
+watchdog `protect=1/5` **23:28:47**;
+watchdog `protect=5/5` and pinned stop marker
+**23:28:55**; API logs shutdown and SIGTERM to EngineCore
+**23:28:58**; Docker veth teardown **23:29:11**.
+This clock alignment is consistent with the exact
+`2026-10-14T14:28:55Z` stop marker. The final
+`KeyboardInterrupt` traceback itself has no embedded
+wall-clock time.
+
+**Interpretation:** `KeyboardInterrupt("terminated")` is
+raised inside vLLM's interruption handler while the API
+waited on an EngineCore initialization socket. This
+supports *external termination of an as-yet-unready server*
+after the independently confirmed protective watchdog stop,
+**not a newly established spontaneous GPU allocation,
+CUDA or ModelOpt exception**. The later 6/81–9/81 progress
+messages may reflect buffering/interleaving **or** worker
+activity during Docker's noninstant graceful shutdown;
+the underlying worker execution timestamps were not
+captured, so neither possibility is proven and worker
+activity *after final container exit* must not be claimed.
+The existence of first-pass 81/81 does not prove that all
+model components finished loading or that API READY occurred.
+
+**Prior source CI correction independently VERIFIED:**
+GitHub HEAD `bedb80cf05fc115aa670e8aaab3c2274473e73bb`
+has **Push #38662904456 = SUCCESS** and
+**PR #38662909227 = SUCCESS**, both pinned to that SHA.
+This resolves the earlier benchmark-document cross-category
+reference failure at `cc5bdfa3...`. CI is synthetic/source
+qualification, not a second physical H6 run. This new
+evidence commit must have its own CI result checked separately.
+
+**Safety/state:** `H6_DIRECT_STOP=CONFIRMED_WATCHDOG_MEMORY_PROTECTION`;
+`DOCKER_CR_LF_COUNTS_VERIFIED=YES`;
+`PYTHON_TRACEBACK=LINES_256_TO_328`;
+`TRACEBACK_TERMINAL_EXCEPTION=KeyboardInterrupt_terminated`;
+`SECOND_SHARD_PASS_INCOMPLETE=YES`;
+`GPU_RM_FAULT_IN_CAPTURE=NOT_OBSERVED`;
+`GPU_RM_HEALTH=INCONCLUSIVE`;
+`WATCHDOG_NECESSITY=INCONCLUSIVE`;
+`H6_READY=NOT_OBSERVED`;
+`H6_BENCHMARK=NOT_MEASURED`;
+`OFF_HOST_BACKUP=NOT_VERIFIED`;
+`H6_RELAUNCH=NOT_AUTHORIZED`;
+`PROTECTION_WEAKENING=NOT_AUTHORIZED`;
+`DOCKER_CHECKPOINT_DELETION=NOT_AUTHORIZED`;
+`DRAFT_PR_MERGE=NOT_AUTHORIZED`.
+
+**Next safe direction:** investigate host-wide swap
+attribution and peak unified-memory residency through
+existing archived telemetry/source analysis before
+proposing any safer alternate checkpoint-loading policy.
+No new GPU start or watchdog changes without explicit
+owner approval. The complete on-host Docker raw evidence
+is preserved; it is not uploaded in full to GitHub.
+
 ## 2026-10-15 — SIGTERM-associated vLLM KeyboardInterrupt; console newline normalization needed
 
 **Newest actual owner-operated DGX read-only check** on preserved,

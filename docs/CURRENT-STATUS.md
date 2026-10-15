@@ -1,3 +1,38 @@
+## 2026-10-15 — Physical H6 Docker tail fully normalized: CR/LF counts and exception resolved
+
+Actual DGX operator confirmed **all seven original H6 evidence
+files SHA256 PASS** again and measured raw `docker.log`
+delimiter counts: **244 LF, 97 CR, 336 Python
+`splitlines()` logical lines**. This explains the
+earlier `nl -ba` vs Python index discrepancy
+without changing the evidence.
+First shard pass **81/81**, 577.40s at
+`docker.log` Python logical row 234 (~23:28:33 KST);
+the next pass starts 0/81 at row 244 (~23:28:46),
+reaches 5/81 before API shutdown row **255**
+(23:28:58 KST), and prints 6/81–9/81
+after the traceback in the captured output stream.
+The single terminal traceback occupies rows **256–328**:
+API was initializing EngineCore via AsyncMPClient /
+ZeroMQ poll and vLLM `_interrupt_init` raised
+`KeyboardInterrupt("terminated")` at row 327,
+`KeyboardInterrupt: terminated` at row 328.
+Previous watchdog stop was **23:28:55 KST**.
+Worker progress after the API message may be
+interleaved/buffered or genuine graceful-stop lag;
+neither is a demonstrated post-exit GPU workload.
+No independent CUDA/RM/OOM/ModelOpt crash is
+evidenced by this terminal traceback. Root cause of
+whether watchdog intervention was *necessary*
+remains **INCONCLUSIVE**, notwithstanding definite
+watchdog-triggered termination.
+The prior docs/CI repair SHA `bedb80cf05fc115aa670e8aaab3c2274473e73bb`
+passed **Push #38662904456 and PR #38662909227**;
+this new commit needs independent CI verification.
+No H6 READY/benchmark, off-host verified backup,
+GPU rerun, guard weakening, deletion or PR merge.
+[Permanent detailed evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 interrupted vLLM initialization and CR-rendering caveat
 
 Actual archived H6 owner terminal again verified **seven

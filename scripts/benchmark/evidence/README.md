@@ -1,3 +1,20 @@
+## 2026-10-15 — H6 Docker-log carriage returns and final termination traceback qualified
+
+[Exact read-only physical normalized-log analysis](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):
+H6 archive seven checksums PASS; raw Docker log has
+244 LF + 97 CR and 336 Python logical rows.
+First 81-shard checkpoint pass completed in 577.40s;
+second 0/81 pass initiated during non-CMA Free decline.
+API shutdown at Python row 255; continuous traceback
+rows 256–328 ends in vLLM `_interrupt_init`
+`KeyboardInterrupt: terminated`, consistent with
+watchdog stop (23:28:55 KST) and API SIGTERM (23:28:58).
+Rows 329–336 present second-pass 6–9/81 output after
+the traceback in log-stream order; neither post-exit
+GPU activity nor a spontaneous CUDA fault is proven.
+H6 not READY/benchmark measured; no rerun, deletion,
+guard weakening or merge authorized.
+
 ## 2026-10-15 — H6 vLLM shutdown traceback ending verified; CI documentation rule corrected
 
 [Owner read-only traceback and monitoring evidence](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):

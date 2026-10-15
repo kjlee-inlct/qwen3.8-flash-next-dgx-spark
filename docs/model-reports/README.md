@@ -1,3 +1,17 @@
+## 2026-10-15 — H6 final traceback indexed, 2nd checkpoint pass unqualified
+
+Physical owner archive 7/7 SHA256 PASS.
+Normalized Docker output: 244 LF, 97 CR,
+336 Python logical lines. First 81/81 shard pass
+took 577.40s; second pass began, logged 0–9/81
+and did not complete. API shutdown row 255 was
+followed by `_interrupt_init` termination traceback
+rows 256–328, ending `KeyboardInterrupt: terminated`.
+Consistent with confirmed watchdog stop, not an
+independent GPU OOM finding. No H6 API READY,
+inference or llama-benchy performance measurement.
+[Detailed physical evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 vLLM initialization interrupted by protected STOP, not measured
 
 Real DGX evidence archive 7/7 SHA256 PASS. vLLM API
