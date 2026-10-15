@@ -11,7 +11,7 @@ usage() { echo "Usage: bash scripts/model/hybrid-retirement-audit.sh PATH"; }
 target="$(realpath -m -- "$1")"
 [[ -d "${target}" && ! -L "${target}" ]] || { echo "AUDIT=BLOCKED_INVALID_TARGET"; exit 3; }
 [[ -f "${target}/.qwen38-hybrid-manifest.json" ]] || { echo "AUDIT=BLOCKED_NOT_HYBRID"; exit 3; }
-[[ "${target}" == "$(model_asset_root)"/qwen3.8-h* ]] || { echo "AUDIT=BLOCKED_OUTSIDE_MODEL_ROOT"; exit 3; }
+[[ "${target}" == "$(model_asset_root)"/qwen3.8-h* || "${target}" == "$(model_asset_root)/qwen3.8-hybrid-quant-layout" ]] || { echo "AUDIT=BLOCKED_OUTSIDE_MODEL_ROOT"; exit 3; }
 command -v docker >/dev/null || { echo "AUDIT=BLOCKED_DOCKER_UNAVAILABLE"; exit 3; }
 ids="$(docker ps -aq)" || { echo "AUDIT=BLOCKED_DOCKER_LIST_FAILED"; exit 3; }
 blockers=0
