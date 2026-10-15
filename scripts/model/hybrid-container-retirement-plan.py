@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only exact six Hybrid Docker retirement plan, never removal."""
 import json
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -69,8 +70,9 @@ def plan(ids_text: str, inspect_text: str) -> tuple[bool, list[str]]:
             if not isinstance(mount, dict) or not isinstance(mount.get("Source"), str):
                 return False, ["BLOCKED_OTHER_CONTAINER_MOUNTS_UNVERIFIED"]
             source = mount["Source"].rstrip("/")
-            if any(source.endswith("/models/" + stage) or
-                   ("/models/" + stage + "/") in (source + "/") for stage in STAGES):
+            model_root = str(Path(__file__).resolve().parents[2] / "models")
+            if any(source == model_root + "/" + stage or
+                   source.startswith(model_root + "/" + stage + "/") for stage in STAGES):
                 return False, ["BLOCKED_UNEXPECTED_CONTAINER_HYBRID_REFERENCE id=" + cid + " source=" + source]
     lines.append("TARGET_COUNT=6")
     lines.append("OTHER_DOCKER_CONTAINERS=UNCHANGED")
