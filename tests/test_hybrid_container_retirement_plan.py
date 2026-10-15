@@ -49,8 +49,13 @@ class HybridContainerRetirementPlanTests(unittest.TestCase):
 
     def test_other_container_hybrid_mount_blocks(self):
         ids, items = fixture()
-        items[-1]["Mounts"] = [{"Source": "/model/models/" + mod.STAGES[1]}]
+        items[-1]["Mounts"] = [{"Source": str(SOURCE.resolve().parents[2] / "models" / mod.STAGES[1])}]
         self.assertFalse(mod.plan(ids, json.dumps(items))[0])
+
+    def test_legacy_missing_home_mount_does_not_impersonate_project(self):
+        ids, items = fixture()
+        items[-1]["Mounts"] = [{"Source": "/home/inlc/models/" + mod.STAGES[0]}]
+        self.assertTrue(mod.plan(ids, json.dumps(items))[0])
 
     def test_no_destructive_calls(self):
         source = SOURCE.read_text()
