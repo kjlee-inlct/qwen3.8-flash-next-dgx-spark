@@ -1,3 +1,20 @@
+## 2026-10-15 — Hybrid retirement reference inventory (source-only)
+
+A read-only inventory command now exists:
+
+```bash
+bash scripts/model/hybrid-retirement-audit.sh "$PWD/models/qwen3.8-h6-modelopt-w4a16"
+```
+
+It prints matching profile aliases (including H7/H20), then scans **all**
+Docker IDs returned by `docker ps -aq`, including exited containers,
+checking bind-mount sources. Docker list/inspect failures block the audit.
+Exit 3 indicates blocker or inability to establish inventory; successful
+inventory still explicitly prints `READ_ONLY_NOT_DELETE_AUTHORIZATION`.
+This is a **source-only** addition; it has not been executed on actual DGX.
+It does not archive evidence, change registry profiles, or authorize checkpoint
+or Docker deletion. Generic Hybrid removal remains blocked.
+
 ## 2026-10-15 — Generic Hybrid deletion fail-closed until dependency closure
 
 Source review found that `manage-models.sh remove PATH --dry-run` only
