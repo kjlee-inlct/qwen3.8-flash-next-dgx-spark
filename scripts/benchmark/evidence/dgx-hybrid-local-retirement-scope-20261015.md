@@ -1,3 +1,29 @@
+## 2026-10-16 — Physically checked aggregate of all 17 archived logs
+
+The operator ran the checksum-gated log aggregate on the real DGX. It reported 17 logs, aggregate size **1,351,619 bytes**, **7** traceback markers across 4 containers, **2** KeyboardInterrupt markers (H6 M1), and **0** matching OOM strings. The source archive SHA256SUMS hash matched the previously pinned `79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701`. All rows below contain only content digests, byte counts and marker counts; **no raw log lines have been committed**.
+
+| Docker ID (full) | Log bytes | Log SHA256 | Tracebacks | KeyboardInterrupt |
+|---|---:|---|---:|---:|
+| `10f8645adee052bd7506f1237e4064bcbbfb189caaeacbb9759981eaa33b32a5` | 54680 | `c181269b1a3fd857d057a774b75d4ae217fbc6299f57af7189a4e3b96ce5b4a7` | 0 | 0 |
+| `2ea2a61cb2e07df79044280ac1c65ffa5bda8fb3084501ea87853b7d6fbf20e1` | 54680 | `90b3c6e973a47e8f8bc4d48eaeff2c95a3f732f44f0f525e34683552c83a1741` | 0 | 0 |
+| `3b7e6badbd653f38f18e884c287b96c3c37cf005822cbc9ccb03f741d7421254` | 54679 | `45c0bde94055fe8731466ba13655ce001380ec3c559eeffb10cdc12f9210bd75` | 0 | 0 |
+| `43afd5055614c273181bd8f91d251ab19ac88d49080f3362cf7bcc31143c5c65` | 118387 | `2044781c9c47086ce053598f11312881831fbc794d46cbfa59a421f3db8f6b13` | 4 | 0 |
+| `569f2720593f4d0f768342c1417a9d2363fba894fd7f83a8de8a5df0dd2a9d51` | 54679 | `210319ad1f6e6e8bcf7c8325d20bf4d0e88eabd69beb7b722c2b29b1eed4d711` | 0 | 0 |
+| `586fb729f12cfb8971ba5ed21ef4fdff4845505d132511cfcacb269c77e045a0` | 54681 | `fcdb4221e5371efc6aee0720a66386dbd862491c384e032a8b3564d9f2aaffcb` | 0 | 0 |
+| `6484fdf56ffbec15d76333bda1a36f05ca50b9f17841b37e41e0781343a8b2e0` | 55250 | `2ac494ca68e919480efa382953df5495399b58d6f6a91b48275c3610742c0009` | 0 | 0 |
+| `7a871dfd8c7dbc63f7e3943a7261003e9564442a28c486b6cd6b3b8bf672cc45` | 54814 | `88b97dab36c1d207b7c7e349317203d3452d07fbd5c9efc7eb1d65f3f2ccdc01` | 0 | 0 |
+| `ba4029544a1ef39ffc2ab316da9ceb4cb975e845344c6be9bf683fc50db2ca5a` | 54545 | `f44f909152c0a411091b7c92e6b5850a5d94b5fdfaf1c2c967c205a8ef572cde` | 0 | 0 |
+| `bd6886aa4499f14e12e8ce3e49c2400ec2a0d940bf4e0d03a0d8fe3d1d5ba14c` | 93074 | `a7ed99f656fcb969d9ea3317aac5d17cfebb72d8153c71810e0a8b12d3d73e1f` | 0 | 0 |
+| `c14af278cc738258a8fda1d686595864f845ff11cf4b223e8c1f48d92be06ca1` | 55965 | `7f00b35ec39100834e3a230e0b83479764c48a959a757ec580d3910c4ef06fc1` | 1 | 0 |
+| `df2787a3fab4ef0d6d953e62ba4f7af380eebc46bf220734804b993cec5ac21b` | 54680 | `2f2601288cd7af145ef4176ff091491738cfb396f6e3984fb333b909d68dc64f` | 0 | 0 |
+| `e029767f2882aa50636bcabf55a55d4adda0c3b25c4d41c2b58d8d0b0f915a1c` | 56101 | `cc94e23d08799d82e3247b8949b113fc7544c5821d62bb2a6301d6f4eeaf7aad` | 1 | 0 |
+| `e2b000b28d5e71922e20d59f9725c8ebe54c5794349a20515343302f8d608e2a` | 386318 | `096bf28abeaccad7c529d98e326dc7b966caaeb2832376e6641579692a3eff59` | 0 | 0 |
+| `e526189f1093e95d81568d82eb10b8beaeb6227adca49029f241634769e6cbc7` | 39617 | `55725a50b3c06097fb597e38e7beb1b68725b06ab0c3fff03b791b0bc53e757a` | 1 | 2 |
+| `e937e0f23e45ba4ee8851e79e60eaefc509367b74a021e67a74fea098ad17f62` | 54789 | `e5c7e40e01dfab08bc017ec287e5f7cb6d9f27682647084ae87ea749975d8b7f` | 0 | 0 |
+| `efa06c76207540a3ffa034e1e8d21156565a458be91486b5bac1208bbe9a1aec` | 54680 | `8b0cc729f9ee00c3d3fea2faef525b01d71d37e020dbb82e0e0c889868f0910f` | 0 | 0 |
+
+The aggregate also counted model-loading and safetensors keywords, which are not meaningful success criteria. No matching OOM strings is **not** evidence against the separately documented H6 M1 physical memory-protection stop. Operator output explicitly stated `raw_lines_in_output=false`, `docker_delete_performed=false`, and `model_delete_performed=false`. The source logs still exist only in the local private archive and are **not** restored by this Git record.
+
 ## 2026-10-15 — Pinned Git-facing local archive provenance (physical DGX PASS)
 
 Owner ran the maintained read-only provenance verifier after fast-forward to
