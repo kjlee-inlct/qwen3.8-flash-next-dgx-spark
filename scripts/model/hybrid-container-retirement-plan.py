@@ -71,7 +71,7 @@ def plan(ids_text: str, inspect_text: str) -> tuple[bool, list[str]]:
             source = mount["Source"].rstrip("/")
             if any(source.endswith("/models/" + stage) or
                    ("/models/" + stage + "/") in (source + "/") for stage in STAGES):
-                return False, ["BLOCKED_UNEXPECTED_CONTAINER_HYBRID_REFERENCE"]
+                return False, ["BLOCKED_UNEXPECTED_CONTAINER_HYBRID_REFERENCE id=" + cid + " source=" + source]
     lines.append("TARGET_COUNT=6")
     lines.append("OTHER_DOCKER_CONTAINERS=UNCHANGED")
     return True, lines
