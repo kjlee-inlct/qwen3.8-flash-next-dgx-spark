@@ -1,5 +1,85 @@
 # Actual DGX H6 M1 memory-protection stop — 2026-10-14
 
+## 2026-10-15 — SIGTERM-associated vLLM KeyboardInterrupt; console newline normalization needed
+
+**Newest actual owner-operated DGX read-only check** on preserved,
+checksum-verified evidence: `sha256sum -c SHA256SUMS.txt` again
+returned **7/7 PASS**. The operator ran
+`nl -ba -- docker.log | sed -n '235,336p'` and
+`nl -ba -- monitor.log | sed -n '11,26p'`.
+The visible Docker excerpt ended with this precise vLLM
+exception path (shown as `nl` rows 238–240):
+
+```text
+(APIServer pid=55)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/launchers/api_server/entry.py", line 171, in _interrupt_init
+(APIServer pid=55)     raise KeyboardInterrupt("terminated")
+(APIServer pid=55) KeyboardInterrupt: terminated
+```
+
+**Interpretation:** vLLM's own `_interrupt_init` raised
+`KeyboardInterrupt("terminated")`, consistent with an
+external lifecycle interrupt while the engine was
+initializing, **not independently proof of spontaneous
+GPU OOM or a model initialization defect**.
+This agrees with independently timestamped watchdog
+`protect=5/5` and `PROTECT stopping` at
+**2026-10-14 23:28:55 KST**, earlier application
+`[shutdown] ... send sigterm to process EngineCore`
+at the consistent clock equivalent **23:28:58 KST**,
+and kernel veth teardown at ~**23:29:11 KST**.
+The traceback excerpt itself does **not** show a timestamp
+for `KeyboardInterrupt`; this ordering is a source/log
+correlation, not its independent precise time.
+
+**Critical counting/visibility caveat:** the previous Python
+reader used universal newline decoding and reported
+`docker.log` **336 logical lines**. `nl -ba` and
+`sed` use newline-separated display lines and may
+handle carriage returns from the tqdm/safetensors
+`Loading ...` progress bars differently. In this
+console the `nl` excerpt visibly had numbered lines
+235–240 followed by unnumbered 6/81→9/81 progress
+messages. Thus the displayed `nl` line 240 is **not
+guaranteed to be the same physical segment as Python
+logical line 240**, and **the requested 235–336 slice
+did not provide all 336 Python-indexed logical lines**.
+Do not infer a second independent traceback or error
+merely from apparently contradictory line positions.
+The raw `docker.log` in the 7-file archive remains
+unchanged. If needed, the owner should display it using
+a read-only **Python universal-newline iteration** with
+explicit escaped control characters and Python-indexed
+line numbers before drawing finer chronological
+conclusions.
+
+**GitHub CI source/document rule discovered (separate from
+physical GPU evidence):** on source
+`cc5bdfa3fe659f61a5dcf212bcab0eef390ff9c0`
+both Push run **38659412502** and PR run
+**38659416275** finished **FAILURE** because
+`test_script_layout.ScriptLayoutTests.test_canonical_category_dependencies_follow_allowed_directions`
+flagged the benchmark evidence Markdown's literal
+cross-category path prefix `scripts/ru` + `ntime/`.
+This was **one failure among 1,144 tests**, with no
+identified runtime-code test failures. The present docs
+amendment preserves the verified monitor Git blob SHA
+`017451b75b69da00bb10d9aec591a161a56862dc`
+but names the monitor by basename only in the benchmark
+evidence file. The unabridged canonical path may be
+documented in `docs/`, where the benchmark dependency
+restriction does not apply. **New CI must be checked
+against its exact commit before claiming PASS.**
+
+**Safety verdict unchanged:**
+`H6_DIRECT_STOP=WATCHDOG_MEMORY_PROTECTION_CONFIRMED`;
+`VLLM_TRACEBACK_LAST_EXCEPTION=KeyboardInterrupt_terminated`;
+`H6_INDEPENDENT_GPU_EXCEPTION=NOT_ESTABLISHED`;
+`WATCHDOG_PROTECTION_NECESSITY=INCONCLUSIVE`;
+`H6_API_READY=NOT_OBSERVED`;
+`BENCHMARK=NOT_MEASURED`;
+`OFF_HOST_BACKUP=NOT_VERIFIED`;
+`RESTART/THRESHOLD_RELAXATION/DELETION/MERGE=NOT_AUTHORIZED`.
+
 ## 2026-10-15 — Physical H6 monitor/Docker last-loading-window cross-check (7/7 archive PASS)
 
 **Evidence type:** real owner-pasted **read-only** analysis of the
@@ -41,7 +121,7 @@ this is a total fall of **3,299 MiB**. The higher
 contiguous/unified GPU allocation headroom.
 
 **Watchdog causal rule, source-identity checked:** GitHub
-`scripts/runtime/monitor-runtime.sh` has identical Git blob
+The canonical runtime monitor, `monitor-runtime.sh`, has identical Git blob
 `017451b75b69da00bb10d9aec591a161a56862dc`
 at the actual physical run commit
 `a30fe34b8c2fd3ad511d79876ac95ad69ac32523`

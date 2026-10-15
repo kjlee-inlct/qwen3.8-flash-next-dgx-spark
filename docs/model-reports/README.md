@@ -1,3 +1,17 @@
+## 2026-10-15 — H6 vLLM initialization interrupted by protected STOP, not measured
+
+Real DGX evidence archive 7/7 SHA256 PASS. vLLM API
+traceback ends in `_interrupt_init`-generated
+`KeyboardInterrupt: terminated`, consistent with
+the independently confirmed memory-protection watchdog
+stop and subsequent graceful shutdown. It does not
+establish a separate model/GPU runtime failure.
+Previous Docker traceback line numbering from shell
+`nl` differs from Python's 336 logical lines when
+carriage-return progress bars appear. No H6 READY,
+inference or performance measurement.
+[Detailed owner evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 second-shard-pass watchdog STOP, still NOT_MEASURED
 
 Real read-only `monitor.log` + `docker.log` evidence:

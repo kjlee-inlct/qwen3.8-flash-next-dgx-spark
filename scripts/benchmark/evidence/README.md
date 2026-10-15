@@ -1,3 +1,20 @@
+## 2026-10-15 — H6 vLLM shutdown traceback ending verified; CI documentation rule corrected
+
+[Owner read-only traceback and monitoring evidence](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):
+seven archived checksums PASS. Visible final exception
+`KeyboardInterrupt: terminated` comes from vLLM
+`_interrupt_init`, consistent with watchdog stop,
+not independent GPU OOM. Tqdm progress carriage returns
+make `nl` numbering differ from Python's earlier 336
+logical lines; a control-safe view is needed for further
+traceback disambiguation. The previous head failed
+`test_script_layout` because this benchmark evidence
+file literally named a canonical script in another
+category. It now uses the exact monitor basename/blob
+without forbidden cross-category path. Physical STOP
+still protected and not benchmarked; no new CI outcome
+claimed until verified.
+
 ## 2026-10-15 — H6 protected-stop Docker/monitor time correlation
 
 [Detailed physical H6 forensic event chronology](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):

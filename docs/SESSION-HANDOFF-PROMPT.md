@@ -1,3 +1,35 @@
+## 2026-10-15 — H6 interrupted vLLM initialization and CR-rendering caveat
+
+Actual archived H6 owner terminal again verified **seven
+SHA256 files PASS**. The shutdown traceback visibly ended
+with vLLM `entry.py:_interrupt_init` raising
+`KeyboardInterrupt("terminated")` and
+`KeyboardInterrupt: terminated`, consistent with
+the watchdog's pinned memory-protection stop
+23:28:55 KST and subsequent vLLM EngineCore SIGTERM
+message around 23:28:58. No independent GPU/RM OOM
+cause is established. `nl -ba` printed numbered Docker
+rows 235–240 followed by unnumbered shard progress bars;
+because tqdm uses carriage returns, these shell line
+numbers cannot safely be equated with the earlier Python
+universal-newline **336 logical lines**. Next inspection,
+if required, must use Python-indexed escaped output on
+original `docker.log` without modifying archive files.
+Confirmed source monitor path is
+`scripts/runtime/monitor-runtime.sh`, identical Git blob
+`017451b75b69da00bb10d9aec591a161a56862dc`
+at the original H6 launch and later audit revisions.
+Prior docs commit `cc5bdfa3...` had **both Push and PR
+CI FAILED** solely on `test_script_layout` category
+restriction: the physical evidence Markdown under
+`scripts/benchmark/` included a forbidden literal
+cross-category `runtime` path. The benchmark evidence
+was corrected to retain the script name + hash without
+the forbidden path. New head's CI is separate and cannot
+be presumed passed. No GPU run, protection change,
+Docker deletion, benchmark, PR merge or off-host backup
+qualification. [Permanent analysis](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
 ## 2026-10-15 — H6 terminal cross-check: watchdog stop during second shard pass
 
 Actual operator read-only analysis, seven on-host SHA256 entries
