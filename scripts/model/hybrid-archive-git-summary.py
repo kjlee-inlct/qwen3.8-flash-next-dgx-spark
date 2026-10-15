@@ -27,7 +27,7 @@ def summarize(root):
         raise ValueError("expected exactly 35 regular archive entries")
     entries = {}
     for row in manifest.read_text(encoding="utf-8").splitlines():
-        if len(row) != 64 + 2 + 68 or row[64:66] != "  ":
+        if len(row) not in (64 + 2 + 68, 64 + 2 + 69) or row[64:66] != "  ":
             raise ValueError("unexpected sha manifest row")
         digest, name = row[:64], row[66:]
         if (name in entries or not name.endswith((".json", ".log"))
