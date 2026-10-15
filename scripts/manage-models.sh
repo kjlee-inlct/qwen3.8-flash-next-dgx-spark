@@ -39,7 +39,8 @@ assets:
 
 remove:
   Deletes only a checkpoint directory containing a managed manifest. It never
-  removes Docker containers or images.
+  removes Docker containers or images. Hybrid checkpoint deletion is blocked
+  pending a dedicated all-container/all-profile dependency and archive gate.
 
 retire:
   Retires one logical PROFILE. Stopped experiment containers are removed, then
@@ -566,6 +567,10 @@ remove_model() {
 
   IFS=$'\t' read -r status kind repo revision files < <(manifest_summary "${manifest}")
   [[ "${status}" != INVALID ]] || die "refusing deletion: invalid model manifest"
+  if [[ "${kind}" == hybrid ]]; then
+    printf "BLOCKED_HYBRID_DEPENDENCY_CLOSURE=%s\n" "${path}" >&2
+    die "Hybrid checkpoint requires an independently qualified all-container mount, H7/H20 alias, and evidence archive retirement procedure; generic remove is unsafe (including --dry-run)"
+  fi
   size="$(du -sh -- "${path}" 2>/dev/null | cut -f1 || printf '?')"
   printf 'Model removal candidate\n  path     : %s\n  kind     : %s\n  repo     : %s\n  revision : %s\n  status   : %s\n  size     : %s\n' \
     "${path}" "${kind}" "${repo}" "${revision}" "${status}" "${size}"
