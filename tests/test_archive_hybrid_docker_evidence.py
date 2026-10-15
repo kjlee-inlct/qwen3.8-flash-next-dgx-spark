@@ -22,7 +22,8 @@ class HybridArchive17Tests(unittest.TestCase):
         for token in ('docker("rm"', 'docker("start"', 'docker("stop"', "shutil.rmtree(", "unlink("):
             self.assertNotIn(token, text)
         for marker in ("os.fchmod", "tempfile.TemporaryDirectory", "SHA256SUMS",
-                       "HYBRID_DOCKER_DELETE=NOT_PERFORMED", "latest != entries"):
+                       "HYBRID_DOCKER_DELETE=NOT_PERFORMED", "normalized(latest) != normalized(entries)",
+                       "set(latest_ids.splitlines()) != set(ids.splitlines())"):
             self.assertIn(marker, text)
 
 
