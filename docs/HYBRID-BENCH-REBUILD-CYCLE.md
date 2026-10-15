@@ -1,3 +1,19 @@
+## 2026-10-15 — Git-safe research log aggregates prepared
+
+The owner's DGX verified 17 exact archived Docker metadata records and
+34 file SHA256 entries, and reported the archive manifest SHA256
+`79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701`.
+The same value is now pinned in the immutable retirement evidence report.
+
+`python3 scripts/model/hybrid-log-aggregate.py` is read-only and first
+revalidates every archived file's SHA256 and the 17 metadata identities,
+then emits only per-container full IDs, log digests and byte sizes, and
+counts of explicitly named error/loading markers. It **never** emits
+unreviewed raw log lines or Docker credentials. A marker count is not a
+diagnosis or proof of an error's absence. It is a *source-only* addition
+until the owner physically executes it; JSON output must be reviewed
+before any optional commit. There is no Docker or checkpoint deletion.
+
 ## 2026-10-15 — Exact 17-container local archive preparation
 
 Actual DGX operator read `docker logs --timestamps` from all 17 exited
