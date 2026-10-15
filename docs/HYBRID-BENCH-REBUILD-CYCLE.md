@@ -1,3 +1,37 @@
+## 2026-10-15 — H6 controller-to-runtime static loading boundary (source-only)
+
+Static review at PR #261 source `9460bf38fc97268635eacd9a4a34f5dd6ff3d3d0` confirms that
+`scripts/wizard/hybrid-h6-m1.py` sets `KV=17179869184` (16 GiB),
+`MODEL_PROFILE=orcarouter-hybrid`, `VLLM_IMAGE=vllm-orcarouter-v029:v1`,
+`KV_MEM=KV`, `GPU_UTIL=0.80`, `NSPEC=2` and `MAXLEN=262144`.
+The controller invokes `scripts/serve.sh` once to **create** an isolated
+Docker trial, arms the external monitor, and then starts the exact container
+ID. It does **not** itself implement or request two weight-load passes.
+
+For this profile, `scripts/serve.sh` selects `PLE_MODE=mmap`,
+`--load-format safetensors`, `--tensor-parallel-size 1`,
+`--kv-cache-memory-bytes 17179869184`, `VLLM_PLE_MMAP=1`, and
+`VLLM_PLE_MMAP_PREWARM=0`; it passes `/model` to the pinned image's
+vLLM server. The base OrcaRouter and H3/H4/H5 parent checkpoints are
+read-only mounts. Multiple mounts do **not** demonstrate concurrent
+materialization or duplicate in-memory weights by themselves.
+
+**Inference boundary:** the 81/81 first pass and interrupted second 0/81–9/81
+pass are confirmed by preserved physical logs, but repository launcher
+source does not identify their internal vLLM/ModelOpt Python callers,
+allocation lifetimes, retained tensors, or peak resident/swap attribution.
+Neither the 173.59-GiB checkpoint prefetch INFO nor a second tqdm counter
+alone proves a second complete resident copy. Image build/source correspondence
+and exact-loader function instrumentation must be established before asserting
+whether the second pass is necessary, redundant or avoidable. Do not label the
+external watchdog termination a loader OOM without independent evidence.
+
+**Decision:** `H6_RETIREMENT=DEFERRED_PENDING_INTERNAL_LOADER_ATTRIBUTION`;
+`H6_GPU_RETRY=NOT_AUTHORIZED`; `H6_DELETE=NOT_AUTHORIZED`.
+Retain the stopped container, original evidence, H3–H6 and dependent H7/H20
+assets. A read-only next step is to inspect the exact image provenance and
+loader implementations without starting GPU or changing host resources.
+
 ## 2026-10-15 — Physical H6 Docker tail fully normalized: CR/LF counts and exception resolved
 
 Actual DGX operator confirmed **all seven original H6 evidence
