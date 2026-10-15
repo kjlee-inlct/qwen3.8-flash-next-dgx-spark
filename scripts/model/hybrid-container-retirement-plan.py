@@ -19,7 +19,7 @@ STAGES = (
     "qwen3.8-h5-neutral-input-scale",
     "qwen3.8-h6-modelopt-w4a16",
 )
-FULL_ID = re.compile(r"[a-f0-9]{64}\\Z")
+FULL_ID = re.compile(r"[a-f0-9]{64}\Z")
 
 
 def docker(*args: str) -> str:
