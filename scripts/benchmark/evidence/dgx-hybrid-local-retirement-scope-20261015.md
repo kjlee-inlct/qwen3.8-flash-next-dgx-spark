@@ -1,3 +1,33 @@
+## 2026-10-15 — Seventeen-object archive independently checked on DGX
+
+Operator inspected the local private archive at
+`~/.local/state/qwen38-spark/retirement-archives/hybrid-docker-17-20261015`.
+It exists with mode `drwx------`, allocated size about **1.5M**,
+and contains exactly 17 `.log` files, 17 `.json` files and one
+`SHA256SUMS` manifest. An independent `sha256sum -c SHA256SUMS`
+verified **34/34** recorded file digests. A second read-only Python
+check verified 17 unique JSON internal IDs exactly equal to the
+64-hex filename stems, each JSON status `exited`, each
+`protected=false`, each with nonempty Hybrid mounts and matching
+log file: `HYBRID_METADATA=PASS_17_EXACT_IDS`. No Docker removal or
+model deletion occurred. This confirms the **local** archive and
+metadata structure, not that its raw payloads were committed to Git.
+
+**Git preservation policy:** This repository already includes
+the full 17-ID inventory, physical H6 stop analysis, research outcome
+and build scripts. Keep the raw 34-file evidence archive private until
+reviewed; raw Docker logs may include confidential strings. A Git
+commit containing a curated evidence manifest, rather than raw logs,
+is permitted after reviewing path disclosure and provenance.
+Checkpoint weights are explicitly out of Git scope by operator choice.
+
+Remaining for real cleanup: review which stopped research containers
+belong in the exact removal allowlist; ensure no active/managed Docker
+objects share those IDs; confirm protected OrcaRouter and original M1
+data; capture baseline filesystem free bytes; separately review and
+approve a specific no-prune/no-force cleanup sequence. The known legacy
+`/home/inlc/models` symlink must not be recreated or mutated for this.
+
 ## 2026-10-15 — Whole-Docker physical inventory: 17 Hybrid references
 
 Operator ran the maintained read-only Hybrid Docker inventory command after
