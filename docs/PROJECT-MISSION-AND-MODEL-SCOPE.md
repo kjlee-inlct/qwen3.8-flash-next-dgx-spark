@@ -4,7 +4,15 @@
 
 A working GPU runtime, memory protection, NVIDIA RM analysis, lifecycle state files, deterministic H38 candidate and benchmark/evidence infrastructure are **supporting engineering constraints**, not replacement top-level product goals. Continue safe wizard engineering when the separate H38 rollout remains blocked.
 
-## The original four model targets — plus one added later
+## Active development policy — 2026-10-15
+
+The operator explicitly **deferred finishing the Wizard around mazinb first**. Instead, validate multiple candidate checkpoints and improve shared installation, switching, monitoring, benchmarking, and removal Wizard flows incrementally as each model reveals requirements. This defers a mazinb-centered completion milestone, **not** the original wizard-first product mission. Do not treat any candidate as installable, GPU-ready, or benchmarked merely because it is listed here.
+
+Additional research candidate: `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` (proposed key `catplusplus`, **research-only; no registry support claimed**). The originally planned `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` also remains a priority for compatibility and single-Spark feasibility research. Compare checkpoint tensor/config inventory and serving requirements before selecting trial order. Keep `mazinb` as an actual-DGX READY/benchmark reference, not a prerequisite for completing the whole Wizard.
+
+Hybrid H6: first perform read-only static analysis of double checkpoint loading and memory behavior; make an explicit keep/retire decision. Do not retry GPU loading, weaken protection, delete H3–H6 or dependent H7/H20 assets, or change managed services without a separate gated approval. Retiring a profile means removing future exposure safely, not erasing immutable evidence or historical Git records.
+
+## The original four model targets — later additions and candidates
 
 | Timeline | Wizard key | Exact repository / checkpoint identity | Registry status |
 |---|---|---|---|
@@ -12,9 +20,10 @@ A working GPU runtime, memory protection, NVIDIA RM analysis, lifecycle state fi
 | Original 2 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | Experimental; installable |
 | Original 3 | `mazinb` | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | Experimental; installable |
 | Original 4 | `lychee888` | `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` | Planned; **not installable** |
-| Added later | `orcarouter-hybrid` | `local/orcarouter-mazinb-h6-w4a16` (OrcaRouter + mazinb experts, W4A16 NVFP4) | Experimental; installable |
+| Added later | `orcarouter-hybrid` | `local/orcarouter-mazinb-h6-w4a16` (OrcaRouter + mazinb experts, W4A16 NVFP4) | Experimental; installable; retirement under review |
+| Proposed candidate | `catplusplus` (proposed) | `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` | Research only; not in registry |
 
-**Counts:** **4 original + 1 later-added Hybrid = 5 tracked families**. **3/4 original installable** and **4/5 total installable** according to the current registry. Do not rewrite history as four original models including Hybrid; do not claim all four originals are complete while lychee888 is planned. The Hybrid H3/H4/H5 build artifacts are prerequisites/intermediate stages, not additional user-selectable checkpoint families. **H38 is a candidate runtime implementation of the existing OrcaRouter profile, not a sixth wizard model.** Backend `vllm` (implemented) versus `sglang` (planned) is a separate axis.
+**Counts:** **4 original + 1 later-added Hybrid = 5 current registry families**, plus 1 proposed research candidate not yet registered. **3/4 original installable** and **4/5 total installable** according to the current registry. Do not rewrite history as four original models including Hybrid; do not claim all four originals are complete while lychee888 is planned. The Hybrid H3/H4/H5 build artifacts are prerequisites/intermediate stages, not additional user-selectable checkpoint families. **H38 is a candidate runtime implementation of the existing OrcaRouter profile, not a sixth wizard model.** Backend `vllm` (implemented) versus `sglang` (planned) is a separate axis.
 
 Registry truth: [model-profiles.sh](../scripts/model/model-profiles.sh), exposed by `./install.sh --list-models`. “Installable” means an implementation path exists, not completed live or host-stable E2E validation.
 
@@ -56,7 +65,7 @@ Registry truth: [model-profiles.sh](../scripts/model/model-profiles.sh), exposed
 
 Current bounds: actual DGX B4 is a collected stopped-runtime read-only prestart, **not M1 LIVE PASS**; M2 destructive live E2E not run; M3 live all-pairs unqualified; M4 H38 blocked; D0 independent disposable admission not granted; PR #259 Draft/Open/Unmerged. The current state may change: always re-read [CURRENT-STATUS.md](CURRENT-STATUS.md), [MANAGED-LIFECYCLE-ACCEPTANCE.md](MANAGED-LIFECYCLE-ACCEPTANCE.md), [OPERATIONS.md](../OPERATIONS.md) and [dated evidence](../scripts/benchmark/evidence/README.md).
 
-**New-session instruction:** Begin with this mission and scope. Then inspect recent operator state/CI/PR and pick the next **highest-value safe wizard deliverable**, not the deepest unresolved GPU experiment by default.
+**New-session instruction:** Begin with this mission and scope, then the latest status and compact handoff. Prioritize multi-model feasibility/validation and incremental reusable Wizard improvements; do not insist on mazinb-first Wizard completion.
 
 ## Wizard consent and closed-input safety regression (2026-10-13)
 
