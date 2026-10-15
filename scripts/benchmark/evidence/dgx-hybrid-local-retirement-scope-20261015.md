@@ -1,3 +1,22 @@
+## 2026-10-15 — Pinned Git-facing local archive provenance (physical DGX PASS)
+
+Owner ran the maintained read-only provenance verifier after fast-forward to
+`ca6fbef`. JSON output confirmed `schema_version=1`,
+`record_type=hybrid_docker_archive_provenance`, **17 containers verified**,
+**34 SHA256-verified files**, all pinned IDs listed below, and exact
+SHA256 of the local 17-container archive's `SHA256SUMS` file:
+
+```text
+79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701
+```
+
+This hash is a **Git-pinned reference to local bytes**, not proof that the
+17 logs or JSON evidence payloads themselves are present in Git. The report
+explicitly recorded `raw_logs_in_git=false`,
+`docker_removal_performed=false`, `model_removal_performed=false`.
+All 17 expected IDs are already recorded in this document. No model or
+Docker deletion is authorized merely by this checksum report.
+
 ## 2026-10-15 — Seventeen-object archive independently checked on DGX
 
 Operator inspected the local private archive at
