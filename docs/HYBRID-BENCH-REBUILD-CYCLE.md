@@ -1,3 +1,26 @@
+## 2026-10-15 — Original H6 evidence located and local checksums reverified
+
+Operator found the original archive at
+`~/h6-m1-evidence-20261014.dvQmt6eq`. Original evidence manifest
+`SHA256SUMS.txt` passed all **seven** entries again: `active.json`,
+`trial.json`, `monitor.log`, `runtime-stop.env`, `docker-inspect.json`,
+`docker.log` and `kernel-window.log`. Archive `du`: 108K.
+`kernel.log` is zero bytes and not part of the seven checksummed entries;
+do not represent it as a verified kernel trace.
+The separately archived exact six Docker containers remain at
+`~/.local/state/qwen38-spark/hybrid-retirement-evidence`, with metadata and
+six rendered `docker logs --timestamps` files, 7/7 SHA256 PASS, 756K.
+These are **two local archives on the same DGX**, not an independently
+verified off-host backup. Neither archive licenses deletion.
+
+`python3 scripts/model/verify-hybrid-retirement-evidence.py` validates
+exact file inventories and SHA256 digests read-only, refusing symlinks,
+missing/extra manifest entries and digest mismatches. Its output always
+reports `OFF_HOST_BACKUP=NOT_VERIFIED` and
+`HYBRID_DELETE_AUTHORIZATION=NO`. Host execution of this new verifier
+remains **NOT_OBSERVED**; H3–H6 (136G) and their historical containers remain
+protected, and no PR merge is authorized.
+
 ## 2026-10-15 — Six stopped Hybrid containers: evidence preflight only
 
 Owner read-only DGX measurements identify six exited containers mounting H3/H4/H5/H6:
