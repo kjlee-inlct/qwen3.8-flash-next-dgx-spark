@@ -1,3 +1,19 @@
+## 2026-10-15 — Generic Hybrid deletion fail-closed until dependency closure
+
+Source review found that `manage-models.sh remove PATH --dry-run` only
+advertised a candidate and the generic delete path considered running Docker
+mounts, not stopped historical containers or H7/H20 registry alias closure.
+A preview labelled `DRY-RUN` is **not deletion authorization**. The generic
+`remove` path now blocks Hybrid-kind manifests before dry-run or destructive
+execution with `BLOCKED_HYBRID_DEPENDENCY_CLOSURE`; this is a deliberate
+safety freeze, not a completed retirement implementation or host test.
+Before enabling deletion, introduce a reviewed, exact-path retirement audit
+covering every Docker container including exited, all profile aliases,
+original H6 evidence, model-link ownership and saved manifests, with
+post-archive verification and independent explicit operator authorization.
+Preserve current OrcaRouter, PLE swap, installed releases, H6 stop evidence,
+and future separate checkpoints intended for model switching tests.
+
 ## 2026-10-15 — H6 controller-to-runtime static loading boundary (source-only)
 
 Static review at PR #261 source `9460bf38fc97268635eacd9a4a34f5dd6ff3d3d0` confirms that
