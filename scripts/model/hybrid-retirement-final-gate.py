@@ -55,11 +55,29 @@ def inspect_and_validate():
         target = root / name
         if target.is_symlink() or not target.is_dir():
             raise ValueError("missing or symlinked model: " + name)
+    # In-tree file symlinks (for example, README.md) are common in model
+    # layouts and do not make a directory tree unsafe to unlink. However,
+    # record each one and require a separate operator review before deletion.
+    symlinks = []
     for name in STAGES:
         target = root / name
         for path in target.rglob("*"):
             if path.is_symlink():
-                raise ValueError("symlink in Hybrid tree: " + str(path))
+                raw = path.readlink()
+                resolved = path.resolve(strict=False)
+                symlinks.append({
+                    "stage": name,
+                    "path_relative_to_stage": str(path.relative_to(target)),
+                    "raw_target": str(raw),
+                    "resolved_exists": resolved.exists(),
+                    "resolved_within_hybrid_stage": resolved.is_relative_to(target.resolve()),
+                    "resolved_within_protected_orcarouter": resolved.is_relative_to(
+                        (root / PROTECTED).resolve()),
+                })
+    if symlinks:
+        print(json.dumps({"hybrid_symlink_review_required": symlinks},
+                         indent=2, sort_keys=True), file=sys.stderr)
+        raise ValueError("Hybrid tree contains symlinks: inspect targets before retirement")
     return {"archived_container_count": len(expected),
             "hybrid_container_count": len(hybrid),
             "pinned_archive_manifest_sha256": PINNED_MANIFEST,
