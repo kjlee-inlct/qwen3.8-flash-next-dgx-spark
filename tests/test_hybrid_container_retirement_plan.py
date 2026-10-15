@@ -23,6 +23,11 @@ def fixture():
 
 
 class HybridContainerRetirementPlanTests(unittest.TestCase):
+    def test_full_id_regex_accepts_exact_hex_and_rejects_short(self):
+        self.assertTrue(mod.FULL_ID.fullmatch(next(iter(mod.EXPECTED.values()))))
+        self.assertFalse(mod.FULL_ID.fullmatch("e526189f1093"))
+        self.assertFalse(mod.FULL_ID.fullmatch("g" * 64))
+
     def test_exact_six_only(self):
         ids, items = fixture()
         ok, lines = mod.plan(ids, json.dumps(items))
