@@ -74,7 +74,7 @@ def plan(ids_text: str, inspect_text: str) -> tuple[bool, list[str]]:
             # A former ~/models symlink targeted this project model root.
             # Docker retains historic bind source strings after links disappear.
             # Treat the legacy alias as a dependency, never a distinct safe path.
-            roots = (model_root, str(Path.home() / "models"))
+            roots = (model_root, "/home/inlc/models")
             if any(source == root + "/" + stage or
                    source.startswith(root + "/" + stage + "/")
                    for root in roots for stage in STAGES):
