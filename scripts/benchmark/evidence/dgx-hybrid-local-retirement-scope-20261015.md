@@ -1,3 +1,34 @@
+## 2026-10-15 — Whole-Docker physical inventory: 17 Hybrid references
+
+Operator ran `python3 scripts/model/hybrid-docker-inventory.py` after
+fast-forward to `c93b074`. It returned
+`HYBRID_RESEARCH_DOCKER_CANDIDATES=17` and
+`HYBRID_DOCKER_INVENTORY=PASS_READ_ONLY`; all 17 were `exited`.
+Exactly six belong to the previously SHA256-checked local six-container
+archive. **Eleven more historical Docker objects need their evidence
+preservation reviewed**; the six-container archive does not cover them:
+
+| Additional historical Docker object | Full observed Docker ID |
+|---|---|
+| qwen38-h6-kv16-control | `10f8645adee052bd7506f1237e4064bcbbfb189caaeacbb9759981eaa33b32a5` |
+| qwen38-h6-kv16-rmuvm-r8 | `2ea2a61cb2e07df79044280ac1c65ffa5bda8fb3084501ea87853b7d6fbf20e1` |
+| qwen38-h6-kv8-instrumented-r2 | `3b7e6badbd653f38f18e884c287b96c3c37cf005822cbc9ccb03f741d7421254` |
+| qwen38-h6-kv8-control | `569f2720593f4d0f768342c1417a9d2363fba894fd7f83a8de8a5df0dd2a9d51` |
+| qwen38-h6-kv145-trace-r5 | `586fb729f12cfb8971ba5ed21ef4fdff4845505d132511cfcacb269c77e045a0` |
+| qwen38-h6-kv8-instrumented | `7a871dfd8c7dbc63f7e3943a7261003e9564442a28c486b6cd6b3b8bf672cc45` |
+| qwen38-h6-kv15-trace-r6 | `ba4029544a1ef39ffc2ab316da9ceb4cb975e845344c6be9bf683fc50db2ca5a` |
+| qwen38-h6-kv16-rmsys-r9 | `c14af278cc738258a8fda1d686595864f845ff11cf4b223e8c1f48d92be06ca1` |
+| qwen38-h6-kv14-control | `df2787a3fab4ef0d6d953e62ba4f7af380eebc46bf220734804b993cec5ac21b` |
+| qwen38-h6-kv12-control | `e029767f2882aa50636bcabf55a55d4adda0c3b25c4d41c2b58d8d0b0f915a1c` |
+| qwen38-h6-kv16-trace-r7 | `efa06c76207540a3ffa034e1e8d21156565a458be91486b5bac1208bbe9a1aec` |
+
+These additional eleven bind historical `/home/inlc/models/` paths;
+the operator confirmed it was a symlink to the project model assets
+although the link is now absent. All 17 are **research inventory
+candidates**, not individually approved removal IDs. No raw logs,
+environment/secrets, or full inspect configs were committed. Neither
+Docker removal nor checkpoint reclamation has happened.
+
 # DGX Hybrid local research retirement — operator scope and immutable inventory
 
 ## Provenance and policy (2026-10-15)
