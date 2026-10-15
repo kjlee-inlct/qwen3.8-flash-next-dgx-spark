@@ -71,8 +71,13 @@ def plan(ids_text: str, inspect_text: str) -> tuple[bool, list[str]]:
                 return False, ["BLOCKED_OTHER_CONTAINER_MOUNTS_UNVERIFIED"]
             source = mount["Source"].rstrip("/")
             model_root = str(Path(__file__).resolve().parents[2] / "models")
-            if any(source == model_root + "/" + stage or
-                   source.startswith(model_root + "/" + stage + "/") for stage in STAGES):
+            # A former ~/models symlink targeted this project model root.
+            # Docker retains historic bind source strings after links disappear.
+            # Treat the legacy alias as a dependency, never a distinct safe path.
+            roots = (model_root, str(Path.home() / "models"))
+            if any(source == root + "/" + stage or
+                   source.startswith(root + "/" + stage + "/")
+                   for root in roots for stage in STAGES):
                 return False, ["BLOCKED_UNEXPECTED_CONTAINER_HYBRID_REFERENCE id=" + cid + " source=" + source]
     lines.append("TARGET_COUNT=6")
     lines.append("OTHER_DOCKER_CONTAINERS=UNCHANGED")
