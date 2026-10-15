@@ -113,8 +113,18 @@ def main():
         # Re-check live inventory before publication. Never archive stale Docker identities.
         latest_ids = docker("ps", "-aq", "--no-trunc")
         latest = module.inventory(latest_ids, docker("inspect", *latest_ids.splitlines()))
-        if latest_ids.splitlines() != ids.splitlines() or latest != entries:
-            raise RuntimeError("Docker inventory changed during archive")
+        # Docker does not guarantee ps or Mounts array ordering. Compare identity
+        # and semantic mount sets, without weakening changed-state detection.
+        def normalized(rows):
+            return {
+                row["id"]: (
+                    row["name"], row["status"], row["protected"],
+                    tuple(sorted((m["source"], tuple(sorted(m["stages"])))
+                                 for m in row["hybrid_mounts"]))
+                ) for row in rows
+            }
+        if set(latest_ids.splitlines()) != set(ids.splitlines()) or normalized(latest) != normalized(entries):
+            raise RuntimeError("Docker inventory identities, states, or mounts changed during archive")
         final = base / "hybrid-docker-17-20261015"
         if final.exists() or final.is_symlink():
             raise RuntimeError("archive destination exists: " + str(final))
