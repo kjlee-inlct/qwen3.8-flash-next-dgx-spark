@@ -1,3 +1,11 @@
+## 2026-10-15 — DIRECTION CHANGE: multi-model validation + compact handoff
+
+OPERATOR DECISION (not a physical GPU result): defer mazinb-centered Wizard completion. Maintain the wizard-first long-term mission, but improve common Wizard support incrementally while researching/validating `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` and new candidate `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed`. Catplusplus is **research-only**, not registered, installed, benchmarked, or verified compatible. mazinb retains its historical real DGX READY and benchmark reference.
+
+Hybrid H6 remains protected/stopped. Next decision is read-only assessment of the double 81-shard loading/memory behavior before deciding whether to retire Hybrid; do not infer success from absence of a kernel Xid. No new GPU run or asset deletion authorized. Preserve H7/H20 references, old managed OrcaRouter ID, H6 archive, and both Draft PR #261/#259. The older planned benchmark→retire→rebuild sequence is **deferred pending the explicit keep/retire decision**, not silently completed.
+
+SESSION POLICY: stationary rules/history/evidence belong in canonical permanent docs. `docs/SESSION-HANDOFF-PROMPT.md` is a compact entrypoint with source-of-truth links, invariant guardrails and live delta only. Full previous handoff prose remains retrievable in Git history; do not copy that entire historical log into new conversation prompts.
+
 ## 2026-10-15 — Physical H6 Docker tail fully normalized: CR/LF counts and exception resolved
 
 Actual DGX operator confirmed **all seven original H6 evidence
