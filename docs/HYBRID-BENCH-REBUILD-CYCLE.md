@@ -1,3 +1,20 @@
+## 2026-10-15 — Six stopped Hybrid containers: evidence preflight only
+
+Owner read-only DGX measurements identify six exited containers mounting H3/H4/H5/H6:
+H6 M1, R28, R27, R26, R25b and R24; their Docker JSON log allocations
+were 56K, 460K, 148K, 116K, 72K, 72K (924K summed), respectively.
+H3–H6 `du -sch` total was 136G with no `find -links +1` hits inside
+those four trees. The separate expendable `llama-benchy-m1-e9be344` clone
+(204M) was removed by the operator only after checking its clean worktree,
+remote ancestry and explicit `DELETE`; the 36K mazinb M1 results remain.
+
+A non-destructive six-ID identity/state/metadata check is available:
+`python3 scripts/model/hybrid-container-evidence.py`.
+It emits a narrow selection of inspect fields and never archives logs or
+copies sensitive full `docker inspect` output. It is not a backup or a
+retirement gate. No Docker/model deletion is authorized; independent SHA-verified
+archive and explicit exact-ID consent still need separate implementation.
+
 ## 2026-10-15 — Hybrid retirement reference inventory (source-only)
 
 A read-only inventory command now exists:
