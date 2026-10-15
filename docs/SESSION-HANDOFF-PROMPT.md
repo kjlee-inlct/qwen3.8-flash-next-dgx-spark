@@ -1,33 +1,88 @@
-# Session handoff — compact entrypoint
+# Permanent session rules and handoff interface
 
-**Updated:** 2026-10-15 KST. **Repository:** https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark
+This file contains **stable, accepted operating rules** and a document
+navigation contract. It must **not** become a chronological log of unfinished
+tasks, today's blockers, transient HEADs, or per-session experiment output.
+Do not append a new dated "current live delta" section at every handoff.
 
-## How to resume (source of truth; no snapshot trust)
+## Project continuity
 
-This is an **entrypoint**, not an archive. When starting a new conversation, read the latest versions of these canonical files from GitHub, in order:
+- Project: [qwen3.8-flash-next-dgx-spark](https://github.com/kjlee-inlct/qwen3.8-flash-next-dgx-spark), on **one** NVIDIA DGX Spark / GB10.
+- Product mission: operator-friendly `./install.sh` and `./uninstall.sh` Wizards for install, switch, inspect and safe removal. See [project mission and model scope](PROJECT-MISSION-AND-MODEL-SCOPE.md).
+- **Accepted direction:** do not make mazinb-first Wizard completion a prerequisite. Validate model candidates individually while improving the shared Wizard and lifecycle incrementally. Specific pending investigations belong in the **conversation handoff**, not here; accepted changes in model scope belong in the mission document.
+- Distinguish candidate, source implementation, registry-installable, DGX READY, inference PASS, measured benchmark and long-term host qualification. None implies the next.
+- The full fixed architecture, safety and acceptance rules are maintained in their canonical documents; do not reprint them in this file.
 
-1. [Project mission and model scope](PROJECT-MISSION-AND-MODEL-SCOPE.md) — permanent goals, full model registry vs candidates.
-2. [Current status](CURRENT-STATUS.md) — latest decisions, actual DGX results, blockers, outstanding work; historical dated entries may be superseded.
-3. [Architecture](ARCHITECTURE.md), [operations](../OPERATIONS.md), [managed lifecycle acceptance](MANAGED-LIFECYCLE-ACCEPTANCE.md), and [staged DGX validation](DGX-STAGED-VALIDATION.md) — invariants/acceptance.
-4. [Scripts and dependency rules](../scripts/README.md) and current implementation/tests — operational APIs and CI rules.
-5. [Hybrid plan](HYBRID-BENCH-REBUILD-CYCLE.md), [physical H6 evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md) and [evidence index](../scripts/benchmark/evidence/README.md) — only if relevant.
-6. [Model-specific reports](model-reports/README.md) and [lychee888 integration](LYCHEE888-WIZARD-INTEGRATION.md) — model-specific proof/gates.
+## Authoritative documentation map
 
-Inspect actual remote branch HEAD, open PRs and their exact-HEAD CI. Never assume a SHA, Draft state or result in an old chat is current. Distinguish GitHub source, DGX local checkout, installed release, Docker/image IDs and checkpoint SHA. GitHub CI and synthetic tests **do not** establish physical DGX READY or stability.
+Read the latest repository copies, selecting additional documents only when relevant:
 
-## Current live delta (2026-10-15)
+| Subject | Permanent authority |
+|---|---|
+| Objective, model IDs, model-vs-backend scope | [PROJECT-MISSION-AND-MODEL-SCOPE.md](PROJECT-MISSION-AND-MODEL-SCOPE.md) |
+| Verified outcomes, dated status record | [CURRENT-STATUS.md](CURRENT-STATUS.md) |
+| Architecture and lifecycle semantics | [ARCHITECTURE.md](ARCHITECTURE.md), [MANAGED-LIFECYCLE-ACCEPTANCE.md](MANAGED-LIFECYCLE-ACCEPTANCE.md) |
+| Host operations, deletion, rollback | [OPERATIONS.md](../OPERATIONS.md), [DGX-STAGED-VALIDATION.md](DGX-STAGED-VALIDATION.md) |
+| Maintained scripts, dependency directions, tests | [scripts/README.md](../scripts/README.md) |
+| Hybrid research/runbook and immutable physical proof | [HYBRID-BENCH-REBUILD-CYCLE.md](HYBRID-BENCH-REBUILD-CYCLE.md), [H6 evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md), [evidence index](../scripts/benchmark/evidence/README.md) |
+| Model-specific evaluations and plans | [model reports](model-reports/README.md), [lychee888 plan](LYCHEE888-WIZARD-INTEGRATION.md) |
 
-- **Multi-model development:** defer mazinb-first Wizard completion; research lychee888 FP8PLE and `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` and incrementally improve reusable Wizard support. Catplusplus is proposed only; do not claim installed/registered. mazinb physical M1 benchmark exists as comparison evidence.
-- **Hybrid H6:** first GPU experiment ended via watchdog memory-protection before READY. A complete first 81-shard pass was followed by a second pass; stopped during the second pass. Terminal `KeyboardInterrupt("terminated")` matches shutdown rather than proving independent GPU failure. Watchdog stop confirmed; necessity and RM allocation health unresolved. First benchmark NOT_MEASURED. Perform **read-only static feasibility analysis** before the keep/retire decision.
-- **Deletion:** H3–H6 retirement blocked by historical H7/H20 aliases and other Docker mount references. H6 raw evidence only on-host verified (SHA256 7/7), off-host backup NOT_VERIFIED. Do not remove assets, relax watchdog, change managed startup, run new GPU trials, or prune Docker on a diagnostic pretext. Retire only after separate exact-target dependency/evidence review and explicit approval.
-- **PR gate:** PR #261 and #259 remain Draft/unmerged unless independently reverified; never ready/merge these without separate explicit authorization. Starting working branch at prior snapshot `feature/wizard-modular-phase1-20261014`; recheck live SHA.
+Historical evidence remains historical. Where a newer verified result supersedes
+an older `NOT_CAPTURED` or `NOT_VERIFIED`, preserve both with provenance; do
+not silently rewrite physical history.
 
-## Permanent working contract
+## Invariant working rules
 
-Prefer direct GitHub connector changes for accessible repository tasks: inspect → implement/reuse existing scripts → add tests → commit → verify exact-head Push/PR CI → update canonical docs. Keep immutable dated physical evidence. For physical DGX actions provide safe, bounded commands and STOP conditions; never represent source-only validation as live GPU qualification. Fail closed on EOF/invalid operator input; exact resource identity, previews, no silent destructive defaults, recovery/rollback and ownership protection are mandatory. Avoid duplicated one-off scripts when a maintained script can be extended. Do not assume GitHub access permits host access. Consult the linked canonical docs for expanded rules rather than pasting them here.
+1. **Read before action:** check current canonical documents, exact remote
+   branch HEAD, PR state and CI. Confirm local DGX checkout, installed
+   immutable release, model revision, images and Docker IDs separately.
+2. **Act on repository where possible:** use the connected GitHub tools to
+   inspect code, implement reusable scripts/tests, commit and verify the
+   **exact resulting HEAD** and Push/PR CI. Source-only or CI PASS is never a
+   physical DGX PASS. Respect repository layout tests and dependency rules.
+3. **Physical DGX boundaries:** no claim of host execution without actual
+   operator/tool evidence. Do not start GPU trials, modify watchdog thresholds,
+   restart services, change boot behavior, remove model data, prune Docker,
+   change swap or alter protected objects without a separate reviewed,
+   explicitly authorized procedure. Give bounded commands with STOP criteria.
+4. **Fail-closed lifecycle:** preview affected exact resources, verify
+   ownership/dependencies/rollback, preserve immutable evidence, and require
+   explicit consent for destructive action. EOF/invalid input cannot count as
+   affirmative consent. Reuse and extend maintained scripts before creating
+   redundant one-offs.
+5. **PR safety:** never auto-merge or mark a protected Draft PR ready merely
+   because tests pass. Reverify each PR live; honor its documented consent
+   boundary (including historical #259/#261 unless explicitly released).
+6. **Documentation on substantive completion:** update the relevant canonical
+   source when a decision becomes accepted, a test result becomes verified,
+   safety constraints change, or a technical conclusion is established.
+   Avoid copying active task checklists or transient discussions into this
+   permanent handoff file.
 
-## Reusable new-chat prompt
+## What belongs in the conversation-to-conversation prompt
 
-> Continue `kjlee-inlct/qwen3.8-flash-next-dgx-spark` using the **latest GitHub** `docs/SESSION-HANDOFF-PROMPT.md`, `docs/PROJECT-MISSION-AND-MODEL-SCOPE.md` and `docs/CURRENT-STATUS.md`. Follow linked canonical docs and actual evidence; verify remote HEAD/PR/CI first. Work through the next safe step, update permanent docs and tests, and use GitHub connector commits where possible. No unapproved DGX mutation or merging protected PRs. Do not repeat historical handoff logs.
+Each session handoff message (outside this file) contains only the **live,
+unresolved delta**:
 
-**History:** the previous long-form handoff (including dated historical notices) is preserved in Git history; substantive H6 details and source-of-truth results remain in the linked canonical evidence and status documents. This entrypoint is deliberately concise.
+- active goal and exact point reached;
+- latest verified branch/commit/PR/CI and host identities *as a dated snapshot*;
+- new evidence acquired during that session, with links to canonical evidence;
+- pending blockers/uncertainties and the next safe concrete action;
+- explicitly approved or prohibited actions specific to the live task.
+
+Do not repeat the permanent rules or complete historical experiment log. When
+the active task finishes, retire its handoff text; preserve only validated
+outcomes and accepted policy in the proper permanent documents.
+
+### Short reusable starter
+
+> Continue the existing GitHub project
+> `kjlee-inlct/qwen3.8-flash-next-dgx-spark`. First read the latest
+> `docs/SESSION-HANDOFF-PROMPT.md` and its canonical links. Then use
+> the **live task handoff pasted below** to resume where work stopped.
+> Check actual HEAD/PR/CI and separate GitHub proof from physical DGX evidence.
+> Update permanent docs for verified conclusions, not for every transient
+> step. Do not perform unapproved host mutation or PR merge.
+
+Append the latest **live task handoff text** only when changing conversations.
+This file should rarely need updating after the operating contract stabilizes.
