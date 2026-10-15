@@ -1,3 +1,18 @@
+## 2026-10-15 — Combined read-only Hybrid retirement preflight
+
+Actual DGX operator ran `verify-hybrid-retirement-evidence.py`: local original H6
+archive **7/7 PASS**, six Docker logs/metadata archive **7/7 PASS**,
+`LOCAL_EVIDENCE_VERIFICATION=PASS`; no independently verified off-host backup.
+The new orchestration `bash scripts/model/hybrid-retirement-preflight.sh`
+checks both inventories again, verifies six exact exited Docker identities,
+and audits H3/H4/H5/H6 against all Docker containers and registered aliases.
+Expected current outcome is `BLOCKED_REFERENCES` (six exited containers per
+stage, H7/H20 aliases); actual new script host execution is **not yet observed**.
+The check does not create archives or remove resources; even a zero-reference
+inventory is **not** deletion authorization. Archive off-host replication,
+protection of original OrcaRouter and rollback sources, independent approval,
+and a separately reviewed disposal procedure remain mandatory.
+
 ## 2026-10-15 — Original H6 evidence located and local checksums reverified
 
 Operator found the original archive at
