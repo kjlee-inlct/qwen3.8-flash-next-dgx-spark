@@ -1,3 +1,25 @@
+## 2026-10-15 — Operator clarified local Hybrid retirement scope
+
+Operator states that local Hybrid research artifacts/checkpoints may be deleted,
+provided experiment records are preserved in Git. This changes the planning
+assumption: an off-host **weight** backup is not a prerequisite requested by
+the operator, and Docker containers with historical Hybrid bind paths may be
+retired together with their related research assets after evidence retention.
+It does **not** imply an approved deletion command or that any removal occurred.
+
+Before destructive work, preserve a curated **sanitized** immutable evidence
+record in Git: model/construction parameters, source revisions, physical H6
+protection-stop diagnosis, experiment outcomes, six pinned Docker IDs and the
+observed historical `/home/inlc/models` symlink mapping, along with hashes and
+archive provenance. Do not commit raw `docker-inspect.json` (may include
+credentials or environment), unknown raw Docker logs, hidden caches, or model
+weights without dedicated review. The original local archives remain intact
+until evidence-in-Git has been verified. Git reports do not reproduce removed
+weights: future reconstruction requires upstream model and build inputs.
+OrcaRouter source checkpoint, all protected managed resources, PLE swap and
+M1 evidence remain out of scope. A separately reviewed exact-target removal
+and post-removal filesystem check still require explicit approval.
+
 ## 2026-10-15 — Exact six-container removal PLAN (source only, no deletion)
 
 Operator's combined Hybrid preflight on the DGX confirmed 7/7 SHA PASS for
