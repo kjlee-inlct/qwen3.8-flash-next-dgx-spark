@@ -1,6 +1,6 @@
 ## 2026-10-15 — Whole-Docker physical inventory: 17 Hybrid references
 
-Operator ran `python3 scripts/model/hybrid-docker-inventory.py` after
+Operator ran the maintained read-only Hybrid Docker inventory command after
 fast-forward to `c93b074`. It returned
 `HYBRID_RESEARCH_DOCKER_CANDIDATES=17` and
 `HYBRID_DOCKER_INVENTORY=PASS_READ_ONLY`; all 17 were `exited`.
