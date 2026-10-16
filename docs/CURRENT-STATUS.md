@@ -1,3 +1,46 @@
+## 2026-10-16 — Managed state retention review and next candidate metadata (read-only)
+
+DGX owner has completed independent post-removal checks: retired Hybrid H3–H6
+model directories absent, protected OrcaRouter directory present, and local
+17-container private retirement archive SHA256 files still pass. Final
+available bytes observed: `449058615296`. Do not remove original raw
+Hybrid archive based merely on its Git-pinned checksums: Git retains
+summaries and log hashes, **not the raw logs**. A distinct
+`retirement-archives/mazinb-docker-20261014T103718Z-7e238b9aeb`
+must remain untouched by Hybrid cleanup.
+
+The owner inspected `~/.local/state/qwen38-spark`, which also includes
+`install.env`, `asset-ownership.json`, `operation.lock`,
+`config.vllm.json`, `monitor.log`, multiple `runtime-validation*.json`,
+30 `stability-N.json` files, `ab-trials`, `analysis`,
+`hybrid-h6-m1` and `hybrid-retirement-evidence`. These are **not all
+disposable**: runtime and ownership files are protected, and raw evidence
+archives contain non-Git-backed material. Historical Hybrid state and
+stability results require separate duplicate/reference review, not blanket
+deletion.
+
+A small self-contained read-only classifier now lives in
+`scripts/storage/state-retention-audit.py`, exposed under Wizard
+Storage item 5, plus isolated synthetic tests. It reports
+allocation-sized estimates, retention categories, symlinks and filesystem
+boundary warnings **without exposing state-file contents or deleting
+anything**. Its actual DGX output has NOT yet been collected. There is
+currently no approved command for deleting these state folders.
+
+Owner's real DGX remote metadata-only model inspection:
+`lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` revision
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`, reported
+`remote_size_gib=123.24575388710946`, public, and separate MTP file marker;
+`catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`, reported
+`remote_size_gib=63.87655057385564`, public. Both reported
+`LOCAL_REQUIRED` with no tensor/layout qualification. Public
+Hugging Face file-browser UI shows **189 GB** for the latter, differing
+from the metadata-only inspector's 63.88 GiB; measurement scope is not
+yet reconciled. **Do not budget download/physical storage based on
+one of these numbers until exact file inventory and selective download
+scope are verified**. No GPU launch or model-weight download occurred.
+
 ## 2026-10-16 — VERIFIED: Hybrid local retirement completed; Wizard guided cleanup modularized
 
 **Physical DGX result, independently checked:** exactly 17 stopped Hybrid research Docker containers removed; all four H3/H4/H5/H6 checkpoint directories removed. Their names are recorded in the [immutable retirement evidence](../scripts/benchmark/evidence/dgx-hybrid-local-retirement-scope-20261015.md). 17-container raw-log+metadata private archive remains on DGX with 34/34 SHA256-verified files; its `SHA256SUMS` SHA256 is `79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701`. Git contains sanitized 17-ID inventory, per-log digests/marker counts and H6 physical failure report; it does **not** contain raw logs or deleted weight blobs.
