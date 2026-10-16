@@ -1,3 +1,25 @@
+## 2026-10-16 — Actual Hybrid research retirement supersedes previous pending plan
+
+The owner **completed** the exact-17 stopped research Docker retirement and
+the subsequent exact H3/H4/H5/H6 local checkpoint deletion on the single DGX
+Spark. Independent host checks confirmed all four directories absent,
+the original OrcaRouter checkpoint present, and the private archived evidence
+checksum valid. The model phase recovered a measured 145,637,814,272 bytes
+of available filesystem space; details and ID-level evidence:
+[Hybrid local retirement evidence](../scripts/benchmark/evidence/dgx-hybrid-local-retirement-scope-20261015.md).
+Earlier sections in this document discussing an undecided Hybrid retirement
+are **historical as of 2026-10-15**, not the current operator decision.
+The original `orcarouter-hybrid` profile must not be advertised as a
+ready installed/qualified local model after retirement. Preserve its
+historical registry and experiment provenance, but do not reinterpret old
+failed/stopped H6 tests as a successful inference/benchmark.
+
+The active direction is to finalize a small modular Wizard status/cleanup
+guide and **move on promptly to research the lychee888 FP8-PLE and
+catplusplus mixed-NVFP4 candidates**, initially read-only and without GPU
+start or large downloads.
+
+
 # Project mission — wizard-first install / uninstall / switch
 
 **Primary product goal (P0):** Make checkpoint installation, removal/uninstall and switching easy and reliable for an operator on a single NVIDIA DGX Spark, principally through the interactive **terminal wizard** `./install.sh` and `./uninstall.sh`. The wizard is not a GUI application. The intended everyday user workflow must not require manually stitching together a long sequence of Docker, vLLM and systemd commands.
