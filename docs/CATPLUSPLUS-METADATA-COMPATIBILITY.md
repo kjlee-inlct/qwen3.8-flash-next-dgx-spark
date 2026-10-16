@@ -54,13 +54,37 @@ The new script's actual pinned Hub output and GitHub CI must be recorded
 separately; source presence alone does not mean the 189GB reconciliation
 has already passed.
 
+## 2026-10-16 physical DGX read-only metadata attempt
+
+After fast-forwarding to `22bcba4711ee423ffea062268f4b8de3366938e1`,
+the owner used Wizard **3 → 7 → 1** with manifest valid, profile
+orcarouter and image `vllm-skinny-tp1:v1`. The JSON-only inspection
+returned `CATPLUSPLUS_METADATA_FAIL: tree pagination repeated or exceeded
+100 pages`. It did not reach file inventory validation. No weights were
+downloaded or model loader exercised. The former implementation used
+`recursive=true&expand=true`, with one combined guard for repeating URLs
+or more than 100 pages. The original error cannot distinguish which
+case occurred. Hugging Face documents that `expand=true` is a costly
+request limited to ~50 entries/page, versus up to 1000 per page without
+expansion. That motivates compact pagination; it does NOT independently
+prove the exact cause of this DGX failure.
+
+GitHub SOURCE change: use `recursive=true&expand=false&limit=1000`,
+with exact pinned revision, validated pagination links, independent
+repeated-URL/repeated-path/empty-page/256-page fail-closed errors,
+plus periodic read-only progress output. Synthetic fixtures simulate
+more than 100 unique pages without downloading checkpoints. The corrected
+path still requires a NEW physical Hub run to establish its actual
+file count and 63.88-GiB versus ~189-GB byte reconciliation. Do not
+mislabel a synthetic success as a real Hugging Face validation.
+
 ## Next read-only operator check — Wizard-first
 
 After a clean source checkout fast-forward, open the operator Wizard:
 
     ./wizard.sh
 
-Choose **3 — Models / switch preview → 11 — Candidate Hub metadata
+Choose **3 — Models / switch preview → 7 — Candidate Hub metadata
 (read-only) → 1 — catplusplus summary**. Select 2 in the same submenu
 for the complete JSON file inventory printed to the terminal; 0 returns.
 The Wizard invokes the pinned standard-library inspector internally and
