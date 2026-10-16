@@ -1,3 +1,39 @@
+## 2026-10-16 — ACTUAL DGX catplusplus pinned inventory and size reconciliation PASS
+
+Owner re-ran the read-only Wizard **3 → 7 → 1** after the compact
+pagination fix against immutable HF revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`.
+The physical-DGX terminal returned
+`TREE_METADATA_COMPLETE`, `legacy_tree_reconciliation_complete=True`,
+`GPU_RUN=NOT_PERFORMED`; pagination progress reached page 20 at
+19,820 entries, with 17,448 **files** after directory filtering.
+There were 96 `.safetensors` files and 96 index-referenced weight
+filenames. These are Hub JSON metadata results, **not** local weight
+installation, tensor header validation or GPU load.
+
+**Definitive old-API accounting resolution:** old
+`siblings[].size` = **68,586,923,924 bytes** = 63.876550574 GiB;
+new full-tree-only files = **119,953,105,520 bytes** =
+111.715035066 GiB; complete repository = **188,540,029,444 bytes** =
+175.591585640 GiB = **188.540029444 decimal GB** (matches public
+UI ~189 GB). Both `legacy_siblings_unknown_size_entries=0` and
+`legacy_missing_size_recovered_tree_bytes=0`. The former shortfall
+came from filenames missing from the sibling inventory rather than
+unknown per-file byte sizes. Supersedes historical `NOT_CAPTURED`
+and unresolved notes below; retain their dated provenance.
+
+`root_safetensors_gib=174.8553` (~187.75 decimal GB)
+is the **stored root weight data**. NVIDIA lists a single DGX Spark
+with 128 decimal GB unified RAM (~119.21 GiB); therefore an
+unchanged fully resident model load exceeds the entire system
+capacity by ~55.65 GiB before runtime/KV/monitor overhead.
+Memory mapping/offload/streaming are unqualified alternatives,
+not license to launch. Candidate remains
+`RESEARCH_ONLY / PROFILE_INSTALLABLE=0 / GPU_NOT_TESTED`;
+lychee888's separate pinned L0 JSON PASS remains distinct.
+See [full reconciled candidate record](CATPLUSPLUS-METADATA-COMPATIBILITY.md).
+No Docker, weight download, GPU or host mutation was reported.
+
 ## 2026-10-16 — Actual DGX Hub pagination failure; compact metadata fix CI PASS
 
 Owner synchronized the Wizard checkout at `22bcba4711ee423ffea062268f4b8de3366938e1`
