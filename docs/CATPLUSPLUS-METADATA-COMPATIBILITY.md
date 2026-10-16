@@ -4,6 +4,60 @@ Status 2026-10-16: RESEARCH_ONLY / NOT_REGISTERED / NOT_DOWNLOADED / GPU_NOT_TES
 Target: catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed
 Pinned revision from DGX owner: 3251fd8afbd08f76368a9bfa71132d9aef364813.
 
+## 2026-10-16 actual DGX pinned full-tree inventory — L0 metadata PASS
+
+**ACTUAL_DGX / Hub API JSON / Wizard 3 → 7 → 1, owner-captured output.**
+The read-only inspector was re-run after the compact-paging source fix
+on immutable Hugging Face revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`.
+It reported `TREE_METADATA_COMPLETE`, `legacy_tree_reconciliation_complete=True`,
+`GPU_RUN=NOT_PERFORMED`, and page progress at 1/10/20, ending with
+17,448 repository files, including 96 `.safetensors` files and
+96 weight filenames referenced by the safetensors index. Config and
+index JSON were retrieved and validated at that exact revision,
+but this operator output did **not** display per-tensor config values,
+headers, dtype, shape or weight payload checksums.
+
+**Exact reconciliation from physical summary output:**
+
+| Scope | Decimal bytes | Binary GiB | What the probe proves |
+|---|---:|---:|---|
+| Legacy API `siblings[].size` subtotal | 68,586,923,924 | 63.876550574 | Previously reported 63.88 GiB |
+| Additional full-tree files absent from legacy siblings | 119,953,105,520 | 111.715035066 | The omitted file inventory, **not unknown-size entries** |
+| **Complete repository** | **188,540,029,444** | **175.591585640** | **188.540029444 decimal GB**, consistent with Hub UI ~189 GB |
+| Root `.safetensors` only | Rounded by probe | 174.8553 | Data on disk, **not** measured resident memory |
+
+`legacy_siblings_unknown_size_entries=0` and
+`legacy_missing_size_recovered_tree_bytes=0`; the mismatch arose
+from **files omitted from the old sibling listing**, not LFS size fields
+being null. This supersedes the earlier **unresolved** and
+**missing-size hypothesis** sections below, which are retained as dated
+historical evidence only. The reported 96 index filenames is metadata
+mapping count; it does not establish file content or actual loader support.
+The exact root-safetensors byte total and per-path breakdown were not
+printed by the summary view; retain that precision distinction rather
+than reverse-engineering exact values from rounded GiB.
+
+**Single GB10 capacity screen — planning inference, not live load:**
+NVIDIA specifies 128 **decimal GB** coherent unified RAM on DGX Spark,
+approximately 119.21 GiB. The **stored root safetensors alone** are
+about 174.86 GiB (~187.75 decimal GB), exceeding total unified
+physical capacity by about 55.65 GiB (59.75 decimal GB) even before
+runtime memory, KV cache, CUDA buffers and monitor reserve. Thus a
+simple fully resident, unchanged-weight TP=1 load does **not** fit.
+This comparison cannot rule out separately engineered partial residency,
+mmap, CPU/NVMe paging or further quantization, and it does not prove
+runtime performance or stability. Publisher's separate Thor result is
+not a DGX Spark TP=1 proof. **Do not download weights or try a GPU
+launch** on the basis of the metadata PASS.
+
+**Disposition:** Reconciliation L0 complete. Candidate remains
+`RESEARCH_ONLY / NOT_INSTALLABLE / GPU_NOT_TESTED`. Next actions are
+source/architecture-level comparisons with lychee888 and a bounded
+memory-residency/loader compatibility assessment. Preserve the exact
+owner-captured output as this record; a full 17,448-path inventory was
+not attached to this evidence and should not be claimed as archived.
+
 ## Separate evidence tiers
 
 **Historical physical DGX remote inspection:** The existing generic remote
@@ -78,7 +132,7 @@ path still requires a NEW physical Hub run to establish its actual
 file count and 63.88-GiB versus ~189-GB byte reconciliation. Do not
 mislabel a synthetic success as a real Hugging Face validation.
 
-## Next read-only operator check — Wizard-first
+## Completed operator procedure — Wizard-first (metadata L0 only)
 
 After a clean source checkout fast-forward, open the operator Wizard:
 
@@ -103,8 +157,12 @@ is not necessarily the minimum inference download or physical peak RAM.
 
 ## Outstanding admission gates
 
-1. Capture actual pinned API/tree/config/index; reconcile 63.88 GiB and
-   HF ~189 GB by exact filename and byte accounting.
+1. **DONE (aggregate accounting):** Pinned Hub API/tree/config/index
+   validated on DGX and the 63.88-GiB versus ~189-GB discrepancy
+   reconciled by missing legacy sibling **filenames**, not sizes.
+   Full per-path evidence was not captured; only request it if needed
+   for a specific loader/memory question, without printing 17k paths to
+   the operator terminal.
 2. Read safetensors headers later under a separate reviewed procedure.
    Check MXFP8 E8M0 scale, fused qkvz alias, ModelOpt mixed dispatch,
    NVFP4 expert and global FP8 PLE scale consumers in a pinned backend.
