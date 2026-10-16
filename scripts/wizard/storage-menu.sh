@@ -8,6 +8,7 @@ wizard_storage_menu() {
     wizard_menu_option 2 'Recommendations / 권장'
     wizard_menu_option 3 'Cleanup plan only / 삭제 계획'
     wizard_menu_option 4 'Benchmark archive integrity & reclaim gates (read-only) / 증거 검증'
+    wizard_menu_option 5 'State retention audit (read-only) / 상태·증거 파일 보존 점검'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -16,6 +17,8 @@ wizard_storage_menu() {
       3) bash "${ROOT_DIR}/scripts/manage-storage.sh" plan ;;
       4) python3 -B "${ROOT_DIR}/scripts/diagnostics/benchmark-reclaim-readiness.py" ||
             wizard_warning 'Benchmark evidence audit incomplete; cleanup remains blocked.' ;;
+      5) python3 -B "${ROOT_DIR}/scripts/storage/state-retention-audit.py" ||
+            wizard_warning 'State retention audit failed; no removal is authorized.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
