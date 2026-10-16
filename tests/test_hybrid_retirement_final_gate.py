@@ -11,7 +11,7 @@ class HybridFinalGateTests(unittest.TestCase):
         ast.parse(text)
         for required in ("archive.summarize", "PINNED_MANIFEST",
                          'entry["status"] != "exited"', '"AutoRemove"',
-                         '"RestartPolicy"', '"Type") != "bind"', "path.is_symlink()", "raw_target", "resolved_within_protected_orcarouter",
+                         '"RestartPolicy"', '"Type") != "bind"', "path.is_symlink()", "alias_sources", "expected_counts", "verified_virtual_link_counts",
                          "read_only_preflight"):
             self.assertIn(required, text)
         for forbidden in ("docker rm", '"rm",', "rmtree(", "unlink(", "shutil.", "os.remove("):
