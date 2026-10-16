@@ -55,6 +55,7 @@ class CandidateMetadataWizardTests(unittest.TestCase):
         self.assertIn("7) wizard_candidate_metadata_menu ;;", model)
         self.assertIn("candidate-metadata-menu.sh", route)
         self.assertIn("wizard_candidate_metadata_menu() {", menu)
+        self.assertIn("wizard_menu_option 3 'lychee888 pinned FP8-PLE source gate", menu)
         self.assertNotIn("wizard_candidate_metadata_menu() {", model)
         for forbidden in ("docker run", "docker rm", "rm -rf", "--install", "--yes", "curl -O", "hf download"):
             self.assertNotIn(forbidden, menu)
@@ -72,6 +73,22 @@ class CandidateMetadataWizardTests(unittest.TestCase):
         result, calls = self.run_menu("2\n0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--json", calls)
+
+    def test_lychee_source_gate_uses_only_pinned_metadata_inspector(self):
+        result, calls = self.run_menu("3\n0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("assess_lychee888_loader.py", calls)
+        self.assertIn("-B", calls)
+        self.assertNotIn("inspect_catplusplus_metadata.py", calls)
+        self.assertIn("NOT qualified", result.stdout)
+        self.assertIn("NOT installable", result.stdout)
+
+    def test_failed_lychee_source_gate_does_not_admit_candidate(self):
+        result, calls = self.run_menu("3\n0\n", fail=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(calls.strip().splitlines()), 1)
+        self.assertIn("FAILED or incomplete", result.stdout)
+        self.assertNotIn("SOURCE inspection completed", result.stdout)
 
     def test_invalid_then_back_does_not_fetch(self):
         result, calls = self.run_menu("99\n0\n")
