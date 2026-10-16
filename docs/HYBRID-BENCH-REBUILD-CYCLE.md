@@ -1,3 +1,23 @@
+## 2026-10-16 — Model-only preflight after Docker retirement
+
+Physical DGX showed `HYBRID_DOCKER_EXACT_17=REMOVED`; a separate
+`docker ps -a` no longer listed any of the 17 archived IDs and
+confirmed the protected managed/unrelated containers remained. Disk
+available before: `298321874944` bytes; after:
+`303421616128` bytes (observed delta `5099741184` bytes).
+
+**Do not re-run the old seventeen-present gate after removal.**
+The new read-only command
+`python3 scripts/model/hybrid-post-docker-model-gate.py` verifies the
+pinned private SHA archive, confirms that all seventeen formerly
+archived IDs are absent, rejects any retained Docker mount pointing
+to H3–H6 including the legacy home-model alias, checks four exact
+model directories, filesystem boundaries and virtual-link prefix
+counts `13/76/91/139`, and confirms protected OrcaRouter exists.
+The tool intentionally does not delete models, containers, volumes
+or Docker images; it must be physically run before a future separate
+exact-target cleanup tool is considered.
+
 ## 2026-10-15 — Git-safe research log aggregates prepared
 
 The owner's DGX verified 17 exact archived Docker metadata records and
