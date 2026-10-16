@@ -115,3 +115,39 @@ accuracy and strict RM. The original-fourth profile remains
 `planned` and disabled. Next L1 is source/fixture adapter
 analysis using this immutable checkpoint identity; do not
 start a weight download or model load from this metadata PASS.
+
+
+## 2026-10-16 L1 source review: FP8 PLE dispatcher (no host execution)
+
+**GitHub SOURCE:** The current managed serve.sh only routes orcarouter,
+nvidia, mazinb and retired Hybrid profiles. The normal v0.29 PLE mmap
+mode is NOT evidence it can instantiate an FP8 E4M3 PLE embedding or
+consume a global BF16 scale; the lychee888 registry remains planned
+with PROFILE_INSTALLABLE=0. The current download, serve and Wizard
+paths do not admit this checkpoint. No image-internal class/loader
+inspection at the actual installed image digest has yet been captured.
+
+**Publisher / external implementation (not DGX proof):** The lychee888
+card documents the dual-DGX recipe using a patched vLLM PLE resolver
+and PLE_QUANT_OVERRIDE=fp8. That resolver dispatches to
+Qwen3_8FlashNextPLEFp8EmbeddingMethod; without the override, the
+NVFP4 top-level quantization metadata can select a BF16 PLE
+allocation instead. The expected checkpoint shape is 128 FP8 shard
+weights and one BF16 [1] global weight_scale. The corresponding public
+MiaAI-Lab dual-node instructions target TP=2 and are NOT a test of
+our single GB10 TP=1 with managed v0.29 image.
+
+**L1 fixture/implementation checks before any download or GPU launch:**
+verify that a pinned candidate backend resolves the FP8 embedding
+instead of BF16; registers both an FP8 weight and BF16 global scale;
+maps all 128 n-gram shard names into the ten FP8 files without reading
+an unrelated BF16 PLE shard; respects quantization ignored-layers
+handling; and consumes the checkpoint scalar scale in the embedding
+lookup. Also check the actual installed image's code/digest, loading
+peak memory, TP=1 support and strict RM reserve independently.
+A passing synthetic dispatch unit test is source-only; it is not a
+physical READY or inference qualification.
+
+**Decision:** No verified single-Spark compatibility yet.
+Do not mutate existing image or register lychee888 as installable;
+keep the 2026-10-13 real-Hub L0 PASS as the prior completed gate.
