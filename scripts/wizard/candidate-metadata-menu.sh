@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Candidate checkpoint investigations. Only remote JSON metadata is requested.
+# Candidate checkpoint investigations: remote metadata and read-only source audit.
 # This menu NEVER admits a candidate for install, downloads weights, or starts GPU/Docker.
 
 wizard_catplusplus_metadata_check() {
@@ -31,6 +31,18 @@ wizard_lychee888_source_gate() {
   wizard_warning 'lychee888 remains planned and NOT installable.'
 }
 
+wizard_installed_ple_source_audit() {
+  wizard_header 'Existing image PLE loader source / 설치 이미지 PLE 소스 점검'
+  wizard_info 'Only local Docker image/container inspect and copy from the EXISTING qwen38-flash-next container.'
+  wizard_info 'No container creation, start, GPU use, downloads, model data or service changes.'
+  if python3 -B "${ROOT_DIR}/scripts/model/audit_installed_ple_image.py"; then
+    wizard_warning 'Installed image SOURCE signatures captured; this is NOT a lychee888 loader/TP=1 qualification.'
+  else
+    wizard_warning 'Installed image source is INCONCLUSIVE or unavailable; NO managed resources were changed.'
+  fi
+  wizard_warning 'lychee888 remains NOT installable. Runtime adapter and memory admission are still blocked.'
+}
+
 wizard_candidate_metadata_menu() {
   local choice
   while true; do
@@ -40,12 +52,14 @@ wizard_candidate_metadata_menu() {
     wizard_menu_option 1 'catplusplus pinned inventory summary / 파일·용량 요약'
     wizard_menu_option 2 'catplusplus full JSON file inventory / 전체 파일 목록 출력'
     wizard_menu_option 3 'lychee888 pinned FP8-PLE source gate / FP8-PLE 로더 소스 점검'
+    wizard_menu_option 4 'Existing image PLE loader source (read-only) / 기존 이미지 PLE 소스 검사'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
       1) wizard_catplusplus_metadata_check summary ;;
       2) wizard_catplusplus_metadata_check full ;;
       3) wizard_lychee888_source_gate ;;
+      4) wizard_installed_ple_source_audit ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
