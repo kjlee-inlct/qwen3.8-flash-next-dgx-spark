@@ -1,3 +1,22 @@
+## 2026-10-16 — Candidate SOURCE metadata inspector added; Hub inventory and GPU unverified
+
+A standalone standard-library catplusplus revision-pinned HF metadata tree
+inspector and synthetic/offline tests were added. It reads only JSON (complete
+paginated file tree, config, optional index) to distinguish legacy
+siblings[].size subtotal from repository/weight file bytes. Historical
+63.87655 GiB and public UI ~189 GB have **NOT** yet been reconciled by an
+actual pinned full-tree output; model weights and GPU were not touched.
+The current model card and config show ModelOpt MIXED_PRECISION, MXFP8
+projections and NVFP4 experts, but current main-web config is not
+independent pinned-revision validation. Source L1 found no qualified TP=1
+FP8-PLE resolver in the current managed lychee888 path; the dual-DGX
+external override is not a single-GB10 proof.
+See [catplusplus investigation](CATPLUSPLUS-METADATA-COMPATIBILITY.md)
+and [lychee888 plan](LYCHEE888-WIZARD-INTEGRATION.md). Both candidates
+remain unapproved for real GPU trials or installation. Keep PR #261 and
+#259 Draft/Unmerged. CI result for the latest fix must be checked on its
+exact HEAD separately.
+
 ## 2026-10-16 — Physical managed-state retention audit PASS; cleanup closed
 
 Owner fast-forwarded the DGX checkout through commit `9d84c39` and ran
