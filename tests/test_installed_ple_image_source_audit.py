@@ -114,6 +114,23 @@ return None''')
         self.assertEqual(mod.audit_source(dtype)["fp8_ple_selection_source"],
                          "DTYPE_ROUTING_SOURCE_PRESENT")
 
+    def test_dtype_or_override_string_mention_is_not_dispatch(self):
+        source = code(
+            '''note = "PLE_QUANT_OVERRIDE and ple_embedding_dtype"
+if not isinstance(quant_config, Fp8Config):
+    return None
+return Qwen3_8FlashNextPLEFp8EmbeddingMethod()''')
+        self.assertEqual(mod.audit_source(source)["fp8_ple_selection_source"],
+                         "NATIVE_FP8_CONFIG_ONLY_SOURCE")
+
+    def test_unrelated_multiplication_is_not_fp8_scale_consumption(self):
+        source = code().replace(
+            "return embeddings * weight_scale",
+            "note = weight_scale\\n    return embeddings * 2",
+        )
+        self.assertEqual(mod.audit_source(source)["fp8_scale_multiply_source"],
+                         "NOT_PROVEN")
+
     def test_static_signatures_never_prove_scale_if_absent(self):
         record = mod.audit_source(code().replace("torch.bfloat16", "torch.float32")
                                   .replace("embeddings * weight_scale", "embeddings"))
