@@ -42,10 +42,10 @@ Hybrid H6: first perform read-only static analysis of double checkpoint loading 
 | Original 2 | `nvidia` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | Experimental; installable |
 | Original 3 | `mazinb` | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | Experimental; installable |
 | Original 4 | `lychee888` | `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` | Planned; **not installable** |
-| Added later | `orcarouter-hybrid` | `local/orcarouter-mazinb-h6-w4a16` (OrcaRouter + mazinb experts, W4A16 NVFP4) | Experimental; installable; retirement under review |
+| Added later | `orcarouter-hybrid` | `local/orcarouter-mazinb-h6-w4a16` (OrcaRouter + mazinb experts, W4A16 NVFP4) | **Retired 2026-10-16; not installable; historical only** |
 | Proposed candidate | `catplusplus` (proposed) | `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` | Research only; not in registry |
 
-**Counts:** **4 original + 1 later-added Hybrid = 5 current registry families**, plus 1 proposed research candidate not yet registered. **3/4 original installable** and **4/5 total installable** according to the current registry. Do not rewrite history as four original models including Hybrid; do not claim all four originals are complete while lychee888 is planned. The Hybrid H3/H4/H5 build artifacts are prerequisites/intermediate stages, not additional user-selectable checkpoint families. **H38 is a candidate runtime implementation of the existing OrcaRouter profile, not a sixth wizard model.** Backend `vllm` (implemented) versus `sglang` (planned) is a separate axis.
+**Counts:** **4 original + 1 later-added Hybrid = 5 historical registry families**, plus 1 proposed research candidate not yet registered. **3/4 original installable** and **3/5 total installable** now that Hybrid has been retired. Do not rewrite history as four original models including Hybrid; do not claim all four originals are complete while lychee888 is planned. The Hybrid H3/H4/H5 build artifacts are prerequisites/intermediate stages, not additional user-selectable checkpoint families. **H38 is a candidate runtime implementation of the existing OrcaRouter profile, not a sixth wizard model.** Backend `vllm` (implemented) versus `sglang` (planned) is a separate axis.
 
 Registry truth: [model-profiles.sh](../scripts/model/model-profiles.sh), exposed by `./install.sh --list-models`. “Installable” means an implementation path exists, not completed live or host-stable E2E validation.
 
