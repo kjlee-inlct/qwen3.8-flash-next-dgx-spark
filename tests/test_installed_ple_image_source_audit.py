@@ -75,15 +75,106 @@ class InstalledImagePLETests(unittest.TestCase):
         with self.assertRaisesRegex(mod.AttestationError, "differs"):
             mod.validate_identity(image, container)
 
-    def test_refuses_overridden_source_mount(self):
+    def test_identifies_only_mounts_shadowing_exact_ple_path(self):
         img, c = identities()
-        c["Mounts"].append({"Destination": "/usr/local/lib/python3.12/dist-packages/vllm"})
-        with self.assertRaisesRegex(mod.AttestationError, "Mounted vLLM source"):
-            mod.validate_identity(img, c)
+        unrelated = {"Type": "bind", "Destination":
+                     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor",
+                     "Source": "/tmp/modelopt-patch"}
+        c["Mounts"].append(unrelated)
+        mod.validate_identity(img, c)
+        self.assertEqual(mod.covering_mounts(c, mod.PATHS[0]), [])
+        bound = {"Type": "bind", "Destination": mod.PATHS[0],
+                 "Source": "/tmp/test-patched-ple.py", "RW": False}
+        c["Mounts"].append(bound)
+        self.assertEqual(mod.covering_mounts(c, mod.PATHS[0]), [bound])
+        self.assertEqual(mod.host_bind_target(bound, mod.PATHS[0]),
+                         "/tmp/test-patched-ple.py")
+
+    def test_rejects_nested_mounts_and_nonbind_override(self):
+        _, container = identities()
+        container["Mounts"].extend([
+            {"Type": "bind", "Destination": "/usr/local/lib/python3.12/dist-packages/vllm",
+             "Source": "/tmp/vllm", "RW": False},
+            {"Type": "bind", "Destination": mod.PATHS[0],
+             "Source": "/tmp/ple.py", "RW": False},
+        ])
+        with self.assertRaisesRegex(mod.AttestationError, "Overlapping"):
+            mod.covering_mounts(container, mod.PATHS[0])
+        with self.assertRaisesRegex(mod.AttestationError, "non-bind"):
+            mod.host_bind_target(
+                {"Type": "volume", "Destination": mod.PATHS[0], "Source": "/tmp/foo"},
+                mod.PATHS[0],
+            )
 
     def test_no_container_or_image_source_remains_inconclusive(self):
         with patch.object(mod, "docker_read", side_effect=mod.AttestationError("absent")):
             self.assertEqual(mod.main(), 2)
+
+    def test_bind_mapping_directory_to_specific_ple_path(self):
+        mount = {"Type": "bind", "Destination":
+                 "/usr/local/lib/python3.12/dist-packages/vllm",
+                 "Source": "/tmp/mapped-vllm"}
+        expected = "/tmp/mapped-vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py"
+        self.assertEqual(mod.host_bind_target(mount, mod.PATHS[0]), expected)
+
+    def test_read_host_source_nofollow_and_bounded_without_docker(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            from pathlib import Path
+            p = Path(tmp) / "ple_layer.py"
+            p.write_text(code(), encoding="utf-8")
+            self.assertIn("_get_ple_embedding_quant_method",
+                          mod.read_host_source_nofollow(str(p)))
+            fake = Path(tmp) / "alias.py"
+            fake.symlink_to(p)
+            with self.assertRaisesRegex(mod.AttestationError, "inaccessible or unsafe"):
+                mod.read_host_source_nofollow(str(fake))
+            p.write_text("x" * (mod.MAX_SOURCE + 1))
+            with self.assertRaisesRegex(mod.AttestationError, "bounded regular"):
+                mod.read_host_source_nofollow(str(p))
+
+    def test_exact_mounted_ple_source_is_used_without_docker_cp(self):
+        import tempfile
+        from pathlib import Path
+        image, container = identities()
+        commands = []
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "mounted.py"
+            source.write_text(code(), encoding="utf-8")
+            container["Mounts"].append({
+                "Type": "bind", "Destination": mod.PATHS[0],
+                "Source": str(source), "RW": False,
+            })
+            def docker(*args):
+                commands.append(args)
+                if args[:2] == ("image", "inspect"):
+                    return __import__("json").dumps([image]).encode()
+                if args[:2] == ("container", "inspect"):
+                    return __import__("json").dumps([container]).encode()
+                raise AssertionError("Docker copy must not be used for bind-mount content")
+            with patch.object(mod, "docker_read", side_effect=docker):
+                result = mod.inspect_existing()
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(result["source_origin"], "HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER")
+        self.assertEqual(result["source_mount_destination"], mod.PATHS[0])
+        self.assertEqual(result["lychee888_tp1_loader"], "NOT_QUALIFIED")
+
+    def test_unreadable_mounted_ple_never_falls_back_to_cp(self):
+        image, container = identities()
+        container["Mounts"].append({
+            "Type": "bind", "Destination": mod.PATHS[0],
+            "Source": "/definitely/nonexistent/ple.py", "RW": False,
+        })
+        calls = []
+        def docker(*args):
+            calls.append(args)
+            return __import__("json").dumps(
+                [image if args[:2] == ("image", "inspect") else container]
+            ).encode()
+        with patch.object(mod, "docker_read", side_effect=docker):
+            with self.assertRaisesRegex(mod.AttestationError, "inaccessible or unsafe"):
+                mod.inspect_existing()
+        self.assertEqual(len(calls), 2)
 
     def test_tar_read_regular_only(self):
         self.assertIn("_get_ple_embedding_quant_method",
