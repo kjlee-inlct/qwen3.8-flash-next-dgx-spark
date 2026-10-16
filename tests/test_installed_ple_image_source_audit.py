@@ -29,8 +29,8 @@ def identities():
 
 
 def code(selector='''if not isinstance(quant_config, Fp8Config):
-        return None
-    return Qwen3_8FlashNextPLEFp8EmbeddingMethod()'''):
+    return None
+return Qwen3_8FlashNextPLEFp8EmbeddingMethod()'''):
     return (
         "class Qwen3_8FlashNextPLEFp8EmbeddingMethod:\n"
         "    def create_weights(self, layer):\n"
@@ -103,12 +103,12 @@ class InstalledImagePLETests(unittest.TestCase):
     def test_source_override_and_dtype_dispatch_are_distinct(self):
         override = code(
             '''if os.getenv("PLE_QUANT_OVERRIDE") == "fp8":
-        return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
-    return None''')
+    return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
+return None''')
         dtype = code(
             '''if ple_embedding_dtype == "float8_e4m3fn":
-        return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
-    return None''')
+    return Qwen3_8FlashNextPLEFp8EmbeddingMethod()
+return None''')
         self.assertEqual(mod.audit_source(override)["fp8_ple_selection_source"],
                          "EXPLICIT_OVERRIDE_SOURCE_PRESENT")
         self.assertEqual(mod.audit_source(dtype)["fp8_ple_selection_source"],
