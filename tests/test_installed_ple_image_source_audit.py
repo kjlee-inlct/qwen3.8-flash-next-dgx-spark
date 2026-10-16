@@ -126,7 +126,7 @@ return Qwen3_8FlashNextPLEFp8EmbeddingMethod()''')
     def test_unrelated_multiplication_is_not_fp8_scale_consumption(self):
         source = code().replace(
             "return embeddings * weight_scale",
-            "note = weight_scale\\n    return embeddings * 2",
+            "note = weight_scale\n    return embeddings * 2",
         )
         self.assertEqual(mod.audit_source(source)["fp8_scale_multiply_source"],
                          "NOT_PROVEN")
