@@ -316,3 +316,39 @@ Even a successful static source extraction is
 An image-specific, isolated source patch and further synthetic tests
 may be considered **only after** this source attestation, separately
 from any real GPU qualification.
+
+### 2026-10-16 actual existing-image audit: mount provenance blocked, not loader failed
+
+The owner physically ran Wizard **3 → 7 → 4** and captured
+`PLE_IMAGE_AUDIT=INCONCLUSIVE: Mounted vLLM source could differ from
+image layer` with `DOCKER_MUTATION=NONE` and
+`GPU_RUN=NOT_PERFORMED`. The old inspector treated any mount under
+a broad vLLM Python prefix as a blocker; it did **not** report the
+specific mount and did **not** prove it covered `ple_layer.py`.
+See [physical mounted-source audit](../scripts/benchmark/evidence/dgx-lychee888-existing-ple-mount-audit-20261016.md).
+It is not evidence of a failed model load.
+
+**Remediation in the maintained read-only audit module:** when
+`docker inspect` identifies a matching existing image and managed
+container, only a mount whose destination actually covers the
+candidate `ple_layer.py` pathname is relevant. Unrelated ModelOpt
+or other vLLM file mounts are no longer blockers. If an exact
+PLE file or ancestor directory is bind-mounted, use the Docker
+mount's `Source` mapping to inspect the host's existing file
+*read-only* with per-component no-symlink-following, bounded size
+and stable identity checks; never claim that the bound host file
+is part of the original image layer. Report
+`source_origin=HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER`,
+container source pathname, bind destination and the SHA256 of the
+bytes actually parsed. If no relevant mount exists, the legacy
+`docker cp` source route remains available and is labeled
+`EXISTING_CONTAINER_FILESYSTEM_NOT_PROVEN_RUNTIME`.
+Ambiguous overlapping mounts, a non-bind source, missing bind file,
+symlink, unstable read, unexpected source structure or image/container
+ID mismatch still block safely as `INCONCLUSIVE`. Neither path
+proves the file was actually imported by a running Python process.
+
+This improvement is **SOURCE/SYNTHETIC CI only** until another
+physical Wizard **3 → 7 → 4** run. No mounts, Docker objects,
+images or services are changed by the audit; the installed image
+digest and lychee888 TP=1 loader remain unqualified until captured.
