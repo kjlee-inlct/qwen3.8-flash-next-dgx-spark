@@ -1,3 +1,40 @@
+## 2026-10-16 — ACTUAL_DGX lychee888 compressed-tensors gate PASS; loader remains blocked
+
+The owner fast-forwarded the clean DGX working checkout from
+`99f04da` to `aea42fa` then used Wizard **3 → 7 → 3**.
+The actual fixed-revision Hub JSON output returned
+`INDEX_STRUCTURE_PASS_METADATA_ONLY` at
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`,
+223,047 index keys, 128 FP8 PLE shards / ten files / one global
+scale key, `float8_e4m3fn` PLE dtype, **`quant_method=compressed-tensors`**,
+`format=mixed-precision`, and no top-level `quant_algo`.
+`nvidia_patch_source_dispatch=NOT_APPLICABLE`;
+`SOURCE_ONLY_LOADER_UNQUALIFIED`,
+`MODEL_PAYLOAD_DOWNLOADED=NO` and `GPU_RUN=NOT_PERFORMED`.
+This supersedes the new L1 source probe's prior `NOT_CAPTURED` status,
+**not** the unverified actual-image loader and single-Spark TP=1 gates.
+Exact owner-provided evidence is retained at
+[lychee888 actual source-gate report](../scripts/benchmark/evidence/dgx-lychee888-fp8ple-source-gate-physical-20261016.md).
+
+**SOURCE follow-on only:** The external dual-Spark PLE implementation
+demonstrates FP8 table selection on explicit `ple_embedding_dtype`,
+FP8 weight/BF16 global-scale registration and applying the global
+scale during dequantization, but its externally maintained image and
+TP=2 evidence do not qualify our installed `vllm-skinny-tp1:v1`
+or actual GB10 TP=1 runtime. AGPL external source is referenced,
+not copied. A bounded **read-only existing-image source inspector**
+now operates through Wizard **3 → 7 → 4**:
+`docker image inspect`, `docker container inspect` and
+`docker cp` from an already-existing exact matching managed
+container only. It cannot create/start/exec any container, build
+images or touch GPU/model data, and fails closed if the source/image
+identity is unavailable. Its output is explicitly static source
+signatures only and `lychee888_tp1_loader=NOT_QUALIFIED`.
+This new inspection procedure has **NOT** yet been executed on
+the real DGX; CI/synthetic evidence is separate. The candidate
+remains planned/disabled. PR #261 and #259 remain protected Draft
+and no merge or physical GPU trial is authorized.
+
 ## 2026-10-16 — lychee888 pinned FP8-PLE source-only Wizard gate; CI PASS, physical probe pending
 
 Added `scripts/model/assess_lychee888_loader.py` (independent standard-library
