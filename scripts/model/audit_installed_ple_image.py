@@ -21,7 +21,7 @@ IMAGE_TAG = "vllm-skinny-tp1:v1"
 MANAGED_CONTAINER = "qwen38-flash-next"
 MAX_RESPONSE = 1024 * 1024
 MAX_SOURCE = 512 * 1024
-IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}\\Z")
+IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}\Z")
 SOURCE_RELATIVE = "vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py"
 PATHS = tuple(
     f"/usr/local/lib/python{py}/{kind}/{SOURCE_RELATIVE}"
