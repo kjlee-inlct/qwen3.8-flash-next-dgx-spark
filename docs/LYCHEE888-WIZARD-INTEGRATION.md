@@ -230,3 +230,89 @@ offload memory plans without sacrificing NVIDIA RM/watchdog reserve.
 The author's validated dual-Spark recipe and `PLE_QUANT_OVERRIDE=fp8`
 are **external** implementation evidence, not a qualified single-GB10
 managed path. No trial or destructive action is approved.
+
+## 2026-10-16 actual DGX FP8-PLE source gate result and installed-image source admission
+
+**Physical operator evidence:** [DGX lychee888 fixed-revision source-gate transcript](../scripts/benchmark/evidence/dgx-lychee888-fp8ple-source-gate-physical-20261016.md).
+The owner fast-forwarded a clean checkout to
+`aea42fa4e7e768b4fd6603a13638d11c33976dbd` and used
+Wizard **3 → 7 → 3**. On the real DGX, Hub JSON/index returned
+`INDEX_STRUCTURE_PASS_METADATA_ONLY`, exactly 223,047 index keys,
+128 FP8 PLE shard keys across ten files and one scale key at immutable
+lychee888 SHA `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`.
+The actual pinned config reports **`quant_method=compressed-tensors`**
+and **`format=mixed-precision`**, `quant_algo=None`,
+`ple_embedding_dtype=float8_e4m3fn`.
+The checker correctly returned
+`nvidia_patch_source_dispatch=NOT_APPLICABLE` and
+`SOURCE_ONLY_LOADER_UNQUALIFIED`. The installed manifest indicated
+`vllm-skinny-tp1:v1` but **neither its digest nor actual internal
+`ple_layer.py` source was verified**. The check did not download
+weights or execute any GPU/Docker action. This **ACTUAL_DGX** gate
+supersedes the earlier `NOT_CAPTURED` source-probe status, but does
+not supersede the outstanding runtime/TP=1 blockers.
+
+### Source-level FP8-PLE contract — external reference, not an installed patch
+
+The publicly reviewed
+[MiaAI-Lab dual-Spark PLE source](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Dual-DGX-Sparks/blob/main/files/ple_layer_patched.py)
+(current source blob `b86cd6263ddfc77ed200d22271f49c4899c299b3`,
+**mutable `main`, not installed image evidence**) demonstrates
+separate implementation obligations:
+
+1. **Selection:** the checkpoint-specific
+   `text_config.ple_embedding_dtype=float8_e4m3fn` may be used to
+   select `Qwen3_8FlashNextPLEFp8EmbeddingMethod` rather than
+   relying on the unrelated model-wide
+   `isinstance(quant_config, Fp8Config)` check. The historical
+   dual-Spark recipe uses `PLE_QUANT_OVERRIDE=fp8`; a later external
+   source version uses dtype-driven dispatch. Do not indiscriminately
+   force FP8 on BF16 or packed-NVFP4 PLE checkpoints.
+2. **Registration/load:** that FP8 method registers
+   an FP8 embedding `weight` and global BF16 `weight_scale`.
+   Correct file/key mapping (already checked at JSON level) is
+   insufficient without verifying that the scale actually gets loaded,
+   survives the model's sharded/CPU-offload loader path and is not
+   left uninitialized.
+3. **Consumption:** the PLE lookup/dequant path must multiply FP8
+   embedding values by the global scale in the proper output dtype
+   and device, failing closed if the scale is missing. Static code
+   presence is not proof of runtime invocation or numerical accuracy.
+4. **TP=1/residency:** the external reference is primarily a
+   TP=2 dual-Spark recipe, not single Spark admission. The publisher's
+   `123.25 GiB` on-disk checkpoint figure is itself greater than
+   the Spark's official `128 decimal GB ~=119.21 GiB` unified RAM,
+   before runtime/KV/monitor reserve. A safe, actually verified
+   mmap/offload/residency model would be required; do not equate
+   disk size directly with measured peak resident bytes.
+
+The external recipe is AGPL-licensed; treat it as source/architecture
+reference and respect its provenance. Do not copy its implementation
+into the maintained backend without separate license and integration
+review. The project's existing NVIDIA-only `patch-nv-mixed.py`
+must remain unchanged on this evidence.
+
+### Next read-only physical operator gate — Wizard-first
+
+The standalone `scripts/model/audit_installed_ple_image.py` can
+inspect an **already-existing, exact matching** managed
+`qwen38-flash-next` container associated with local
+`vllm-skinny-tp1:v1`. It invokes only bounded
+`docker image inspect`, `docker container inspect`, and
+`docker cp` read-only operations. It refuses mismatched image IDs,
+unexpected source mounts and ambiguous or oversized source archives.
+It parses the existing vLLM `ple_layer.py` source in memory and
+records its SHA256, FP8 resolver branch signatures, BF16 global scale
+registration and dequantization multiplication signatures. It cannot
+create a container to fill in missing evidence.
+
+Operator route: `./wizard.sh` → **3 → 7 → 4**
+(**Existing image PLE loader source**). If no existing matched
+container/source is available, the result is deliberately
+`INCONCLUSIVE`; it does not fall back to starting a container,
+building/altering the image, changing models or downloading weights.
+Even a successful static source extraction is
+`STATIC_ONLY_NOT_EXECUTION` and `lychee888_tp1_loader=NOT_QUALIFIED`.
+An image-specific, isolated source patch and further synthetic tests
+may be considered **only after** this source attestation, separately
+from any real GPU qualification.
