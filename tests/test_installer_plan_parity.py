@@ -258,8 +258,8 @@ install_plan_render_cli_preview
             self.assertIn("--dry-run", argv)
             self.assertNotIn("--no-start", argv)
 
-    def test_fresh_hybrid_h6_plan_is_non_mutating(self) -> None:
-        """A clean-host Hybrid choice must resolve its H6 recipe without host I/O."""
+    def test_retired_hybrid_h6_plan_fails_closed_without_mutation(self) -> None:
+        """Retired H6 is not offered as a new install plan."""
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             models = home / "new-models"
@@ -268,25 +268,8 @@ install_plan_render_cli_preview
                 "--model-root", str(models), "--no-start", "--yes", "--dry-run",
             ]
             preview = self.run_installer(home, args)
-            self.assertEqual(preview.returncode, 0, preview.stderr)
-            plan = self.extract_plan(preview.stdout)
-            self.assertEqual(plan["profile"], "orcarouter-hybrid")
-            self.assertEqual(plan["model"], "local/orcarouter-mazinb-h6-w4a16")
-            self.assertEqual(plan["revision"], "h6-modelopt-w4a16-v1")
-            self.assertEqual(plan["image"], "vllm-orcarouter-v029:v1")
-            self.assertEqual(plan["directory"], str(models / "qwen3.8-h6-modelopt-w4a16"))
-            self.assertIn(f"hybrid base : {models / 'qwen3.8-flash-next-orcarouter'}", preview.stdout)
-            self.assertIn(f"hybrid mix  : {models / 'qwen3.8-flash-next-mazinb'}", preview.stdout)
-            self.assertEqual(plan["protection"], "enabled")
-            self.assertIn("DRY-RUN complete", preview.stdout)
-
-            equivalent = self.extract_equivalent_cli(preview.stdout)
-            self.assertIn("--model", equivalent)
-            self.assertIn("orcarouter-hybrid", equivalent)
-            self.assertIn("--dry-run", equivalent)
-            replay = self.run_installer(home, equivalent[1:])
-            self.assertEqual(replay.returncode, 0, replay.stderr)
-            self.assertEqual(self.extract_plan(replay.stdout), plan)
+            self.assertNotEqual(preview.returncode, 0)
+            self.assertIn("retired", preview.stderr)
             self.assertFalse((home / "state").exists())
             self.assertFalse(models.exists())
 
