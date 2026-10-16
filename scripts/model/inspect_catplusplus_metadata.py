@@ -137,12 +137,45 @@ def validate(
     weights = sorted(n for n in files if n.endswith(".safetensors"))
     root_weights = [n for n in weights if "/" not in n]
     extras = [n for n in files if n.startswith("extra/")]
-    sibling_sizes = [
-        s.get("size") if isinstance(s, dict) else None
-        for s in api.get("siblings", [])
-    ]
-    legacy_known = sum(s for s in sibling_sizes if isinstance(s, int) and not isinstance(s, bool) and s >= 0)
-    legacy_unknown = sum(not (isinstance(s, int) and not isinstance(s, bool) and s >= 0) for s in sibling_sizes)
+    # The old remote inspector sums only siblings[].size. Xet/LFS blobs can
+    # have a missing size here while the revision-pinned expanded tree knows it.
+    siblings = api.get("siblings")
+    if not isinstance(siblings, list):
+        raise InventoryError("revision API siblings are missing or invalid")
+    legacy: dict[str, int | None] = {}
+    for entry in siblings:
+        if not isinstance(entry, dict):
+            raise InventoryError("revision API contains non-object sibling")
+        name = entry.get("rfilename")
+        if not isinstance(name, str) or not name or name in legacy:
+            raise InventoryError("revision API contains invalid/duplicate sibling filename")
+        raw_size = entry.get("size")
+        if raw_size is not None and (
+            not isinstance(raw_size, int) or isinstance(raw_size, bool) or raw_size < 0
+        ):
+            raise InventoryError(f"invalid sibling size: {name}")
+        legacy[name] = raw_size
+    api_only_names = sorted(set(legacy) - set(files))
+    if api_only_names:
+        raise InventoryError("revision API siblings absent from full tree: " + ", ".join(api_only_names[:10]))
+    mismatched = sorted(
+        name for name, size in legacy.items()
+        if size is not None and file_sizes[name] is not None and size != file_sizes[name]
+    )
+    if mismatched:
+        raise InventoryError("revision API and tree report different file sizes: " + ", ".join(mismatched[:10]))
+    legacy_known = sum(size for size in legacy.values() if size is not None)
+    missing_legacy_names = sorted(name for name, size in legacy.items() if size is None)
+    tree_only_names = sorted(set(files) - set(legacy))
+    missing_legacy_bytes = sum(file_sizes[name] or 0 for name in missing_legacy_names)
+    tree_only_bytes = sum(file_sizes[name] or 0 for name in tree_only_names)
+    reconciliation_complete = all(
+        file_sizes[name] is not None for name in missing_legacy_names + tree_only_names
+    )
+    # The tree's byte sum must partition cleanly into known legacy,
+    # missing-size legacy entries and files omitted from legacy siblings.
+    if not unknown and legacy_known + missing_legacy_bytes + tree_only_bytes != sum(file_sizes.values()):
+        raise InventoryError("legacy/tree byte reconciliation does not balance")
     weight_map: dict[str, str] | None = None
     index_files: list[str] | None = None
     if index is not None:
@@ -179,7 +212,12 @@ def validate(
         "index_tensor_keys": len(weight_map) if weight_map is not None else None,
         "unindexed_root_safetensors": sorted(set(root_weights) - set(index_files or [])) if index_files is not None else None,
         "legacy_siblings_known_bytes": legacy_known,
-        "legacy_siblings_unknown_size_entries": legacy_unknown,
+        "legacy_siblings_unknown_size_entries": len(missing_legacy_names),
+        "legacy_siblings_missing_size_paths": missing_legacy_names,
+        "legacy_missing_size_recovered_tree_bytes": missing_legacy_bytes if reconciliation_complete else None,
+        "tree_only_files_absent_from_legacy_siblings": tree_only_names,
+        "tree_only_bytes": tree_only_bytes if reconciliation_complete else None,
+        "legacy_tree_reconciliation_complete": size_complete and reconciliation_complete,
         "repository_file_count": len(files),
         "safetensors_file_count": len(weights),
         "root_safetensors_file_count": len(root_weights),
@@ -227,7 +265,8 @@ def main() -> int:
     else:
         for key in ("immutable_revision", "verdict", "repository_file_count", "safetensors_file_count",
                     "root_safetensors_gib", "all_repository_gib", "legacy_siblings_known_bytes",
-                    "legacy_siblings_unknown_size_entries", "index_file_count"):
+                    "legacy_siblings_unknown_size_entries", "legacy_missing_size_recovered_tree_bytes",
+                    "tree_only_bytes", "legacy_tree_reconciliation_complete", "index_file_count"):
             print(f"{key}={result[key]}")
         print("GPU_RUN=NOT_PERFORMED")
     return 0 if result["verdict"] == "TREE_METADATA_COMPLETE" else 2
