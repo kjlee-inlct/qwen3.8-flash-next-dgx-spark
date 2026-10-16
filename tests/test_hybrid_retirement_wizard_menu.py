@@ -1,4 +1,4 @@
-"""Hybrid retirement wizard is navigable, read-only, and historical IDs are not reused."""
+"""Hybrid retirement wizard is modular, navigable, and read-only."""
 from pathlib import Path
 import unittest
 
@@ -10,17 +10,20 @@ ROUTER = ROOT / "scripts/wizard/menus.sh"
 
 class HybridRetirementWizardMenuTests(unittest.TestCase):
     def test_navigation_and_guards(self):
-        text = MENU.read_text()
+        model = MENU.read_text()
         guide = SUBMENU.read_text()
         router = ROUTER.read_text()
-        self.assertNotIn("wizard_hybrid_retirement_guide() {", text)
+        self.assertNotIn("wizard_hybrid_retirement_guide() {", model)
+        self.assertIn("wizard_menu_option 10", model)
+        self.assertIn("10) wizard_hybrid_retirement_guide ;;", model)
         self.assertIn("hybrid-retirement-menu.sh", router)
-        for phrase in ("wizard_hybrid_retirement_guide()"
-                       "wizard_menu_option 10", "10) wizard_hybrid_retirement_guide ;;",
-                       "hybrid-archive-git-summary.py", "hybrid-docker-inventory.py",
+        self.assertIn("wizard_hybrid_retirement_guide() {", guide)
+        for phrase in ("hybrid-archive-git-summary.py",
+                       "hybrid-docker-inventory.py",
                        "Old exact-17/H3-H6 scripts", "((missing+=1))"):
-            self.assertIn(phrase, guide if phrase not in ("wizard_menu_option 10", "10) wizard_hybrid_retirement_guide ;;") else text)
-        for forbidden in ('--execute', 'docker rm', 'rmtree', 'remove-hybrid-models-exact-h3-h6.py'):
+            self.assertIn(phrase, guide)
+        for forbidden in ("--execute", "docker rm", "rmtree",
+                          "remove-hybrid-models-exact-h3-h6.py"):
             self.assertNotIn(forbidden, guide)
 
 
