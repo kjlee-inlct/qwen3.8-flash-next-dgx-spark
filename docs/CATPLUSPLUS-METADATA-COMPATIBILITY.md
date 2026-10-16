@@ -40,11 +40,20 @@ The new script's actual pinned Hub output and GitHub CI must be recorded
 separately; source presence alone does not mean the 189GB reconciliation
 has already passed.
 
-## Next read-only operator check
+## Next read-only operator check — Wizard-first
 
-After a source checkout fast-forward, with no service or model changes:
+After a clean source checkout fast-forward, open the operator Wizard:
 
-    python3 -B scripts/model/inspect_catplusplus_metadata.py --json > /tmp/catplusplus-metadata-3251fd8.json
+    ./wizard.sh
+
+Choose **3 — Models / switch preview → 11 — Candidate Hub metadata
+(read-only) → 1 — catplusplus summary**. Select 2 in the same submenu
+for the complete JSON file inventory printed to the terminal; 0 returns.
+The Wizard invokes the pinned standard-library inspector internally and
+never downloads safetensors, changes model installability, starts GPU
+services or modifies Docker. A failure remains inconclusive and does not
+admit a candidate. The standalone Python command remains an internal
+developer/test entry point, **not the recommended operator workflow**.
 
 Capture verdict, missing-size file names, entire file_inventory,
 all_repository_bytes, root_safetensors_bytes and
