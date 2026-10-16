@@ -151,3 +151,47 @@ physical READY or inference qualification.
 **Decision:** No verified single-Spark compatibility yet.
 Do not mutate existing image or register lychee888 as installable;
 keep the 2026-10-13 real-Hub L0 PASS as the prior completed gate.
+
+## 2026-10-16 follow-on source comparison after catplusplus L0 inventory PASS
+
+The physical DGX catplusplus immutable-revision Hub tree now reconciles
+legacy 63.876550574 GiB versus the complete 175.591585640 GiB repository.
+This answers **file accounting only**; it does not elevate catplusplus
+to loader qualification. Stored catplusplus root weights occupy
+174.8553 GiB, well beyond the single Spark's official 128 decimal GB
+coherent RAM for a wholly resident unmodified loader. Consequently
+catplusplus has a higher source-level residency risk than the
+**publisher-reported**, not independently byte-audited,
+lychee888 123.25-GiB disk layout. Even lychee888's figure exceeds the
+single Spark's 128 *decimal* GB in raw terms; real PLE mmap/offload
+and runtime overhead must be verified rather than assumed.
+
+**Existing reusable SOURCE:** `scripts/patch-nv-mixed.py`, delivered by
+`scripts/Dockerfile.nv-mixed` for the NVIDIA candidate, patches
+`Qwen3_8FlashNextPLEFp8EmbeddingMethod` dispatch **only for**
+`ModelOptMixedPrecisionConfig` whose per-prefix
+`_resolve_quant_algo(prefix) == "FP8"`. The Dockerfile layers this
+over `vllm-skinny-tp1:v1` and creates a distinct target image
+`vllm-nv-mixed:v2`. The owner-reported current installed image
+`vllm-skinny-tp1:v1` is **not evidence that those modifications
+are present** in its runtime. This source code is a useful reference
+for the FP8 n-gram embedding method, **not a working lychee888
+loader**: the lychee card instead describes NVFP4 model-level
+quantization plus `PLE_QUANT_OVERRIDE=fp8` on the *dual-node*
+third-party recipe. The exact pinned lychee config/loader binding
+must be checked before reusing or adapting this dispatch;
+catplusplus's MXFP8 fused projection aliases are yet another
+independent requirement.
+
+**Next SOURCE-only gate, no real launch:** inspect pinned lychee
+`quantization_config` and relevant constructor/resolver branches;
+prove the planned TP=1 image can register 128 FP8 PLE embedding
+shards and a single BF16 global `weight_scale`, and actually
+apply the scalar in lookup. Check naming and MoE/attention
+quantization separately using mock/synthetic source tests.
+Do not assume modelopt_mixed and modelopt/NVFP4 are interchangeable,
+or that a source patch equals a built/pinned image. Preserve the
+existing actual-DGX lychee Hub `INDEX_STRUCTURE_PASS_METADATA_ONLY`
+as L0 evidence. No weight downloads, Docker build, GPU trials,
+service changes or registry admissions are authorized by this
+review.
