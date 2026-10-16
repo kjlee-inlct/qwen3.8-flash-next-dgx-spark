@@ -76,6 +76,11 @@ not silently rewrite physical history.
    one-off manual command the default operator workflow when a suitable
    Wizard path exists. Update this stable rule here when changed; record
    specific features/results only in their canonical implementation/status docs.
+   When a research-only workflow is conclusively retired, remove obsolete
+   operator menu routes while preserving its historical source, immutable
+   evidence, safeguards and registry retirement status unless a separately
+   authorized removal applies. Do not expose dead-end launch/deletion actions
+   to ordinary operators after that research lifecycle has closed.
 
 ## What belongs in the conversation-to-conversation prompt
 
