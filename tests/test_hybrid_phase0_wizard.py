@@ -41,29 +41,25 @@ class HybridPhase0Tests(unittest.TestCase):
             self.assertIn("HYBRID_PHASE0_READONLY=BLOCKED", result.stderr)
             self.assertFalse((home / "xdg").exists())
 
-    def test_wizard_menu_7_is_readonly_delegation(self):
+    def test_retired_wizard_hybrid_routes_are_unreachable(self):
+        # The former 7-10 menu routes were retired after physical cleanup.
+        # No network, GPU or host services are required for the navigation test.
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            bin_dir = home / "bin"
-            bin_dir.mkdir()
-            stub = bin_dir / "bash"
-            stub.write_text('#!/bin/sh\n'
-                            'printf "%s\\n" "$*" >> "$HOME/calls"\n'
-                            'exit 0\n', encoding="utf-8")
-            stub.chmod(0o700)
             env = {**os.environ, "HOME": str(home),
-                   "XDG_STATE_HOME": str(home / "xdg"),
-                   "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+                   "XDG_STATE_HOME": str(home / "xdg")}
             result = subprocess.run(
                 ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
-                cwd=ROOT, env=env, input="3\n7\n0\n0\n",
+                cwd=ROOT, env=env, input="3\\n8\\n9\\n10\\n0\\n0\\n",
                 capture_output=True, text=True, check=False, timeout=20,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            calls = (home / "calls").read_text(encoding="utf-8")
-            self.assertIn("hybrid-phase0-readonly.sh", calls)
-            self.assertNotIn("install.sh", calls)
-            self.assertNotIn("reclaim-mazinb", calls)
+            self.assertEqual(result.stdout.count("Invalid selection"), 3)
+            self.assertIn("7) Candidate Hub metadata", result.stdout)
+            self.assertNotIn("Hybrid H6 Phase-0 inventory", result.stdout)
+            self.assertNotIn("Hybrid H6 launch admission", result.stdout)
+            self.assertNotIn("hybrid-phase0-readonly.sh", MENU.read_text())
+            self.assertTrue(SCRIPT.is_file())  # historical read-only probe retained
             self.assertFalse((home / "xdg").exists())
 
     def test_cleanup_success_does_not_report_failure(self):
