@@ -21,6 +21,8 @@ REPO = "catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed"
 REVISION = "3251fd8afbd08f76368a9bfa71132d9aef364813"
 SHA = re.compile(r"^[a-f0-9]{40}$")
 MAX_JSON = 128 * 1024 * 1024
+TREE_PAGE_SIZE = 1000  # HF expand=false supports up to 1000 entries/page.
+MAX_TREE_PAGES = 256   # Safety ceiling; never claim completeness if exceeded.
 GIB = 1024 ** 3
 
 
@@ -52,6 +54,58 @@ def _get_json(url: str) -> tuple[Any, str | None]:
     return _object(data, url), next_url
 
 
+def _checked_tree_url(url: str) -> str:
+    """Reject cross-revision, cross-repository and downgraded Link cursors."""
+    parsed = urllib.parse.urlsplit(url)
+    expected_path = f"/api/models/{REPO}/tree/{REVISION}"
+    if parsed.scheme != "https" or parsed.netloc != "huggingface.co" or parsed.path != expected_path:
+        raise InventoryError("Hub tree pagination Link changed host, repo or pinned revision")
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    if any(len(v) != 1 for v in params.values()):
+        raise InventoryError("Hub tree pagination Link contains ambiguous parameters")
+    if (params.get("recursive", [""])[0].lower() != "true"
+            or params.get("expand", [""])[0].lower() != "false"
+            or params.get("limit") != [str(TREE_PAGE_SIZE)]):
+        raise InventoryError("Hub tree pagination Link dropped recursive/compact/limit settings")
+    if not set(params).issubset({"recursive", "expand", "limit", "cursor"}):
+        raise InventoryError("Hub tree pagination Link has unexpected query parameters")
+    return url
+
+
+def _list_revision_tree() -> list[dict[str, Any]]:
+    """Complete compact Hub tree; reject loops and partial traversal."""
+    endpoint = f"https://huggingface.co/api/models/{REPO}/tree/{REVISION}"
+    url: str | None = f"{endpoint}?recursive=true&expand=false&limit={TREE_PAGE_SIZE}"
+    tree: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    seen_paths: set[str] = set()
+    while url is not None:
+        _checked_tree_url(url)
+        if url in seen_urls:
+            raise InventoryError(f"Hub tree pagination repeated URL after {len(seen_urls)} pages")
+        if len(seen_urls) >= MAX_TREE_PAGES:
+            raise InventoryError(f"Hub tree exceeded {MAX_TREE_PAGES} compact pages; inventory incomplete")
+        seen_urls.add(url)
+        page, next_url = _get_json(url)
+        if not isinstance(page, list) or not all(isinstance(entry, dict) for entry in page):
+            raise InventoryError("Hub tree page is not a JSON array of objects")
+        if not page and next_url is not None:
+            raise InventoryError("Hub tree pagination has empty nonterminal page")
+        for entry in page:
+            name = entry.get("path")
+            if not isinstance(name, str) or not name:
+                raise InventoryError("Hub tree page has entry without a path")
+            if name in seen_paths:
+                raise InventoryError(f"Hub tree pagination repeated path after {len(seen_urls)} pages: {name}")
+            seen_paths.add(name)
+        tree.extend(page)
+        if len(seen_urls) == 1 or len(seen_urls) % 10 == 0 or next_url is None:
+            print(f"CATPLUSPLUS_TREE_PROGRESS pages={len(seen_urls)} entries={len(tree)}",
+                  file=sys.stderr)
+        url = next_url
+    return tree
+
+
 def remote_snapshot() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any], dict[str, Any] | None]:
     if not SHA.fullmatch(REVISION):
         raise InventoryError("source revision is not immutable SHA")
@@ -59,19 +113,7 @@ def remote_snapshot() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, A
     api, _ = _get_json(f"https://huggingface.co/api/models/{REPO}/revision/{REVISION}?blobs=true")
     if not isinstance(api, dict) or api.get("sha") != REVISION:
         raise InventoryError("Hub revision API did not confirm requested commit")
-    url: str | None = f"https://huggingface.co/api/models/{REPO}/tree/{REVISION}?recursive=true&expand=true"
-    tree: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
-    while url is not None:
-        if url in seen_urls or len(seen_urls) >= 100:
-            raise InventoryError("tree pagination repeated or exceeded 100 pages")
-        seen_urls.add(url)
-        page, url = _get_json(url)
-        if not isinstance(page, list):
-            raise InventoryError("Hub tree page is not an array")
-        if not all(isinstance(x, dict) for x in page):
-            raise InventoryError("Hub tree contains non-object entries")
-        tree.extend(page)
+    tree = _list_revision_tree()
     file_names = {x.get("path") for x in tree if x.get("type") == "file"}
     if "config.json" not in file_names:
         raise InventoryError("missing config.json in tree")
