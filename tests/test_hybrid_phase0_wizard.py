@@ -50,7 +50,7 @@ class HybridPhase0Tests(unittest.TestCase):
                    "XDG_STATE_HOME": str(home / "xdg")}
             result = subprocess.run(
                 ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
-                cwd=ROOT, env=env, input="3\\n8\\n9\\n10\\n0\\n0\\n",
+                cwd=ROOT, env=env, input="3\n8\n9\n10\n0\n0\n",
                 capture_output=True, text=True, check=False, timeout=20,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
