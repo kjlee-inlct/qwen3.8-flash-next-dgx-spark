@@ -108,7 +108,7 @@ class InventoryTests(unittest.TestCase):
 
     def test_index_inconsistency_fails(self):
         docs = snapshot()
-        docs[1] = [x for x in docs[1] if x["path"] != "model.safetensors.index.json"]
+        docs[1][:] = [x for x in docs[1] if x["path"] != "model.safetensors.index.json"]
         with self.assertRaisesRegex(mod.InventoryError, "index.json"):
             mod.validate(*docs)
 
