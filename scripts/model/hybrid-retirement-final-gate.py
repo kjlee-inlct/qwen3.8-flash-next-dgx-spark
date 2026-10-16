@@ -86,8 +86,10 @@ def inspect_and_validate():
             mapped = source_root.joinpath(*parts)
             if not mapped.is_file() and not mapped.is_symlink():
                 raise ValueError("mapped Hybrid source missing: " + str(path))
-            if mapped.is_symlink():
-                raise ValueError("mapped Hybrid source is another symlink: " + str(path))
+            # Earlier stages can themselves be virtual-link layouts.
+            # That is safe for unlinking; do not resolve or traverse them.
+            if mapped.is_dir():
+                raise ValueError("mapped Hybrid source is a directory: " + str(path))
             counts[name] += 1
     expected_counts = {STAGES[0]: 13, STAGES[1]: 76, STAGES[2]: 91, STAGES[3]: 139}
     if counts != expected_counts:
