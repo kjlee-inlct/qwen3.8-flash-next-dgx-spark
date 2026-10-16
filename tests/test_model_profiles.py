@@ -497,7 +497,7 @@ class ModelProfileTests(unittest.TestCase):
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("generated locally", result.stderr)
+        self.assertIn("retired", result.stderr)
 
     def test_installer_wires_hybrid_build_orchestrator(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
