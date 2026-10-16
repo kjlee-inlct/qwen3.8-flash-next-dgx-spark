@@ -56,8 +56,13 @@ not silently rewrite physical history.
 6. **Documentation on substantive completion:** update the relevant canonical
    source when a decision becomes accepted, a test result becomes verified,
    safety constraints change, or a technical conclusion is established.
-   Avoid copying active task checklists or transient discussions into this
-   permanent handoff file.
+   Record actual deletion, protected-asset postchecks, data provenance and
+   measured recovered space in dated status/evidence documents; link them
+   from the stable handoff index rather than pasting chronological logs here.
+   Keep Wizard routing screens thin and dedicated lifecycle logic in separate
+   testable modules; do not reuse historical exact-ID cleanup scripts as
+   generic operations. Avoid copying active task checklists or transient
+   discussions into this permanent handoff file.
 
 ## What belongs in the conversation-to-conversation prompt
 
