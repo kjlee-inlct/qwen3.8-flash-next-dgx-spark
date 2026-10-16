@@ -1,3 +1,33 @@
+## 2026-10-16 — Physical removal of exactly 17 Hybrid Docker research objects
+
+Operator invoked the opt-in exact-ID Docker-only removal after an
+actual DGX `DRY_RUN` had matched all 17 archived IDs and the GitHub
+CI for that code completed successfully. The terminal printed
+`REMOVED_EXACT_ID=` for each of all 17 expected full IDs, then
+`HYBRID_DOCKER_EXACT_17=REMOVED` and
+`MODEL_DELETE=NOT_PERFORMED`. A separate subsequent
+`docker ps -a --no-trunc` listed eight retained unrelated/managed
+Docker containers, including `qwen38-flash-next`, healthy running
+`open-webui`, and running `portainer`; none of the exact 17 remained.
+
+Observed `df -B1 .` before removal:
+`used=634497937408`, `available=298321874944` bytes.
+Observed after removal:
+`used=629398196224`, `available=303421616128` bytes.
+**Net observed additional available bytes: 5,099,741,184
+(about 4.75 GiB)**. This is observational correlation rather
+than filesystem proof that all change came exclusively from Docker;
+no Docker volumes/images or H3–H6 model directories were
+intentionally deleted by this script.
+
+**Retirement state:** EXACT_17_DOCKER=REMOVED_PHYSICALLY;
+H3_H4_H5_H6_MODELS=NOT_REMOVED;
+ORCAROUTER_MODEL=PROTECTED;
+PROVENANCE_ARCHIVE=LOCAL_PRIVATE_34_CHECKSUMS_PASS_BEFORE_REMOVAL.
+The earlier 17-object Docker presence gate is expected to
+fail after this deletion; it must not be reused as a model-only
+retirement gate.
+
 ## 2026-10-16 — Physically checked aggregate of all 17 archived logs
 
 The operator ran the checksum-gated log aggregate on the real DGX. It reported 17 logs, aggregate size **1,351,619 bytes**, **7** traceback markers across 4 containers, **2** KeyboardInterrupt markers (H6 M1), and **0** matching OOM strings. The source archive SHA256SUMS hash matched the previously pinned `79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701`. All rows below contain only content digests, byte counts and marker counts; **no raw log lines have been committed**.
