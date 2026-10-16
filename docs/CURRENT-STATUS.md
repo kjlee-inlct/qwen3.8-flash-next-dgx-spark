@@ -1,3 +1,27 @@
+## 2026-10-16 — Retired Hybrid research routes removed from active Wizard
+
+Following the operator's request, the four completed Hybrid-only Model
+management routes (former items 7–10 for H6 Phase-0, H3–H6 dependency
+inspection, H6 launch admission and historical retirement guidance) have
+been removed from the active terminal Wizard. The read-only candidate Hub
+metadata submenu moved from item 11 to **item 7**. Historical Hybrid
+inspection scripts and the retired retirement-menu module remain in Git
+for reproducibility but are no longer imported by active Wizard routing.
+Stale active-menu wording claiming the physically removed H3–H6 stages
+must still be retained was corrected. The `orcarouter-hybrid` registry
+record stays `retired` / `PROFILE_INSTALLABLE=0`; neither the registry's
+historical identity nor the original local research evidence was deleted.
+
+SOURCE + synthetic CI through commit `d78ad60e16719fc31cca5b94bde1bc0a11fbb3ef`:
+GitHub Actions run `38857649562` **SUCCESS**, after updating assertions
+that previously required the obsolete Hybrid menu. Regression tests now
+verify the retired menu IDs cannot reach historical scripts and the
+read-only source guards remain preserved. Stable general policy for
+removing obsolete research-only menu routes is in
+`docs/SESSION-HANDOFF-PROMPT.md`. No operator DGX source-sync,
+Docker/model deletion, host mutation or new GPU trial is claimed by
+these repository-only changes. PR #261/#259 remain protected Draft.
+
 ## 2026-10-16 — Candidate metadata Wizard integrated; source-only CI PASS
 
 The canonical operator Wizard now exposes Model management item 11
