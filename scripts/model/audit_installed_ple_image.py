@@ -129,7 +129,9 @@ def audit_source(source: str) -> dict[str, str]:
     ]
     if len(quant) != 1 or len(fp8cls) != 1:
         raise AttestationError("Expected PLE quant resolver and FP8 embedding class not both found")
-    text = ast.unparse(quant[0])
+    # Only executable function BODY counts. A ple_embedding_dtype parameter
+    # in the signature does not prove dtype-based routing is implemented.
+    text = "\n".join(ast.unparse(stmt) for stmt in quant[0].body)
     if "PLE_QUANT_OVERRIDE" in text:
         route = "EXPLICIT_OVERRIDE_SOURCE_PRESENT"
     elif "ple_embedding_dtype" in text and "Qwen3_8FlashNextPLEFp8EmbeddingMethod" in text:
