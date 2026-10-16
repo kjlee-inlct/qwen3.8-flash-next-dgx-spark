@@ -1,3 +1,24 @@
+## 2026-10-16 — Candidate metadata Wizard integrated; source-only CI PASS
+
+The canonical operator Wizard now exposes Model management item 11
+(read-only candidate metadata), with catplusplus summary/full-JSON options
+routed to the independent pinned Hub inspector. No candidate was made
+installable. Error, cancellation, EOF and mock interpreter invocation
+are covered by isolated synthetic Wizard tests. The catplusplus inspector
+additionally reconciles old API `siblings[].size` subtotals with the
+complete revision-pinned tree, separately accounting for legacy NULL sizes
+and tree-only files, with four new offline validation tests.
+
+GitHub PR #261 source/CI head `92dbb1ad8acf28bffe5fabdf5d003b87997e31be`:
+Actions run `38856100612` **SUCCESS**, independently of any physical DGX
+execution. Stable independent-module/Wizard-managed-operation rules were
+recorded in `docs/SESSION-HANDOFF-PROMPT.md` (earlier CI run
+`38855790439` SUCCESS). Both PR #261 and #259 remain protected Draft.
+**Physical pinned full-tree API output remains NOT_CAPTURED.**
+63.88 GiB versus ~189 GB is still only a source-level size discrepancy
+hypothesis, not settled actual file accounting. No weights, GPU, Docker,
+host state or protected assets were changed by these repository commits.
+
 ## 2026-10-16 — Candidate SOURCE metadata inspector added; Hub inventory and GPU unverified
 
 A standalone standard-library catplusplus revision-pinned HF metadata tree
