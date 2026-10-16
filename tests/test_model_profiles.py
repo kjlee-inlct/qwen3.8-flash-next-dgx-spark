@@ -354,7 +354,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn('PROFILE_DISPLAY_NAME="OrcaRouter Uncensored"', profiles)
         self.assertIn('PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6"', profiles)
         self.assertIn(
-            'PROFILE_DESCRIPTION="Generated H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"',
+            'PROFILE_DESCRIPTION="Retired local H6 hybrid (2026-10-16); preserved for historical metadata only"',
             profiles,
         )
         self.assertIn("wizard_step 5 6 'API 및 서비스'", installer)
