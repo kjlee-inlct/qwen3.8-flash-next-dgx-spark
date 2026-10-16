@@ -63,6 +63,19 @@ not silently rewrite physical history.
    testable modules; do not reuse historical exact-ID cleanup scripts as
    generic operations. Avoid copying active task checklists or transient
    discussions into this permanent handoff file.
+7. **Independent implementations, Wizard-managed operation:** implement reusable
+   inspection, analysis, download, validation and lifecycle capabilities in
+   small, independently testable role modules. Keep the terminal Wizard as
+   the preferred, discoverable operator-facing control plane for meaningful
+   model/host management actions: route to maintained modules, display clear
+   preview, state, evidence, errors and cancel/back behavior, and distinguish
+   read-only checks from mutations. Do **not** expose every internal helper
+   as a menu item or force developer-only debugging, CI or scripted automation
+   through the Wizard; direct module execution is appropriate in those cases.
+   Separate module tests from Wizard routing/consent tests. Do not make a
+   one-off manual command the default operator workflow when a suitable
+   Wizard path exists. Update this stable rule here when changed; record
+   specific features/results only in their canonical implementation/status docs.
 
 ## What belongs in the conversation-to-conversation prompt
 
