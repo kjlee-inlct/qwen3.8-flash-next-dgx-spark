@@ -135,6 +135,29 @@ Canonical implementations include:
 - `model/prepare-hybrid-checkpoint.py`
 - `model/prepare-quant-layout-hybrid-checkpoint.py`
 - `model/inspect-checkpoint-diff.py`
+- `model/inspect_catplusplus_metadata.py` (pinned Hub JSON full-tree only)
+- `model/inspect_lychee888_metadata.py` (pinned-source JSON L0)
+- `model/assess_lychee888_loader.py` (pinned JSON vs NVIDIA patch source)
+- `model/audit_installed_ple_image.py` (existing container/source read-only)
+
+## Read-only model candidate evidence tools
+
+The canonical Python modules in `scripts/model/` are independently testable;
+operators reach the candidate inventory via `./wizard.sh` → **3 → 7**.
+`inspect_catplusplus_metadata.py` (Wizard items 1/2) reads only immutable
+Hub JSON; `assess_lychee888_loader.py` (item 3) compares pinned
+lychee888 config/index to repository source without weights. Item 4 runs
+`audit_installed_ple_image.py`, which reads only an existing exact-image
+managed Docker container and, if the PLE source is bind-mounted, the
+corresponding host source file using size-limited no-follow read-only
+operations. It ignores unrelated vLLM mounts. The output **always**
+distinguishes `HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER` from
+`EXISTING_CONTAINER_FILESYSTEM_NOT_PROVEN_RUNTIME`; ambiguous overlay
+or unsafe file provenance fails closed. No `docker run`, `exec`,
+`start`, Docker/host mutation or GPU is invoked by these probes.
+Source SHA256 and static AST method presence are not a runtime import,
+tensor load, scale consumption or TP=1 readiness proof.
+See `docs/LYCHEE888-WIZARD-INTEGRATION.md` for the exact evidence gates.
 
 ## Model download transport
 
