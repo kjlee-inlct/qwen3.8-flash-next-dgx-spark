@@ -87,52 +87,6 @@ wizard_mazinb_retirement_audit() {
   fi
 }
 
-wizard_hybrid_phase0_readonly() {
-  wizard_header 'Hybrid H6 Phase-0 read-only inventory / 읽기 전용 점검'
-  wizard_info 'No model start, download, checkpoint deletion or service changes.'
-  if bash "$ROOT_DIR/scripts/wizard/hybrid-phase0-readonly.sh"; then
-    wizard_success 'Static inventory collected; benchmark and deletion are NOT authorized.'
-  else
-    wizard_warning 'Hybrid admission BLOCKED; inspect the audit before any live step.'
-  fi
-}
-
-wizard_hybrid_dependency_readonly() {
-  local sha root
-  wizard_header 'Hybrid H3-H6 external dependency audit / 참조 관계 점검'
-  wizard_warning 'This only lists blockers; no checkpoint, Docker, or service modification.'
-  sha="$(git -C "$ROOT_DIR" rev-parse HEAD)" || {
-    wizard_warning 'Unable to pin checkout SHA.'
-    return 0
-  }
-  root="$ROOT_DIR/models"
-  [[ -z "${QWEN38_PHASE0_MODELS_ROOT:-}" ]] || root="$QWEN38_PHASE0_MODELS_ROOT"
-  if python3 -B "$ROOT_DIR/scripts/wizard/hybrid-dependency-readonly.py" \
-       --models-root "$root" --expected-sha "$sha"; then
-    wizard_info 'No known registry/Docker references; deletion STILL NOT AUTHORIZED.'
-  else
-    wizard_warning 'Deletion BLOCKED: dependent profiles or Docker mounts, or incomplete audit.'
-  fi
-}
-
-wizard_hybrid_h6_launch_admission() {
-  local sha root rc=0
-  wizard_header 'Hybrid H6 protected launch admission / 안전 기동 점검'
-  wizard_info 'Read-only only: no Docker start, downloads or service changes.'
-  sha="$(git -C "$ROOT_DIR" rev-parse HEAD)" || return 0
-  root="$ROOT_DIR/models"
-  if [[ -v QWEN38_PHASE0_MODELS_ROOT ]]; then
-    root="$QWEN38_PHASE0_MODELS_ROOT"
-  fi
-  python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-launch-admission.py" \
-    --models-root "$root" --expected-sha "$sha" || rc=$?
-  case "$rc" in
-    0) wizard_info 'Manual review REQUIRED; start is NOT authorized.' ;;
-    3) wizard_warning 'H6 launch BLOCKED pending safe lifecycle/protection controller.' ;;
-    *) wizard_warning 'H6 launch admission INVALID. Do not start.' ;;
-  esac
-}
-
 wizard_model_menu() {
   local choice
   while true; do
@@ -143,11 +97,7 @@ wizard_model_menu() {
     wizard_menu_option 4 'Reclaim mazinb source checkpoint (evidence gated) / mazinb 원본 정리'
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
-    wizard_menu_option 7 'Hybrid H6 Phase-0 inventory (read-only) / Hybrid 사전 점검'
-    wizard_menu_option 8 'Hybrid H3-H6 dependency blockers (read-only) / Hybrid 참조 차단 점검'
-    wizard_menu_option 9 'Hybrid H6 launch admission (read-only) / Hybrid 안전 기동 검증'
-    wizard_menu_option 10 'Hybrid retirement guide & post-cleanup checks / Hybrid 정리 안내·검증'
-    wizard_menu_option 11 'Candidate Hub metadata (read-only) / 후보 모델 파일·용량 조사'
+    wizard_menu_option 7 'Candidate Hub metadata (read-only) / 후보 모델 파일·용량 조사'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -157,11 +107,7 @@ wizard_model_menu() {
       4) wizard_mazinb_source_reclaim ;;
       5) wizard_mazinb_docker_retire ;;
       6) wizard_mazinb_retirement_audit ;;
-      7) wizard_hybrid_phase0_readonly ;;
-      8) wizard_hybrid_dependency_readonly ;;
-      9) wizard_hybrid_h6_launch_admission ;;
-      10) wizard_hybrid_retirement_guide ;;
-      11) wizard_candidate_metadata_menu ;;
+      7) wizard_candidate_metadata_menu ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
