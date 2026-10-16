@@ -1,3 +1,29 @@
+## 2026-10-16 — Actual DGX Hub pagination failure; compact metadata fix CI PASS
+
+Owner synchronized the Wizard checkout at `22bcba4711ee423ffea062268f4b8de3366938e1`
+and selected Model management **3 → 7 → 1** for the revision-pinned
+catplusplus remote metadata summary. It failed before validation with
+`CATPLUSPLUS_METADATA_FAIL: tree pagination repeated or exceeded 100 pages`.
+The old implementation conflated a repeated URL with the 100-page limit
+and used costly `expand=true` (documented at ~50 files/page). This
+was a **physical host execution of read-only Hub JSON inspection**, NOT
+physical model loading, READY or inference; 63.88 GiB vs ~189 GB remains
+unresolved.
+
+Source fix: `scripts/model/inspect_catplusplus_metadata.py` now uses
+`recursive=true&expand=false&limit=1000`, enforces pinned-revision
+pagination links, distinguishes repeated URLs/paths and empty-progress
+pages, reports progress, and fails closed when the 256-page ceiling
+is exceeded without claiming inventory completeness. Additional
+synthetic/offline tests cover 105 unique pages, loops, missing progress,
+unsafe links and the hard page limit. Source/CI at
+`6858b4252d3e8768bd3c62a91508d7d4f614e176`, GitHub
+Actions run `38859700597`, **SUCCESS**. The exact Hugging Face
+model inventory still needs a new read-only DGX run via Wizard
+**3 → 7 → 1**, without Docker, GPU or checkpoint download. The
+status of PR #261 remains protected Draft; no merge was authorized.
+See [catplusplus compatibility record](CATPLUSPLUS-METADATA-COMPATIBILITY.md).
+
 ## 2026-10-16 — Retired Hybrid research routes removed from active Wizard
 
 Following the operator's request, the four completed Hybrid-only Model
