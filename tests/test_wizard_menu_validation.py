@@ -39,23 +39,16 @@ class WizardMenuValidationTests(unittest.TestCase):
         )
         return root
 
-    def test_new_host_hybrid_selection_reaches_h6_plan(self) -> None:
-        """Menu choice 4 must reach the full H6 installer plan on an empty HOME."""
+    def test_new_host_retired_hybrid_is_not_selectable(self) -> None:
+        """Option 4 is now Cancel; H6 cannot enter an installer plan."""
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            # Model=Hybrid, default model root; config override=no,
-            # monitor=yes, protection=yes, custom thresholds=no,
-            # API=local, service=yes, continue=yes.
-            answers = "4\n\nn\ny\ny\nn\n1\ny\ny\n"
-            result = self.run_wizard(home, answers)
+            result = self.run_wizard(home, "4\n")
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("profile     : orcarouter-hybrid", result.stdout)
-            self.assertIn("model       : local/orcarouter-mazinb-h6-w4a16", result.stdout)
-            self.assertIn("revision    : h6-modelopt-w4a16-v1", result.stdout)
-            self.assertIn("hybrid base :", result.stdout)
-            self.assertIn("hybrid mix  :", result.stdout)
-            self.assertIn("protection  : enabled", result.stdout)
-            self.assertIn("DRY-RUN complete", result.stdout)
+            self.assertIn("4) Cancel", result.stdout)
+            self.assertIn("Cancelled", result.stdout)
+            self.assertNotIn("profile     : orcarouter-hybrid", result.stdout)
+            self.assertNotIn("DRY-RUN complete", result.stdout)
             self.assertFalse((home / "state").exists())
             self.assertFalse((home / "models").exists())
 
