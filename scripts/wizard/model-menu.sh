@@ -147,6 +147,7 @@ wizard_model_menu() {
     wizard_menu_option 8 'Hybrid H3-H6 dependency blockers (read-only) / Hybrid 참조 차단 점검'
     wizard_menu_option 9 'Hybrid H6 launch admission (read-only) / Hybrid 안전 기동 검증'
     wizard_menu_option 10 'Hybrid retirement guide & post-cleanup checks / Hybrid 정리 안내·검증'
+    wizard_menu_option 11 'Candidate Hub metadata (read-only) / 후보 모델 파일·용량 조사'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -160,6 +161,7 @@ wizard_model_menu() {
       8) wizard_hybrid_dependency_readonly ;;
       9) wizard_hybrid_h6_launch_admission ;;
       10) wizard_hybrid_retirement_guide ;;
+      11) wizard_candidate_metadata_menu ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
