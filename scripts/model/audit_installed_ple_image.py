@@ -132,11 +132,38 @@ def audit_source(source: str) -> dict[str, str]:
     # Only executable function BODY counts. A ple_embedding_dtype parameter
     # in the signature does not prove dtype-based routing is implemented.
     text = "\n".join(ast.unparse(stmt) for stmt in quant[0].body)
-    if "PLE_QUANT_OVERRIDE" in text:
+    def returns_fp8(branch: list[ast.stmt]) -> bool:
+        return any(
+            isinstance(node, ast.Return)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "Qwen3_8FlashNextPLEFp8EmbeddingMethod"
+            for stmt in branch for node in ast.walk(stmt)
+        )
+
+    def guards_fp8_on(if_node: ast.If, marker: str) -> bool:
+        # Enforce an actual IF condition *and* an FP8-method return.
+        # Merely mentioning dtype/override in a docstring or unused argument
+        # must never be counted as implementation evidence.
+        test = if_node.test
+        if marker == "PLE_QUANT_OVERRIDE":
+            has_marker = any(
+                isinstance(node, ast.Constant) and node.value == marker
+                for node in ast.walk(test)
+            )
+        else:
+            has_marker = any(
+                isinstance(node, ast.Name) and node.id == marker
+                for node in ast.walk(test)
+            )
+        return has_marker and returns_fp8(if_node.body)
+
+    branches = [node for node in ast.walk(quant[0]) if isinstance(node, ast.If)]
+    if any(guards_fp8_on(node, "PLE_QUANT_OVERRIDE") for node in branches):
         route = "EXPLICIT_OVERRIDE_SOURCE_PRESENT"
-    elif "ple_embedding_dtype" in text and "Qwen3_8FlashNextPLEFp8EmbeddingMethod" in text:
+    elif any(guards_fp8_on(node, "ple_embedding_dtype") for node in branches):
         route = "DTYPE_ROUTING_SOURCE_PRESENT"
-    elif "isinstance(quant_config, Fp8Config)" in text:
+    elif "isinstance(quant_config, Fp8Config)" in text and returns_fp8(quant[0].body):
         route = "NATIVE_FP8_CONFIG_ONLY_SOURCE"
     else:
         route = "UNKNOWN_STATIC_DISPATCH"
@@ -150,8 +177,12 @@ def audit_source(source: str) -> dict[str, str]:
     dequant = [n for n in funcs if n.name == "_dequantize_embeddings"]
     # This is a source signature, NOT a guarantee of runtime entry/scale loading.
     dequant_code = "\n".join(ast.unparse(n) for n in dequant)
-    scale_applied = "weight_scale" in dequant_code and any(
-        isinstance(n, ast.Mult) for fun in dequant for n in ast.walk(fun)
+    scale_applied = any(
+        isinstance(node, ast.BinOp)
+        and isinstance(node.op, ast.Mult)
+        and any(isinstance(part, ast.Name) and part.id == "weight_scale"
+                for part in ast.walk(node))
+        for fun in dequant for node in ast.walk(fun)
     )
     return {
         "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest(),
