@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Read-only source attestation from an EXISTING managed Docker container.
 
-Uses ONLY 'docker image inspect', 'docker container inspect' and 'docker cp'.
+Uses ONLY Docker image/container inspect, docker cp for unmounted files,
+and bounded read-only host-file reads for exactly matching existing bind
+mounts. Docker cp does not reliably access user mounts, so host bind contents
+are examined separately with no-follow safeguards and explicit provenance.
 Never creates/starts/executes a container, builds an image, or touches GPU,
-weights, services, host tuning or protected evidence. If the managed container
-is absent/mismatched, source remains NOT_CAPTURED (fail closed).
+weights, services, host tuning or protected evidence. If identity/provenance
+is ambiguous or inaccessible, source remains NOT_CAPTURED (fail closed).
 """
 from __future__ import annotations
 
@@ -12,7 +15,10 @@ import ast
 import hashlib
 import io
 import json
+import os
+from pathlib import PurePosixPath
 import re
+import stat
 import subprocess
 import sys
 import tarfile
@@ -79,16 +85,81 @@ def validate_identity(image: dict, container: dict) -> dict[str, str]:
         raise AttestationError("Existing managed container/image tag differs from inspected image")
     if not isinstance(container.get("Mounts"), list):
         raise AttestationError("Managed container mount inventory unavailable")
-    for entry in container["Mounts"]:
-        destination = entry.get("Destination") if isinstance(entry, dict) else None
-        if isinstance(destination, str) and (
-            destination == "/usr/local/lib" or
-            destination.startswith("/usr/local/lib/python") or
-            "ple_layer.py" in destination or
-            destination.endswith("/vllm")
-        ):
-            raise AttestationError("Mounted vLLM source could differ from image layer")
+    if not all(isinstance(entry, dict) for entry in container["Mounts"]):
+        raise AttestationError("Invalid managed container mount records")
     return {"image_tag": IMAGE_TAG, "image_id": iid, "managed_container_id": cid}
+
+
+def covering_mounts(container: dict, target: str) -> list[dict]:
+    """Select only mounts shadowing THIS source path, never unrelated vLLM files."""
+    matches = []
+    for item in container["Mounts"]:
+        dest = item.get("Destination")
+        if not isinstance(dest, str):
+            raise AttestationError("Invalid Docker mount destination")
+        if not dest.startswith("/") or ".." in PurePosixPath(dest).parts:
+            raise AttestationError("Unsafe Docker mount destination")
+        dest = dest.rstrip("/") or "/"
+        if target == dest or target.startswith(dest + "/"):
+            matches.append(item)
+    # Docker has a longest-prefix mount resolution rule; reject potentially
+    # ambiguous nested or duplicate overlays rather than silently guessing.
+    if len(matches) > 1:
+        raise AttestationError("Overlapping Docker bind mounts affect PLE source")
+    return matches
+
+
+def host_bind_target(mount: dict, target: str) -> str:
+    """Resolve an exact Docker bind mapping lexically, without symlink following."""
+    dest, src = mount.get("Destination"), mount.get("Source")
+    if mount.get("Type") != "bind":
+        raise AttestationError("PLE source is covered by a non-bind mount")
+    if not isinstance(src, str) or not src.startswith("/"):
+        raise AttestationError("Bind mount source unavailable")
+    if ".." in PurePosixPath(src).parts or not isinstance(dest, str):
+        raise AttestationError("Unsafe bind mount mapping")
+    if target != dest and not target.startswith(dest.rstrip("/") + "/"):
+        raise AttestationError("Bind mount does not map PLE source")
+    relative = target[len(dest.rstrip("/")):].lstrip("/")
+    return src.rstrip("/") + ("/" + relative if relative else "")
+
+
+def read_host_source_nofollow(path: str) -> str:
+    """Open every path component with O_NOFOLLOW; bound bytes and verify stable."""
+    parts = PurePosixPath(path).parts
+    if not path.startswith("/") or ".." in parts or not parts:
+        raise AttestationError("Unsafe bind source path")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = None
+    try:
+        fd = os.open("/", flags | os.O_DIRECTORY)
+        for i, name in enumerate(parts[1:]):
+            new_fd = os.open(
+                name, flags | (os.O_DIRECTORY if i < len(parts) - 2 else 0),
+                dir_fd=fd,
+            )
+            os.close(fd)
+            fd = new_fd
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= MAX_SOURCE:
+            raise AttestationError("Mounted PLE source is not a bounded regular file")
+        raw = bytearray()
+        while len(raw) <= MAX_SOURCE:
+            piece = os.read(fd, min(65536, MAX_SOURCE + 1 - len(raw)))
+            if not piece:
+                break
+            raw.extend(piece)
+        after = os.fstat(fd)
+        if (len(raw) != before.st_size or len(raw) > MAX_SOURCE
+                or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+                != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)):
+            raise AttestationError("Mounted PLE source changed during read")
+        return raw.decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise AttestationError("Mounted PLE bind source inaccessible or unsafe") from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def source_from_cp(raw: bytes) -> str:
@@ -198,12 +269,31 @@ def inspect_existing() -> dict[str, str]:
     image = one_json(docker_read("image", "inspect", IMAGE_TAG), "image")
     container = one_json(docker_read("container", "inspect", MANAGED_CONTAINER), "container")
     result = validate_identity(image, container)
+    # A bound PLE module obscures the image-layer file. Its host file, not
+    # docker cp's view of the stopped container, is the effective source.
+    mapped = [
+        (path, matches[0])
+        for path in PATHS
+        if (matches := covering_mounts(container, path))
+    ]
+    if mapped:
+        if len(mapped) != 1:
+            raise AttestationError("Ambiguous multiple Python PLE mount locations")
+        path, mount = mapped[0]
+        host_source = host_bind_target(mount, path)
+        result["source_location_in_existing_container"] = path
+        result["source_origin"] = "HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER"
+        result["source_mount_destination"] = mount["Destination"]
+        result["source_mount_mode"] = "rw" if mount.get("RW") else "ro_or_unknown"
+        result.update(audit_source(read_host_source_nofollow(host_source)))
+        return result
     for path in PATHS:
         try:
             raw = docker_read("cp", f"{MANAGED_CONTAINER}:{path}", "-")
         except AttestationError:
             continue
         result["source_location_in_existing_container"] = path
+        result["source_origin"] = "EXISTING_CONTAINER_FILESYSTEM_NOT_PROVEN_RUNTIME"
         result.update(audit_source(source_from_cp(raw)))
         return result
     raise AttestationError("No known PLE loader path in existing matching container")
