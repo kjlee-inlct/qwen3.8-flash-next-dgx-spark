@@ -26,9 +26,9 @@ wizard_mazinb_source_reclaim() {
   local confirmed
   wizard_header 'mazinb original checkpoint reclamation / 원본 모델 정리'
   wizard_warning 'Only the original mazinb checkpoint is a candidate.'
-  wizard_warning 'Historical M1/KV Docker containers, shared images, Hybrid H3-H6, logs and benchmark reports MUST remain.'
+  wizard_warning 'Protected OrcaRouter, shared images, archived research logs and benchmark reports MUST remain.'
   wizard_warning 'Removing the model makes stopped mazinb trials non-restartable until the model is re-downloaded.'
-  wizard_info 'Checking archived benchmark JSON/Markdown SHA, M1 stopped journal and Hybrid dependency provenance (read-only).'
+  wizard_info 'Checking benchmark archive checksums, stopped journal and protected-asset dependencies (read-only).'
   if ! bash "${ROOT_DIR}/scripts/manage-models.sh" reclaim-mazinb --dry-run; then
     wizard_warning 'Reclaim BLOCKED; no model files deleted. Review evidence and dependencies.'
     return 0
@@ -55,7 +55,7 @@ wizard_mazinb_docker_retire() {
   wizard_warning 'This is separate from source checkpoint deletion (already completed).'
   wizard_warning 'Exactly five stopped mazinb experiment containers are candidates; all other Docker objects stay.'
   wizard_warning 'Original container logs and metadata will be archived privately and SHA256-verified BEFORE any Docker removal.'
-  wizard_warning 'Shared vLLM Docker image, volumes, M1 journals, Hybrid H3-H6 and benchmark files are protected.'
+  wizard_warning 'Shared vLLM image, volumes, M1 journals, OrcaRouter and benchmark evidence are protected.'
   if ! bash "${ROOT_DIR}/scripts/manage-models.sh" retire-mazinb-containers --dry-run; then
     wizard_warning 'Docker cleanup BLOCKED; no containers removed. Review the evidence and exact IDs.'
     return 0
