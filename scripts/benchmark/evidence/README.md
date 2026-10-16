@@ -1,3 +1,19 @@
+## 2026-10-16 — lychee888 actual DGX compressed-tensors FP8-PLE source gate
+
+[Exact operator-supplied read-only source-gate output](dgx-lychee888-fp8ple-source-gate-physical-20261016.md):
+clean fast-forward to `aea42fa`, Wizard **3 → 7 → 3**,
+immutable lychee888 Hub revision `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`,
+`INDEX_STRUCTURE_PASS_METADATA_ONLY`, 223,047 index tensor keys,
+128 FP8 PLE shards / 10 files / one global scale.
+Pinned config is `compressed-tensors`/`mixed-precision`;
+NVIDIA-only `ModelOptMixedPrecisionConfig` patch does **not** apply.
+`SOURCE_ONLY_LOADER_UNQUALIFIED`, `GPU_RUN=NOT_PERFORMED`,
+no weights downloaded. This is NOT image-internal source, actual
+FP8 scale consumption, TP=1 memory or runtime qualification.
+The new existing-container read-only PLE source audit remains
+unexecuted on DGX and must not be promoted to physical success
+from source/CI alone.
+
 ## 2026-10-15 — H6 Docker-log carriage returns and final termination traceback qualified
 
 [Exact read-only physical normalized-log analysis](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md):
