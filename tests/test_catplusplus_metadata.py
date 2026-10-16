@@ -68,6 +68,39 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(result["config"]["quantized_layer_algorithms"], {"MXFP8": 1, "NVFP4": 1})
         self.assertIn("actual safetensors tensor", " ".join(result["not_verified"]))
 
+    def test_legacy_tree_byte_reconciliation_is_exact(self):
+        result = mod.validate(*snapshot())
+        self.assertTrue(result["legacy_tree_reconciliation_complete"])
+        self.assertEqual(result["legacy_siblings_known_bytes"], 220)
+        self.assertEqual(result["legacy_siblings_missing_size_paths"], ["model-00001.safetensors"])
+        self.assertEqual(result["legacy_missing_size_recovered_tree_bytes"], 330)
+        self.assertEqual(result["tree_only_bytes"], 70)
+        self.assertEqual(
+            result["legacy_siblings_known_bytes"]
+            + result["legacy_missing_size_recovered_tree_bytes"]
+            + result["tree_only_bytes"],
+            result["all_repository_bytes"],
+        )
+
+    def test_old_api_and_tree_inconsistent_bytes_fail(self):
+        docs = snapshot()
+        docs[0]["siblings"][1]["size"] = 119
+        with self.assertRaisesRegex(mod.InventoryError, "different file sizes"):
+            mod.validate(*docs)
+
+    def test_api_sibling_missing_from_complete_tree_fails(self):
+        docs = snapshot()
+        docs[0]["siblings"].append({"rfilename": "hidden.safetensors", "size": None})
+        with self.assertRaisesRegex(mod.InventoryError, "absent from full tree"):
+            mod.validate(*docs)
+
+    def test_legacy_reconciliation_does_not_claim_complete_if_tree_size_unknown(self):
+        docs = snapshot()
+        docs[1][2].pop("lfs")
+        result = mod.validate(*docs)
+        self.assertFalse(result["legacy_tree_reconciliation_complete"])
+        self.assertIsNone(result["legacy_missing_size_recovered_tree_bytes"])
+
     def test_absent_index_does_not_imply_safe_selective_download(self):
         result = mod.validate(*snapshot(with_index=False))
         self.assertIsNone(result["index_referenced_weight_bytes"])
