@@ -55,33 +55,48 @@ def inspect_and_validate():
         target = root / name
         if target.is_symlink() or not target.is_dir():
             raise ValueError("missing or symlinked model: " + name)
-    # In-tree file symlinks (for example, README.md) are common in model
-    # layouts and do not make a directory tree unsafe to unlink. However,
-    # record each one and require a separate operator review before deletion.
-    symlinks = []
+    # Absolute symlinks are container-namespace references, not host / paths.
+    # Deleting links never follows them; mapping is strictly for review.
+    alias_sources = {
+        STAGES[0]: ("/base-model", PROTECTED),
+        STAGES[1]: ("/h3-model", STAGES[0]),
+        STAGES[2]: ("/h4-all", STAGES[1]),
+        STAGES[3]: ("/h5-parent", STAGES[2]),
+    }
+    counts = {name: 0 for name in STAGES}
     for name in STAGES:
         target = root / name
+        alias, source_name = alias_sources[name]
+        source_root = root / source_name
         for path in target.rglob("*"):
-            if path.is_symlink():
-                raw = path.readlink()
-                resolved = path.resolve(strict=False)
-                symlinks.append({
-                    "stage": name,
-                    "path_relative_to_stage": str(path.relative_to(target)),
-                    "raw_target": str(raw),
-                    "resolved_exists": resolved.exists(),
-                    "resolved_within_hybrid_stage": resolved.is_relative_to(target.resolve()),
-                    "resolved_within_protected_orcarouter": resolved.is_relative_to(
-                        (root / PROTECTED).resolve()),
-                })
-    if symlinks:
-        print(json.dumps({"hybrid_symlink_review_required": symlinks},
-                         indent=2, sort_keys=True), file=sys.stderr)
-        raise ValueError("Hybrid tree contains symlinks: inspect targets before retirement")
+            if not path.is_symlink():
+                continue
+            # A symlinked directory is particularly dangerous to reason about;
+            # refuse it even if the prefix otherwise looks familiar.
+            raw = str(path.readlink())
+            prefix = alias + "/"
+            if not raw.startswith(prefix):
+                raise ValueError("unexpected Hybrid symlink target: " + str(path) + " -> " + raw)
+            suffix = raw[len(prefix):]
+            from pathlib import PurePosixPath
+            parts = PurePosixPath(suffix).parts
+            if (not parts or any(part in ("", ".", "..") for part in parts)
+                or raw.endswith("/") or "\\" in suffix):
+                raise ValueError("unsafe Hybrid virtual link: " + str(path))
+            mapped = source_root.joinpath(*parts)
+            if not mapped.is_file() and not mapped.is_symlink():
+                raise ValueError("mapped Hybrid source missing: " + str(path))
+            if mapped.is_symlink():
+                raise ValueError("mapped Hybrid source is another symlink: " + str(path))
+            counts[name] += 1
+    expected_counts = {STAGES[0]: 13, STAGES[1]: 76, STAGES[2]: 91, STAGES[3]: 139}
+    if counts != expected_counts:
+        raise ValueError("Hybrid virtual-link counts changed: " + str(counts))
     return {"archived_container_count": len(expected),
             "hybrid_container_count": len(hybrid),
             "pinned_archive_manifest_sha256": PINNED_MANIFEST,
             "model_targets": list(STAGES),
+            "verified_virtual_link_counts": counts,
             "protected_orcarouter": PROTECTED,
             "docker_delete_performed": False,
             "model_delete_performed": False,
