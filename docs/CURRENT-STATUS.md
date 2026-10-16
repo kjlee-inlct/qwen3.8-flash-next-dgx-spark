@@ -1,3 +1,35 @@
+## 2026-10-16 — ACTUAL_DGX PLE image audit INCONCLUSIVE; safe mount-provenance SOURCE fix CI PASS
+
+Operator ran the newly added Wizard **3 → 7 → 4** against their
+existing DGX state and received
+`PLE_IMAGE_AUDIT=INCONCLUSIVE: Mounted vLLM source could differ
+from image layer`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`. This is a valid protective stop, **not**
+an observed lychee888 GPU loader failure. The old checker blocked
+all mounts under a broad Python/vLLM package prefix and did not
+report whether the specific `ple_layer.py` path was shadowed.
+See [physical mount-check evidence](../scripts/benchmark/evidence/dgx-lychee888-existing-ple-mount-audit-20261016.md).
+The original exact image SHA256, conflicting Docker mount identity
+and actual effective PLE source remain **NOT_CAPTURED**.
+
+**Repository-only remediation:** `scripts/model/audit_installed_ple_image.py`
+now distinguishes mounts covering the exact probed PLE pathname
+from unrelated vLLM mounts. For an exact matching existing managed
+container/image, it reads a covering host bind source with bounded,
+symlink-resistant, identity-checked read-only operations (no Docker
+`exec`, container start, image build or model data access), and
+reports `source_origin=HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER`,
+mount destination and actual source SHA256. Unmounted sources still
+use `docker cp` and carry separate provenance, while overlapping,
+non-bind, unreadable, symlink or changed sources remain fail-closed.
+The synthetic CI at commit `003851a34eca5098b83e8aa3dca27fedec7c6bae`,
+Actions `38869439987`, **SUCCESS**; source-only, not physical.
+Operator route stays Wizard **3 → 7 → 4** after clean fast-forward.
+No lychee888 registry, installability, watchdog, image or running
+host configuration was changed. Both protected Draft PRs remain
+unmerged. See [lychee888 working analysis](LYCHEE888-WIZARD-INTEGRATION.md)
+and [canonical module map](../scripts/README.md).
+
 ## 2026-10-16 — ACTUAL_DGX lychee888 compressed-tensors gate PASS; loader remains blocked
 
 The owner fast-forwarded the clean DGX working checkout from
