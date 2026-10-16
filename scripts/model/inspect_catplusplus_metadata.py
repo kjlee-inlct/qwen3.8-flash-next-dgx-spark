@@ -20,7 +20,7 @@ from typing import Any
 REPO = "catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed"
 REVISION = "3251fd8afbd08f76368a9bfa71132d9aef364813"
 SHA = re.compile(r"^[a-f0-9]{40}$")
-MAX_JSON = 32 * 1024 * 1024
+MAX_JSON = 128 * 1024 * 1024
 GIB = 1024 ** 3
 
 
@@ -30,7 +30,7 @@ class InventoryError(ValueError):
 
 def _object(raw: bytes, context: str) -> Any:
     if len(raw) > MAX_JSON:
-        raise InventoryError(f"{context}: JSON exceeds 32 MiB limit")
+        raise InventoryError(f"{context}: JSON exceeds 128 MiB limit")
     try:
         return json.loads(raw)
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -197,7 +197,7 @@ def validate(
         },
         "file_inventory": [
             {"path": name, "bytes": file_sizes[name],
-             "lfs_oid": (files[name].get("lfs") or {}).get("oid") if isinstance(files[name].get("lfs"), dict) else None,
+             "lfs_sha256": (files[name].get("lfs") or {}).get("sha256") if isinstance(files[name].get("lfs"), dict) else None,
              "xet_hash": files[name].get("xetHash")}
             for name in sorted(files)
         ],
