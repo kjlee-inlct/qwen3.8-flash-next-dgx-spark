@@ -195,3 +195,38 @@ existing actual-DGX lychee Hub `INDEX_STRUCTURE_PASS_METADATA_ONLY`
 as L0 evidence. No weight downloads, Docker build, GPU trials,
 service changes or registry admissions are authorized by this
 review.
+
+## 2026-10-16 pinned FP8-PLE SOURCE gate added (not a loader implementation)
+
+The independent `scripts/model/assess_lychee888_loader.py` now exposes a
+**read-only, fixed-revision-only** Hub config/index gate. It always
+pins `1b3c3cedc14fb3bee4294dea5e3515af74b8268a` before fetching
+the revision API, `config.json` and `model.safetensors.index.json`;
+no `.safetensors` is downloaded. It reuses the existing 128-shard /
+10-file / single-global-scale L0 index checker, then reports the
+actual pinned config's `quant_method`, `quant_algo` and `format` against
+the maintained `patch-nv-mixed.py` predicate. The NVIDIA-specific patch
+requires `ModelOptMixedPrecisionConfig` with per-prefix FP8 lookup;
+a different quantization method, including compressed-tensors, must
+**not** be treated as compatible merely because the PLE tensor
+serialization matches. Even when the config class appears compatible,
+the exact PLE prefix and runtime image implementation remain unverified.
+
+Wizard entry: `./wizard.sh` → **3 Models → 7 Candidate Hub metadata →
+3 lychee888 pinned FP8-PLE source gate**. Its success message says
+SOURCE inspection completed and **NOT qualified**; it does not
+register, install, download weights, build an image or start GPU.
+The reproducible JSON fixture mode and synthetic tests verify pin
+identity, L0 shard/scale mapping, rejected changed patch anchors,
+compressed-tensors versus ModelOptMixed route discrimination,
+and failure behavior. Actual pinned Hub output from this *new*
+L1 gate is **NOT_CAPTURED** until a DGX operator runs it; the older
+2026-10-13 pinned L0 PASS is preserved separately.
+
+**Mandatory gates still open:** inspect exact installed image digest
+and backend resolver code; verify FP8 embedding module and global
+BF16 scale consumption; verify TP=1 partitioning and managed mmap/
+offload memory plans without sacrificing NVIDIA RM/watchdog reserve.
+The author's validated dual-Spark recipe and `PLE_QUANT_OVERRIDE=fp8`
+are **external** implementation evidence, not a qualified single-GB10
+managed path. No trial or destructive action is approved.
