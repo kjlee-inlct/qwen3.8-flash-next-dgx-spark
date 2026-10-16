@@ -50,7 +50,8 @@ class H6LaunchAdmissionTests(unittest.TestCase):
                     "systemctl start", "unlink(", "rmtree(", "swapoff", "git reset",
                     "install.sh", "manage-service.sh"):
             self.assertNotIn(bad, content)
-        self.assertIn("hybrid-h6-launch-admission.py", MENU.read_text())
+        self.assertTrue(SCRIPT.is_file())  # historical safety checker preserved
+        self.assertNotIn("hybrid-h6-launch-admission.py", MENU.read_text())
 
 
 if __name__ == "__main__":
