@@ -55,6 +55,11 @@ def snapshot(with_index=True):
 
 
 class InventoryTests(unittest.TestCase):
+    @staticmethod
+    def tree_url(suffix=""):
+        return (f"https://huggingface.co/api/models/{mod.REPO}/tree/{mod.REVISION}"
+                f"?recursive=true&expand=false&limit=1000{suffix}")
+
     def test_lfs_fallback_reconciles_legacy_understatement(self):
         result = mod.validate(*snapshot())
         self.assertEqual(result["verdict"], "TREE_METADATA_COMPLETE")
@@ -152,17 +157,77 @@ class InventoryTests(unittest.TestCase):
                 (Path(directory) / name).write_text(json.dumps(data), encoding="utf-8")
             self.assertEqual(mod.validate(*mod.offline_snapshot(Path(directory)))["index_file_count"], 2)
 
+    def test_compact_tree_over_100_pages_is_supported_if_progresses(self):
+        # Simulate a repository that defeated the former 100-page hard cap.
+        # Each page advances both the cursor and the returned path.
+        count = 105
+        requests = []
+        def get_json(url):
+            requests.append(url)
+            i = 0 if "cursor=" not in url else int(url.rsplit("cursor=", 1)[1])
+            next_url = self.tree_url(f"&cursor={i+1}") if i + 1 < count else None
+            return [{"type": "file", "path": f"shard-{i:04}.safetensors",
+                     "size": 11}], next_url
+        with patch.object(mod, "_get_json", side_effect=get_json):
+            tree = mod._list_revision_tree()
+        self.assertEqual(len(tree), count)
+        self.assertEqual(len(requests), count)
+        self.assertTrue(all("expand=false" in url for url in requests))
+
+    def test_tree_pagination_repeated_path_fails_even_when_cursor_changes(self):
+        def get_json(url):
+            return ([{"type": "file", "path": "config.json", "size": 1}],
+                    self.tree_url("&cursor=different"))
+        with patch.object(mod, "_get_json", side_effect=get_json):
+            with self.assertRaisesRegex(mod.InventoryError, "repeated path"):
+                mod._list_revision_tree()
+
+    def test_tree_pagination_repeated_cursor_url_fails(self):
+        def get_json(url):
+            return ([{"type": "file", "path": "config.json", "size": 1}], url)
+        with patch.object(mod, "_get_json", side_effect=get_json):
+            with self.assertRaisesRegex(mod.InventoryError, "repeated URL"):
+                mod._list_revision_tree()
+
+    def test_tree_pagination_missing_progress_fails(self):
+        with patch.object(mod, "_get_json", return_value=([], self.tree_url("&cursor=1"))):
+            with self.assertRaisesRegex(mod.InventoryError, "empty nonterminal"):
+                mod._list_revision_tree()
+
+    def test_tree_pagination_rejects_wrong_revision_or_host(self):
+        for url in (
+            self.tree_url().replace(mod.REVISION, "0"*40),
+            self.tree_url().replace("huggingface.co", "not-huggingface.co"),
+            self.tree_url().replace("expand=false", "expand=true"),
+            self.tree_url().replace("limit=1000", "limit=5"),
+        ):
+            with self.subTest(url=url):
+                with patch.object(mod, "_get_json", return_value=([], url)):
+                    with self.assertRaises(mod.InventoryError):
+                        mod._list_revision_tree()
+
+    def test_tree_page_ceiling_reports_partial_inventory(self):
+        def get_json(url):
+            i = 0 if "cursor=" not in url else int(url.rsplit("cursor=", 1)[1])
+            return ([{"type": "file", "path": f"file-{i}.safetensors"}],
+                    self.tree_url(f"&cursor={i+1}"))
+        with patch.object(mod, "_get_json", side_effect=get_json):
+            with patch.object(mod, "MAX_TREE_PAGES", 2):
+                with self.assertRaisesRegex(mod.InventoryError, "exceeded 2 compact pages"):
+                    mod._list_revision_tree()
+
     def test_network_pagination_and_no_weight_fetch(self):
         api, tree, config, index = snapshot()
         page1, page2 = tree[:2], tree[2:]
         requests = []
+        next_page = self.tree_url("&cursor=next")
         def get_json(url):
             requests.append(url)
             if "/api/models/" in url and "/revision/" in url:
                 return api, None
-            if "/api/models/" in url and "/tree/" in url:
-                return page1, "https://huggingface.co/api/models/next-page"
-            if url.endswith("/api/models/next-page"):
+            if url == self.tree_url():
+                return page1, next_page
+            if url == next_page:
                 return page2, None
             if url.endswith("/config.json"):
                 return config, None
@@ -173,6 +238,7 @@ class InventoryTests(unittest.TestCase):
             result = mod.validate(*mod.remote_snapshot())
         self.assertEqual(result["all_repository_bytes"], 620)
         self.assertEqual(len(requests), 5)
+        self.assertIn("expand=false&limit=1000", requests[1])
         self.assertTrue(all(".safetensors" not in url or url.endswith(".index.json") for url in requests))
 
 
