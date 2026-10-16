@@ -35,7 +35,21 @@ JSON only; it does not download weights or start a process on GPU.
 It reports file-by-file sizes/LFS/Xet hints, legacy API known-size subtotal
 and missing-size count, root safetensors and full repository sizes, optional
 index referenced bytes, quant algorithm counts and fused aliases.
-Unknown sizes remain unknown. Synthetic fixture tests cover errors.
+Unknown sizes remain unknown. The checker also partitions repository
+bytes into three disjoint sets: (1) known legacy sibling sizes, (2) files
+whose legacy size was NULL but the pinned tree supplies a size, and
+(3) full-tree files absent from legacy siblings. It rejects duplicates,
+contradictory sizes, missing API-tree filenames and an unbalanced partition.
+Synthetic/offline fixtures check these reconciliation invariants.
+
+**Provisional size clue, NOT a resolved discrepancy:** The public listing
+shows experts-layer files near 1.42 decimal GB each; 48 such layers would
+account for roughly 68.16 decimal GB (about 63.48 GiB), numerically
+close to the old reported 63.88 GiB. Per-file values are rounded and this
+does not establish what the old API actually counted, nor whether a
+PLE table and other weights/extra sources were omitted. Only the pinned
+full-tree reconciliation can make that determination.
+
 The new script's actual pinned Hub output and GitHub CI must be recorded
 separately; source presence alone does not mean the 189GB reconciliation
 has already passed.
