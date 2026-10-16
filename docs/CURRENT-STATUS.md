@@ -1,3 +1,28 @@
+## 2026-10-16 — lychee888 pinned FP8-PLE source-only Wizard gate; CI PASS, physical probe pending
+
+Added `scripts/model/assess_lychee888_loader.py` (independent standard-library
+metadata/source inspector), its isolated offline synthetic tests and Wizard
+Candidate metadata item **3 → 7 → 3**. The fixed
+`lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` immutable revision
+is `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`. The new gate
+fetches revision-scoped Hub JSON, config and index only, validates
+the 128 FP8 PLE shards / 10 files / global-scale key using the maintained
+L0 module, and compares quantization method to the existing NVIDIA-only
+`ModelOptMixedPrecisionConfig` / per-prefix FP8 patch conditions. It never
+claims the NVIDIA image adapter works for lychee888's config; a successful
+inspection verdict is explicitly `SOURCE_ONLY_LOADER_UNQUALIFIED`.
+It does not download weights or execute Docker/GPU. The actual DGX pinned
+Hub result for this new gate remains **NOT_CAPTURED**; the original
+2026-10-13 lychee888 pinned Hub L0 PASS is preserved separately.
+
+GitHub SOURCE CI at `2cfeb219ec4eb9b7367c808bbf1763fd7a6aa0a6`,
+run `38864476668`, **SUCCESS** (new source gate, Wizard routing
+and tests). The exact later documentation HEAD has its own CI.
+The protected Draft PR #261/#259 remain unmerged; no model image build,
+registration, managed-runtime modification, GPU load, memory-policy change
+or model download was authorized. See
+[lychee888 model compatibility](LYCHEE888-WIZARD-INTEGRATION.md).
+
 ## 2026-10-16 — ACTUAL DGX catplusplus pinned inventory and size reconciliation PASS
 
 Owner re-ran the read-only Wizard **3 → 7 → 1** after the compact
