@@ -1,3 +1,32 @@
+## 2026-10-16 — Physical managed-state retention audit PASS; cleanup closed
+
+Owner fast-forwarded the DGX checkout through commit `9d84c39` and ran
+`python3 -B scripts/storage/state-retention-audit.py` against
+`/home/inlc/.local/state/qwen38-spark`. Physical output:
+`STATE_DELETE_AUTHORIZED=NO`, `STATE_FILES_DELETED=0`; all inspected
+top-level items had `links=0 boundaries=0`. Main measured allocated
+sizes: `mazinb-m1=216.24 MiB` (research data),
+`monitor.log=2.14 MiB` (managed lifecycle diagnostics),
+`retirement-archives=1.69 MiB` including protected original
+Hybrid Docker archive `1.40 MiB` and Mazinb archive `0.29 MiB`,
+`hybrid-retirement-evidence=0.74 MiB`, and
+`hybrid-h6-m1=0.10 MiB`. `ab-trials` and `analysis` are
+each less than 0.2 MiB; 30 stability JSON and runtime
+validation JSON entries are individually tiny.
+
+**Operator disposition:** No further state-file deletion warranted.
+Most allocated state space is the valuable Mazinb M1
+benchmark history; Git has only sanitized Hybrid records,
+not raw 17-container logs. Maintain install/ownership/lock/
+recovery files, benchmark archives and historical evidence.
+The `retirement-archives` parent size already includes its children;
+do not double-count. Audit is classification only, not a
+deletion approval. Close the immediate Hybrid/state cleanup
+task and resume metadata-first model candidate evaluation.
+Source CI for the audit + Wizard Storage item 5 at
+`9d84c39ebd7ed6155199b6c1db4e58ae445dab0e`
+completed successfully; real host audit above was separate.
+
 ## 2026-10-16 — Managed state retention review and next candidate metadata (read-only)
 
 DGX owner has completed independent post-removal checks: retired Hybrid H3–H6
