@@ -13,7 +13,7 @@ list_model_profiles() {
 }
 
 list_model_candidates() {
-  printf '%s\n' lychee888
+  printf '%s\n' orcarouter-hybrid lychee888
 }
 
 describe_model_profile() {
@@ -47,7 +47,7 @@ describe_model_profile() {
       ;;
     orcarouter-hybrid)
       PROFILE_STATUS="retired"
-      PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6 (retired)"
+      PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6"
       PROFILE_DEFAULT=0
       PROFILE_INSTALLABLE=0
       PROFILE_REPO="local/orcarouter-mazinb-h6-w4a16"
