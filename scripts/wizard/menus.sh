@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Top-level UX and safe delegation, not lifecycle mutation.
+# shellcheck source=scripts/wizard/hybrid-retirement-menu.sh
+source "${ROOT_DIR}/scripts/wizard/hybrid-retirement-menu.sh"
 # shellcheck source=scripts/wizard/model-menu.sh
 source "${ROOT_DIR}/scripts/wizard/model-menu.sh"
 # shellcheck source=scripts/wizard/runtime-menu.sh
