@@ -1,3 +1,30 @@
+## 2026-10-16 — Hybrid cleanup complete and Wizard modularity
+
+On the DGX, post-delete checks showed all four H3/H4/H5/H6
+directories **absent**, the protected OrcaRouter model **present**, and
+the private 17-container archive's SHA256 checks **still passing**.
+Final available filesystem bytes: `449058615296`. An earlier
+model-removal output reported `449058627584`; the small 12,288-byte
+difference represents intervening filesystem activity, not an error
+in the cleanup report.
+
+The previous cleanup required many manual checks and round trips. The
+model management menu now exposes entry **10**, Hybrid retirement
+guide and post-cleanup status. The actual 60-line guide resides in
+`scripts/wizard/hybrid-retirement-menu.sh`, sourced by
+`scripts/wizard/menus.sh`, not embedded in the large model
+menu. It offers stage-presence status, private archive verification,
+remaining Docker reference inventory, and an evidence-first workflow.
+It is intentionally non-destructive. Historical fixed-ID exact-17
+and exact-H3-H6 scripts must **not** be presented as general-purpose
+retirement for future experiments.
+
+**Future implementation:** dynamic model/alias/Docker discovery,
+persisted exact-target operator approval, safe evidence capture,
+idempotent stage journal, resumable partial-failure handling, and
+independent post-delete audits. Keep new screens and actions in
+separate small modules, with a thin routing menu and unit tests.
+
 ## 2026-10-16 — Model-only preflight after Docker retirement
 
 Physical DGX showed `HYBRID_DOCKER_EXACT_17=REMOVED`; a separate
