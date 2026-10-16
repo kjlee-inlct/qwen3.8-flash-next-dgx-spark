@@ -1,3 +1,29 @@
+## 2026-10-16 — Physical exact H3–H6 model retirement completed
+
+Owner ran the opt-in, post-Docker-gated exact-target model removal on DGX
+after a successful physical DRY_RUN. The terminal printed, in order:
+`REMOVED_HYBRID_STAGE=qwen3.8-h6-modelopt-w4a16`,
+`REMOVED_HYBRID_STAGE=qwen3.8-h5-neutral-input-scale`,
+`REMOVED_HYBRID_STAGE=qwen3.8-h4-orca-all`, and
+`REMOVED_HYBRID_STAGE=qwen3.8-hybrid-quant-layout`.
+The program reported `mode=EXECUTED`, `protected_orcarouter_exists=true`,
+`available_bytes_before=303420813312`,
+`available_bytes_after=449058627584`,
+`available_bytes_delta=145637814272` (about 135.64 GiB).
+No Docker commands ran from this model-removal tool. Previously, 17
+exact research containers were physically removed.
+
+The separately maintained private evidence archive (34 file SHA256 PASS
+before removal) and Git research documentation were not deletion targets.
+This console output verifies program-reported removal and protected path
+existence; independent post-delete verification of filesystem, Docker
+references, protected checkpoint integrity, swap, and retained evidence
+is still outstanding. Source CI for the model-retirement commit
+`1f7ddd61` completed successfully; this does not replace host checks.
+
+**Retirement milestone: H3_H4_H5_H6=REMOVED_PHYSICALLY;
+EXACT_17_DOCKER=REMOVED_PHYSICALLY; POST_RETIREMENT_AUDIT=PENDING.**
+
 ## 2026-10-16 — Physical removal of exactly 17 Hybrid Docker research objects
 
 Operator invoked the opt-in exact-ID Docker-only removal after an
