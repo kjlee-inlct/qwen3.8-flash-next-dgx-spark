@@ -65,15 +65,19 @@ def failure_summary(kinds: dict[str, int]) -> str:
     return ",".join(f"{reason}:{count}" for reason, count in sorted(kinds.items())) or "NONE"
 
 
-def probe_copy_transport() -> str:
-    """Small generic regular file; distinguishes Docker-copy transport from PLE layout.
-
-    /etc/group is conventional non-model metadata and is NOT copied to disk
-    or printed, only one small TAR header is inspected.
-    """
+def probe_copy_transport(diagnostics: dict[str, str] | None = None) -> str:
+    """Read only /etc/group TAR header; expose sanitized failed-copy metadata."""
     try:
         raw = docker_read("cp", f"{MANAGED_CONTAINER}:/etc/group", "-")
     except DockerCopyError as exc:
+        if diagnostics is not None:
+            diagnostics["docker_cp_small_file_exit_code"] = (
+                str(exc.exit_code) if exc.exit_code is not None else "NOT_CAPTURED"
+            )
+            diagnostics["docker_cp_small_file_stderr_bytes"] = (
+                str(exc.stderr_bytes) if exc.stderr_bytes is not None else "NOT_CAPTURED"
+            )
+            diagnostics["docker_cp_small_file_stderr_signals"] = exc.stderr_signals
         return exc.reason
     except AttestationError:
         return "COPY_FAILED_UNCLASSIFIED"
@@ -106,11 +110,40 @@ class AttestationError(ValueError):
 
 
 class DockerCopyError(AttestationError):
-    """Typed, non-sensitive Docker copy outcome. Never show raw Docker stderr."""
+    """Only enumerated error features, never the Docker error text or paths."""
 
-    def __init__(self, reason: str):
+    def __init__(
+        self, reason: str, *, exit_code: int | None = None,
+        stderr_bytes: int | None = None, stderr_signals: str = "NONE",
+    ):
         self.reason = reason
+        self.exit_code = exit_code
+        self.stderr_bytes = stderr_bytes
+        self.stderr_signals = stderr_signals
         super().__init__("Docker copy unavailable: " + reason)
+
+
+# Fixed vocabulary; never echo the daemon's raw, potentially sensitive text.
+COPY_STDERR_SIGNALS = {
+    "DOCKER_DAEMON_REPLY": (b"error response from daemon",),
+    "ARCHIVE": (b"archive", b"tar stream", b"tar header"),
+    "CONTAINER": (b"container",),
+    "OVERLAY": (b"overlay", b"overlayfs"),
+    "MOUNT": (b"mount",),
+    "FILESYSTEM": (b"filesystem", b"file system"),
+    "NOT_FOUND": (b"not found", b"no such", b"does not exist"),
+    "PERMISSION": (b"permission", b"access denied", b"not permitted"),
+    "INVALID_ARGUMENT": (b"invalid argument", b"unknown flag"),
+    "NETWORK": (b"connection", b"unavailable", b"timeout"),
+}
+
+
+def docker_stderr_signals(raw: bytes) -> str:
+    sample = raw[:4096].lower()
+    return ",".join(
+        key for key, fragments in COPY_STDERR_SIGNALS.items()
+        if any(fragment in sample for fragment in fragments)
+    ) or "NONE"
 
 
 def classify_copy_failure(raw: bytes) -> str:
@@ -133,6 +166,20 @@ def classify_copy_failure(raw: bytes) -> str:
         return "SOURCE_PATH_NOT_FOUND"
     if b"not a directory" in text:
         return "PARENT_NOT_DIRECTORY"
+    if b"no such container" in text or b"container does not exist" in text:
+        return "CONTAINER_MISSING_DURING_COPY"
+    if b"container is paused" in text or b"container paused" in text:
+        return "CONTAINER_PAUSED"
+    if b"container is not running" in text or b"container not running" in text:
+        return "CONTAINER_NOT_RUNNING"
+    if b"operation not permitted" in text:
+        return "OPERATION_NOT_PERMITTED"
+    if b"read-only file system" in text or b"read-only filesystem" in text:
+        return "FILESYSTEM_READ_ONLY"
+    if b"invalid argument" in text or b"unknown flag" in text:
+        return "CLI_ARGUMENT_REJECTED"
+    if b"unexpected eof" in text or b"invalid tar header" in text:
+        return "TAR_STREAM_ERROR"
     return "COPY_FAILED_UNCLASSIFIED"
 
 
@@ -160,7 +207,12 @@ def docker_read(*args: str) -> bytes:
         raise AttestationError("Docker read-only command unavailable") from exc
     if response.returncode != 0:
         if args[0] == "cp":
-            raise DockerCopyError(classify_copy_failure(response.stderr))
+            raise DockerCopyError(
+                classify_copy_failure(response.stderr),
+                exit_code=response.returncode,
+                stderr_bytes=len(response.stderr),
+                stderr_signals=docker_stderr_signals(response.stderr),
+            )
         raise AttestationError("Docker metadata or source unavailable")
     if len(response.stdout) > MAX_RESPONSE:
         if args[0] == "cp":
@@ -378,6 +430,12 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
     if diagnostics is not None:
         diagnostics["image_id"] = result["image_id"]
         diagnostics["managed_container_id"] = result["managed_container_id"]
+        state = container.get("State")
+        status = state.get("Status") if isinstance(state, dict) else None
+        # Exact allowlist: never emit State.Error, env, mount host paths, etc.
+        diagnostics["container_state"] = status if status in (
+            "created", "running", "restarting", "exited", "paused", "dead", "removing"
+        ) else "UNKNOWN"
     # A bound PLE module obscures the image-layer file. Its host file, not
     # docker cp's view of the stopped container, is the effective source.
     mapped = [
@@ -415,7 +473,7 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
         diagnostics["docker_cp_reference_state"] = state
         diagnostics["docker_cp_reference_failure_kinds"] = failure_summary(reference_failures)
         diagnostics["docker_cp_reference_path"] = reference
-        diagnostics["docker_cp_small_file_state"] = probe_copy_transport()
+        diagnostics["docker_cp_small_file_state"] = probe_copy_transport(diagnostics)
         diagnostics["ple_source_file"] = "NOT_CAPTURED"
     raise AttestationError("No known PLE loader path in existing matching container")
 
