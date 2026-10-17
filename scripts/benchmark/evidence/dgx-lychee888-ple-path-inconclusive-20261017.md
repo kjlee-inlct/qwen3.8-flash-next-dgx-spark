@@ -269,3 +269,61 @@ container's exact `/model` and `/model/config.json` mount
 type/RW fields, plus Docker server version; emit no host bind
 source paths. Do not restart Docker, change mount settings, create
 new containers, modify the model, or claim FP8-PLE qualification.
+
+## 2026-10-17 — ACTUAL_DGX nested read-only model/config mounts confirmed at cee107d
+
+The operator cleanly fast-forwarded the checkout
+`feature/wizard-modular-phase1-20261014` from
+`7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360` to
+`cee107d9e47b278d7dede40a8d401ea9c2ccea32`, verified
+`git rev-parse HEAD`, then ran the **actual DGX**
+read-only Wizard **3 → 7 → 4**. Output was:
+
+```text
+PLE_DIAGNOSTIC_IMAGE_ID=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4
+PLE_DIAGNOSTIC_MANAGED_CONTAINER_ID=f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24
+PLE_DIAGNOSTIC_CONTAINER_STATE=exited
+PLE_DIAGNOSTIC_CONTAINER_READONLY_ROOTFS=FALSE
+PLE_DIAGNOSTIC_DOCKER_CP_MODEL_CONFIG_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_EXIT_CODE=1
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STDERR_BYTES=76
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STDERR_SIGNALS=DOCKER_DAEMON_REPLY,FILESYSTEM
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STATE=FILESYSTEM_READ_ONLY
+PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=0
+PLE_DIAGNOSTIC_DOCKER_CP_PLE_FAILURE_KINDS=NOT_ATTEMPTED_PRECHECK_BLOCK
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=NOT_ATTEMPTED_PRECHECK_BLOCK
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_FAILURE_KINDS=NOT_ATTEMPTED_PRECHECK_BLOCK
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_PATH=NOT_CAPTURED
+PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED
+PLE_IMAGE_AUDIT=INCONCLUSIVE: Docker cp transport read-only; source files NOT TESTED
+DOCKER_MUTATION=NONE
+GPU_RUN=NOT_PERFORMED
+```
+
+**Verified on physical DGX:** using the previously matched immutable
+Docker IDs, the inspector read the protected container's existing
+`Mounts` metadata and found **one read-only bind at
+`/model` and one read-only bind at `/model/config.json`**.
+The Docker `ReadonlyRootfs` flag is `FALSE`. The generic
+`/etc/group` `docker cp` still fails with
+`FILESYSTEM_READ_ONLY` (exit 1); the 24 PLE/GEMM file probes
+were deliberately NOT ATTEMPTED. No model source was read,
+no GPU was run, and the tool reported no Docker mutation.
+
+Together with the earlier **exact** daemon stderr
+`openat model/config.json: read-only file system` for the unrelated
+`/etc/group` request, this is strong, directly supported evidence
+of a **nested-readonly-bind Docker copy failure mechanism**.
+Upstream Moby's September 2026
+[overlapping-bind Docker-copy fix](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35)
+is relevant supporting SOURCE evidence, not proof of the
+installed engine's affected code/version. The Docker **server**
+version and direct patch applicability remain **NOT_CAPTURED**.
+Do not claim lychee888 FP8-PLE compatibility, image-source presence
+or whole-host filesystem failure.
+
+**Next bounded read-only diagnostic:** obtain only
+`docker version --format '{{.Server.Version}}'`, plus optionally
+`docker version --format '{{.Server.APIVersion}}'` if necessary,
+without changing Docker mounts, rebuilding/recreating containers,
+restarting services, or downloading/loading weights.
