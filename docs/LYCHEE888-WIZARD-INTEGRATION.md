@@ -501,3 +501,26 @@ after source CI. A direct `docker cp` against only
 the original Docker error for manual interpretation **after
 sanitizing the error message**. This is diagnostic only;
 lychee888 remains `SOURCE_ONLY_LOADER_UNQUALIFIED`.
+
+
+## 2026-10-17 actual DGX Docker-copy preflight result
+
+The owner executed the revised read-only existing-image Wizard **3 → 7 → 4**
+on the protected managed image/container. `HostConfig.ReadonlyRootfs=FALSE`
+and `State.Status=exited` were observed. The small generic
+`/etc/group` copy failed at the Docker-copy transport layer
+(`FILESYSTEM_READ_ONLY`, exit 1, stderr 76 bytes,
+`DOCKER_DAEMON_REPLY,FILESYSTEM`); the new preflight **skipped
+all 24 subsequent PLE/GEMM copies** with
+`NOT_ATTEMPTED_PRECHECK_BLOCK`. This is physical evidence for
+the auditor's conservative stop, not for a particular Python module
+layout or working FP8-PLE implementation. Exact daemon error
+provenance and effective image source remain unresolved; do not infer
+that Docker is configured with readonly rootfs or that host root
+needs a remount. No payload or GPU was used.
+
+[Chronological operator output and interpretation limits](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+Next gate: a bounded reviewed exact Docker error diagnostic without
+changing any Docker object, then source SHA/static FP8 PLE dispatch
+and BF16 scale analysis. lychee888 remains non-installable and
+single Spark TP=1 unqualified.
