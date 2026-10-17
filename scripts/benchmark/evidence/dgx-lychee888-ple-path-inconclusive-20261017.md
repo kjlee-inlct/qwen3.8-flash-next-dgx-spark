@@ -92,3 +92,45 @@ copy-system failure from a PLE package path issue without creating,
 starting or executing any container, or accessing model weights.
 The actual physical outcome of the new transport check is
 `NOT_CAPTURED` until a future operator run.
+
+## Follow-up: all Docker copies returned an unclassified failure
+
+The latest supplied physical Wizard **3 → 7 → 4** output on
+2026-10-17 showed the same immutable local image/container IDs
+as above, no new PLE source, and:
+
+```text
+PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=12
+PLE_DIAGNOSTIC_DOCKER_CP_PLE_FAILURE_KINDS=COPY_FAILED_UNCLASSIFIED:12
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=SKINNY_GEMM_REFERENCE_UNAVAILABLE
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_FAILURE_KINDS=COPY_FAILED_UNCLASSIFIED:12
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_PATH=NOT_CAPTURED
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STATE=COPY_FAILED_UNCLASSIFIED
+PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED
+PLE_IMAGE_AUDIT=INCONCLUSIVE: No known PLE loader path in existing matching container
+DOCKER_MUTATION=NONE
+GPU_RUN=NOT_PERFORMED
+```
+
+**Evidence-based interpretation:** all 24 targeted PLE and skinny
+GEMM file copy requests, **plus one** generic small
+`/etc/group` Docker-copy control, failed under the same
+`COPY_FAILED_UNCLASSIFIED` category. Thus current evidence
+implicates the **shared copy mechanism/container filesystem
+access** before any claim that a particular vLLM module is
+absent. This result does not establish the exact root cause;
+the old classification discarded Docker CLI exit status and
+subprocess stderr beyond a narrow keyword dictionary.
+Actual container runtime status is also **NOT_CAPTURED**.
+No Docker image, model payload, runtime process, or managed
+resource was modified by the checker.
+
+The SOURCE-only remediation records only the existing
+container's allowlisted state (`created/running/exited/paused`,
+etc.), bounded exit code, stderr byte length, and a
+fixed vocabulary of Docker error feature flags from the
+single `/etc/group` transport control. This never prints
+raw stderr, filesystem paths, credentials or file bytes.
+The operator uses the existing read-only Wizard route
+after the new source CI succeeds. Actual findings for
+this new failure-detail probe are **NOT_CAPTURED**.
