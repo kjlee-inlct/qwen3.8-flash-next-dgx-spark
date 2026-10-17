@@ -1,3 +1,34 @@
+## 2026-10-17 — ACTUAL_DGX source copy inconclusive with pinned existing Docker IDs
+
+New physical owner Wizard **3 → 7 → 4** output attested
+existing local Docker image ID
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and managed container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+`PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=12`;
+`PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=SKINNY_GEMM_REFERENCE_UNAVAILABLE`;
+`PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED`;
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`;
+`DOCKER_MUTATION=NONE`, `GPU_RUN=NOT_PERFORMED`.
+This is **not proof the image lacks those files**, since the
+previous inspector discarded Docker-copy error classifications.
+Original log hash and exact on-host checkout SHA were not printed.
+Preserve [second actual source-copy transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+**Source-only follow-up:** the existing standalone auditor now
+reports scrubbed categorical counts of `docker cp` failures
+for PLE and GEMM source requests and probes a single tiny existing
+`/etc/group` TAR read as a **transport control**; only its TAR
+header is validated in memory, not file data displayed or written.
+No Docker start/exec/create, image build/pull, source mount change,
+weight download, GPU load or lifecycle mutation.
+The operator route remains Wizard **3 → 7 → 4**.
+The new classification/transport output is still
+**NOT_CAPTURED on actual DGX**. The lychee888 source adapter,
+memory and TP=1 runtime remain unqualified. The previously
+attested OrcaRouter assets and managed container are protected;
+Draft PR #261/#259 must not be merged without approval.
+
 ## 2026-10-17 — ACTUAL_DGX PLE source path unresolved; bounded Docker-copy differential added
 
 Physical owner executed read-only Wizard **3 → 7 → 4** after the earlier
