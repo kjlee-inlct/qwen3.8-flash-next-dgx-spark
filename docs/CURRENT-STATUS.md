@@ -1,3 +1,38 @@
+## 2026-10-17 — ACTUAL_DGX Docker copy FILESYSTEM_READ_ONLY: 25 requests, source not attested
+
+The owner reran read-only Wizard **3 → 7 → 4** on the existing
+image `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and protected managed container
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+whose visible `container_state=exited`.
+Each of the 12 PLE file candidates and 12 Skinny-GEMM
+references failed Docker copy with `FILESYSTEM_READ_ONLY`;
+the `/etc/group` non-model copy control failed the same way,
+with `exit_code=1`, `stderr_bytes=76`, signals
+`DOCKER_DAEMON_REPLY,FILESYSTEM`. All source files remained
+`NOT_CAPTURED`, `GPU_RUN=NOT_PERFORMED`,
+`DOCKER_MUTATION=NONE`, `PLE_IMAGE_AUDIT=INCONCLUSIVE`.
+The **common Docker filesystem copy error** has priority over
+additional PLE path guessing. Neither checkpoint incompatibility,
+missing modules, host filesystem being read-only, nor container
+rootfs configured readonly is proven. See
+[the latest exact operator transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+The independent inspector now reads
+`container_readonly_rootfs` from existing
+`HostConfig.ReadonlyRootfs` (TRUE/FALSE/UNKNOWN),
+preflights only the bounded `/etc/group` Docker copy,
+and aborts **before 24 targeted file attempts** when
+`FILESYSTEM_READ_ONLY` or `CONTAINER_ROOTFS_READ_ONLY`
+is returned. Target source statuses are explicit
+`NOT_ATTEMPTED_PRECHECK_BLOCK`; this is not a loader
+admission. Both protected Draft PRs are left unmerged;
+no Docker mutation, image rebuild, GPU run or rootfs
+remount is proposed. This new early-stop implementation
+is SOURCE/CI-only until a new physical Wizard
+**3 → 7 → 4** output is supplied. See
+[lychee888 canonical analysis](LYCHEE888-WIZARD-INTEGRATION.md).
+
 ## 2026-10-17 — ACTUAL_DGX: all 25 Docker cp requests unclassified; prioritize shared copy transport
 
 Physical owner ran read-only Wizard **3 → 7 → 4**. It verified local
