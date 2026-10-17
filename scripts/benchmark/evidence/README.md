@@ -1,3 +1,33 @@
+## 2026-10-17 — actual DGX lychee888 PLE-source audit: Docker copy read-only blocker
+
+[Chronological physical Wizard 3→7→4 evidence](dgx-lychee888-ple-path-inconclusive-20261017.md)
+supersedes earlier planned/unexecuted source-attestation language **for this
+specific audit only**. The existing managed `qwen38-flash-next` object
+had image SHA256
+`01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+`State.Status=exited`; all twelve candidate PLE source copies,
+twelve skinny-GEMM reference copies and the independent
+`/etc/group` small-file copy failed with
+`FILESYSTEM_READ_ONLY`. The generic control exited 1,
+returned 76 stderr bytes and the sanitized flags
+`DOCKER_DAEMON_REPLY,FILESYSTEM`. Original stderr bytes, precise
+`HostConfig.ReadonlyRootfs`, on-host checkout SHA and
+PLE Python source remain **NOT_CAPTURED**.
+`DOCKER_MUTATION=NONE`, `GPU_RUN=NOT_PERFORMED`;
+`lychee888` is **not installable** and TP=1 remains unqualified.
+This is a copy-transport blocker, not evidence that PLE/GEMM
+files are missing or that the host filesystem must be remounted.
+
+The next read-only source check is still Wizard **3→7→4**
+after clean branch fast-forward. The new source-only auditor uses
+one small preflight copy and, on the read-only error, skips all
+24 source copies with `NOT_ATTEMPTED_PRECHECK_BLOCK`, also
+reporting the Docker inspect `ReadonlyRootfs` flag without changing
+anything. GitHub CI and physical DGX results must remain distinct;
+the new fast-fail physical output is **NOT_CAPTURED**.
+
 ## 2026-10-16 — lychee888 actual DGX compressed-tensors FP8-PLE source gate
 
 [Exact operator-supplied read-only source-gate output](dgx-lychee888-fp8ple-source-gate-physical-20261016.md):
