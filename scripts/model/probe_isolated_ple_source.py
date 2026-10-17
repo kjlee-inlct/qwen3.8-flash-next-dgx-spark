@@ -16,9 +16,7 @@ import re
 import secrets
 import selectors
 import signal
-import stat
 import subprocess
-import sys
 import time
 
 import audit_installed_ple_image as ple
@@ -173,22 +171,28 @@ def available_docker_space() -> tuple[int, int]:
 def verify_temp(info: dict, cid: str, name: str, nonce: str) -> None:
     if not HEX64.fullmatch(cid):
         raise ProbeError("Temporary ID malformed")
+    config = info.get("Config")
+    labels = config.get("Labels") if isinstance(config, dict) else None
+    state = info.get("State")
+    hc = info.get("HostConfig")
+    if (not isinstance(labels, dict) or not isinstance(state, dict)
+            or not isinstance(hc, dict)):
+        raise ProbeError("Temporary container inspect metadata incomplete")
     if (cid in (EXPECTED_MANAGED_ID, EXPECTED_LEGACY_ID)
             or info.get("Id") != cid or info.get("Name") != "/" + name
             or info.get("Image") != EXPECTED_IMAGE_ID
-            or (info.get("Config") or {}).get("Labels", {}).get(PROBE_LABEL_KEY)
-            != PROBE_LABEL_VALUE
-            or (info.get("Config") or {}).get("Labels", {}).get(
-                "com.qwen38.source-probe.nonce"
-            ) != nonce):
+            or labels.get(PROBE_LABEL_KEY) != PROBE_LABEL_VALUE
+            or labels.get("com.qwen38.source-probe.nonce") != nonce):
         raise ProbeError("Temporary container identity/ownership mismatch")
-    if (info.get("State") or {}).get("Status") != "created":
+    if state.get("Status") != "created":
         raise ProbeError("Temporary container no longer in CREATED state")
-    hc = info.get("HostConfig") or {}
+    policy = hc.get("RestartPolicy")
+    if not isinstance(policy, dict):
+        raise ProbeError("Temporary restart policy inspect incomplete")
     if (info.get("Mounts") != [] or hc.get("Binds") not in (None, [])
             or hc.get("Privileged") is not False
             or hc.get("NetworkMode") != "none"
-            or hc.get("RestartPolicy", {}).get("Name") not in ("no", "")
+            or policy.get("Name") not in ("no", "")
             or hc.get("Devices") not in (None, [])
             or hc.get("Runtime") != "runc"):
         raise ProbeError("Temporary container mount/network/device safety mismatch")
@@ -337,19 +341,38 @@ def main(argv: list[str] | None = None) -> int:
     if not args.execute and (args.approved_image_id or args.approved_scope):
         print("PLE_TEMP_PROBE=STOP_EXECUTION_FLAGS_WITHOUT_EXECUTE")
         return 2
-    try:
-        if not args.execute:
+    if not args.execute:
+        try:
             image, managed, legacy = get_preflight()
             del image, managed, legacy
             print("PLE_TEMP_PROBE=PLAN_ONLY_PROTECTED_IDENTITIES_MATCH")
             print("PLE_TEMP_CREATE=NOT_PERFORMED")
             print("PLE_TEMP_COPY=NOT_PERFORMED")
             return 0
-        return execute()
-    except (ProbeError, ple.AttestationError, OSError, ValueError, UnicodeError) as exc:
-        print(f"PLE_TEMP_PROBE=STOP_{type(exc).__name__}")
-        print("PLE_TEMP_LYCHEE888_TP1=NOT_QUALIFIED")
-        return 2
+        except (ProbeError, ple.AttestationError, OSError, ValueError, UnicodeError) as exc:
+            print(f"PLE_TEMP_PROBE=STOP_{type(exc).__name__}")
+            return 2
+
+    # A termination signal should unwind execute() and its exact-ID cleanup.
+    # SIGKILL and power loss cannot be trapped: the preprinted unique name is
+    # the recovery handle, never a license for name-wide deletion.
+    def stop_on_signal(_signum, _frame):
+        raise ProbeError("Operator interruption: exact-ID cleanup required")
+
+    old_sigterm = signal.getsignal(signal.SIGTERM)
+    old_sigint = signal.getsignal(signal.SIGINT)
+    try:
+        signal.signal(signal.SIGTERM, stop_on_signal)
+        signal.signal(signal.SIGINT, stop_on_signal)
+        try:
+            return execute()
+        except (ProbeError, ple.AttestationError, OSError, ValueError, UnicodeError) as exc:
+            print(f"PLE_TEMP_PROBE=STOP_{type(exc).__name__}")
+            print("PLE_TEMP_LYCHEE888_TP1=NOT_QUALIFIED")
+            return 2
+    finally:
+        signal.signal(signal.SIGTERM, old_sigterm)
+        signal.signal(signal.SIGINT, old_sigint)
 
 
 if __name__ == "__main__":
