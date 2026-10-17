@@ -1,3 +1,16 @@
+## 2026-10-17 — exact Docker stderr, nested bind mount mechanism candidate
+
+[Updated ACTUAL_DGX lychee888 chronology](dgx-lychee888-ple-path-inconclusive-20261017.md)
+includes the physical host checkout SHA `7c93e4db` and one generic
+`/etc/group` copy error: `openat model/config.json: read-only file
+system`. Existing `serve.sh` includes nested `/model:ro` and
+`/model/config.json:ro` bind configuration, and an upstream Moby
+fix documents a matching family of nested-mount Docker-copy failures.
+The actual protected container mount topology/daemon version is
+still unverified. SOURCE-only diagnostics emit sanitized topology
+after the next clean Wizard sync; keep lychee888 non-installable,
+protected Docker assets unchanged and no GPU run.
+
 ## 2026-10-17 — physical DGX copy preflight early-stop confirmed
 
 [Updated chronological lychee888 PLE-source audit transcript](dgx-lychee888-ple-path-inconclusive-20261017.md)
