@@ -1,3 +1,35 @@
+## 2026-10-17 — ACTUAL_DGX PLE source path unresolved; bounded Docker-copy differential added
+
+Physical owner executed read-only Wizard **3 → 7 → 4** after the earlier
+mount-safe source fix. The error changed from broad vLLM mount
+blocking to `PLE_IMAGE_AUDIT=INCONCLUSIVE: No known PLE loader path
+in existing matching container`, with `DOCKER_MUTATION=NONE` and
+`GPU_RUN=NOT_PERFORMED`. The original checker attempted eight
+fixed Python dist/site-package paths and did not print exact image ID,
+matching container ID or `docker cp` failure details. Neither
+source absence nor lychee888 incompatibility is established.
+The exact chat transcript and interpretation limits are preserved
+at [physical source-path evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+GitHub source remediation extends the fixed, bounded Python version
+candidate list (12 paths) and adds **read-only existing-image**
+`low_latency_gemm.py` sentinel checks after missing PLE paths.
+The pinned `scripts/Dockerfile.skinny-gemm` requires that exact
+nvidia low-latency GEMM module for image build. On a failed source
+inspection the checker now prints validated image/container IDs,
+candidate count, sentinel copy status and reference pathname,
+while returning `INCONCLUSIVE`. The sentinel is a **package layout**
+differential, not a PLE loader proof, new Docker image, or GPU trial.
+The same Wizard menu **3 → 7 → 4** is retained, no extra operator
+command or GPU activity is required. Updated synthetic tests cover
+successful/missing sentinel separation and never admit lychee888
+from the reference file alone.
+
+This is **SOURCE/CI** only until a new physical DGX output arrives;
+existing managed profile `orcarouter` and protected Docker assets
+are untouched. Both Draft PR #261 and #259 remain unmerged.
+See [lychee888 canonical analysis](LYCHEE888-WIZARD-INTEGRATION.md).
+ 
 ## 2026-10-16 — ACTUAL_DGX PLE image audit INCONCLUSIVE; safe mount-provenance SOURCE fix CI PASS
 
 Operator ran the newly added Wizard **3 → 7 → 4** against their
