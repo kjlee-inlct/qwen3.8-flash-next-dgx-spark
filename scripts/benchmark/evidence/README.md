@@ -1,3 +1,18 @@
+## 2026-10-17 — ACTUAL_DGX cee107d nested bind topology confirmed
+
+[Chronological actual-DGX source audit](dgx-lychee888-ple-path-inconclusive-20261017.md):
+physical Wizard **3→7→4**, checked-out HEAD `cee107d9`,
+`HostConfig.ReadonlyRootfs=FALSE`,
+`docker_cp_model_config_mount_topology=MODEL_CONFIG_NESTED_RO_BINDS`
+(one read-only bind at each of `/model` and `/model/config.json`),
+generic small-file copy `FILESYSTEM_READ_ONLY`, exit 1,
+and all 24 targeted copies `NOT_ATTEMPTED_PRECHECK_BLOCK`.
+Together with earlier exact Docker `openat model/config.json`
+stderr, this strongly supports a nested-bind Docker copy
+failure rather than a PLE path conclusion; the exact daemon
+version/cause is not yet verified. Protected resources unchanged
+by this inspection; no GPU or weight download.
+
 ## 2026-10-17 — exact Docker stderr, nested bind mount mechanism candidate
 
 [Updated ACTUAL_DGX lychee888 chronology](dgx-lychee888-ple-path-inconclusive-20261017.md)
