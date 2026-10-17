@@ -333,3 +333,29 @@ records, non-bind mounts and a nested pair with other RW flags.
 No Docker bind source/path is displayed, no container is executed,
 and the existing fail-closed `/etc/group` copy preflight and all
 loader/TP=1 restrictions remain in effect. Use Wizard **3 → 7 → 4**.
+
+### PLE isolated source read-only feasibility preview
+
+Developer/reviewer-only command (not another Wizard menu action):
+
+```bash
+python3 -B scripts/model/audit_installed_ple_image.py --plan-isolated-source
+```
+
+This new mode performs **exactly three Docker metadata inspections**:
+the existing tagged image, protected `qwen38-flash-next` and
+historical `qwen38-ab-legacy`. It checks immutable image
+identity, bounded image-size metadata, both container states,
+`/model` and `/model/config.json` fixed mount topology
+and image-declared `VOLUME` metadata. It never invokes
+`docker cp`, creates/runs/removes a container, reads source
+bytes, accesses model weights or uses GPU. It never prints
+bind `Source` paths, environment values or full inspect JSON.
+`REVIEW_CANDIDATE_NOT_AUTHORIZED` denotes only that a future
+*create-only, mountless, unstarted* isolated container method
+is worth explicit operator review; it does not grant permission
+to create such a container and does not attest installed
+PLE code. An image-declared `VOLUME` blocks qualification
+because a temporary create can cause unexpected volume creation.
+The old Wizard **3 → 7 → 4** behavior remains unchanged.
+
