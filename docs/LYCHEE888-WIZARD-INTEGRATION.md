@@ -627,3 +627,27 @@ and SHA256, **not automatically** prove that the bytes
 are the original installed image layer or current
 managed runtime's effective PLE loader. lychee888
 stays non-installable and TP=1 unqualified.
+
+## 2026-10-17 — Historical A/B container exact image match but same nested bind blocker
+
+The physical DGX read-only inspection of historical
+`qwen38-ab-legacy` confirms container
+`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+same exact image SHA256
+`01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+`exited`, `ReadonlyRootfs=false`, and **the same pair**
+of nested readonly bind destinations `/model` and
+`/model/config.json`. Other observed cache mounts are
+separate RW binds. The alternative container is **not
+a qualified way around the Docker 29.6.2 `docker cp`
+pre-fix path**. No historical-container copy was attempted;
+its model data and original evidence are preserved.
+
+The current stage remains **L1 local installed-loader source
+NOT_CAPTURED**, not a checkpoint loader failure. Candidate-only
+source comparisons may proceed with explicit external provenance,
+while any local layer extraction must remain bounded and reviewed
+rather than assuming `docker save` for the ~20.63-GB image
+is free. Protect both containers and do not create/start/restart,
+reconfigure Docker, access model weights or admit lychee888.
+[Exact physical record](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
