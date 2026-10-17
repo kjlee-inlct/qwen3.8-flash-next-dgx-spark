@@ -352,3 +352,36 @@ This improvement is **SOURCE/SYNTHETIC CI only** until another
 physical Wizard **3 → 7 → 4** run. No mounts, Docker objects,
 images or services are changed by the audit; the installed image
 digest and lychee888 TP=1 loader remain unqualified until captured.
+
+### 2026-10-17 physical repeat: known PLE loader paths INCONCLUSIVE
+
+The owner selected read-only Wizard **3 → 7 → 4** again and
+received `PLE_IMAGE_AUDIT=INCONCLUSIVE: No known PLE loader path in
+existing matching container`, `DOCKER_MUTATION=NONE` and
+`GPU_RUN=NOT_PERFORMED`. The prior broad mount-blocking symptom
+was no longer reported, but **no source was captured**, and the
+exact image SHA/container ID and Docker-copy failure details were
+not printed. See [exact operator transcript and inference
+limits](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+This does not establish absent FP8 PLE support; it distinguishes
+neither packaging/version mismatch nor file-copy permission/layout
+failure.
+
+The maintained `audit_installed_ple_image.py` now checks twelve
+bounded, fixed Python3.{10,11,12,13,14,15} dist/site-package
+source paths, reports the already verified image/container identity
+on path failure, and attempts a **small read-only Docker copy** of
+the existing image's `qwen3_8_flash_next/nvidia/low_latency_gemm.py`
+build reference. The project's skinny TP1 Dockerfile explicitly
+asserted that sentinel pathname at build time. A sentinel
+`SKINNY_GEMM_REFERENCE_READABLE` only narrows the suspected
+layout to missing/relocated PLE source, **not** functional FP8 PLE
+loading; `SKINNY_GEMM_REFERENCE_UNAVAILABLE` leaves broader
+copy/package uncertainty. Both remain `INCONCLUSIVE` for the
+lychee888 adapter, regardless of synthetic/source CI success.
+
+The operator uses the **same** Wizard **3 → 7 → 4** after a clean
+GitHub fast-forward; there is no new host mutation, image rebuild,
+container exec/start or GPU activity. If all fixed probes are
+unavailable, a separately designed read-only source inventory
+needs to be qualified, not silently inferred.
