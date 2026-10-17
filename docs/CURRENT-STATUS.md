@@ -30,8 +30,15 @@ admission. Both protected Draft PRs are left unmerged;
 no Docker mutation, image rebuild, GPU run or rootfs
 remount is proposed. This new early-stop implementation
 is SOURCE/CI-only until a new physical Wizard
-**3 → 7 → 4** output is supplied. See
-[lychee888 canonical analysis](LYCHEE888-WIZARD-INTEGRATION.md).
+**3 → 7 → 4** output is supplied. Its latest pre-handoff
+implementation plus documentation at
+`7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360`
+passed GitHub Actions `39035168973` (**SUCCESS**);
+that result is synthetic/repository CI, NOT actual DGX
+Docker-copy or PLE compatibility evidence.
+The [physical evidence index](../scripts/benchmark/evidence/README.md)
+now links the latest `FILESYSTEM_READ_ONLY` transcript.
+See [lychee888 canonical analysis](LYCHEE888-WIZARD-INTEGRATION.md).
 
 ## 2026-10-17 — ACTUAL_DGX: all 25 Docker cp requests unclassified; prioritize shared copy transport
 
