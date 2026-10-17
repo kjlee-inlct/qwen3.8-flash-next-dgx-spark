@@ -524,3 +524,27 @@ Next gate: a bounded reviewed exact Docker error diagnostic without
 changing any Docker object, then source SHA/static FP8 PLE dispatch
 and BF16 scale analysis. lychee888 remains non-installable and
 single Spark TP=1 unqualified.
+
+## 2026-10-17 exact Docker-copy error: nested model/config bind hypothesis
+
+An actual non-model copy `docker cp qwen38-flash-next:/etc/group -
+>/dev/null` failed with `Error response from daemon: openat
+model/config.json: read-only file system`, exit 1, on host checkout
+`7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360`.
+This is no proof that PLE modules are absent. The project's serve
+configuration creates nested read-only bind destinations `/model`
+and `/model/config.json` when its config override is present;
+Moby patched an overlapping-bind-mount `docker cp` failure in
+[upstream commit 7420e624](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35).
+This suggests Docker's nested-mount replay/write-open mechanics
+could account for an error on an **unrequested** path; exact root
+cause is still **INCONCLUSIVE** pending physical Mounts inventory
+and Docker Engine version.
+
+The SOURCE-only inspector adds a bounded, sanitized read-only
+`PLE_DIAGNOSTIC_DOCKER_CP_MODEL_CONFIG_MOUNT_TOPOLOGY` field:
+`MODEL_CONFIG_NESTED_RO_BINDS` denotes only the container-inspect
+structure, not a confirmed daemon fault or working PLE source.
+Run the existing Wizard **3 → 7 → 4** after clean fast-forward
+to collect it; no Docker reconfiguration, restart, runtime launch,
+model download or loader admission is authorized.
