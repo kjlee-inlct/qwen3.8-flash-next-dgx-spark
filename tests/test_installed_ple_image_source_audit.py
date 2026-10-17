@@ -221,6 +221,68 @@ class InstalledImagePLETests(unittest.TestCase):
         self.assertEqual(raised.exception.reason, "PERMISSION_DENIED")
         self.assertNotIn("secret", str(raised.exception))
 
+    def test_unknown_copy_error_exposes_only_safe_signals_and_code(self):
+        from types import SimpleNamespace
+        msg = (b"Error response from daemon: archive extraction failed "
+               b"at /home/private/session/foo with unrecognized fatal error")
+        def fake_run(*_args, **_kwargs):
+            return SimpleNamespace(returncode=37, stdout=b"", stderr=msg)
+        with patch.object(mod.subprocess, "run", side_effect=fake_run):
+            with self.assertRaises(mod.DockerCopyError) as raised:
+                mod.docker_read("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-")
+        err = raised.exception
+        self.assertEqual(err.reason, "COPY_FAILED_UNCLASSIFIED")
+        self.assertEqual(err.exit_code, 37)
+        self.assertEqual(err.stderr_bytes, len(msg))
+        self.assertIn("DOCKER_DAEMON_REPLY", err.stderr_signals)
+        self.assertIn("ARCHIVE", err.stderr_signals)
+        self.assertNotIn("/home/private", repr(err))
+        diagnostics = {}
+        with patch.object(mod, "docker_read", side_effect=err):
+            state = mod.probe_copy_transport(diagnostics)
+        self.assertEqual(state, "COPY_FAILED_UNCLASSIFIED")
+        self.assertEqual(diagnostics["docker_cp_small_file_exit_code"], "37")
+        self.assertEqual(diagnostics["docker_cp_small_file_stderr_bytes"],
+                         str(len(msg)))
+        self.assertIn("ARCHIVE", diagnostics["docker_cp_small_file_stderr_signals"])
+        self.assertNotIn("private", repr(diagnostics))
+
+    def test_common_docker_copy_error_categories(self):
+        cases = (
+            (b"Error: no such container abc", "CONTAINER_MISSING_DURING_COPY"),
+            (b"Error: container is paused", "CONTAINER_PAUSED"),
+            (b"Error: container is not running", "CONTAINER_NOT_RUNNING"),
+            (b"archive: unexpected EOF", "TAR_STREAM_ERROR"),
+            (b"invalid argument for copy", "CLI_ARGUMENT_REJECTED"),
+            (b"operation not permitted on filesystem", "OPERATION_NOT_PERMITTED"),
+        )
+        for raw, reason in cases:
+            with self.subTest(reason=reason):
+                self.assertEqual(mod.classify_copy_failure(raw), reason)
+
+    def test_managed_container_state_only_known_values(self):
+        image, container = identities()
+        container["State"] = {"Status": "exited", "Error": "sensitive-message"}
+        def docker(*args):
+            import json
+            if args[:2] == ("image", "inspect"):
+                return json.dumps([image]).encode()
+            if args[:2] == ("container", "inspect"):
+                return json.dumps([container]).encode()
+            raise mod.DockerCopyError("COPY_FAILED_UNCLASSIFIED")
+        d = {}
+        with patch.object(mod, "docker_read", side_effect=docker):
+            with self.assertRaises(mod.AttestationError):
+                mod.inspect_existing(d)
+        self.assertEqual(d["container_state"], "exited")
+        self.assertNotIn("sensitive-message", repr(d))
+        container["State"]["Status"] = "secret-host-status"
+        d2 = {}
+        with patch.object(mod, "docker_read", side_effect=docker):
+            with self.assertRaises(mod.AttestationError):
+                mod.inspect_existing(d2)
+        self.assertEqual(d2["container_state"], "UNKNOWN")
+
     def test_generic_small_tar_check_distinguishes_copy_transport(self):
         def good(*args):
             self.assertEqual(args, ("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-"))
