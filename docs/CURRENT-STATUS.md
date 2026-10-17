@@ -1,3 +1,30 @@
+## 2026-10-17 — ACTUAL_DGX Docker copy openat model/config.json; nested readonly bind candidate
+
+The owner captured the exact 76-byte-class Docker daemon error
+from the same read-only generic copy control:
+`Error response from daemon: openat model/config.json: read-only file system`
+(exit 1). The directly supplied host checkout SHA was
+`7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360`
+at this invocation. A request for `/etc/group` failed while accessing
+an unrelated `model/config.json` path. Static project serve source
+specifies nested read-only Docker bind mounts `/model:ro` and
+`/model/config.json:ro` for config override. Moby's
+[2026-09-17 nested bind mount Docker-copy fix](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35)
+is a directly relevant candidate mechanism, **not verified as the
+installed daemon fault**. The physical container `Mounts` fields
+and daemon version remain NOT_CAPTURED.
+
+**SOURCE-only follow-up:** The existing PLE auditor now emits a
+sanitized fixed-destination mount topology observation based solely on
+existing `docker container inspect` records; it does not print
+host bind-source paths. It retains the current fail-closed Docker-copy
+preflight and is not a substitute for the next actual physical
+Wizard **3 → 7 → 4** execution. This exact source change requires
+its own HEAD CI result. Full physical stderr/provenance and
+bounded next-gate details:
+[lychee888 Docker-copy chronology](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+No Docker/GPU/model mutation, PR merge or candidate admission.
+
 ## 2026-10-17 — ACTUAL_DGX early-stop verified; Docker copy read-only blocker persists
 
 Owner supplied the next actual read-only Wizard **3 → 7 → 4**
