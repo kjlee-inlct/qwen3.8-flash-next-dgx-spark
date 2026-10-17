@@ -1,3 +1,28 @@
+## 2026-10-17 — ACTUAL_DGX early-stop verified; Docker copy read-only blocker persists
+
+Owner supplied the next actual read-only Wizard **3 → 7 → 4**
+output from the same pinned managed image/container IDs recorded in
+the [chronological physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+`State.Status=exited` and **`HostConfig.ReadonlyRootfs=FALSE`**
+were observed. The single generic `/etc/group` `docker cp`
+failed with `FILESYSTEM_READ_ONLY`, exit 1, stderr 76 bytes,
+sanitized signals `DOCKER_DAEMON_REPLY,FILESYSTEM`.
+The revised auditor correctly reported `ple_candidates_checked=0`
+and `NOT_ATTEMPTED_PRECHECK_BLOCK` for all targeted PLE/GEMM
+copy requests; **24 downstream attempts were skipped**, not tested.
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`.
+
+This is **ACTUAL_DGX proof of source-auditor fail-closed behavior**,
+not proof that PLE/GEMM files are missing, Docker host root is
+read-only, the image has a runtime-compatible FP8 loader, or
+lychee888 TP=1 can load. Docker storage/mount/rootless/daemon
+causality and exact Docker stderr remain unclassified. The
+on-host checkout SHA was not supplied; GitHub HEAD/CI are
+separate evidence. Next: one bounded, reviewed stderr probe on
+an existing non-model file; no Docker mutation, rootfs repair,
+service restart, model download, GPU load or protected PR merge.
+
 ## 2026-10-17 — ACTUAL_DGX Docker copy FILESYSTEM_READ_ONLY: 25 requests, source not attested
 
 The owner reran read-only Wizard **3 → 7 → 4** on the existing
