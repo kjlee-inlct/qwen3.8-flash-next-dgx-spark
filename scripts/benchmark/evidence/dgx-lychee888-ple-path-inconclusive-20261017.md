@@ -182,3 +182,51 @@ No container start, `docker exec`, `docker cp` into a file,
 host remount, Docker restart or protected asset mutation is
 authorized by this diagnostic. Exact physical outcome of this
 new early-stop version is **NOT_CAPTURED**.
+
+
+## 2026-10-17 — physical DGX single-copy preflight and early-stop result (owner supplied)
+
+The operator reran read-only Wizard **3 → 7 → 4** on the actual DGX.
+The visible output below is operator-supplied **ACTUAL_DGX** evidence,
+not a GitHub CI result or independently run assistant command. The
+exact on-host checkout SHA, full Docker CLI stderr, storage-driver
+condition and PLE source bytes remain **NOT_CAPTURED**.
+
+```text
+PLE_DIAGNOSTIC_IMAGE_ID=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4
+PLE_DIAGNOSTIC_MANAGED_CONTAINER_ID=f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24
+PLE_DIAGNOSTIC_CONTAINER_STATE=exited
+PLE_DIAGNOSTIC_CONTAINER_READONLY_ROOTFS=FALSE
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_EXIT_CODE=1
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STDERR_BYTES=76
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STDERR_SIGNALS=DOCKER_DAEMON_REPLY,FILESYSTEM
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STATE=FILESYSTEM_READ_ONLY
+PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=0
+PLE_DIAGNOSTIC_DOCKER_CP_PLE_FAILURE_KINDS=NOT_ATTEMPTED_PRECHECK_BLOCK
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=NOT_ATTEMPTED_PRECHECK_BLOCK
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_FAILURE_KINDS=NOT_ATTEMPTED_PRECHECK_BLOCK
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_PATH=NOT_CAPTURED
+PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED
+PLE_IMAGE_AUDIT=INCONCLUSIVE: Docker cp transport read-only; source files NOT TESTED
+DOCKER_MUTATION=NONE
+GPU_RUN=NOT_PERFORMED
+```
+
+**Verified limited conclusion:** the newly implemented single
+`/etc/group` copy-transport preflight ran on the existing matched
+image/container and correctly stopped the 24 targeted PLE/GEMM copy
+attempts. `HostConfig.ReadonlyRootfs=FALSE` excludes a configured
+readonly rootfs as a directly observed property, **not** all Docker
+snapshotter/storage/mount problems. A daemon-side filesystem read-only
+error remains the immediate copy-transport blocker. `exited` is not
+by itself a Docker-copy failure cause. PLE paths and the actual
+FP8/BF16 scale implementation are **NOT TESTED**, not absent;
+single GB10 TP=1 admission, model download and GPU run remain blocked.
+
+**Next safe evidence:** without restarting Docker or touching protected
+assets, obtain the exact short stderr from one existing-container
+`docker cp qwen38-flash-next:/etc/group - >/dev/null` invocation,
+reviewing it locally for sensitive paths before sharing. If still
+ambiguous, plan bounded read-only Docker storage/host mount metadata
+checks separately. Do not remount, restart, run the container, build
+an image, or elevate the model to installable on this evidence.
