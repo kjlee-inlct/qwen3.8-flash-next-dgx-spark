@@ -466,3 +466,53 @@ plan first (image declared size ~20.63 GB; no blind bulk
 export, root filesystem traversal, host mount or daemon
 restart). Actual `ple_layer.py` SHA and runtime loader
 remain `NOT_CAPTURED` and `NOT_QUALIFIED`.
+
+## 2026-10-18 — ACTUAL_DGX isolated source planner exact-SHA preview
+
+**Evidence provenance:** owner-supplied physical DGX terminal output,
+read-only code sync followed by read-only Docker inspect; not
+independently executed by the assistant, and not a CI/GPU result.
+The operator verified clean branch
+`feature/wizard-modular-phase1-20261014`,
+fast-forwarded from `cee107d` to exact
+`769332111dc4cdfa13e9817544b9166402985f66`,
+stopped on SHA mismatch, and ran the maintained
+`audit_installed_ple_image.py --plan-isolated-source` command:
+
+```text
+PLE_SOURCE_PLAN_IMAGE_ID=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4
+PLE_SOURCE_PLAN_IMAGE_SIZE_BYTES=20629141958
+PLE_SOURCE_PLAN_MANAGED_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_SOURCE_PLAN_LEGACY_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_SOURCE_PLAN_DECLARED_IMAGE_VOLUMES=NONE
+PLE_SOURCE_PLAN_EXISTING_CONTAINER_COPY_ROUTE=BLOCKED_SAME_NESTED_RO_MOUNTS
+PLE_SOURCE_PLAN_ISOLATED_CREATE_ONLY_FEASIBILITY=REVIEW_CANDIDATE_NOT_AUTHORIZED
+PLE_SOURCE_PLAN_SOURCE_BYTES_CAPTURED=NO
+PLE_SOURCE_PLAN_DOCKER_INSPECT_REQUESTS=3
+PLE_SOURCE_PLAN_DOCKER_CP_REQUESTS=0
+PLE_SOURCE_PLAN_DOCKER_MUTATION=NONE
+PLE_SOURCE_PLAN_GPU_RUN=NOT_PERFORMED
+PLE_SOURCE_PLAN_LYCHEE888_TP1_LOADER=NOT_QUALIFIED
+PLE_SOURCE_PLAN=PREVIEW_ONLY_NOT_AUTHORIZED
+```
+
+**Verified narrow result:** one exact pre-existing local image,
+two container image/mount records, no image-declared volumes;
+the read-only feasibility planner returned
+`REVIEW_CANDIDATE_NOT_AUTHORIZED` after
+**3 inspections, 0 copies, 0 mutations, 0 GPU runs**.
+The human-visible checkout SHA guard and fast-forward succeeded.
+Declared `Config.Volumes=NONE` reduces one particular
+anonymous-volume creation hazard but does not exclude metadata,
+storage, device, or Docker daemon side effects of a future
+container create. This evidence is **NOT permission to create
+or delete** a temporary Docker object, and does **not**
+demonstrate that a mountless copy would work or that image PLE
+files exist.
+
+**Repository next step (source-only):** added the reviewed-but-
+unapproved [isolated image source-access plan](../../../docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md)
+with identity/resource/STOP/postcheck/cleanup rules.
+The plan does **not** implement or run any Docker mutation.
+Installed PLE source SHA and lychee888 TP=1 still
+`NOT_CAPTURED / NOT_QUALIFIED`.
