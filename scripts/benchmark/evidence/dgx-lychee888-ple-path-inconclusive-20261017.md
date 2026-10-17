@@ -230,3 +230,42 @@ reviewing it locally for sensitive paths before sharing. If still
 ambiguous, plan bounded read-only Docker storage/host mount metadata
 checks separately. Do not remount, restart, run the container, build
 an image, or elevate the model to installable on this evidence.
+
+## 2026-10-17 — ACTUAL_DGX exact Docker daemon stderr and checkout SHA
+
+The owner supplied the following **actual DGX terminal output** after
+the earlier preflight result (no image, container or model mutation):
+
+```text
+$ git -C ~/Workspace/llm/qwen3.8-flash-next-dgx-spark rev-parse HEAD
+7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360
+$ docker cp qwen38-flash-next:/etc/group - >/dev/null
+Error response from daemon: openat model/config.json: read-only file system
+DOCKER_CP_EXIT=1
+```
+
+This exact checkout SHA is attested **at the command invocation**, not
+retroactively for all earlier Wizard outputs. An unrelated
+`/etc/group` copy fails during daemon access to
+`model/config.json`, a path neither requested nor printed by the
+sanitized inspector. This is a **strong clue for a nested mount /
+archive filesystem-view error**, not proof that the model config,
+checkpoint or the host rootfs is read-only or corrupt. The existing
+project `serve.sh` has two nested read-only bind arguments:
+`/model:ro` and `/model/config.json:ro` when a config override
+is configured. The exact **physical container Mounts inventory** and
+Docker Engine version remain NOT_CAPTURED.
+
+An independent Moby change on 2026-09-17,
+[moby/moby commit 7420e624](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35),
+fixes `docker cp` handling of overlapping nested bind mounts by
+avoiding opening an already-existing inner target for writing. The
+specific upstream reproducer has a different error code/path, so this
+is a matching failure **mechanism candidate**, not a confirmed diagnosis
+of the installed daemon version.
+
+**Next physical evidence:** read-only inspect of the protected
+container's exact `/model` and `/model/config.json` mount
+type/RW fields, plus Docker server version; emit no host bind
+source paths. Do not restart Docker, change mount settings, create
+new containers, modify the model, or claim FP8-PLE qualification.
