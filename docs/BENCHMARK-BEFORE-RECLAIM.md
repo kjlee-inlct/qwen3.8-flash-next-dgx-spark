@@ -1,4 +1,227 @@
+## 2026-10-14 20:43 KST — PHYSICAL DGX MANAGED HOST IDLE: PASS (final)
+
+**Evidence type: operator DGX terminal, not CI simulation.** The user fast-forwarded the
+physical DGX source from `909b03f` to verified branch commit
+`2a2c2220bbb70db6007934bd678bddd704c0f643`:
+`SOURCE_UPDATE=PASS`. The standalone read-only shutdown preview
+`bash install.sh --lang ko --manage-settings --shutdown-access --dry-run`
+reached normalized **6/6 plan** with current `orcarouter` model profile,
+`API access: local only: 127.0.0.1:8888`, service disabled (`--no-service`),
+`--no-start`, and `DRY-RUN 완료` with no host resource mutation.
+
+The operator then invoked `./wizard.sh` → **Runtime 4 → post-benchmark shutdown 6**,
+explicitly approved the separate default-NO plan/commit questions, and reached
+`Settings transaction prepared (start=0)`, systemd
+`qwen38-flash-next.service` boot target link removed,
+`Managed Qwen API access endpoints removed`,
+`Managed Qwen runtime service removed`,
+`Settings resources applied and verified with boot enable deferred until commit`,
+`Settings transaction committed`, and transaction state applied/verified.
+The managed install manifest remains `PHASE=complete`, `MODEL_PROFILE=orcarouter`,
+but is now configured `API_ACCESS_MODE=local`, `SERVICE_ENABLED=0`.
+**The profile shown in the manifest is configured identity, not evidence
+of a running model.**
+
+**Two independent physical host-idle checks passed**: once automatically after
+Wizard shutdown and once directly after exiting Wizard using
+`python3 -B scripts/diagnostics/verify-managed-idle.py`. Both output:
+
+```text
+MANAGED_IDLE_MODEL_PROFILE=orcarouter
+MANAGED_IDLE_API_ACCESS_MODE=local
+MANAGED_IDLE_SERVICE_ENABLED=0
+MANAGED_IDLE_UNIT=qwen38-flash-next.service load=not-found active=inactive boot=
+MANAGED_IDLE_UNIT=qwen38-openwebui-proxy.socket load=not-found active=inactive boot=
+MANAGED_IDLE_UNIT=qwen38-openwebui-proxy.service load=not-found active=inactive boot=
+MANAGED_IDLE_SYSTEMD=NO_RUNNING_OR_BOOT_ENABLED_UNITS
+MANAGED_IDLE_MANAGED_PORTS=NO_LISTENERS
+MANAGED_IDLE_DOCKER=NO_RUNNING_QWEN38_CONTAINERS
+MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START
+MANAGED_IDLE_AUDIT_HOST_MUTATION=NONE
+```
+
+**Scope of PASS:** the project-managed runtime and OpenWebUI systemd units,
+boot-enable flags, configured backend/API/experiment port set, and running
+`qwen38-*` Docker containers. This is not proof that every non-project
+Docker or unrelated host service is stopped, nor proof of a physical reboot.
+ma-zinb checkpoint (~173.65 GiB reclaimed), exact five trial containers
+(~1.30 GiB reclaimed), and complete mazinb evidence archive were verified
+in earlier physical stages. H3–H6, OrcaRouter model checkpoint, Docker images,
+historic Docker objects not selected for reclaim, releases, benchmark payloads,
+journals, and archives remain in place.
+
+**Next workflow consequence:** newly installed or selected model must explicitly
+restore the desired `API_ACCESS_MODE` and `SERVICE_ENABLED` through the
+managed Wizard settings editor (Runtime **4 → 4**), only when wanted.
+Do not manually toggle raw systemd units without updating managed state.
+The older subsections below record historic intermediate states
+(active proxy / unverified idle) and are **superseded by this physical PASS**.
+
+## 2026-10-14 physical mazinb five-container retirement — PASS, final service/proxy audit pending
+
+**Physical operator console (2026-10-14 ~19:37 KST), source SHA `c89b481562f0e53cc49bc5212b4cb645b5618fd2`:**
+`manage-models.sh retire-mazinb-containers --dry-run` passed. Wizard
+**Models 3 → 5** archived exact five mazinb stopped containers' logs and
+sanitized inspect metadata BEFORE removal; the SHA manifest verified all
+10 payloads. Exact five containers were removed and all other Docker IDs
+remained unchanged. The protected OrcaRouter predecessor and shared
+`vllm-orcarouter-v029:v1` image remained intact.
+
+- `MAZINB_DOCKER_ARCHIVE_SHA256=PASS_10_FILES`
+- archive: `/home/inlc/.local/state/qwen38-spark/retirement-archives/mazinb-docker-20261014T103718Z-7e238b9aeb`
+- separate M1 tombstone: `/home/inlc/.local/state/qwen38-spark/mazinb-m1/retired-docker.json`
+- `MAZINB_DOCKER_REMOVED_COUNT=5`; `MAZINB_DOCKER_RETIRE_RESULT=REMOVED_FIVE_VERIFIED`
+- available filesystem delta `1397395456` bytes (~1.30 GiB)
+- Docker container inventory: 29 → 24 total; other Docker IDs unchanged.
+- original mazinb source checkpoint was already reclaimed (~173.65 GiB
+  disk availability improvement) with all H3–H6 stages retained.
+
+**Remaining closure:** physical service, proxy, socket, process and
+listener audit was **NOT_RUN** in that output. The single managed
+`qwen38-flash-next.service` and `qwen38-openwebui-proxy.socket` /
+`qwen38-openwebui-proxy.service` are **SHARED OrcaRouter runtime/API
+components**; do not remove them merely because mazinb is retired.
+M1 uniquely used port **18889**. The managed backend **8888** and shared
+proxy's default **8000** / optional LAN port are not inherently mazinb
+remnants. The reserved future `qwen38-mazinb-m1-background.service`
+was never implemented as a running user worker; verify no unexpected
+user/system unit appeared.
+
+New permanent read-only closer:
+`python3 -B scripts/verify-mazinb-retirement.py` and Wizard
+**Models (3) → 6: final mazinb audit**. It verifies complete original
+benchmark archive, all ten retired Docker archive files and their
+metadata/IDs, the M1 tombstone, absence of mazinb-labelled/owned Docker
+containers, preserved predecessor and shared image, system AND user
+systemd dedicated units (including on-disk unit inventory), unit text
+of known shared runtime/proxy, listening **18889**, and host worker/
+watchdog processes. It prints shared runtime and proxy status without
+deleting them. A failed/unavailable inspection is BLOCKED/INCONCLUSIVE
+rather than a false PASS. This script never changes units, sockets,
+containers, images, proxies or data. After CI, perform physical host
+read-only verification; final complete teardown is not yet attested.
+
+## 2026-10-14 DGX physical mazinb checkpoint deletion — PASS; five Docker remnants — PENDING
+
+Actual user-provided DGX console from 2026-10-14 18:55 KST (source
+`72346806e9e9ed7438245761ae40b606eb6bc941`) shows successful
+Wizard **Models → 4** exact scoped deletion of
+`models/qwen3.8-flash-next-mazinb`. Five stopped mazinb experiment
+containers were intentionally preserved by the source-only implementation.
+Source/checkpoint and Hybrid evidence SHA passed independently after deletion.
+
+- MAZINB_RECLAIM_RESULT=`SOURCE_CHECKPOINT_REMOVED_VERIFIED`
+- Docker inventory result=`UNCHANGED` (expected for that original action)
+- FS before=`110587654144` bytes; after=`297037643776` bytes
+- FS available delta=`186449989632` bytes (about **173.65 GiB**)
+- H3, H4, H5, H6 all PRESERVED; protected predecessor Docker ID still pinned
+- Original `smoke.json`, `mazinb.json`, `mazinb-report.md` SHA all PASS
+- Five mazinb stopped IDs: `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`, `64a4dfacebc0369887742440b5f1a084420b4ca1dc65c4324de61be5d49a1be3`, `7af3966f3d0cae79f8277eaf9ad003fb04c1e15ea01f86574c2d8eeac396e7a1`, `b47e01628492da3f49d5aca2b677ed66dabde08680ae690df700926a37c0d631`, `e9107e3cbebecea9affe7e92dfaf13f711ebf84f8ed8e6e06b1ba16985c9e647`.
+
+**Correction:** Earlier source-only deletion never offered Docker removal.
+The requested new, independent cleanup is `./wizard.sh` → **Models (3)
+→ Retire five mazinb Docker containers (5)** or strictly read-only
+`./scripts/manage-models.sh retire-mazinb-containers --dry-run`.
+The new helper `scripts/model/retire-mazinb-containers.py` requires
+exact five 64-hex IDs and names, exit state, restart policies, matching
+previous checkpoint bind mount and vLLM image tag; protected predecessor;
+complete benchmark original/repo hash verification; M1 stopped journal;
+H3-H6 presence; full Docker inventory. An apply requires owner confirmation,
+the lifecycle and M1 benchmark locks, reruns the plan, and archives five
+sanitized inspect JSON metadata files + five complete bounded Docker logs +
+portable SHA256SUMS under private
+`~/.local/state/qwen38-spark/retirement-archives/` **before** performing
+only `docker rm <exact-container-ID>`. It never uses `-f` or `-v`,
+deletes no images/volumes, and checks other Docker object IDs unchanged.
+The historical M1 journals remain byte-identical; a separate
+`mazinb-m1/retired-docker.json` allows M1 status to report
+`M1_DOCKER_REMOVED=YES_ARCHIVED` after verified cleanup.
+
+**PHYSICAL FIVE-CONTAINER DOCKER REMOVAL: NOT_RUN**. Do not conflate
+source/CI passage with an actual DGX run. The shared
+`vllm-orcarouter-v029:v1` image must stay because H3–H6 and other trials
+share it. Docker global prune remains forbidden.
+
+## 2026-10-14: mazinb source checkpoint-only retirement workflow (SOURCE IMPLEMENTED; PHYSICAL RECLAIM NOT_RUN)
+
+The owner requested: after completing the measured mazinb v0.29 M1 benchmark,
+reclaim the original mazinb model through the Wizard and verify it. This is
+**not** approval for broad container/image/model pruning. Real deletion
+is conditional on passing an exact-target admission and a new explicit Wizard
+confirmation; do not infer complete mazinb Legacy benchmarking or long-term
+host-stability qualification from the v0.29 result.
+
+Current implementation: `./wizard.sh` → **Models (3) → Reclaim mazinb (4)**.
+The Wizard performs a default-NO, read-only `manage-models.sh
+reclaim-mazinb --dry-run`; an actual apply requires the literal phrase
+`DELETE_MAZINB_SOURCE_CHECKPOINT`. It then delegates to the existing
+`manage-models.sh` checkpoint removal engine rather than introducing
+a second deletion implementation.
+
+The separate read-only gate `scripts/model/mazinb-reclaim-gate.py` must
+verify: complete pinned mazinb model manifest; nonactive completed managed
+installation; published physical M1 `smoke.json`, `mazinb.json`,
+`mazinb-report.md` SHA256 against **both** repository archived payloads
+and original DGX results; H3 pinned provenance and, when present, complete
+H3→H6 runtime-only validation; absence of symlinks into the removed
+checkpoint; complete Docker inventory with no running project Docker or
+restartable stopped mount references; exact protected OrcaRouter predecessor
+identity; M1 terminal journal and exact stopped container. The apply path
+adds the shared lifecycle and M1 benchmark locks and repeats checks before
+deletion. It preserves every existing Docker container, image, logger,
+historical M1/KV record, Hybrid stage, immutable release, PLE swap and
+benchmarked source evidence. Stopped mazinb containers mounting its
+checkpoint become archive-only/nonrestartable without re-download.
+
+After deletion, the manager checks that the exact directory is absent,
+Docker object inventory and protected predecessor ID are unchanged,
+benchmark archive audit still passes, and records filesystem available
+bytes before/after. Actual recovered bytes must come from that physical
+output, **not** the historical ~174 GiB directory snapshot.
+
+**Status:** GitHub source/host-free tests only until the owner runs a
+version-verified physical DGX Wizard dry-run and checks the result. Physical
+apply must remain blocked on any failed gate, stale source SHA, incomplete
+Hybrid link references, invalid Docker identity, unverified independent
+archive, or user cancellation. No model files have been deleted in this
+development session.
+
+See [mazinb source report](model-reports/mazinb.md).
+
 # Benchmark first — selective DGX model/Docker reclamation
+
+## 2026-10-14 operator priority reset: run → benchmark → archive → targeted reclaim
+
+**Primary purpose:** actually test installed user models, record reproducible
+performance and stability, archive raw llama-benchy JSON/Markdown/checksums,
+and then reclaim disk/memory by removing **specific** superseded model and
+experiment assets. Wizard is the instrument, not the goal; background
+Supervisor P1a–P1e is OPTIONAL/DEFERRED rather than the next default milestone.
+
+The physical mazinb 16-GiB M1 benchmark and digest checks are already
+complete. Physical P1e synthetic simulation and 11/11 standalone tests
+passed at `1594f30`. They do not prove an actual background worker.
+
+**New guard:** general `manage-storage.sh prune` cannot delete benchmark
+results by file age. `--benchmark-days` is now a **report-only age
+threshold**. The Wizard Storage menu includes a read-only checksum/report
+readiness audit; this does not certify external backup or authorize deletion.
+Historical prune behavior could delete stopped experiment containers.
+**The current hardened source now preserves these containers** during broad
+prune as well as benchmark files; their logs/evidence are retained until
+individually identified, archived, reviewed and explicitly approved.
+A future targeted cleanup must verify exact Docker ID and dependent assets.
+
+**Operational next:** run fresh read-only storage inventory (filesystem,
+containers/image references, current checkpoint/dependency graph, model
+report SHA archive status). Compare against 2026-10-13 S1 105GiB-free
+snapshot before proposing precise reclamation. Select the next real
+testable installed candidate, run supervised foreground qualification
+and llama-benchy in a second terminal, verify archived copy, then
+narrow per-asset dry-run. Do not prematurely remove OrcaRouter,
+the protected managed predecessor, hybrid H3/H4 ancestors, swap,
+immutable releases, benchmark results, or unrelated Docker apps.
+
 
 ## OrcaRouter actual wizard DRY-RUN PASS; performance still unmeasured (2026-10-13)
 

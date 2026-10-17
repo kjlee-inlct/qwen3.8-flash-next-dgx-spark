@@ -123,17 +123,41 @@ TRIAL_PREDECESSOR_ID="${TRIAL_PREDECESSOR_ID:-}"
 DOCKER_LAUNCH=(run -d)
 TRIAL_LABELS=()
 if [[ "${TRIAL_CREATE_ONLY}" == 1 ]]; then
-  [[ "${TRIAL_VARIANT}" == legacy || "${TRIAL_VARIANT}" == v029 ]] || { echo "FATAL: invalid trial variant" >&2; exit 2; }
   [[ "${TRIAL_PREDECESSOR_ID}" =~ ^[a-f0-9]{64}$ ]] || { echo "FATAL: exact predecessor ID missing" >&2; exit 2; }
-  [[ "${NAME}" == "qwen38-ab-${TRIAL_VARIANT}" && "${MODEL_PROFILE}" == orcarouter &&
-     "${PORT}" == 18888 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
-     "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 ]] || { echo "FATAL: trial isolation constraints not satisfied" >&2; exit 2; }
-  [[ "${TRIAL_VARIANT}" != legacy || "${IMAGE}" == vllm-skinny-tp1:v1 ]] || exit 2
-  [[ "${TRIAL_VARIANT}" != v029 || "${IMAGE}" == vllm-orcarouter-v029:v1 ]] || exit 2
   DOCKER_LAUNCH=(create)
-  TRIAL_LABELS=(--label qwen38.abtrial=orcarouter
-                --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
-                --label "qwen38.variant=${TRIAL_VARIANT}")
+  if [[ "${TRIAL_VARIANT}" == mazinb-m1 ]]; then
+    # A unique, pinned, create-only mazinb M1 experiment must not reuse
+    # historical KV-A or KV-B objects or the managed predecessor name.
+    [[ "${NAME}" =~ ^qwen38-mazinb-m1-[0-9]{14}-[a-f0-9]{8}$ &&
+       "${MODEL_PROFILE}" == mazinb && "${IMAGE}" == vllm-orcarouter-v029:v1 &&
+       "${PORT}" == 18889 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
+       "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 &&
+       "${MONITOR_PROTECT}" == 0 && "${KV_MEM:-}" == 17179869184 ]] ||
+      { echo "FATAL: mazinb M1 create-only isolation constraints not satisfied" >&2; exit 2; }
+    TRIAL_LABELS=(--label qwen38.abtrial=mazinb
+                  --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
+                  --label qwen38.variant=m1)
+  elif [[ "${TRIAL_VARIANT}" == hybrid-h6-m1 ]]; then
+    [[ "${NAME}" =~ ^qwen38-hybrid-h6-m1-[0-9]{14}-[a-f0-9]{8}$ &&
+       "${MODEL_PROFILE}" == orcarouter-hybrid && "${IMAGE}" == vllm-orcarouter-v029:v1 &&
+       "${PORT}" == 18890 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
+       "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 &&
+       "${MONITOR_PROTECT}" == 0 && "${KV_MEM:-}" == 17179869184 ]] ||
+      { echo "FATAL: H6 M1 create-only isolation constraints not satisfied" >&2; exit 2; }
+    TRIAL_LABELS=(--label qwen38.abtrial=hybrid
+                  --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
+                  --label qwen38.variant=h6-m1)
+  else
+    [[ "${TRIAL_VARIANT}" == legacy || "${TRIAL_VARIANT}" == v029 ]] || { echo "FATAL: invalid trial variant" >&2; exit 2; }
+    [[ "${NAME}" == "qwen38-ab-${TRIAL_VARIANT}" && "${MODEL_PROFILE}" == orcarouter &&
+       "${PORT}" == 18888 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
+       "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 ]] || { echo "FATAL: trial isolation constraints not satisfied" >&2; exit 2; }
+    [[ "${TRIAL_VARIANT}" != legacy || "${IMAGE}" == vllm-skinny-tp1:v1 ]] || exit 2
+    [[ "${TRIAL_VARIANT}" != v029 || "${IMAGE}" == vllm-orcarouter-v029:v1 ]] || exit 2
+    TRIAL_LABELS=(--label qwen38.abtrial=orcarouter
+                  --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
+                  --label "qwen38.variant=${TRIAL_VARIANT}")
+  fi
 elif [[ "${TRIAL_CREATE_ONLY}" != 0 ]]; then
   echo "FATAL: invalid trial create-only switch" >&2; exit 2
 fi

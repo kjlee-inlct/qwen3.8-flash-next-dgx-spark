@@ -135,6 +135,39 @@ Canonical implementations include:
 - `model/prepare-hybrid-checkpoint.py`
 - `model/prepare-quant-layout-hybrid-checkpoint.py`
 - `model/inspect-checkpoint-diff.py`
+- `model/inspect_catplusplus_metadata.py` (pinned Hub JSON full-tree only)
+- `model/inspect_lychee888_metadata.py` (pinned-source JSON L0)
+- `model/assess_lychee888_loader.py` (pinned JSON vs NVIDIA patch source)
+- `model/audit_installed_ple_image.py` (existing container/source read-only)
+
+## Read-only model candidate evidence tools
+
+The canonical Python modules in `scripts/model/` are independently testable;
+operators reach the candidate inventory via `./wizard.sh` → **3 → 7**.
+`inspect_catplusplus_metadata.py` (Wizard items 1/2) reads only immutable
+Hub JSON; `assess_lychee888_loader.py` (item 3) compares pinned
+lychee888 config/index to repository source without weights. Item 4 runs
+`audit_installed_ple_image.py`, which reads only an existing exact-image
+managed Docker container and, if the PLE source is bind-mounted, the
+corresponding host source file using size-limited no-follow read-only
+operations. It ignores unrelated vLLM mounts. The output **always**
+distinguishes `HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER` from
+`EXISTING_CONTAINER_FILESYSTEM_NOT_PROVEN_RUNTIME`; ambiguous overlay
+or unsafe file provenance fails closed. No `docker run`, `exec`,
+`start`, Docker/host mutation or GPU is invoked by these probes.
+Source SHA256 and static AST method presence are not a runtime import,
+tensor load, scale consumption or TP=1 readiness proof.
+The read-only audit first attempts a single bounded non-model
+`/etc/group` TAR copy to preflight Docker-copy transport and
+records allowlisted `HostConfig.ReadonlyRootfs` (without changing it).
+If the copy fails with `FILESYSTEM_READ_ONLY` or
+`CONTAINER_ROOTFS_READ_ONLY`, it skips **all 24** PLE/GEMM file
+probes (`NOT_ATTEMPTED_PRECHECK_BLOCK`) rather than falsely claiming
+the files absent. Otherwise the existing source-path probes and
+sanitized failure counts apply. No copied bytes, stderr, mounted
+host paths or credentials are printed, and the result never
+qualifies the model loader.
+See `docs/LYCHEE888-WIZARD-INTEGRATION.md` for the exact evidence gates.
 
 ## Model download transport
 
@@ -286,3 +319,78 @@ The layout tests scan canonical implementation files for explicit cross-category
 ## CI rule
 
 Shell syntax and ShellCheck must recurse into script subdirectories. Python compilation must recurse through `scripts/` and `tests/`; canonical benchmark code is included under `scripts/benchmark/`.
+
+### Read-only Docker-copy nested-mount topology hint
+
+The existing-image PLE audit now prints a sanitized
+`PLE_DIAGNOSTIC_DOCKER_CP_MODEL_CONFIG_MOUNT_TOPOLOGY` value based
+on the existing protected container's `Mounts` entries for two
+**fixed** destinations, `/model` and `/model/config.json`.
+`MODEL_CONFIG_NESTED_RO_BINDS` means one bind at each destination,
+both with `RW=false`; it is **not** proof of the daemon's root
+cause. Other outcomes distinguish absent config-overlay, ambiguous
+records, non-bind mounts and a nested pair with other RW flags.
+No Docker bind source/path is displayed, no container is executed,
+and the existing fail-closed `/etc/group` copy preflight and all
+loader/TP=1 restrictions remain in effect. Use Wizard **3 → 7 → 4**.
+
+### PLE isolated source read-only feasibility preview
+
+Developer/reviewer-only command (not another Wizard menu action):
+
+```bash
+python3 -B scripts/model/audit_installed_ple_image.py --plan-isolated-source
+```
+
+This new mode performs **exactly three Docker metadata inspections**:
+the existing tagged image, protected `qwen38-flash-next` and
+historical `qwen38-ab-legacy`. It checks immutable image
+identity, bounded image-size metadata, both container states,
+`/model` and `/model/config.json` fixed mount topology
+and image-declared `VOLUME` metadata. It never invokes
+`docker cp`, creates/runs/removes a container, reads source
+bytes, accesses model weights or uses GPU. It never prints
+bind `Source` paths, environment values or full inspect JSON.
+`REVIEW_CANDIDATE_NOT_AUTHORIZED` denotes only that a future
+*create-only, mountless, unstarted* isolated container method
+is worth explicit operator review; it does not grant permission
+to create such a container and does not attest installed
+PLE code. An image-declared `VOLUME` blocks qualification
+because a temporary create can cause unexpected volume creation.
+The old Wizard **3 → 7 → 4** behavior remains unchanged.
+
+### Physical isolated-source metadata preview result (2026-10-18)
+
+The owner physically ran
+`audit_installed_ple_image.py --plan-isolated-source`
+at exact checkout `769332111dc4cdfa13e9817544b9166402985f66`.
+It reported `DECLARED_IMAGE_VOLUMES=NONE`,
+`REVIEW_CANDIDATE_NOT_AUTHORIZED`, 3 inspect requests,
+0 copies, 0 mutations and no source capture. A future
+created-only mountless object remains out of scope without
+**separate explicit approval**. See the
+[review-only bounded procedure](../docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md)
+for STOP conditions and owner/cleanup safeguards. This
+developer-only review does not add a mutating Wizard action.
+
+### One-time, owner-approved PLE isolated source probe
+
+`model/probe_isolated_ple_source.py` implements a narrowly
+approved separate research-only procedure; its default
+invocation is inspect-only and its mutation route requires
+`--execute`, the exact image digest, and
+`--approved-scope ONE_UNSTARTED_TEMP_CONTAINER_CREATE_COPY_RM`.
+It creates **one** unique, unstarted, mountless, networkless
+container from the exact already-existing image (no build,
+pull, GPU or weights). Source reads and TAR output are bounded.
+Exact-ID deletion is allowed only for its own unchanged
+created-state labeled temporary object; all existing
+managed/history container IDs are protected.
+
+Before physical execution require success on exact GitHub CI
+and a clean DGX checkout to that SHA, with no concurrent
+managed lifecycle transition. A failed cleanup or protected
+postcheck is not a PASS and needs manual review. Owner
+approval is scoped only to that temporary object's create
+and removal; see
+`docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md`.

@@ -84,11 +84,15 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("vllm-orcarouter-v029-h14-ct-input-scale-postload:v1", assets)
         self.assertIn('STORAGE_IMAGE_DESCRIPTION="Shared vLLM v0.29 experiment base; keep"', assets)
 
-    def test_stopped_experiment_cleanup_covers_h7_h8_h9_h10_names(self) -> None:
+    def test_stopped_experiment_inventory_covers_h7_h8_h9_h10_names(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("docker ps -a --filter 'name=qwen38-'", script)
         self.assertIn('$1 != "qwen38-flash-next"', script)
         self.assertNotIn("name=^/qwen38-orca-", script)
+        self.assertIn("EXPERIMENT_CONTAINER_PURGE=DISABLED_REQUIRES_EXACT_ID_ARCHIVE_AND_OWNER_APPROVAL", script)
+        self.assertIn("[Stopped experiment containers: PRESERVED for logs/evidence]", script)
+        self.assertNotIn('run_or_echo docker rm "${name}"', script)
+
 
     def test_manager_uses_disposable_registry_instead_of_hardcoded_function(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
@@ -126,12 +130,36 @@ class StorageManagerTests(unittest.TestCase):
         self.assertIn("named volumes are always protected", script)
         self.assertIn("portainer_data", script)
 
-    def test_build_cache_and_benchmark_retention_are_bounded(self) -> None:
+    def test_build_cache_bounded_and_benchmark_artifacts_never_pruned(self) -> None:
         script = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("BUILD_CACHE_DAYS=7", script)
         self.assertIn("BENCHMARK_DAYS=30", script)
         self.assertIn('docker builder prune -f --filter "until=${hours}h"', script)
         self.assertIn('-mtime "+${BENCHMARK_DAYS}"', script)
+        self.assertIn("BENCHMARK_ARTIFACT_PURGE=DISABLED_ALWAYS_PRESERVE", script)
+        self.assertNotIn('rm -f -- "${path}"', script)
+        self.assertIn("benchmark_candidates()", script)
+        self.assertIn("benchmark result files are ALWAYS PRESERVED", script)
+
+    def test_mazinb_reclaim_flags_fail_closed_without_managed_manifest(self) -> None:
+        # Even --yes is not an override for the managed-state/archive gate.
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            for flag in ("--dry-run", "--yes"):
+                result = subprocess.run(
+                    ["bash", str(MODEL_MANAGER), "reclaim-mazinb", flag],
+                    cwd=ROOT,
+                    env={**os.environ, "HOME": tmp,
+                         "XDG_STATE_HOME": str(Path(tmp) / "xdg"),
+                         "QWEN38_MODEL_ROOT": str(Path(tmp) / "models")},
+                    text=True, capture_output=True, check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("strict completed managed installation is required",
+                              result.stderr)
+                self.assertNotIn("takes no positional target", result.stderr)
+                self.assertFalse((Path(tmp) / "xdg").exists())
 
     def test_model_manager_exposes_profile_asset_lifecycle(self) -> None:
         script = MODEL_MANAGER.read_text(encoding="utf-8")
