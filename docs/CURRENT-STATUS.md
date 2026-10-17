@@ -1,3 +1,34 @@
+## 2026-10-17 — ACTUAL_DGX: all 25 Docker cp requests unclassified; prioritize shared copy transport
+
+Physical owner ran read-only Wizard **3 → 7 → 4**. It verified local
+Docker image SHA `01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and protected managed container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+Twelve PLE paths and twelve skinny-GEMM paths each returned
+`COPY_FAILED_UNCLASSIFIED:12`; the generic tiny `/etc/group`
+Docker-copy control also returned `COPY_FAILED_UNCLASSIFIED`.
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`. The exact reason, exit status and
+container runtime state were not in this physical output. This
+is **not proof of missing vLLM files or loader incompatibility**;
+the shared Docker-copy access mechanism is the priority blocker.
+See [the actual physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+**GitHub SOURCE-only follow-on:** bounded, enumerated Docker
+copy error categories and the generic non-model transport
+control now also expose `container_state` (allowlist only),
+`docker_cp_small_file_exit_code`,
+`docker_cp_small_file_stderr_bytes`, and
+`docker_cp_small_file_stderr_signals` (fixed keywords only).
+No raw Docker stderr, host mount/source paths, credential data,
+model files, Docker mutations, service restarts or GPU launches.
+The same read-only Wizard **3 → 7 → 4** performs the check
+after a clean branch sync. The new actual DGX result is
+**NOT_CAPTURED** until the owner runs it; CI is only
+synthetic verification. The lychee888 `compressed-tensors`
+FP8-PLE source adapter, memory and single Spark TP=1 remain
+unqualified; PR #261/#259 stay Draft and unmerged.
+
 ## 2026-10-17 — ACTUAL_DGX source copy inconclusive with pinned existing Docker IDs
 
 New physical owner Wizard **3 → 7 → 4** output attested
