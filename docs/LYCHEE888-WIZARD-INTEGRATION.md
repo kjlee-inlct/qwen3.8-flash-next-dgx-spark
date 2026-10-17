@@ -422,3 +422,38 @@ means the copy mechanism works for at least that file; it is
 compatible with lychee888's `compressed-tensors` FP8-PLE format.
 The actual new copy-transport diagnostic outcome is still
 `NOT_CAPTURED`, not a source-level PASS.
+
+### 2026-10-17 all existing-container Docker cp requests failed (ACTUAL_DGX)
+
+The next actual DGX read-only Wizard **3 → 7 → 4** captured
+`COPY_FAILED_UNCLASSIFIED:12` for PLE paths,
+`COPY_FAILED_UNCLASSIFIED:12` for the Skinny-GEMM source paths,
+and `COPY_FAILED_UNCLASSIFIED` for the generic small
+`/etc/group` copy. Image ID remained
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+with existing managed container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+`GPU_RUN=NOT_PERFORMED` and `DOCKER_MUTATION=NONE`.
+See [latest actual DGX source-copy evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+**The common Docker-copy/control-file failure now takes priority
+over guessing more PLE package paths**. The result still does not
+prove that `ple_layer.py` or the GEMM module is absent, nor
+that Docker itself is broken: only that this checker received
+nonzero/unusable copy results. The installed container's runtime
+state and specific daemon error response were not captured.
+
+The source-only diagnostic now prints `PLE_DIAGNOSTIC_CONTAINER_STATE`
+from Docker inspect using an allowlisted set and, for the *single*
+existing `/etc/group` copy failure, safe details:
+`PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_EXIT_CODE`,
+`..._STDERR_BYTES`, `..._STDERR_SIGNALS`.
+Error signals are only fixed category names, e.g.
+`DOCKER_DAEMON_REPLY`, `ARCHIVE`, `OVERLAY`, `MOUNT`,
+`FILESYSTEM`, `INVALID_ARGUMENT`, `PERMISSION`.
+No raw stderr, mounted host path or file content is exposed.
+Expanded known-error classifications remain fail-closed.
+The operator route stays **Wizard 3 → 7 → 4**; no start, exec,
+copy-to-host, model install, image build, GPU or service change.
+The next actual DGX result is **NOT_CAPTURED**. Synthetic CI
+only demonstrates the safe parsing/reporting source.
