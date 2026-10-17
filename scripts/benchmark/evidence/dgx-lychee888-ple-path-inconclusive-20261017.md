@@ -422,3 +422,47 @@ existing container would be **container-filesystem evidence**,
 not automatic image-layer or managed runtime attestation.
 Preserve the historical A/B container, managed container,
 image, checkpoint, and all PR protection boundaries.
+
+## 2026-10-17 — ACTUAL_DGX legacy exact digest and matching nested config binds
+
+The owner performed **read-only Docker inspect** of the historical A/B
+container `qwen38-ab-legacy`, and supplied the actual DGX output:
+
+```text
+CONTAINER_ID=57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56
+IMAGE_ID=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4
+IMAGE_TAG=vllm-skinny-tp1:v1
+STATE=exited
+ROOTFS_READONLY=false
+MOUNT_DEST=/model TYPE=bind RW=false
+MOUNT_DEST=/model/config.json TYPE=bind RW=false
+MOUNT_DEST=/root/.cache/flashinfer TYPE=bind RW=true
+MOUNT_DEST=/root/.cache/vllm TYPE=bind RW=true
+```
+
+**New ACTUAL_DGX proof:** the legacy container references the
+**same exact immutable image ID** as the managed container, and
+has the same `/model:ro` with nested
+`/model/config.json:ro` bind configuration. Both rootfs flags
+are false and both containers are stopped. Its cache bind mounts
+have no proven bearing on PLE loader source access. No
+Docker-copy test on the legacy container was performed.
+
+**Decision:** the existing alternate container does **not**
+remove the known nested-bind precondition for the Docker
+29.6.2 copy-path defect. It is **not a qualified workaround**
+for extracting the existing PLE source. Do not try repeated
+`docker cp` attempts on historical or managed containers
+merely to repeat the known failure. Do not relabel either
+container or create a replacement.
+
+Potential future methods require separate safety review:
+a bounded **source-only** comparison against a pinned external
+upstream tree can proceed without claiming it is the actual
+installed-image source; accessing immutable local image layer
+bytes via `docker save` or Docker's internal layer store
+would need an explicit bounded resource/ownership/read-only
+plan first (image declared size ~20.63 GB; no blind bulk
+export, root filesystem traversal, host mount or daemon
+restart). Actual `ple_layer.py` SHA and runtime loader
+remain `NOT_CAPTURED` and `NOT_QUALIFIED`.
