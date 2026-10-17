@@ -1,3 +1,30 @@
+## 2026-10-17 — ACTUAL_DGX image size and legacy A/B alternate preview candidate
+
+The owner ran read-only Docker image-size and container-inventory
+commands. The pinned image ID remained
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+declared image size `20,629,141,958` bytes (~19.21 GiB).
+`docker ps -a --filter ancestor=vllm-skinny-tp1:v1`
+returned two **stopped** containers:
+historical `qwen38-ab-legacy`
+(`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+exit 137) and protected managed `qwen38-flash-next`
+(`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+exit 0), both displaying tag `vllm-skinny-tp1:v1`.
+The `ancestor` filter **does not attest** the legacy
+container's exact immutable image digest; its mount topology
+and source provenance remain unverified.
+
+**Current safe next step:** read-only `docker container inspect`
+for **only** `qwen38-ab-legacy` and display its exact `Image`
+digest, state, readonly-rootfs flag, and mount **destinations**
+/ types / RW flags, never bind Source paths. Do not copy source
+from or change the historical container before identity and
+mount risk are evaluated. The 20.6-GB image is not a suitable
+unreviewed bulk-save target. No GPU run, daemon restart,
+image rebuild, model download or PR merge occurred.
+[Physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-17 — ACTUAL_DGX 29.6.2 predates verified nested-bind docker cp fix
 
 Read-only actual DGX `docker version` and `docker info`
