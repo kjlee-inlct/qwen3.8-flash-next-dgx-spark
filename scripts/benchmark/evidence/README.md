@@ -1,3 +1,15 @@
+## 2026-10-18 — owner-scoped temp PLE-source workflow source-only
+
+The owner explicitly permitted **one** new temporary
+created-but-not-started Docker container from the already
+installed exact image, only bounded generic/PLE file copies,
+and deletion of that same verified new full ID. Maintained
+guarded source module plus Synthetic tests have been
+committed, but no actual DGX Docker creation or source
+capture is attested. See
+[approved-scope procedure and STOP contract](../../../docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md).
+Historical/managed Docker objects remain protected.
+
 ## 2026-10-18 — ACTUAL_DGX isolated source planner preview: 3 inspect, zero copy
 
 [Actual pinned DGX metadata-only isolated-source preview](dgx-lychee888-ple-path-inconclusive-20261017.md):
