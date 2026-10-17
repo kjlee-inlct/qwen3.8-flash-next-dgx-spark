@@ -156,7 +156,12 @@ distinguishes `HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER` from
 or unsafe file provenance fails closed. No `docker run`, `exec`,
 `start`, Docker/host mutation or GPU is invoked by these probes.
 Source SHA256 and static AST method presence are not a runtime import,
-tensor load, scale consumption or TP=1 readiness proof.
+tensor load, scale consumption or TP=1 readiness proof. If all known
+PLE and Skinny-GEMM source paths are unavailable, the read-only audit
+reports **only bounded categorical Docker copy failure counts**, then
+tries a small pre-existing non-model `/etc/group` TAR copy strictly
+as a transport check. This never prints copied bytes, stderr, user
+paths or mounted host data and cannot qualify any model loader.
 See `docs/LYCHEE888-WIZARD-INTEGRATION.md` for the exact evidence gates.
 
 ## Model download transport
