@@ -548,3 +548,29 @@ structure, not a confirmed daemon fault or working PLE source.
 Run the existing Wizard **3 → 7 → 4** after clean fast-forward
 to collect it; no Docker reconfiguration, restart, runtime launch,
 model download or loader admission is authorized.
+
+## 2026-10-17 actual DGX nested /model/config.json bind confirmation
+
+Physical operator fast-forwarded to verified HEAD
+`cee107d9e47b278d7dede40a8d401ea9c2ccea32` and ran
+read-only Wizard **3 → 7 → 4**. Against the same protected image
+and managed stopped container, `HostConfig.ReadonlyRootfs=FALSE`
+while `MODEL_CONFIG_NESTED_RO_BINDS` **confirms both**
+`/model` and `/model/config.json` are separate read-only bind
+mount destinations. A `docker cp` of the non-model `/etc/group`
+file still failed with `FILESYSTEM_READ_ONLY`, exit code 1;
+24 source copies were correctly bypassed by
+`NOT_ATTEMPTED_PRECHECK_BLOCK`, no Docker mutation/GPU execution.
+The prior daemon stderr `openat model/config.json: read-only file
+system` now has corroborating actual mount-topology evidence.
+
+Moby upstream corrected overlapping bind handling in
+[2026-09-17 commit 7420e624](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35),
+but the installed Docker Engine server version and exact root-cause
+match are **NOT_VERIFIED**. This is a Docker copy-path blocker, not
+a PLE implementation, checkpoint-integrity or TP=1 result.
+The next read-only gate is the Docker **server version**, followed
+by a reviewed extraction option that needs no protected container
+restart, recreation, remount or image rebuild.
+
+[Complete physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
