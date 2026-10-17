@@ -651,3 +651,62 @@ rather than assuming `docker save` for the ~20.63-GB image
 is free. Protect both containers and do not create/start/restart,
 reconfigure Docker, access model weights or admit lychee888.
 [Exact physical record](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — Source acquisition decisions after identical legacy nested binds
+
+**SOURCE-only feasibility planning is implemented** in existing
+`scripts/model/audit_installed_ple_image.py` with
+`--plan-isolated-source`. This developer/reviewer-only
+route does no `docker cp` or Docker mutation. It requires
+exact immutable image identity for the managed and historical
+containers, stopped/created states, valid fixed nested
+mount records, positive declared image size, and checks
+image `Config.Volumes`. It outputs sanitized decisions.
+An image-declared volume is a hard planning STOP because
+Docker `create` can allocate an anonymous volume even when
+no explicit `--volume` is given. A no-volume preview is
+**review-worthy only**, never an operator authorization.
+
+A future **temporary mountless created-but-never-started**
+container could in principle avoid the Docker 29.6.2
+nested RO mount replay precondition and let a single bounded
+PLE Python file be copied and SHA256-inspected from the
+same pinned image ID. This remains **not implemented, not
+executed, and not authorized**: before any such action the
+operator must separately approve an exact-image create-only
+procedure, unique temporary name/label, zero model/GPU/
+network exposure, bounded single-file reads, automatic
+same-ID cleanup, host disk/I/O cap, protected-container
+immutability and explicit STOP/recovery rules. This
+limited create/delete changes Docker state even though
+no GPU is run. Never use `docker run`, `exec`, daemon
+restart or blind `docker save` as an unreviewed shortcut.
+
+### External upstream references — distinct from installed image
+
+- [vLLM PR #53899](https://github.com/vllm-project/vllm/pull/53899)
+  (closed **unmerged** 2026-09-21) covers CPU-offload work.
+  Its published offload validation is BF16/FP8 on GB200 at
+  TP2/TP4 or DP4+EP4, **not** single GB10 TP=1.
+  The source tree and file namespace have changed relative
+  to this locally built image; do not assert exact-byte
+  equivalence.
+- [vLLM PR #54882](https://github.com/vllm-project/vllm/pull/54882)
+  (merged 2026-09-03) adds an FP8 PLE resolver branch for
+  `ModelOptMixedPrecisionConfig`; it does not prove support
+  for pinned lychee888's `compressed-tensors` /
+  `mixed-precision` quantization dispatch.
+- [Community forced-FP8 patch](https://github.com/getrefined/Qwen3.8-Flash-Next-NVFP4-vLLM-DGX-Spark)
+  shows a minimal environment override around the resolver,
+  but targets a different checkpoint and deployment; it
+  does not validate lychee888 expert quantization, BF16
+  global PLE scale consumption, TP=1, or memory safety.
+
+**Next source gates:** establish exact image-origin
+`ple_layer.py` SHA/code before any runtime adaptation;
+map `CompressedTensorsConfig` selection and weight-loader
+compatibility independently, then global BF16 PLE scale
+registration/use, and finally single-GB10 TP=1 memory and
+functional readiness under separate approval. No large
+checkpoint transfer or GPU trial is authorized by source
+evidence.
