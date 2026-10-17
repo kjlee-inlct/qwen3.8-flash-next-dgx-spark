@@ -218,9 +218,12 @@ class IsolatedProbeTests(unittest.TestCase):
             [x for x in fake.calls if x[:2] == ("container", "rm")],
             [("container", "rm", fake.cid)],
         )
-        self.assertNotIn("run", str(fake.calls))
-        self.assertNotIn("start", str(fake.calls))
-        self.assertNotIn("exec", str(fake.calls))
+        forbidden = {("container", "run"), ("container", "start"),
+                     ("container", "exec"), ("container", "kill"),
+                     ("container", "rm", mod.EXPECTED_MANAGED_ID),
+                     ("container", "rm", mod.EXPECTED_LEGACY_ID)}
+        self.assertFalse(any(x[:2] in forbidden or x in forbidden
+                             for x in fake.calls))
         self.assertNotIn("docker", stdout.lower().split("source_sha256")[-1])
 
     def test_transport_failure_still_cleans_up(self):
@@ -297,7 +300,6 @@ class IsolatedProbeTests(unittest.TestCase):
                 ])
         self.assertEqual(code, 2)
         self.assertFalse(fake.temp)
-        self.assertIn("Insufficient", "") if False else None
 
 
 if __name__ == "__main__":
