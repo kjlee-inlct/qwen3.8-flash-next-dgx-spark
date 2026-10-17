@@ -457,3 +457,47 @@ The operator route stays **Wizard 3 → 7 → 4**; no start, exec,
 copy-to-host, model install, image build, GPU or service change.
 The next actual DGX result is **NOT_CAPTURED**. Synthetic CI
 only demonstrates the safe parsing/reporting source.
+
+### 2026-10-17 root-cause narrowed: read-only Docker-copy transport on exited container
+
+The latest actual DGX Wizard **3 → 7 → 4** output shows:
+`container_state=exited`,
+twelve PLE and twelve Skinny GEMM copies all failed as
+`FILESYSTEM_READ_ONLY`, and the independent `/etc/group`
+control copy failed identically (`exit_code=1`,
+`stderr_bytes=76`,
+`stderr_signals=DOCKER_DAEMON_REPLY,FILESYSTEM`).
+The same known local image SHA256 and protected container ID
+were verified; neither PLE source nor effective runtime was
+read. See [physical read-only copy evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+This supports a **common copy-transport blocker**, not missing
+source files or failure of lychee888's FP8-PLE loader.
+
+Docker's published `docker cp` CLI supports stopped containers;
+a separate `--read-only` container rootfs option exists.
+We have **not yet observed** the container's
+`HostConfig.ReadonlyRootfs` value or full daemon error text,
+so we cannot equate the short sanitized category with either the
+rootfs configuration or host filesystem health. No root remount,
+daemon restart, image rebuild, container replacement or GPU launch.
+
+The maintained audit now uses a **single small non-model
+`/etc/group` copy preflight** after exact image/container checks
+and before 24 PLE/GEMM copy attempts. For
+`FILESYSTEM_READ_ONLY` or
+`CONTAINER_ROOTFS_READ_ONLY`, it immediately returns
+`INCONCLUSIVE`, marks source probes
+`NOT_ATTEMPTED_PRECHECK_BLOCK`, and records safe,
+allowlisted `container_readonly_rootfs=TRUE/FALSE/UNKNOWN`
+from existing Docker inspect. This is a read-only inspection
+of existing metadata, **not** a change to the setting.
+If the control succeeds, targeted file probes proceed as
+before; a read-only configuration flag by itself is **not**
+used to infer a transport failure.
+
+Next operator run uses unchanged Wizard **3 → 7 → 4**
+after source CI. A direct `docker cp` against only
+`/etc/group` with output streamed to `/dev/null` can provide
+the original Docker error for manual interpretation **after
+sanitizing the error message**. This is diagnostic only;
+lychee888 remains `SOURCE_ONLY_LOADER_UNQUALIFIED`.
