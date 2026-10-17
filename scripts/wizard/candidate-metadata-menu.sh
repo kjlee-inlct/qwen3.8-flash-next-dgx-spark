@@ -33,7 +33,7 @@ wizard_lychee888_source_gate() {
 
 wizard_installed_ple_source_audit() {
   wizard_header 'Existing image PLE loader source / 설치 이미지 PLE 소스 점검'
-  wizard_info 'Only local Docker image/container inspect and copy from the EXISTING qwen38-flash-next container.'
+  wizard_info 'Read-only Docker inspect/copy from the existing managed container; a PLE bind source may be read locally.'
   wizard_info 'No container creation, start, GPU use, downloads, model data or service changes.'
   if python3 -B "${ROOT_DIR}/scripts/model/audit_installed_ple_image.py"; then
     wizard_warning 'Installed image SOURCE signatures captured; this is NOT a lychee888 loader/TP=1 qualification.'
