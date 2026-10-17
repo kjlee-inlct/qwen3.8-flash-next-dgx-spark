@@ -174,6 +174,8 @@ def classify_copy_failure(raw: bytes) -> str:
         return "CONTAINER_NOT_RUNNING"
     if b"operation not permitted" in text:
         return "OPERATION_NOT_PERMITTED"
+    if b"rootfs is marked read-only" in text or b"container rootfs is read-only" in text:
+        return "CONTAINER_ROOTFS_READ_ONLY"
     if b"read-only file system" in text or b"read-only filesystem" in text:
         return "FILESYSTEM_READ_ONLY"
     if b"invalid argument" in text or b"unknown flag" in text:
@@ -436,6 +438,13 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
         diagnostics["container_state"] = status if status in (
             "created", "running", "restarting", "exited", "paused", "dead", "removing"
         ) else "UNKNOWN"
+        host_config = container.get("HostConfig")
+        readonly_flag = (host_config.get("ReadonlyRootfs")
+                         if isinstance(host_config, dict) else None)
+        diagnostics["container_readonly_rootfs"] = (
+            "TRUE" if readonly_flag is True else
+            "FALSE" if readonly_flag is False else "UNKNOWN"
+        )
     # A bound PLE module obscures the image-layer file. Its host file, not
     # docker cp's view of the stopped container, is the effective source.
     mapped = [
@@ -454,6 +463,23 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
         result["source_mount_mode"] = "rw" if mount.get("RW") else "ro_or_unknown"
         result.update(audit_source(read_host_source_nofollow(host_source)))
         return result
+    # Probe the common Docker-copy path ONCE before probing many model files.
+    # On a read-only filesystem, repeating 24 file copies cannot establish
+    # missing PLE sources. No Docker object is modified by this probe.
+    if diagnostics is not None:
+        transport = probe_copy_transport(diagnostics)
+        diagnostics["docker_cp_small_file_state"] = transport
+        if transport in ("FILESYSTEM_READ_ONLY", "CONTAINER_ROOTFS_READ_ONLY"):
+            diagnostics["ple_candidates_checked"] = "0"
+            diagnostics["docker_cp_ple_failure_kinds"] = "NOT_ATTEMPTED_PRECHECK_BLOCK"
+            diagnostics["docker_cp_reference_state"] = "NOT_ATTEMPTED_PRECHECK_BLOCK"
+            diagnostics["docker_cp_reference_failure_kinds"] = "NOT_ATTEMPTED_PRECHECK_BLOCK"
+            diagnostics["docker_cp_reference_path"] = "NOT_CAPTURED"
+            diagnostics["ple_source_file"] = "NOT_CAPTURED"
+            raise AttestationError(
+                "Docker cp transport read-only; source files NOT TESTED"
+            )
+
     ple_failures: dict[str, int] = {}
     for path in PATHS:
         try:
@@ -473,7 +499,7 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
         diagnostics["docker_cp_reference_state"] = state
         diagnostics["docker_cp_reference_failure_kinds"] = failure_summary(reference_failures)
         diagnostics["docker_cp_reference_path"] = reference
-        diagnostics["docker_cp_small_file_state"] = probe_copy_transport(diagnostics)
+        # A generic transport preflight was already taken exactly once.
         diagnostics["ple_source_file"] = "NOT_CAPTURED"
     raise AttestationError("No known PLE loader path in existing matching container")
 
