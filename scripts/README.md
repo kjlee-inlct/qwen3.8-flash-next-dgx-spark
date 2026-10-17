@@ -359,3 +359,17 @@ PLE code. An image-declared `VOLUME` blocks qualification
 because a temporary create can cause unexpected volume creation.
 The old Wizard **3 → 7 → 4** behavior remains unchanged.
 
+### Physical isolated-source metadata preview result (2026-10-18)
+
+The owner physically ran
+`audit_installed_ple_image.py --plan-isolated-source`
+at exact checkout `769332111dc4cdfa13e9817544b9166402985f66`.
+It reported `DECLARED_IMAGE_VOLUMES=NONE`,
+`REVIEW_CANDIDATE_NOT_AUTHORIZED`, 3 inspect requests,
+0 copies, 0 mutations and no source capture. A future
+created-only mountless object remains out of scope without
+**separate explicit approval**. See the
+[review-only bounded procedure](../docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md)
+for STOP conditions and owner/cleanup safeguards. This
+developer-only review does not add a mutating Wizard action.
+
