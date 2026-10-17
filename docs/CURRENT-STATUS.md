@@ -1,3 +1,34 @@
+## 2026-10-18 — SOURCE_ONLY isolated PLE source planning gate; no image bytes
+
+The current working branch implements a **preview-only**
+`python3 -B scripts/model/audit_installed_ple_image.py --plan-isolated-source`
+diagnostic. It uses exactly three existing Docker inspect
+requests and fails closed on mismatched immutable image ID,
+unexpected protected/historical container state, missing
+mount data, invalid image size, or ambiguous image
+`Config.Volumes`. It reports only safe source-access
+feasibility labels, never host bind source paths or raw
+container config. It **does not** create, copy, start,
+remove or change a container. A hypothetical mountless
+create-only source-copy probe remains a separately reviewed,
+**NOT_AUTHORIZED** future operation; volume declarations
+are a STOP condition because Docker may create anonymous
+volumes. Only SOURCE/CI tests exist for this mode until an
+actual DGX run is supplied; it is NOT a physical
+image-loader capture or a TP=1 admission.
+[Maintained module](../scripts/model/audit_installed_ple_image.py).
+
+External reference-only update: upstream vLLM
+[PR #53899](https://github.com/vllm-project/vllm/pull/53899)
+was closed without merge on 2026-09-21 and documents
+CPU offload TP2/TP4 on GB200, not single GB10 TP=1.
+[PR #54882](https://github.com/vllm-project/vllm/pull/54882)
+merged on 2026-09-03 but resolves FP8 PLE under
+`ModelOptMixedPrecisionConfig`, **not** proof that the
+pinned lychee888 `compressed-tensors` `mixed-precision`
+config selects that route. The exact vendor image source
+SHA remains `NOT_CAPTURED`.
+
 ## 2026-10-17 — ACTUAL_DGX legacy same-image nested RO mounts; alternative cp blocked
 
 Operator inspected historical stopped `qwen38-ab-legacy`
