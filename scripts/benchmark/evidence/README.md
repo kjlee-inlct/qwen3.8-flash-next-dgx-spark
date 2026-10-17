@@ -1,3 +1,18 @@
+## 2026-10-17 — ACTUAL_DGX historical legacy container same image and same nested RO binds
+
+[Complete actual-DGX lychee888 Docker-copy chronology](dgx-lychee888-ple-path-inconclusive-20261017.md):
+read-only `docker container inspect qwen38-ab-legacy`
+established the exact protected-image digest match and
+`/model:ro` plus nested `/model/config.json:ro`
+binds; rootfs readonly flag false, container exited.
+Its cache mounts are RW. This alternate historical
+container therefore **does not eliminate** the Docker
+29.6.2 nested-bind failure precondition, and is not an
+approved copy-based bypass. No legacy `docker cp`,
+container mutation, GPU run or source capture occurred.
+Future source extraction requires a separately bounded
+nonmutating approach with verified provenance.
+
 ## 2026-10-17 — ACTUAL_DGX 20.63 GB image and two stopped ancestor-filter containers
 
 [Updated lychee888 physical evidence](dgx-lychee888-ple-path-inconclusive-20261017.md):
