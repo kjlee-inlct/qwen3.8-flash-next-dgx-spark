@@ -1,6 +1,6 @@
 # lychee888 local installed-image PLE source — isolated read-only probe plan
 
-**Status:** PROPOSAL / NOT AUTHORIZED / NOT EXECUTED, 2026-10-18.
+**Current status (2026-10-18):** Owner APPROVED only the narrow one-temp-container create/copy/exact-ID-remove cycle. SOURCE_IMPLEMENTED, ACTUAL_DGX_NOT_EXECUTED. The historical preapproval plan below remains preserved; all GPU, model, daemon, protected-container and PR mutations remain forbidden.
 **Host scope:** the sole protected NVIDIA DGX Spark GB10; this document
 is a *review contract*, not a command to create/remove Docker objects.
 **Project rules:** [permanent handoff](SESSION-HANDOFF-PROMPT.md),
@@ -166,3 +166,51 @@ unapproved temporary create/remove, or protected PR merge.
 `TEMP_CONTAINER=NOT_CREATED`,
 `PLE_IMAGE_SOURCE=NOT_CAPTURED`,
 `LYCHEE888_INSTALLABLE=NO`.
+
+## 2026-10-18 — owner approval of one isolated unstarted source probe
+
+On 2026-10-18 the operator explicitly answered **허용** to the narrow
+proposal for **exactly one NEW temporarily created, never-started,
+mountless container** from the already installed immutable image;
+read only a small generic file and allowlisted PLE source files,
+then remove **only its own verified full container ID**. This approval
+does not authorize editing/removing/starting protected managed or
+historical containers, image rebuild/pull, model installation,
+weight download, GPU execution, host/Docker restart or PR merge.
+
+Source implementation: `scripts/model/probe_isolated_ple_source.py`.
+Its default route is a no-mutation read-only preflight. Physical
+execution requires `--execute`, exact `--approved-image-id`, and
+`--approved-scope ONE_UNSTARTED_TEMP_CONTAINER_CREATE_COPY_RM`.
+A separately guarded clean exact Git SHA with SUCCESS CI is required
+before the operator executes it on the DGX.
+
+The script checks original container IDs and states, nested bind
+topology, exact image ID and recorded size, absent image-declared
+volumes, and Docker storage free bytes/inodes. It creates an inert
+temporary object with `docker container create`, `--network none`,
+`--runtime runc`, `--restart no`, `--pull never`, a unique label and
+nonce, and without any model/GPU mounts. It must never call
+`run`, `start`, `exec`, Docker daemon restart or model loaders.
+
+It validates exact newly created ID, owner nonce, `created` state,
+empty mounts, runc runtime and network isolation before Docker cp.
+It copies only `/etc/group` as a small TAR control and up to 12
+fixed PLE Python source paths, bounded to the existing inspector's
+tar/file limits; no full-image export or model payload read.
+On success it prints the exact source SHA256 and static AST gate
+without asserting compatible compressed-tensors routing or TP=1.
+
+Cleanup is attempted by exact newly created 64-hex ID only after
+reinspect shows its unchanged ownership label, nonce, image and
+`created` state, with NO force flag. Any identity/state mismatch
+stops cleanup and requires manual review. SIGTERM/SIGINT unwind
+through guarded cleanup where possible. SIGKILL/power loss cannot
+be caught: preserve the printed unique planned name and created ID
+for independent recovery review; never delete by name alone.
+
+The source probe always performs read-only protected-container
+postchecks. A complete physical cycle must report
+`PLE_TEMP_CLEANUP=EXACT_ID_REMOVED_VERIFIED` and
+`PLE_TEMP_PROTECTED_POSTCHECK=MATCH`. The script and Synthetic
+tests are SOURCE_ONLY until a DGX terminal result is supplied.
