@@ -327,3 +327,57 @@ or whole-host filesystem failure.
 `docker version --format '{{.Server.APIVersion}}'` if necessary,
 without changing Docker mounts, rebuilding/recreating containers,
 restarting services, or downloading/loading weights.
+
+## 2026-10-17 — ACTUAL_DGX Docker Engine 29.6.2 overlay2 verified
+
+Owner supplied the actual DGX read-only host inspection:
+
+```text
+=== Docker Engine ===
+SERVER_VERSION=29.6.2
+SERVER_API=1.55
+=== Docker storage ===
+STORAGE_DRIVER=overlay2
+```
+
+This is **ACTUAL_DGX server metadata**, not a GPU or Docker filesystem
+mutation and not proof of image or PLE loader compatibility.
+
+**Independent exact upstream source comparison (SOURCE_REVIEW, not
+physical binary disassembly):**
+
+- Official Moby `docker-v29.6.2` `daemon/containerfs_linux.go`
+  calls `root.Open(relDest)` for a replayed mount target and
+  `root.OpenFile(unsafePath, os.O_CREATE|os.O_WRONLY, 0o755)`
+  inside `createIfNotExists`.
+- Official Moby `docker-v29.8.2` replaces those operations with
+  `root.OpenFile(relDest, unix.O_PATH, 0)` and
+  `root.OpenFile(unsafePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)`
+  (existing targets are left alone on `EEXIST`).
+- Docker's [29.8.2 release notes](https://docs.docker.com/engine/release-notes/29/)
+  dated **2026-09-30** explicitly list a nested-bind-mount
+  `docker cp` fix linked to
+  [moby/moby#53724](https://github.com/moby/moby/pull/53724).
+  The earlier [Moby commit 7420e624](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35)
+  documents the faulty write-open/replay mechanism.
+
+The actual `29.6.2` server version **precedes the upstream
+fix**. In conjunction with the confirmed nested read-only
+`/model` / `/model/config.json` mounts and the
+`openat model/config.json: read-only file system` error while
+copying `/etc/group`, the original upstream defect is a
+**high-confidence cause hypothesis**. `overlay2` alone
+does not prove storage-driver corruption. A distributor-specific
+backport or binary patch was not investigated; do not claim
+verified daemon build provenance or directly established stack trace.
+The exact effective PLE loader remains NOT_CAPTURED and
+`lychee888` remains NOT installable.
+
+**Next nonmutating feasibility checks:** bound the installed
+image's declared `Size` and enumerate existing stopped containers
+matching the **same immutable image ID**; if none can be proven to
+expose an unshadowed source path, stop and plan another reviewed
+read-only strategy. A `docker image save` may stream a large
+archive and is NOT automatically authorized just because it
+does not create a container. No Docker upgrade/restart, image
+rebuild, container create/start, weight download, or GPU run.
