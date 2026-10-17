@@ -1,3 +1,34 @@
+## 2026-10-17 — ACTUAL_DGX legacy same-image nested RO mounts; alternative cp blocked
+
+Operator inspected historical stopped `qwen38-ab-legacy`
+(`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`)
+on the DGX using **read-only Docker inspect**.
+`Image` **exactly matched** the protected managed
+`vllm-skinny-tp1:v1` image digest
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`.
+`State.Status=exited`, `HostConfig.ReadonlyRootfs=false`.
+Its `Mounts` include `/model` and
+`/model/config.json`, both bind and `RW=false`;
+cache binds `/root/.cache/flashinfer` and
+`/root/.cache/vllm` have `RW=true`.
+This proves that the historical A/B container has the
+**same nested read-only bind configuration** as the managed
+container, so it is **not an established Docker-copy
+workaround** for the diagnosed Docker 29.6.2 mount replay
+bug. No `docker cp` against the legacy container was
+performed or implied; no PLE source was captured.
+
+Proceed to a **separately reviewed, bounded nonmutating**
+image-origin source-access approach or independent
+pinned-source analysis with explicit provenance; do not
+bulk-export a ~20.63-GB image without an I/O/resource plan,
+access the Docker layer store with unbounded root traversal,
+restart Docker, create a fresh container, alter mounts or
+touch checkpoint/GPU. The installed-source SHA, FP8 PLE
+dispatch, BF16 scale and single-GB10 TP=1 gates remain
+unqualified.
+[Complete physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-17 — ACTUAL_DGX image size and legacy A/B alternate preview candidate
 
 The owner ran read-only Docker image-size and container-inventory
