@@ -381,3 +381,44 @@ read-only strategy. A `docker image save` may stream a large
 archive and is NOT automatically authorized just because it
 does not create a container. No Docker upgrade/restart, image
 rebuild, container create/start, weight download, or GPU run.
+
+## 2026-10-17 — ACTUAL_DGX exact image-size and ancestor-filter container inventory
+
+The owner reported the following **read-only actual DGX outputs**;
+the checkout HEAD at this *particular* invocation was not printed.
+Do not retroactively attach the preceding verified `cee107d` SHA
+or infer a container's immutable image ID from its displayed tag.
+
+```text
+=== Exact image identity and size ===
+IMAGE_ID=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4 IMAGE_SIZE_BYTES=20629141958
+=== Existing image-related containers ===
+ID=57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56 IMAGE=vllm-skinny-tp1:v1 STATUS=Exited (137) 4 days ago NAME=qwen38-ab-legacy
+ID=f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24 IMAGE=vllm-skinny-tp1:v1 STATUS=Exited (0) 10 days ago NAME=qwen38-flash-next
+```
+
+**Physical finding:** the installed reference image is
+20,629,141,958 bytes (about 19.21 GiB), much too large to
+make an unplanned `docker image save` a low-impact source
+probe. The `docker ps -a --filter ancestor=...` query returned
+**two existing stopped containers**, including historical
+A/B object `qwen38-ab-legacy`. The `ancestor` filter and
+displayed `IMAGE` field are **not an immutable image identity
+assertion**; the legacy container's actual `.Image` digest,
+`.HostConfig.ReadonlyRootfs`, mount topology and any vLLM
+source-path shadowing remain **NOT_CAPTURED**. Its historical
+exit 137 is not a reason to restart it and not proof of
+source compatibility.
+
+**Next bounded read-only differentiation:** inspect only
+`qwen38-ab-legacy` using Docker `container inspect`.
+Print exact `Id`, `Image` digest, `State.Status`,
+`HostConfig.ReadonlyRootfs`, and mount destination/type/RW
+(no `Mounts[].Source`, labels, environment, model contents).
+Do not call `docker cp` on this alternate until immutable
+identity and absence of problematic nested bind mounts have
+been validated. Even successful source copy from a distinct
+existing container would be **container-filesystem evidence**,
+not automatic image-layer or managed runtime attestation.
+Preserve the historical A/B container, managed container,
+image, checkpoint, and all PR protection boundaries.
