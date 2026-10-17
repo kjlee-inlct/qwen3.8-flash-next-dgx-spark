@@ -283,6 +283,73 @@ class InstalledImagePLETests(unittest.TestCase):
                 mod.inspect_existing(d2)
         self.assertEqual(d2["container_state"], "UNKNOWN")
 
+    def test_readonly_copy_preflight_stops_before_all_model_copy_attempts(self):
+        import json
+        image, container = identities()
+        container["State"] = {"Status": "exited"}
+        container["HostConfig"] = {"ReadonlyRootfs": True}
+        calls = []
+        def fake(*args):
+            calls.append(args)
+            if args[:2] == ("image", "inspect"):
+                return json.dumps([image]).encode()
+            if args[:2] == ("container", "inspect"):
+                return json.dumps([container]).encode()
+            if args == ("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-"):
+                raise mod.DockerCopyError(
+                    "FILESYSTEM_READ_ONLY", exit_code=1, stderr_bytes=76,
+                    stderr_signals="DOCKER_DAEMON_REPLY,FILESYSTEM")
+            raise AssertionError("No PLE/GEMM copies after blocked cp transport")
+        with patch.object(mod, "docker_read", side_effect=fake):
+            d = {}
+            with self.assertRaisesRegex(mod.AttestationError,
+                                        "read-only; source files NOT TESTED"):
+                mod.inspect_existing(d)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(d["container_readonly_rootfs"], "TRUE")
+        self.assertEqual(d["container_state"], "exited")
+        self.assertEqual(d["docker_cp_small_file_state"], "FILESYSTEM_READ_ONLY")
+        self.assertEqual(d["docker_cp_small_file_exit_code"], "1")
+        self.assertEqual(d["ple_candidates_checked"], "0")
+        self.assertEqual(d["docker_cp_ple_failure_kinds"], "NOT_ATTEMPTED_PRECHECK_BLOCK")
+        self.assertEqual(d["docker_cp_reference_state"], "NOT_ATTEMPTED_PRECHECK_BLOCK")
+
+    def test_readonly_rootfs_flag_alone_does_not_block_successful_source_reads(self):
+        import json
+        image, container = identities()
+        container["HostConfig"] = {"ReadonlyRootfs": True}
+        calls = []
+        def fake(*args):
+            calls.append(args)
+            if args[:2] == ("image", "inspect"):
+                return json.dumps([image]).encode()
+            if args[:2] == ("container", "inspect"):
+                return json.dumps([container]).encode()
+            if args == ("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-"):
+                return tar_source("root:x:0:\\n", filename="group")
+            if args == ("cp", f"{mod.MANAGED_CONTAINER}:{mod.PATHS[0]}", "-"):
+                return tar_source(code())
+            raise AssertionError(args)
+        with patch.object(mod, "docker_read", side_effect=fake):
+            d = {}
+            result = mod.inspect_existing(d)
+        self.assertEqual(d["container_readonly_rootfs"], "TRUE")
+        self.assertEqual(d["docker_cp_small_file_state"], "SMALL_REGULAR_TAR_READABLE")
+        self.assertEqual(result["source_audit"], "STATIC_ONLY_NOT_EXECUTION")
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(result["lychee888_tp1_loader"], "NOT_QUALIFIED")
+
+    def test_rootfs_error_is_distinct_from_host_filesystem_read_only(self):
+        self.assertEqual(
+            mod.classify_copy_failure(
+                b"Error response from daemon: container rootfs is marked read-only"),
+            "CONTAINER_ROOTFS_READ_ONLY",
+        )
+        self.assertEqual(
+            mod.classify_copy_failure(b"overlay: read-only file system"),
+            "FILESYSTEM_READ_ONLY",
+        )
+
     def test_generic_small_tar_check_distinguishes_copy_transport(self):
         def good(*args):
             self.assertEqual(args, ("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-"))
