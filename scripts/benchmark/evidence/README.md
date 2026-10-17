@@ -1,3 +1,18 @@
+## 2026-10-17 — ACTUAL_DGX 20.63 GB image and two stopped ancestor-filter containers
+
+[Updated lychee888 physical evidence](dgx-lychee888-ple-path-inconclusive-20261017.md):
+pinned installed Docker image ID and 20,629,141,958-byte
+size were rechecked. Docker's `ancestor`-filtered
+stopped-container inventory lists the protected managed
+container and historical `qwen38-ab-legacy`
+(`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`).
+The latter is a **candidate for read-only comparison**
+only; displayed image tag does not prove immutable digest,
+and mount topology remains unknown. Next evidence is
+bounded Docker inspect of the historical container's digest
+and mount destination/type/RW fields without source paths.
+No copy, mutation, bulk image export or GPU execution.
+
 ## 2026-10-17 — ACTUAL_DGX Docker 29.6.2 confirmed before Moby nested-bind fix
 
 [Physical Docker-copy diagnosis and upstream comparison](dgx-lychee888-ple-path-inconclusive-20261017.md):
