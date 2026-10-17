@@ -184,6 +184,70 @@ class InstalledImagePLETests(unittest.TestCase):
         with self.assertRaisesRegex(mod.AttestationError, "unexpected/big"):
             mod.source_from_cp(tar_source(code(), filename="other.py"))
 
+    def test_skinny_reference_probe_only_uses_bounded_copy(self):
+        commands = []
+        reference = mod.PATHS[0].replace(
+            mod.SOURCE_RELATIVE, mod.SKINNY_GEMM_RELATIVE)
+        def fake(*args):
+            commands.append(args)
+            if args == ("cp", f"{mod.MANAGED_CONTAINER}:{reference}", "-"):
+                return tar_source("def enable_skinny(): pass\\n", filename="low_latency_gemm.py")
+            raise AssertionError("Expected first exact built-in sentinel only")
+        with patch.object(mod, "docker_read", side_effect=fake):
+            state, path = mod.probe_layout()
+        self.assertEqual(state, "SKINNY_GEMM_REFERENCE_READABLE")
+        self.assertEqual(path, reference)
+        self.assertEqual(len(commands), 1)
+
+    def test_missing_ple_prints_conservative_diagnostic(self):
+        image, container = identities()
+        calls = []
+        def fake(*args):
+            calls.append(args)
+            if args[:2] == ("image", "inspect"):
+                return __import__("json").dumps([image]).encode()
+            if args[:2] == ("container", "inspect"):
+                return __import__("json").dumps([container]).encode()
+            raise mod.AttestationError("Docker metadata or source unavailable")
+        with patch.object(mod, "docker_read", side_effect=fake):
+            d = {}
+            with self.assertRaisesRegex(mod.AttestationError, "No known PLE loader path"):
+                mod.inspect_existing(d)
+        self.assertEqual(d["image_id"], IMAGE_ID)
+        self.assertEqual(d["docker_cp_reference_state"], "SKINNY_GEMM_REFERENCE_UNAVAILABLE")
+        self.assertEqual(d["ple_candidates_checked"], str(len(mod.PATHS)))
+        self.assertEqual(d["ple_source_file"], "NOT_CAPTURED")
+        self.assertTrue(all(args[:1] == ("cp",)
+                            for args in calls[2:]))
+        self.assertNotIn("run", repr(calls))
+
+    def test_reference_present_does_not_create_false_ple_proof(self):
+        image, container = identities()
+        def fake(*args):
+            if args[:2] == ("image", "inspect"):
+                return __import__("json").dumps([image]).encode()
+            if args[:2] == ("container", "inspect"):
+                return __import__("json").dumps([container]).encode()
+            if args[0] == "cp" and args[1].endswith(
+                    "/low_latency_gemm.py"):
+                return tar_source("def f(): pass\\n", filename="low_latency_gemm.py")
+            raise mod.AttestationError("PLE missing")
+        with patch.object(mod, "docker_read", side_effect=fake):
+            d = {}
+            with self.assertRaisesRegex(mod.AttestationError, "No known PLE loader"):
+                mod.inspect_existing(d)
+        self.assertEqual(d["docker_cp_reference_state"], "SKINNY_GEMM_REFERENCE_READABLE")
+        self.assertEqual(d["ple_source_file"], "NOT_CAPTURED")
+
+    def test_extended_python_versions_are_fixed_bounded_candidates(self):
+        self.assertEqual(len(mod.PATHS), 12)
+        self.assertIn(
+            "/usr/local/lib/python3.14/dist-packages/" + mod.SOURCE_RELATIVE,
+            mod.PATHS)
+        self.assertIn(
+            "/usr/local/lib/python3.15/site-packages/" + mod.SOURCE_RELATIVE,
+            mod.PATHS)
+
     def test_native_fp8_only_does_not_qualify_lychee(self):
         record = mod.audit_source(code())
         self.assertEqual(record["fp8_ple_selection_source"], "NATIVE_FP8_CONFIG_ONLY_SOURCE")
