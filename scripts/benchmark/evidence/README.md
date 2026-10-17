@@ -1,3 +1,18 @@
+## 2026-10-17 — physical DGX copy preflight early-stop confirmed
+
+[Updated chronological lychee888 PLE-source audit transcript](dgx-lychee888-ple-path-inconclusive-20261017.md)
+now includes the actual **single-copy** Wizard **3→7→4**
+result: `HostConfig.ReadonlyRootfs=FALSE`, stopped protected
+container, `/etc/group` Docker-copy control
+`FILESYSTEM_READ_ONLY` (exit 1, 76-byte stderr),
+`ple_candidates_checked=0`, and
+`NOT_ATTEMPTED_PRECHECK_BLOCK` for the other 24 copy
+attempts. `DOCKER_MUTATION=NONE`; no GPU was run.
+This qualifies the early-stop logic **on the actual DGX**, but
+not loader source, storage root cause or single-Spark compatibility.
+The earlier historical entries below are retained as they were
+observed.
+
 ## 2026-10-17 — actual DGX lychee888 PLE-source audit: Docker copy read-only blocker
 
 [Chronological physical Wizard 3→7→4 evidence](dgx-lychee888-ple-path-inconclusive-20261017.md)
