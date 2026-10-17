@@ -134,3 +134,51 @@ raw stderr, filesystem paths, credentials or file bytes.
 The operator uses the existing read-only Wizard route
 after the new source CI succeeds. Actual findings for
 this new failure-detail probe are **NOT_CAPTURED**.
+
+## Latest 2026-10-17 actual DGX: copy blocked by read-only filesystem
+
+Operator repeated read-only Wizard **3 → 7 → 4**. The inspector
+verified the same image and managed container identities, now
+captured `State.Status=exited` and classified all attempted
+Docker-copy requests as `FILESYSTEM_READ_ONLY`:
+
+```text
+PLE_DIAGNOSTIC_IMAGE_ID=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4
+PLE_DIAGNOSTIC_MANAGED_CONTAINER_ID=f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24
+PLE_DIAGNOSTIC_CONTAINER_STATE=exited
+PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=12
+PLE_DIAGNOSTIC_DOCKER_CP_PLE_FAILURE_KINDS=FILESYSTEM_READ_ONLY:12
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=SKINNY_GEMM_REFERENCE_UNAVAILABLE
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_FAILURE_KINDS=FILESYSTEM_READ_ONLY:12
+PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_PATH=NOT_CAPTURED
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_EXIT_CODE=1
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STDERR_BYTES=76
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STDERR_SIGNALS=DOCKER_DAEMON_REPLY,FILESYSTEM
+PLE_DIAGNOSTIC_DOCKER_CP_SMALL_FILE_STATE=FILESYSTEM_READ_ONLY
+PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED
+PLE_IMAGE_AUDIT=INCONCLUSIVE: No known PLE loader path in existing matching container
+DOCKER_MUTATION=NONE
+GPU_RUN=NOT_PERFORMED
+```
+
+**Conclusion:** a common Docker daemon-side read-only filesystem
+error blocks all twenty-five copy requests, including a generic
+`/etc/group` control file. The error is not evidence of missing
+PLE modules, model incompatibility or corrupt checkpoint data.
+Docker supports copying from stopped containers in general, so
+`exited` alone is not an explanation. Docker's
+`HostConfig.ReadonlyRootfs` for this container and the full 76-byte
+Docker stderr **were not shown**; therefore the exact source of
+the read-only restriction (container rootfs setting versus daemon
+storage/mount state) remains unresolved. No inference about the
+host root partition or need to remount is permitted.
+
+**Repository SOURCE-only response:** inspect the existing
+`HostConfig.ReadonlyRootfs` value without changing it, test the
+generic small-file transport first, and when it returns
+`FILESYSTEM_READ_ONLY` or `CONTAINER_ROOTFS_READ_ONLY`,
+abort **before** attempting the remaining 24 targeted copies.
+No container start, `docker exec`, `docker cp` into a file,
+host remount, Docker restart or protected asset mutation is
+authorized by this diagnostic. Exact physical outcome of this
+new early-stop version is **NOT_CAPTURED**.
