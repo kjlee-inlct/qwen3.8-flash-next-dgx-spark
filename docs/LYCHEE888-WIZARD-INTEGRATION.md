@@ -385,3 +385,40 @@ GitHub fast-forward; there is no new host mutation, image rebuild,
 container exec/start or GPU activity. If all fixed probes are
 unavailable, a separately designed read-only source inventory
 needs to be qualified, not silently inferred.
+
+### 2026-10-17 actual fixed-path/sentinel DGX output; copy transport UNKNOWN
+
+A subsequent owner-run Wizard **3 → 7 → 4** obtained the exact local
+image ID `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and existing managed container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+However `PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=12`,
+`PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=SKINNY_GEMM_REFERENCE_UNAVAILABLE`
+and `PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED`.
+`INCONCLUSIVE`, `DOCKER_MUTATION=NONE`, `GPU_RUN=NOT_PERFORMED`.
+See the [dated physical evidence, second capture](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+**Do not classify the PLE module as absent**: earlier probes suppressed
+all `docker cp` error types (missing path versus daemon/filesystem
+copy issue), and no effective import/runtime evidence was collected.
+
+The updated read-only inspector now aggregates only sanitized Docker
+copy failure classifications (`SOURCE_PATH_NOT_FOUND`,
+`PERMISSION_DENIED`, `DAEMON_UNAVAILABLE`,
+`PARENT_NOT_DIRECTORY`, `COPY_FAILED_UNCLASSIFIED`, and bounded
+copy timeout/oversize outcomes) for both PLE and GEMM reference
+file attempts. Raw Docker stderr, mount sources and user paths are
+never printed. It also fetches one small non-model file
+`/etc/group` from the existing managed container using `docker cp`
+and validates only the bounded in-memory TAR header. This control
+can distinguish broad copy-transport failures from package path
+failures even when both PLE and GEMM references are missing.
+No large directory enumeration, checkpoint access, model download,
+container create/start/exec, image build or GPU execution is added.
+
+The correct operator route is unchanged: **Wizard 3 → 7 → 4** after
+a clean checkout update and source CI. An accessible generic TAR
+means the copy mechanism works for at least that file; it is
+**not** a proof that any model source is present, importable or
+compatible with lychee888's `compressed-tensors` FP8-PLE format.
+The actual new copy-transport diagnostic outcome is still
+`NOT_CAPTURED`, not a source-level PASS.
