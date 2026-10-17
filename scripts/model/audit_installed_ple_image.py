@@ -31,9 +31,41 @@ IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}\Z")
 SOURCE_RELATIVE = "vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py"
 PATHS = tuple(
     f"/usr/local/lib/python{py}/{kind}/{SOURCE_RELATIVE}"
-    for py in ("3.12", "3.11", "3.13", "3.10")
+    for py in ("3.12", "3.11", "3.13", "3.10", "3.14", "3.15")
     for kind in ("dist-packages", "site-packages")
 )
+
+
+# Present in the pinned skinny-GEMM Dockerfile's build assertion.
+# Its absence is NOT a proof that PLE code is missing; this is a layout
+# diagnostic only and never feeds loader/install admission decisions.
+SKINNY_GEMM_RELATIVE = "vllm/models/qwen3_8_flash_next/nvidia/low_latency_gemm.py"
+
+
+def _bounded_tar_has_one_file(raw: bytes, name: str) -> bool:
+    try:
+        if len(raw) > MAX_RESPONSE:
+            return False
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
+            members = archive.getmembers()
+            return (len(members) == 1 and members[0].isfile()
+                    and members[0].size <= MAX_SOURCE
+                    and members[0].name.lstrip("./") == name)
+    except (tarfile.TarError, OSError):
+        return False
+
+
+def probe_layout() -> tuple[str, str]:
+    """Bounded, explicit Docker-copy checks; no listing, exec or filesystem walk."""
+    for path in PATHS:
+        reference = path.replace(SOURCE_RELATIVE, SKINNY_GEMM_RELATIVE)
+        try:
+            raw = docker_read("cp", f"{MANAGED_CONTAINER}:{reference}", "-")
+        except AttestationError:
+            continue
+        if _bounded_tar_has_one_file(raw, "low_latency_gemm.py"):
+            return "SKINNY_GEMM_REFERENCE_READABLE", reference
+    return "SKINNY_GEMM_REFERENCE_UNAVAILABLE", "NOT_CAPTURED"
 
 
 class AttestationError(ValueError):
@@ -265,10 +297,13 @@ def audit_source(source: str) -> dict[str, str]:
     }
 
 
-def inspect_existing() -> dict[str, str]:
+def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str]:
     image = one_json(docker_read("image", "inspect", IMAGE_TAG), "image")
     container = one_json(docker_read("container", "inspect", MANAGED_CONTAINER), "container")
     result = validate_identity(image, container)
+    if diagnostics is not None:
+        diagnostics["image_id"] = result["image_id"]
+        diagnostics["managed_container_id"] = result["managed_container_id"]
     # A bound PLE module obscures the image-layer file. Its host file, not
     # docker cp's view of the stopped container, is the effective source.
     mapped = [
@@ -296,13 +331,25 @@ def inspect_existing() -> dict[str, str]:
         result["source_origin"] = "EXISTING_CONTAINER_FILESYSTEM_NOT_PROVEN_RUNTIME"
         result.update(audit_source(source_from_cp(raw)))
         return result
+    if diagnostics is not None:
+        state, reference = probe_layout()
+        diagnostics["ple_candidates_checked"] = str(len(PATHS))
+        diagnostics["docker_cp_reference_state"] = state
+        diagnostics["docker_cp_reference_path"] = reference
+        diagnostics["ple_source_file"] = "NOT_CAPTURED"
     raise AttestationError("No known PLE loader path in existing matching container")
 
 
 def main() -> int:
+    diagnostics: dict[str, str] = {}
     try:
-        result = inspect_existing()
+        result = inspect_existing(diagnostics)
     except AttestationError as exc:
+        # Only already validated resource identifiers and our fixed probe
+        # reference paths are emitted. No environment secrets, bind Source
+        # paths, model data, or live container stdout is exposed.
+        for key, value in diagnostics.items():
+            print(f"PLE_DIAGNOSTIC_{key.upper()}={value}")
         print(f"PLE_IMAGE_AUDIT=INCONCLUSIVE: {exc}", file=sys.stderr)
         print("DOCKER_MUTATION=NONE")
         print("GPU_RUN=NOT_PERFORMED")
