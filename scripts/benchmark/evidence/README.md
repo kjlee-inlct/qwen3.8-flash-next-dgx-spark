@@ -1,3 +1,19 @@
+## 2026-10-18 — SOURCE_ONLY isolated image source-access planner and upstream PR provenance
+
+The existing [PLE auditor](../../model/audit_installed_ple_image.py)
+now exposes a **separate developer-only**
+`--plan-isolated-source` mode: three image/container
+inspects only, immutable identity plus nested bind/declared
+volume screening, **zero Docker copies or mutations**.
+It previews whether a future mountless create-only
+temporary image-source probe is worth approval; it neither
+implements nor authorizes that probe. Source/CI-only
+pending physical DGX execution. Verified upstream vLLM
+PR #53899 is closed/unmerged (offload TP2/TP4 on
+GB200) and PR #54882 covers ModelOpt mixed precision,
+not the compressed-tensors lychee888 runtime loader.
+[Current technical plan](../../../docs/LYCHEE888-WIZARD-INTEGRATION.md).
+
 ## 2026-10-17 — ACTUAL_DGX historical legacy container same image and same nested RO binds
 
 [Complete actual-DGX lychee888 Docker-copy chronology](dgx-lychee888-ple-path-inconclusive-20261017.md):
