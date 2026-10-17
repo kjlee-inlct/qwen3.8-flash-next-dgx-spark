@@ -134,7 +134,7 @@ class FakeDocker:
                 "State": {"Status": "created"},
                 "Mounts": [],
                 "HostConfig": {
-                    "Binds": None, "Privileged": False, "NetworkMode": "none",
+                    "Binds": None, "Privileged": False, "ReadonlyRootfs": False, "NetworkMode": "none",
                     "RestartPolicy": {"Name": "no"}, "Devices": [],
                     "Runtime": "runc",
                 },
