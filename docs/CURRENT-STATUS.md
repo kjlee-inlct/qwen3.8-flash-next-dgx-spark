@@ -1,3 +1,32 @@
+## 2026-10-18 — owner approved exactly one isolated unstarted PLE source probe
+
+The owner explicitly answered **허용** to creating one **new**
+temporary container from the exact already-installed
+`vllm-skinny-tp1:v1` image, never starting it, reading only
+one bounded generic TAR and bounded PLE Python source files,
+and removing **only that uniquely labeled newly created ID**.
+The owner did **not** approve modifying/removing/restarting the
+protected managed or A/B containers, executing GPU code,
+downloading models, rebuilding images, Docker daemon upgrades
+or protected Draft PR merger.
+
+Source implementation is `scripts/model/probe_isolated_ple_source.py`
+with synthetic tests `tests/test_isolated_ple_source_probe.py`.
+The script defaults to read-only preview; execution requires
+exact immutable image ID and `--approved-scope` literal.
+It validates metadata, disk/inode reserve, no image-declared
+volumes, zero mounts/network/GPU exposure, exact temp
+identity/nonce/state, bounded TAR and source AST evidence,
+exact-ID-only cleanup and postchecks. SIGINT/SIGTERM attempt
+guarded cleanup, while SIGKILL/power-loss cannot be recovered
+automatically. A cleanup identity mismatch is STOP, not force
+deletion. All real Docker create/copy/remove steps remain
+**ACTUAL_DGX NOT_RUN** until a clean exact successful CI
+checkout and owner-terminal execution report are supplied.
+The installed PLE source SHA and lychee888 loader/TP=1 remain
+`NOT_CAPTURED`/`NOT_QUALIFIED` until that result.
+[Scoped operator contract](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md).
+
 ## 2026-10-18 — ACTUAL_DGX isolated-source feasibility planner passed metadata only
 
 The operator cleanly fast-forwarded the DGX branch to exact
