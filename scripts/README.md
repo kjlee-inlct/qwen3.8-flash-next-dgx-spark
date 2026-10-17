@@ -319,3 +319,17 @@ The layout tests scan canonical implementation files for explicit cross-category
 ## CI rule
 
 Shell syntax and ShellCheck must recurse into script subdirectories. Python compilation must recurse through `scripts/` and `tests/`; canonical benchmark code is included under `scripts/benchmark/`.
+
+### Read-only Docker-copy nested-mount topology hint
+
+The existing-image PLE audit now prints a sanitized
+`PLE_DIAGNOSTIC_DOCKER_CP_MODEL_CONFIG_MOUNT_TOPOLOGY` value based
+on the existing protected container's `Mounts` entries for two
+**fixed** destinations, `/model` and `/model/config.json`.
+`MODEL_CONFIG_NESTED_RO_BINDS` means one bind at each destination,
+both with `RW=false`; it is **not** proof of the daemon's root
+cause. Other outcomes distinguish absent config-overlay, ambiguous
+records, non-bind mounts and a nested pair with other RW flags.
+No Docker bind source/path is displayed, no container is executed,
+and the existing fail-closed `/etc/group` copy preflight and all
+loader/TP=1 restrictions remain in effect. Use Wizard **3 → 7 → 4**.
