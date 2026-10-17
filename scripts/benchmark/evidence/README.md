@@ -1,3 +1,16 @@
+## 2026-10-18 — ACTUAL_DGX isolated source planner preview: 3 inspect, zero copy
+
+[Actual pinned DGX metadata-only isolated-source preview](dgx-lychee888-ple-path-inconclusive-20261017.md):
+checkout `769332111d...`, exact pinned image,
+two nested-RO container mount records, **no
+image-declared volumes**, `REVIEW_CANDIDATE_NOT_AUTHORIZED`,
+3 Docker inspect requests, 0 `docker cp`, no
+container/image mutation or GPU execution. The operator
+performed only a read-only preview; no source bytes
+were captured. A separate [unapproved source-access plan](../../../docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md)
+defines future exact-ID scope/STOP/cleanup but is not
+permission to create or delete any Docker object.
+
 ## 2026-10-18 — SOURCE_ONLY isolated image source-access planner and upstream PR provenance
 
 The existing [PLE auditor](../../model/audit_installed_ple_image.py)
