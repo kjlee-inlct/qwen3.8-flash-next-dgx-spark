@@ -250,6 +250,28 @@ def validate_identity(image: dict, container: dict) -> dict[str, str]:
     return {"image_tag": IMAGE_TAG, "image_id": iid, "managed_container_id": cid}
 
 
+def model_config_mount_topology(container: dict) -> str:
+    """Summarize only fixed /model nesting, never disclose bind sources.
+
+    Docker may fail *unrelated* cp requests while replaying nested mounts.
+    This is a read-only inspect hint, not proof of daemon causality.
+    """
+    mounts = container.get("Mounts")
+    if not isinstance(mounts, list) or not all(isinstance(m, dict) for m in mounts):
+        return "UNKNOWN"
+    parent = [m for m in mounts if m.get("Destination") == "/model"]
+    child = [m for m in mounts if m.get("Destination") == "/model/config.json"]
+    if not child:
+        return "NO_MODEL_CONFIG_NESTED_MOUNT"
+    if len(parent) != 1 or len(child) != 1:
+        return "AMBIGUOUS_MODEL_CONFIG_NESTING"
+    if parent[0].get("Type") != "bind" or child[0].get("Type") != "bind":
+        return "MODEL_CONFIG_NESTED_NONBIND"
+    if parent[0].get("RW") is False and child[0].get("RW") is False:
+        return "MODEL_CONFIG_NESTED_RO_BINDS"
+    return "MODEL_CONFIG_NESTED_BINDS_RW_OTHER"
+
+
 def covering_mounts(container: dict, target: str) -> list[dict]:
     """Select only mounts shadowing THIS source path, never unrelated vLLM files."""
     matches = []
@@ -444,6 +466,10 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
         diagnostics["container_readonly_rootfs"] = (
             "TRUE" if readonly_flag is True else
             "FALSE" if readonly_flag is False else "UNKNOWN"
+        )
+        # Fixed-path, sanitized nesting observation only; no bind Source paths.
+        diagnostics["docker_cp_model_config_mount_topology"] = (
+            model_config_mount_topology(container)
         )
     # A bound PLE module obscures the image-layer file. Its host file, not
     # docker cp's view of the stopped container, is the effective source.
