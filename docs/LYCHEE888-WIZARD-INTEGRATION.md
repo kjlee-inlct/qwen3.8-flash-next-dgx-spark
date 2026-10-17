@@ -601,3 +601,29 @@ or another carefully reviewed bounded read-only way to
 attest image-origin PLE source. Source and single-GB10 TP=1
 remain unqualified. See
 [actual physical record](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-17 — Potential existing historical A/B comparison container, not yet qualified
+
+ACTUAL_DGX reported a 20,629,141,958-byte (~19.21 GiB)
+`vllm-skinny-tp1:v1` image at the same pinned digest
+and two stopped containers from an `ancestor` filter.
+One, `qwen38-ab-legacy`
+(`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+exit 137), might provide a **non-mutating comparison
+source view** if its *immutable* `.Image` matches and
+it has no blocking nested readonly mounts. This has
+**not** been verified; image tags/ancestor filters are
+not enough. The other object is the protected managed
+`qwen38-flash-next` with the known nested RO config.
+
+The next step is a small, read-only `docker container
+inspect qwen38-ab-legacy` bounded to identity, state,
+ReadonlyRootfs and non-sensitive mount destination/type/RW.
+No historical container deletion/start, Docker configuration
+change, bulk `docker image save`, checkpoint access or
+GPU execution. A future successful `docker cp` would
+attest the historical container filesystem bytes
+and SHA256, **not automatically** prove that the bytes
+are the original installed image layer or current
+managed runtime's effective PLE loader. lychee888
+stays non-installable and TP=1 unqualified.
