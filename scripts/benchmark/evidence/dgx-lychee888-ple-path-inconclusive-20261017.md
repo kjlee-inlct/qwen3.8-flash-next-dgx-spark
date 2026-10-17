@@ -33,7 +33,7 @@ identify which of these applies.
 
 ## Source-only follow-up
 
-The existing read-only `scripts/model/audit_installed_ple_image.py`
+The existing read-only `audit_installed_ple_image.py` module
 now retains the conservative `INCONCLUSIVE` outcome, but also reports
 the validated existing image and container IDs, number of fixed
 candidate paths checked (expanded to Python 3.14/3.15), and a
