@@ -199,6 +199,48 @@ class InstalledImagePLETests(unittest.TestCase):
         self.assertEqual(path, reference)
         self.assertEqual(len(commands), 1)
 
+    def test_failure_classification_drops_raw_docker_stderr_paths(self):
+        cases = (
+            (b"Error: could not find the file /private/example", "SOURCE_PATH_NOT_FOUND"),
+            (b"stat /home/a: no such file or directory", "SOURCE_PATH_NOT_FOUND"),
+            (b"permission denied /home/otheruser", "PERMISSION_DENIED"),
+            (b"Cannot connect to the Docker daemon at unix:///var/run/docker.sock",
+             "DAEMON_UNAVAILABLE"),
+            (b"custom unexpected error path=/etc/x", "COPY_FAILED_UNCLASSIFIED"),
+        )
+        for stderr, expected in cases:
+            with self.subTest(stderr=stderr):
+                self.assertEqual(mod.classify_copy_failure(stderr), expected)
+        from types import SimpleNamespace
+        def badrun(argv, **_):
+            return SimpleNamespace(returncode=1, stdout=b"",
+                                   stderr=b"permission denied secret:/path")
+        with patch.object(mod.subprocess, "run", side_effect=badrun):
+            with self.assertRaises(mod.DockerCopyError) as raised:
+                mod.docker_read("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-")
+        self.assertEqual(raised.exception.reason, "PERMISSION_DENIED")
+        self.assertNotIn("secret", str(raised.exception))
+
+    def test_generic_small_tar_check_distinguishes_copy_transport(self):
+        def good(*args):
+            self.assertEqual(args, ("cp", f"{mod.MANAGED_CONTAINER}:/etc/group", "-"))
+            return tar_source("root:x:0:\\n", filename="group")
+        with patch.object(mod, "docker_read", side_effect=good):
+            self.assertEqual(mod.probe_copy_transport(), "SMALL_REGULAR_TAR_READABLE")
+        with patch.object(mod, "docker_read",
+                          side_effect=mod.DockerCopyError("SOURCE_PATH_NOT_FOUND")):
+            self.assertEqual(mod.probe_copy_transport(), "SOURCE_PATH_NOT_FOUND")
+        with patch.object(mod, "docker_read", return_value=b"not a tar"):
+            self.assertEqual(mod.probe_copy_transport(), "COPY_TAR_INVALID_OR_UNEXPECTED")
+
+    def test_reason_counts_never_include_filesystem_names(self):
+        kinds = {}
+        for reason in ("SOURCE_PATH_NOT_FOUND", "SOURCE_PATH_NOT_FOUND",
+                       "PERMISSION_DENIED"):
+            mod._count_failure(kinds, mod.DockerCopyError(reason))
+        self.assertEqual(mod.failure_summary(kinds),
+                         "PERMISSION_DENIED:1,SOURCE_PATH_NOT_FOUND:2")
+
     def test_missing_ple_prints_conservative_diagnostic(self):
         image, container = identities()
         calls = []
@@ -217,6 +259,11 @@ class InstalledImagePLETests(unittest.TestCase):
         self.assertEqual(d["docker_cp_reference_state"], "SKINNY_GEMM_REFERENCE_UNAVAILABLE")
         self.assertEqual(d["ple_candidates_checked"], str(len(mod.PATHS)))
         self.assertEqual(d["ple_source_file"], "NOT_CAPTURED")
+        self.assertEqual(d["docker_cp_small_file_state"], "COPY_FAILED_UNCLASSIFIED")
+        self.assertEqual(d["docker_cp_ple_failure_kinds"],
+                         "COPY_FAILED_UNCLASSIFIED:12")
+        self.assertEqual(d["docker_cp_reference_failure_kinds"],
+                         "COPY_FAILED_UNCLASSIFIED:12")
         self.assertTrue(all(args[:1] == ("cp",)
                             for args in calls[2:]))
         self.assertNotIn("run", repr(calls))
@@ -238,6 +285,7 @@ class InstalledImagePLETests(unittest.TestCase):
                 mod.inspect_existing(d)
         self.assertEqual(d["docker_cp_reference_state"], "SKINNY_GEMM_REFERENCE_READABLE")
         self.assertEqual(d["ple_source_file"], "NOT_CAPTURED")
+        self.assertEqual(d["docker_cp_small_file_state"], "COPY_FAILED_UNCLASSIFIED")
 
     def test_extended_python_versions_are_fixed_bounded_candidates(self):
         self.assertEqual(len(mod.PATHS), 12)
