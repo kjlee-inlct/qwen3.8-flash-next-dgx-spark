@@ -710,3 +710,33 @@ registration/use, and finally single-GB10 TP=1 memory and
 functional readiness under separate approval. No large
 checkpoint transfer or GPU trial is authorized by source
 evidence.
+
+## 2026-10-18 actual DGX isolated preview passed without volume declaration
+
+The actual DGX operator fast-forwarded to
+`769332111dc4cdfa13e9817544b9166402985f66`,
+then executed the independently maintained
+`audit_installed_ple_image.py --plan-isolated-source`.
+The read-only inspector found the exact expected
+`vllm-skinny-tp1:v1` image ID, image metadata
+size 20,629,141,958 bytes, both protected/historical
+container `MODEL_CONFIG_NESTED_RO_BINDS` and
+`DECLARED_IMAGE_VOLUMES=NONE`.
+The outcome `REVIEW_CANDIDATE_NOT_AUTHORIZED`
+is a **physical metadata preview**, not authorization
+to create a temporary object or an indication that the
+source can be copied.
+It performed exactly three Docker inspect commands,
+no copy/create/delete, no payload download or GPU work.
+
+Further review contract is now in
+[isolated source-read proposal](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md):
+it requires an exact-image mountless, **created-only**
+object, no volumes/network/GPU/model binds, a bounded
+single TAR control + source file, exact new-ID owner-label
+cleanup and before/after protected-asset checks.
+All Docker create/remove instructions are
+**NOT IMPLEMENTED / NOT AUTHORIZED**;
+the plan must not be interpreted as permission.
+Single-GB10 TP=1, FP8 routing and BF16 global scale
+remain unqualified.
