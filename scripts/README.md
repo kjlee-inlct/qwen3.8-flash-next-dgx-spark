@@ -373,3 +373,24 @@ created-only mountless object remains out of scope without
 for STOP conditions and owner/cleanup safeguards. This
 developer-only review does not add a mutating Wizard action.
 
+### One-time, owner-approved PLE isolated source probe
+
+`model/probe_isolated_ple_source.py` implements a narrowly
+approved separate research-only procedure; its default
+invocation is inspect-only and its mutation route requires
+`--execute`, the exact image digest, and
+`--approved-scope ONE_UNSTARTED_TEMP_CONTAINER_CREATE_COPY_RM`.
+It creates **one** unique, unstarted, mountless, networkless
+container from the exact already-existing image (no build,
+pull, GPU or weights). Source reads and TAR output are bounded.
+Exact-ID deletion is allowed only for its own unchanged
+created-state labeled temporary object; all existing
+managed/history container IDs are protected.
+
+Before physical execution require success on exact GitHub CI
+and a clean DGX checkout to that SHA, with no concurrent
+managed lifecycle transition. A failed cleanup or protected
+postcheck is not a PASS and needs manual review. Owner
+approval is scoped only to that temporary object's create
+and removal; see
+`docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md`.
