@@ -1,3 +1,36 @@
+## 2026-10-17 — ACTUAL_DGX confirmed nested read-only model mounts at cee107d
+
+Operator fast-forwarded the clean checkout to exact HEAD
+`cee107d9e47b278d7dede40a8d401ea9c2ccea32`
+and ran Wizard **3 → 7 → 4** on physical DGX.
+The protected image/container immutable IDs matched previous
+observations. `container_state=exited`,
+`container_readonly_rootfs=FALSE`, and the new
+`docker_cp_model_config_mount_topology=MODEL_CONFIG_NESTED_RO_BINDS`
+**physically verified one nested pair of read-only binds**
+at `/model` and `/model/config.json`.
+The single `/etc/group` Docker-copy preflight still failed
+`FILESYSTEM_READ_ONLY` with exit 1, 76-byte stderr and
+`DOCKER_DAEMON_REPLY,FILESYSTEM`; all 24 PLE/GEMM copies
+were deliberately skipped (`NOT_ATTEMPTED_PRECHECK_BLOCK`).
+`DOCKER_MUTATION=NONE`, `GPU_RUN=NOT_PERFORMED`,
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`, source `NOT_CAPTURED`.
+
+Coupled with the preceding exact Docker stderr
+`openat model/config.json: read-only file system` for
+an unrelated `/etc/group` copy, the protected container
+topology now makes the known Docker nested-bind-mount
+copy failure a **strong cause hypothesis**. An upstream
+[Moby source fix](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35)
+for overlapping binds was found, but the installed Docker
+Engine/server version and exact patch applicability remain
+unverified. No inference of missing PLE source or host root
+filesystem failure. **Physical next step:** read-only
+Docker Server Version inspection, then evaluate an alternative
+source-read route which does not modify the protected
+container or Docker configuration.
+[Full physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-17 — ACTUAL_DGX Docker copy openat model/config.json; nested readonly bind candidate
 
 The owner captured the exact 76-byte-class Docker daemon error
