@@ -447,6 +447,89 @@ def audit_source(source: str) -> dict[str, str]:
     }
 
 
+LEGACY_CONTAINER = "qwen38-ab-legacy"
+
+
+def isolated_copy_preflight_plan() -> dict[str, str]:
+    """Read-only decision gate for a *future*, separately approved image probe.
+
+    Intentionally performs EXACTLY three Docker inspect requests. It never
+    creates a container, copies a file, reads a source path, or exposes bind
+    mount host Source/Env values. This is a preview, NOT implementation or
+    authorization of temporary container creation/removal.
+    """
+    image = one_json(docker_read("image", "inspect", IMAGE_TAG), "image")
+    managed = one_json(
+        docker_read("container", "inspect", MANAGED_CONTAINER), "managed container"
+    )
+    legacy = one_json(
+        docker_read("container", "inspect", LEGACY_CONTAINER), "legacy container"
+    )
+    identity = validate_identity(image, managed)
+    expected = identity["image_id"]
+    if (legacy.get("Name") != "/" + LEGACY_CONTAINER
+            or not isinstance(legacy.get("Id"), str)
+            or not re.fullmatch(r"[a-f0-9]{64}", legacy["Id"])
+            or legacy.get("Image") != expected
+            or (legacy.get("Config") or {}).get("Image") != IMAGE_TAG):
+        raise AttestationError("Historical comparison image/container identity mismatch")
+    if not isinstance(legacy.get("Mounts"), list) or not all(
+        isinstance(m, dict) for m in legacy["Mounts"]
+    ):
+        raise AttestationError("Historical mount inventory unavailable")
+    if any(not isinstance(m.get("Destination"), str)
+           for m in managed["Mounts"] + legacy["Mounts"]):
+        raise AttestationError("Invalid destination in mount metadata")
+    size = image.get("Size")
+    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+        raise AttestationError("Installed image declared size unavailable")
+    config = image.get("Config")
+    if not isinstance(config, dict):
+        raise AttestationError("Installed image Config unavailable")
+    declared_volumes = config.get("Volumes")
+    if declared_volumes is not None and not isinstance(declared_volumes, dict):
+        raise AttestationError("Installed image declared volumes unknown")
+    managed_state = (managed.get("State") or {}).get("Status")
+    legacy_state = (legacy.get("State") or {}).get("Status")
+    if managed_state not in ("exited", "created") or legacy_state not in (
+        "exited", "created"
+    ):
+        raise AttestationError("Protected containers are not both stopped/created")
+    managed_topology = model_config_mount_topology(managed)
+    legacy_topology = model_config_mount_topology(legacy)
+    if managed_topology == "UNKNOWN" or legacy_topology == "UNKNOWN":
+        raise AttestationError("Nested mount topology unknown")
+    qualifying_shape = (
+        managed_topology == legacy_topology == "MODEL_CONFIG_NESTED_RO_BINDS"
+        and not declared_volumes
+    )
+    # Never auto-authorize the next action. Even a successful preview
+    # requires a separate reviewed operator approval and cleanup policy.
+    return {
+        "image_id": expected,
+        "image_size_bytes": str(size),
+        "managed_mount_topology": managed_topology,
+        "legacy_mount_topology": legacy_topology,
+        "declared_image_volumes": (
+            "NONE" if not declared_volumes else "PRESENT_BLOCK_REVIEW"
+        ),
+        "existing_container_copy_route": (
+            "BLOCKED_SAME_NESTED_RO_MOUNTS" if qualifying_shape
+            else "NOT_QUALIFIED"
+        ),
+        "isolated_create_only_feasibility": (
+            "REVIEW_CANDIDATE_NOT_AUTHORIZED" if qualifying_shape
+            else "STOP_UNQUALIFIED"
+        ),
+        "source_bytes_captured": "NO",
+        "docker_inspect_requests": "3",
+        "docker_cp_requests": "0",
+        "docker_mutation": "NONE",
+        "gpu_run": "NOT_PERFORMED",
+        "lychee888_tp1_loader": "NOT_QUALIFIED",
+    }
+
+
 def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str]:
     image = one_json(docker_read("image", "inspect", IMAGE_TAG), "image")
     container = one_json(docker_read("container", "inspect", MANAGED_CONTAINER), "container")
@@ -531,6 +614,23 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
 
 
 def main() -> int:
+    # Separate, strictly read-only planning route. This never enters the
+    # existing Docker-copy preflight or accepts an execution/approval flag.
+    if sys.argv[1:]:
+        if sys.argv[1:] != ["--plan-isolated-source"]:
+            print("PLE_SOURCE_PLAN=INVALID_ARGUMENT", file=sys.stderr)
+            return 2
+        try:
+            plan = isolated_copy_preflight_plan()
+        except AttestationError:
+            print("PLE_SOURCE_PLAN=INCONCLUSIVE_METADATA_UNAVAILABLE")
+            print("DOCKER_MUTATION=NONE")
+            print("GPU_RUN=NOT_PERFORMED")
+            return 2
+        for key, value in plan.items():
+            print(f"PLE_SOURCE_PLAN_{key.upper()}={value}")
+        print("PLE_SOURCE_PLAN=PREVIEW_ONLY_NOT_AUTHORIZED")
+        return 0
     diagnostics: dict[str, str] = {}
     try:
         result = inspect_existing(diagnostics)
