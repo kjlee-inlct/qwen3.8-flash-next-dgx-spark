@@ -59,6 +59,38 @@ def tar_source(payload, *, symlink=False, filename="ple_layer.py"):
 
 
 class InstalledImagePLETests(unittest.TestCase):
+    def test_model_config_nested_mount_topology_never_exposes_host_paths(self):
+        _image, container = identities()
+        self.assertEqual(mod.model_config_mount_topology(container),
+                         "NO_MODEL_CONFIG_NESTED_MOUNT")
+        container["Mounts"][0] = {
+            "Type": "bind", "Destination": "/model",
+            "Source": "/private/important-checkpoint", "RW": False,
+        }
+        container["Mounts"].append({
+            "Type": "bind", "Destination": "/model/config.json",
+            "Source": "/private/secret-config", "RW": False,
+        })
+        self.assertEqual(mod.model_config_mount_topology(container),
+                         "MODEL_CONFIG_NESTED_RO_BINDS")
+        self.assertNotIn("/private/", mod.model_config_mount_topology(container))
+        container["Mounts"][1]["RW"] = True
+        self.assertEqual(mod.model_config_mount_topology(container),
+                         "MODEL_CONFIG_NESTED_BINDS_RW_OTHER")
+        container["Mounts"][1]["Type"] = "volume"
+        self.assertEqual(mod.model_config_mount_topology(container),
+                         "MODEL_CONFIG_NESTED_NONBIND")
+        container["Mounts"].append(dict(container["Mounts"][1]))
+        self.assertEqual(mod.model_config_mount_topology(container),
+                         "AMBIGUOUS_MODEL_CONFIG_NESTING")
+
+    def test_openat_model_config_readonly_categorized_without_leaking_path(self):
+        raw = b"Error response from daemon: openat model/config.json: read-only file system"
+        self.assertEqual(mod.classify_copy_failure(raw),
+                         "FILESYSTEM_READ_ONLY")
+        self.assertEqual(mod.docker_stderr_signals(raw),
+                         "DOCKER_DAEMON_REPLY,FILESYSTEM")
+
     def test_readonly_docker_allowlist_rejects_mutations(self):
         for op in (("run", "x"), ("create", "x"), ("start", "x"),
                    ("exec", "x"), ("image", "pull", "x"),
