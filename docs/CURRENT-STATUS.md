@@ -1,3 +1,35 @@
+## 2026-10-18 — ACTUAL_DGX isolated-source feasibility planner passed metadata only
+
+The operator cleanly fast-forwarded the DGX branch to exact
+`769332111dc4cdfa13e9817544b9166402985f66`
+and **physically ran**
+`python3 -B scripts/model/audit_installed_ple_image.py --plan-isolated-source`.
+Output attests exact image SHA256
+`01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+20,629,141,958-byte declared image, **both existing
+containers with `MODEL_CONFIG_NESTED_RO_BINDS`**,
+`DECLARED_IMAGE_VOLUMES=NONE` and
+`ISOLATED_CREATE_ONLY_FEASIBILITY=REVIEW_CANDIDATE_NOT_AUTHORIZED`.
+Only three Docker metadata inspections occurred;
+`DOCKER_CP_REQUESTS=0`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`, `SOURCE_BYTES_CAPTURED=NO`.
+This is a **physical read-only preview result**, not
+an installed PLE-source or loader/GPU acceptance.
+
+A [separate unapproved source-access proposal](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md)
+now describes a future uniquely owned, **created-but-never-
+started, zero-mount** temporary container derived from the
+exact installed image ID, one bounded generic copy and
+bounded PLE-source inspection, plus strict exact-ID postcheck
+and cleanup requirements. It explicitly does **not**
+authorize or execute temporary container creation/removal.
+Owner authorization, host disk/inode/operation isolation,
+exact procedure review, and resource/rollback acceptance
+remain **NOT_GRANTED / NOT_CHECKED**. Protected managed and
+historical containers remain unchanged and both Draft
+PR gates remain blocked.
+[Physical output](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — SOURCE_ONLY isolated PLE source planning gate; no image bytes
 
 The current working branch implements a **preview-only**
