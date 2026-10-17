@@ -1,3 +1,30 @@
+## 2026-10-17 — ACTUAL_DGX 29.6.2 predates verified nested-bind docker cp fix
+
+Read-only actual DGX `docker version` and `docker info`
+reported `SERVER_VERSION=29.6.2`, `SERVER_API=1.55`,
+and `STORAGE_DRIVER=overlay2`. Official Moby
+`docker-v29.6.2` source still uses write-opening
+`O_CREATE|O_WRONLY` and `root.Open` in mount replay.
+The same source at `docker-v29.8.2` contains the
+`O_EXCL` / `O_PATH` improvements; Docker
+[29.8.2 release notes](https://docs.docker.com/engine/release-notes/29/)
+list the nested bind `docker cp` fix.
+Together with the previous **ACTUAL_DGX** nested RO bind topology
+and `openat model/config.json: read-only file system`,
+this narrows the Docker-copy failure to a **high-confidence
+pre-fix daemon mount replay mechanism**, not PLE module absence.
+The installed daemon binary's vendor-specific backport state and
+internal stack are not independently attested; overlay2 usage alone
+is not evidence of a corrupt Docker filesystem.
+
+No Docker update, service restart, image rebuild, bind change,
+container execution, checkpoint download or GPU run was performed.
+Next: size-and-identity-only inventory of the installed image and
+any existing same-image containers before proposing an image-source
+extraction method. Physical source stays `NOT_CAPTURED` and
+lychee888 remains `NOT_INSTALLABLE`.
+[Detailed immutable physical transcript and source comparison](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-17 — ACTUAL_DGX confirmed nested read-only model mounts at cee107d
 
 Operator fast-forwarded the clean checkout to exact HEAD
