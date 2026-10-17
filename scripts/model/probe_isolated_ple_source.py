@@ -191,7 +191,9 @@ def verify_temp(info: dict, cid: str, name: str, nonce: str) -> None:
         raise ProbeError("Temporary restart policy inspect incomplete")
     if (info.get("Mounts") != [] or hc.get("Binds") not in (None, [])
             or hc.get("Privileged") is not False
+            or hc.get("ReadonlyRootfs") is not False
             or hc.get("NetworkMode") != "none"
+            or hc.get("PortBindings") not in (None, {})
             or policy.get("Name") not in ("no", "")
             or hc.get("Devices") not in (None, [])
             or hc.get("Runtime") != "runc"):
