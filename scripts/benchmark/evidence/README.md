@@ -1,3 +1,18 @@
+## 2026-10-17 — ACTUAL_DGX Docker 29.6.2 confirmed before Moby nested-bind fix
+
+[Physical Docker-copy diagnosis and upstream comparison](dgx-lychee888-ple-path-inconclusive-20261017.md):
+actual DGX reports `Docker Server 29.6.2`,
+`Server API 1.55`, `overlay2`.
+Moby's exact `docker-v29.6.2` source retains the
+`O_CREATE|O_WRONLY` mount replay pattern while
+`docker-v29.8.2` and its September 30 release notes
+include the nested-bind fix. In combination with physical
+`MODEL_CONFIG_NESTED_RO_BINDS` and failed `openat
+model/config.json`, the upstream defect is the strongest
+current explanation, but no installed binary trace,
+model source or TP=1 qualification has been obtained.
+No Docker mutation or daemon upgrade authorized.
+
 ## 2026-10-17 — ACTUAL_DGX cee107d nested bind topology confirmed
 
 [Chronological actual-DGX source audit](dgx-lychee888-ple-path-inconclusive-20261017.md):
