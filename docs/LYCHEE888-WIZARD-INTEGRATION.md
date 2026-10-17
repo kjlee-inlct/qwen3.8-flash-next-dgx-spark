@@ -740,3 +740,22 @@ All Docker create/remove instructions are
 the plan must not be interpreted as permission.
 Single-GB10 TP=1, FP8 routing and BF16 global scale
 remain unqualified.
+
+## 2026-10-18 — exact-ID temp source probe source implemented after owner approval
+
+The owner approved a **single new temporary created-only container**
+from the existing exact image ID, one bounded non-model copy control
+and fixed PLE source inspections, then ownership-checked
+exact-ID-only cleanup. The approved scope excludes protected
+containers, checkpoint/GPU use, container starts, daemon changes,
+image rebuilds and PR merges. `probe_isolated_ple_source.py`
+is the guarded independent research module; it is deliberately
+not an ordinary model-install Wizard action.
+
+Source and synthetic tests are committed; no actual DGX Docker
+create or copy has been performed by the assistant. Physical
+success requires a completed exact HEAD CI success, clean
+owner checkout, temporary source path+SHA, cleanup verified
+by exact ID and original container postcheck match. Failure
+or uncertain cleanup blocks any further repeated attempt.
+[Scope and detailed stop/recovery rules](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md).
