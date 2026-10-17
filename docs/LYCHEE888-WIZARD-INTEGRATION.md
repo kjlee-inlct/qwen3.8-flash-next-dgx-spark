@@ -574,3 +574,30 @@ by a reviewed extraction option that needs no protected container
 restart, recreation, remount or image rebuild.
 
 [Complete physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-17 — Docker 29.6.2 official source versus patched 29.8.2
+
+The owner reported **ACTUAL_DGX** `docker version` server
+`29.6.2`, API `1.55` and `docker info` storage driver
+`overlay2`. Comparing official Moby Docker Engine tags shows
+`docker-v29.6.2` still has
+`root.Open(relDest)` plus `O_CREATE|O_WRONLY` in
+`daemon/containerfs_linux.go`, whereas
+`docker-v29.8.2` uses `O_PATH` and `O_EXCL`
+to avoid write-opening existing nested bind-mount targets.
+[Docker 29.8.2 release notes](https://docs.docker.com/engine/release-notes/29/)
+explicitly identify the nested bind mount `docker cp` fix.
+
+The recorded physical `MODEL_CONFIG_NESTED_RO_BINDS`
+and `openat model/config.json: read-only file system`
+are consistent with that **older upstream code path**.
+This is a high-confidence defect match, **not** a claim that
+the exact local `dockerd` binary was inspected or that
+`overlay2` is damaged. Do not upgrade the protected host
+just to complete source inspection. First assess the
+availability of an already existing container of the
+same immutable image without overlapping bind mounts,
+or another carefully reviewed bounded read-only way to
+attest image-origin PLE source. Source and single-GB10 TP=1
+remain unqualified. See
+[actual physical record](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
