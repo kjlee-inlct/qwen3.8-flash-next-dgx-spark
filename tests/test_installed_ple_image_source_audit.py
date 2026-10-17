@@ -59,6 +59,103 @@ def tar_source(payload, *, symlink=False, filename="ple_layer.py"):
 
 
 class InstalledImagePLETests(unittest.TestCase):
+    def test_isolated_source_preview_three_inspects_zero_copies(self):
+        import json
+        image, managed = identities()
+        image["Size"] = 20629141958
+        image["Config"] = {"Volumes": None}
+        managed["HostConfig"] = {"ReadonlyRootfs": False}
+        managed["State"] = {"Status": "exited"}
+        managed["Mounts"] = [
+            {"Destination": "/model", "Type": "bind", "RW": False,
+             "Source": "/home/private/checkpoint"},
+            {"Destination": "/model/config.json", "Type": "bind", "RW": False,
+             "Source": "/home/private/config"},
+        ]
+        legacy = {
+            "Id": "c" * 64, "Image": IMAGE_ID, "Name": "/qwen38-ab-legacy",
+            "Config": {"Image": mod.IMAGE_TAG}, "State": {"Status": "exited"},
+            "Mounts": list(managed["Mounts"]),
+        }
+        calls = []
+        def read(*args):
+            calls.append(args)
+            if args == ("image", "inspect", mod.IMAGE_TAG):
+                return json.dumps([image]).encode()
+            if args == ("container", "inspect", mod.MANAGED_CONTAINER):
+                return json.dumps([managed]).encode()
+            if args == ("container", "inspect", mod.LEGACY_CONTAINER):
+                return json.dumps([legacy]).encode()
+            raise AssertionError("Unexpected Docker action")
+        with patch.object(mod, "docker_read", side_effect=read):
+            plan = mod.isolated_copy_preflight_plan()
+        self.assertEqual(len(calls), 3)
+        self.assertFalse(any("cp" in args or "create" in args for args in calls))
+        self.assertEqual(plan["image_id"], IMAGE_ID)
+        self.assertEqual(plan["image_size_bytes"], "20629141958")
+        self.assertEqual(plan["managed_mount_topology"],
+                         "MODEL_CONFIG_NESTED_RO_BINDS")
+        self.assertEqual(plan["legacy_mount_topology"],
+                         "MODEL_CONFIG_NESTED_RO_BINDS")
+        self.assertEqual(plan["isolated_create_only_feasibility"],
+                         "REVIEW_CANDIDATE_NOT_AUTHORIZED")
+        self.assertEqual(plan["existing_container_copy_route"],
+                         "BLOCKED_SAME_NESTED_RO_MOUNTS")
+        self.assertEqual(plan["docker_cp_requests"], "0")
+        self.assertEqual(plan["source_bytes_captured"], "NO")
+        self.assertNotIn("/home/private", repr(plan))
+        self.assertNotIn("Source", repr(plan))
+        self.assertEqual(plan["lychee888_tp1_loader"], "NOT_QUALIFIED")
+
+    def test_isolated_source_preview_image_volume_blocks_review(self):
+        import json
+        image, managed = identities()
+        image["Size"] = 123456
+        image["Config"] = {"Volumes": {"/data": {}}}
+        managed["State"] = {"Status": "exited"}
+        managed["Mounts"] = [
+            {"Destination": "/model", "Type": "bind", "RW": False},
+            {"Destination": "/model/config.json", "Type": "bind", "RW": False},
+        ]
+        legacy = {
+            "Id": "c" * 64, "Image": IMAGE_ID, "Name": "/qwen38-ab-legacy",
+            "Config": {"Image": mod.IMAGE_TAG}, "State": {"Status": "exited"},
+            "Mounts": list(managed["Mounts"]),
+        }
+        def read(*args):
+            return json.dumps([
+                image if args[0] == "image" else
+                managed if args[-1] == mod.MANAGED_CONTAINER else legacy
+            ]).encode()
+        with patch.object(mod, "docker_read", side_effect=read):
+            plan = mod.isolated_copy_preflight_plan()
+        self.assertEqual(plan["declared_image_volumes"], "PRESENT_BLOCK_REVIEW")
+        self.assertEqual(plan["isolated_create_only_feasibility"], "STOP_UNQUALIFIED")
+
+        legacy["Image"] = "sha256:" + "f" * 64
+        with patch.object(mod, "docker_read", side_effect=read):
+            with self.assertRaisesRegex(mod.AttestationError, "identity mismatch"):
+                mod.isolated_copy_preflight_plan()
+
+    def test_isolated_source_preview_unknown_state_fails_closed(self):
+        import json
+        image, managed = identities()
+        image.update({"Size": 12345, "Config": {"Volumes": None}})
+        managed["State"] = {"Status": "running"}
+        legacy = {
+            "Id": "c" * 64, "Image": IMAGE_ID, "Name": "/qwen38-ab-legacy",
+            "Config": {"Image": mod.IMAGE_TAG}, "State": {"Status": "exited"},
+            "Mounts": [{"Destination": "/model"}],
+        }
+        def read(*args):
+            return json.dumps([
+                image if args[0] == "image" else
+                managed if args[-1] == mod.MANAGED_CONTAINER else legacy
+            ]).encode()
+        with patch.object(mod, "docker_read", side_effect=read):
+            with self.assertRaisesRegex(mod.AttestationError, "not both stopped"):
+                mod.isolated_copy_preflight_plan()
+
     def test_model_config_nested_mount_topology_never_exposes_host_paths(self):
         _image, container = identities()
         self.assertEqual(mod.model_config_mount_topology(container),
