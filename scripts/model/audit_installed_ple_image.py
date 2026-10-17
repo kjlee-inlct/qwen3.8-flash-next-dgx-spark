@@ -55,21 +55,85 @@ def _bounded_tar_has_one_file(raw: bytes, name: str) -> bool:
         return False
 
 
-def probe_layout() -> tuple[str, str]:
+def _count_failure(kinds: dict[str, int], exc: AttestationError) -> None:
+    reason = exc.reason if isinstance(exc, DockerCopyError) else "COPY_FAILED_UNCLASSIFIED"
+    kinds[reason] = kinds.get(reason, 0) + 1
+
+
+def failure_summary(kinds: dict[str, int]) -> str:
+    """Machine-readable category counts only; never output raw Docker errors."""
+    return ",".join(f"{reason}:{count}" for reason, count in sorted(kinds.items())) or "NONE"
+
+
+def probe_copy_transport() -> str:
+    """Small generic regular file; distinguishes Docker-copy transport from PLE layout.
+
+    /etc/group is conventional non-model metadata and is NOT copied to disk
+    or printed, only one small TAR header is inspected.
+    """
+    try:
+        raw = docker_read("cp", f"{MANAGED_CONTAINER}:/etc/group", "-")
+    except DockerCopyError as exc:
+        return exc.reason
+    except AttestationError:
+        return "COPY_FAILED_UNCLASSIFIED"
+    if _bounded_tar_has_one_file(raw, "group"):
+        return "SMALL_REGULAR_TAR_READABLE"
+    return "COPY_TAR_INVALID_OR_UNEXPECTED"
+
+
+def probe_layout(failures: dict[str, int] | None = None) -> tuple[str, str]:
     """Bounded, explicit Docker-copy checks; no listing, exec or filesystem walk."""
     for path in PATHS:
         reference = path.replace(SOURCE_RELATIVE, SKINNY_GEMM_RELATIVE)
         try:
             raw = docker_read("cp", f"{MANAGED_CONTAINER}:{reference}", "-")
-        except AttestationError:
+        except AttestationError as exc:
+            if failures is not None:
+                _count_failure(failures, exc)
             continue
         if _bounded_tar_has_one_file(raw, "low_latency_gemm.py"):
             return "SKINNY_GEMM_REFERENCE_READABLE", reference
+        if failures is not None:
+            failures["COPY_TAR_INVALID_OR_UNEXPECTED"] = (
+                failures.get("COPY_TAR_INVALID_OR_UNEXPECTED", 0) + 1
+            )
     return "SKINNY_GEMM_REFERENCE_UNAVAILABLE", "NOT_CAPTURED"
 
 
 class AttestationError(ValueError):
     """Image identity, read-only extraction or source evidence unqualified."""
+
+
+class DockerCopyError(AttestationError):
+    """Typed, non-sensitive Docker copy outcome. Never show raw Docker stderr."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__("Docker copy unavailable: " + reason)
+
+
+def classify_copy_failure(raw: bytes) -> str:
+    """Classify bounded stderr without emitting paths, mounts, or credentials."""
+    text = raw[:4096].lower()
+    if any(item in text for item in (
+        b"permission denied", b"access denied",
+    )):
+        return "PERMISSION_DENIED"
+    if any(item in text for item in (
+        b"cannot connect to the docker daemon",
+        b"is the docker daemon running",
+        b"error during connect",
+    )):
+        return "DAEMON_UNAVAILABLE"
+    if any(item in text for item in (
+        b"no such file or directory", b"could not find the file",
+        b"not found in container", b"file does not exist",
+    )):
+        return "SOURCE_PATH_NOT_FOUND"
+    if b"not a directory" in text:
+        return "PARENT_NOT_DIRECTORY"
+    return "COPY_FAILED_UNCLASSIFIED"
 
 
 def docker_read(*args: str) -> bytes:
@@ -86,11 +150,21 @@ def docker_read(*args: str) -> bytes:
         response = subprocess.run(
             ["docker", *args], capture_output=True, timeout=15, check=False
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        if args[0] == "cp":
+            raise DockerCopyError("COPY_TIMEOUT") from exc
+        raise AttestationError("Docker inspection timed out") from exc
+    except OSError as exc:
+        if args[0] == "cp":
+            raise DockerCopyError("CLIENT_UNAVAILABLE") from exc
         raise AttestationError("Docker read-only command unavailable") from exc
     if response.returncode != 0:
+        if args[0] == "cp":
+            raise DockerCopyError(classify_copy_failure(response.stderr))
         raise AttestationError("Docker metadata or source unavailable")
     if len(response.stdout) > MAX_RESPONSE:
+        if args[0] == "cp":
+            raise DockerCopyError("COPY_OUTPUT_OVER_LIMIT")
         raise AttestationError("Docker inspection exceeds bounded output")
     return response.stdout
 
@@ -322,20 +396,26 @@ def inspect_existing(diagnostics: dict[str, str] | None = None) -> dict[str, str
         result["source_mount_mode"] = "rw" if mount.get("RW") else "ro_or_unknown"
         result.update(audit_source(read_host_source_nofollow(host_source)))
         return result
+    ple_failures: dict[str, int] = {}
     for path in PATHS:
         try:
             raw = docker_read("cp", f"{MANAGED_CONTAINER}:{path}", "-")
-        except AttestationError:
+        except AttestationError as exc:
+            _count_failure(ple_failures, exc)
             continue
         result["source_location_in_existing_container"] = path
         result["source_origin"] = "EXISTING_CONTAINER_FILESYSTEM_NOT_PROVEN_RUNTIME"
         result.update(audit_source(source_from_cp(raw)))
         return result
     if diagnostics is not None:
-        state, reference = probe_layout()
+        reference_failures: dict[str, int] = {}
+        state, reference = probe_layout(reference_failures)
         diagnostics["ple_candidates_checked"] = str(len(PATHS))
+        diagnostics["docker_cp_ple_failure_kinds"] = failure_summary(ple_failures)
         diagnostics["docker_cp_reference_state"] = state
+        diagnostics["docker_cp_reference_failure_kinds"] = failure_summary(reference_failures)
         diagnostics["docker_cp_reference_path"] = reference
+        diagnostics["docker_cp_small_file_state"] = probe_copy_transport()
         diagnostics["ple_source_file"] = "NOT_CAPTURED"
     raise AttestationError("No known PLE loader path in existing matching container")
 
