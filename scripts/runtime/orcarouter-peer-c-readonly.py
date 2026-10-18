@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+from pathlib import Path
 import shutil
 import subprocess
 
@@ -183,14 +184,109 @@ def preflight() -> int:
     return 0
 
 
+def read_meminfo_kib() -> dict[str, int] | None:
+    """Read Linux /proc/meminfo; missing or malformed fields fail closed."""
+    try:
+        lines = Path("/proc/meminfo").read_text(encoding="utf-8").splitlines()
+        needed = {"MemFree", "MemAvailable", "CmaFree", "SwapFree"}
+        values: dict[str, int] = {}
+        for line in lines:
+            key, sep, rest = line.partition(":")
+            if not sep or key not in needed:
+                continue
+            parts = rest.strip().split()
+            if len(parts) != 2 or parts[1] != "kB":
+                return None
+            values[key] = int(parts[0])
+        if keys_missing := needed - values.keys():
+            return None
+        if any(value < 0 for value in values.values()):
+            return None
+        return values
+    except (OSError, ValueError, UnicodeError):
+        return None
+
+
+def host_check() -> int:
+    """Independent, read-only *snapshot*; never a start permission.
+
+    No Docker create/start/run/exec/copy/stop/rm, no service changes,
+    no sockets bound, and no file writes. All resource checks must fail
+    closed; dynamic results must be rechecked at any future live start.
+    """
+    print("PEER_C_OPERATION=HOST_CHECK_READ_ONLY")
+    rc, output = command("docker", "ps", "--format", "{{json .}}")
+    expected = {
+        "open-webui": "ghcr.io/open-webui/open-webui:main",
+        "portainer": "portainer/portainer-ce:latest",
+    }
+    docker_state = "UNKNOWN_BLOCKED"
+    if rc == 0:
+        try:
+            rows = [json.loads(line) for line in output.splitlines() if line.strip()]
+            if all(isinstance(row, dict) and
+                   isinstance(row.get("Names"), str) and
+                   isinstance(row.get("Image"), str) for row in rows):
+                names = [row["Names"] for row in rows]
+                if (len(names) == len(set(names)) and
+                    all(expected.get(row["Names"]) == row["Image"] for row in rows)):
+                    docker_state = "ONLY_KNOWN_ADMIN_CONTAINERS"
+                else:
+                    docker_state = "UNEXPECTED_RUNNING_CONTAINER_BLOCKED"
+            else:
+                docker_state = "INVALID_DOCKER_PS_BLOCKED"
+        except (json.JSONDecodeError, TypeError):
+            docker_state = "INVALID_DOCKER_PS_BLOCKED"
+    print("PEER_C_RUNNING_DOCKER=" + docker_state)
+
+    rc, listeners = command("ss", "-H", "-ltn", "( sport = :18891 )")
+    port_state = ("NO_LISTENER_AT_CHECK" if rc == 0 and not listeners.strip()
+                  else "LISTENER_OR_UNKNOWN_BLOCKED")
+    print("PEER_C_PORT_18891=" + port_state)
+
+    rc, swap_names = command("swapon", "--show=NAME", "--noheadings")
+    swap_state = ("PLE_SWAP_ACTIVE" if rc == 0 and
+                  "/swap-ple.img" in swap_names.splitlines()
+                  else "PLE_SWAP_MISSING_OR_UNKNOWN_BLOCKED")
+    print("PEER_C_PLE_SWAP=" + swap_state)
+
+    mem = read_meminfo_kib()
+    memory_state = "UNKNOWN_BLOCKED"
+    if mem is not None:
+        noncma_free = max(0, mem["MemFree"] - mem["CmaFree"])
+        noncma_available = max(0, mem["MemAvailable"] - mem["CmaFree"])
+        swap_free = mem["SwapFree"]
+        print("PEER_C_NONCMA_FREE_KIB=" + str(noncma_free))
+        print("PEER_C_NONCMA_AVAILABLE_KIB=" + str(noncma_available))
+        print("PEER_C_SWAP_FREE_KIB=" + str(swap_free))
+        if (noncma_free >= 2 * 1048576 and
+                noncma_available >= 6 * 1048576 and
+                swap_free >= 8 * 1048576):
+            memory_state = "MINIMUM_STATIC_MARGIN_MET"
+        else:
+            memory_state = "LOW_MEMORY_OR_SWAP_BLOCKED"
+    print("PEER_C_MEMORY_MARGIN=" + memory_state)
+
+    if (docker_state != "ONLY_KNOWN_ADMIN_CONTAINERS"
+            or port_state != "NO_LISTENER_AT_CHECK"
+            or swap_state != "PLE_SWAP_ACTIVE"
+            or memory_state != "MINIMUM_STATIC_MARGIN_MET"):
+        print("PEER_C_HOST_CHECK=BLOCKED_REVIEW")
+        return 2
+    print("PEER_C_HOST_CHECK=PASS_SNAPSHOT_NOT_LIVE_APPROVAL")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("plan", "preflight"))
+    parser.add_argument("action", choices=("plan", "preflight", "host-check"))
     args = parser.parse_args()
     if args.action == "plan":
         plan()
         return 0
-    return preflight()
+    if args.action == "preflight":
+        return preflight()
+    return host_check()
 
 
 if __name__ == "__main__":
