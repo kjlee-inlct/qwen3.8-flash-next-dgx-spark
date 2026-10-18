@@ -103,6 +103,66 @@ class OrcaMountConfigTests(unittest.TestCase):
             self.assertEqual(result["docker_mutation"], "NONE")
             self.assertEqual(result["weights_read"], "NONE")
 
+    def test_peer_complete_config_comparison_does_not_overclaim_from_counts(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = FakeMountEnvironment(Path(d))
+            # Same 36/12 layer counts and CT groups/targets can still encode
+            # different model/quant semantics from a public recipe.
+            with (patch.object(checker.guard, "inspect_now", side_effect=env.inspect_now),
+                  patch.object(checker.guard, "fetch_one", side_effect=env.fetch)):
+                report, ok = checker.assess()
+            self.assertTrue(ok)
+            self.assertEqual(report["community_layer_shape"],
+                             "COUNTS_MATCH_NOT_CONFIG_EQUIVALENCE")
+            self.assertEqual(report["peer_full_parity"],
+                             "DIFFERENT_REFERENCE_CANONICAL_VALUES")
+            self.assertEqual(report["peer_quant_parity"],
+                             "DIFFERENT_REFERENCE_CANONICAL_VALUES")
+            self.assertEqual(report["peer_layers_parity"],
+                             "MATCH_REFERENCE_CANONICAL_VALUES")
+            self.assertEqual(report["peer_vision_parity"], "MISSING")
+            self.assertEqual(
+                report["peer_reference_scope"], "THIRD_PARTY_POSTED_JSON_NOT_IMAGE_RUNTIME"
+            )
+            self.assertNotIn(str(Path(d)), repr(report))
+            self.assertNotIn("Source", repr(report))
+
+    def test_peered_section_digest_equalities_use_canonical_json_not_sort_lists(self):
+        example = {
+            "config_groups": {"g1": {"targets": ["b", "a"]}},
+            "ignore": ["q", "p"]
+        }
+        reference = checker.canonical_json_sha256(example)
+        self.assertEqual(
+            reference, checker.canonical_json_sha256({
+                "ignore": ["q", "p"],
+                "config_groups": {"g1": {"targets": ["b", "a"]}},
+            })
+        )
+        self.assertNotEqual(
+            reference, checker.canonical_json_sha256({
+                "config_groups": {"g1": {"targets": ["a", "b"]}},
+                "ignore": ["q", "p"],
+            })
+        )
+        original = checker.PEER_REFERENCE_SHA256
+        try:
+            checker.PEER_REFERENCE_SHA256 = {"full": reference}
+            result = checker.peer_semantic_parity(example)
+            self.assertEqual(result["peer_full_parity"],
+                             "MATCH_REFERENCE_CANONICAL_VALUES")
+        finally:
+            checker.PEER_REFERENCE_SHA256 = original
+
+    def test_peer_fingerprint_absent_sections_are_explicit_not_equivalent(self):
+        parity = checker.peer_semantic_parity({})
+        self.assertEqual(parity["peer_quant_parity"], "MISSING")
+        self.assertEqual(parity["peer_groups_parity"], "MISSING")
+        self.assertEqual(parity["peer_layers_parity"], "MISSING")
+        self.assertEqual(parity["peer_vision_parity"], "MISSING")
+        self.assertEqual(parity["peer_full_parity"],
+                         "DIFFERENT_REFERENCE_CANONICAL_VALUES")
+
     def test_protected_current_postcheck_must_pass_before_inspecting_models(self):
         with tempfile.TemporaryDirectory() as d:
             env = FakeMountEnvironment(Path(d))
