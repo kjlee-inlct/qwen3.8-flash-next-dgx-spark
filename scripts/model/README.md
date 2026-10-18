@@ -324,3 +324,24 @@ not an extra Wizard menu item.
 Host execution, official-image install/boot
 and OrcaRouter stability are still
 `NOT_QUALIFIED`.
+
+### Third-party OrcaRouter full configuration parity digests
+
+A user-provided 1304-line community OrcaRouter
+Docker recipe and complete `config.json` were
+canonicalized (JSON object keys sorted; list order
+preserved) into 64-char SHA256 reference digests:
+full config, quantization config, CT groups/ignore,
+text config, exact ordered attention layers, vision.
+`inspect_orcarouter_mount_config_readonly.py`
+compares these *external-only* references to the
+existing protected mounted override **in memory**,
+reporting only named `MATCH/DIFFERENT/MISSING`
+classifications. It prints no source host path,
+host-derived file digest, model content or raw
+Docker object. This extends the earlier ACTUAL_DGX
+counts-only 2/301/753 and 36/12 match; do not
+conflate reference parity with actual model load,
+runtime stability or original weight hash.
+No physical replay was performed by this
+source-only change.
