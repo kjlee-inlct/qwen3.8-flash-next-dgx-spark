@@ -394,3 +394,29 @@ postcheck is not a PASS and needs manual review. Owner
 approval is scoped only to that temporary object's create
 and removal; see
 `docs/LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md`.
+
+### Read-only physical PLE protected-resource postcheck follow-up
+
+**Physical source probe already ran once** at Git SHA
+`f1bce18ef6ab444ced20f4efed2ba8ec42a250f0`:
+image-derived Python 3.12 `ple_layer.py` was captured
+(SHA256 `a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`),
+the unique temporary ID was removed and absence verified,
+but `PLE_TEMP_PROTECTED_POSTCHECK=FAIL_REVIEW` requires
+independent current-state inspection. **Do not execute the
+one-time mutation probe again.**
+
+The separate maintained
+`python3 -B scripts/model/inspect_ple_postcheck_readonly.py`
+performs **only seven Docker inspect requests**: temporary
+full ID + temporary name, current tagged image, and the two
+protected containers by name and exact full ID. It returns
+only allowlisted sanitized status strings and names of
+different metadata sections, never inspect JSON, mount
+source host paths, labels or environment. `PASS_CURRENT_ONLY`
+means *current* identities/states/topology and same-time
+name-vs-ID metadata agree; it **cannot retroactively
+reverse or explain** the earlier `FAIL_REVIEW`.
+A mismatch/unknown returns nonzero with STOP.
+[Full evidence](benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
