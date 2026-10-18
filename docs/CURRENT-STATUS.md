@@ -1,3 +1,47 @@
+## 2026-10-18 — OrcaRouter-first recovery from community reference, flags mostly already matched
+
+The owner specifically requested revisiting **OrcaRouter
+startup stability** using the Arca single-Spark report,
+rather than only extrapolating it to lychee888.
+GitHub historical physical evidence shows a 16GiB
+OrcaRouter run reached strict `PASS/PASS` (Oct 3),
+while later 16GiB restarts could reach READY yet
+emit strict NVIDIA RM `NV_ERR_NO_MEMORY` and fail
+host-stability; Legacy A (Oct 13) was correctly
+stopped by the protective monitor at 914MiB
+non-CMA free with 13.77GiB swapgrowth before
+checkpoint completion. v0.29 PLE-mmap R22
+reached API READY but had one strict RM OOM;
+mmap reduced later swap pressure yet did not
+eliminate the early ~75GiB RM allocation burst.
+
+Review of maintained `scripts/serve.sh` confirms
+community options `mp`, legacy CPU PLE offload,
+1800s PLE wait, TP1, MTP k=2, 262144 max context,
+0.85 GPU utilization and max 3 sequences
+are already configured. Local 16GiB KV remains
+evidence-driven and **must not be raised to the
+forum's 24GiB** without a separately qualified run.
+Most meaningful unverified difference: the
+community **official CUDA13 ARM64 vLLM image**
+versus our custom legacy/v0.29 images, and
+the author's separate `config.json` override.
+TP1 uniproc/PLE worker hang workaround `mp`
+is already in our stack
+(https://github.com/vllm-project/vllm/issues/53960).
+A recent vLLM image may have different
+allocator/model/quantization semantics, but
+this has **not been source-proved** or physically
+measured here.
+
+**Plan:** source-only image/config comparison and
+read-only preflight first; a new isolated Wizard
+trial needs separate explicit approval. Keep
+protected monitors and 16GiB default; no image
+pull/rebuild, Docker start/create/remove, checkpoint
+download or GPU run now.
+[Authoritative comparison](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+
 ## 2026-10-18 — EXTERNAL_ONLY OrcaRouter single-Spark CPU-offload reference; not lychee888 qualification
 
 The operator supplied the **full third-party report and posted
