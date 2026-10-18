@@ -1,3 +1,54 @@
+## 2026-10-18 — ACTUAL_DGX OrcaRouter read-only preflight stopped on guessed model path
+
+The owner fast-forwarded local
+`feature/wizard-modular-phase1-20261014` from
+`1dddec7..28d5429` and obtained
+`EXACT_HEAD_CI=SUCCESS_2_OF_2`.
+The existing protected-container read-only postcheck
+returned `PASS_CURRENT_ONLY`: both temp ID and
+name absent, pinned image ID/size matches, both
+managed and legacy exact stopped containers/nested
+read-only model binds match. Both container
+name-vs-ID `Mounts=ORDER_ONLY` (complete
+record equality modulo order) and other fields
+`MATCH`. Docker did no mutation/copy/GPU work.
+The official peer-run image
+`vllm/vllm-openai:qwen38-flash-next-arm64-cu130`
+was reported **`OFFICIAL_IMAGE_LOCAL=NOT_PRESENT`**
+by a read-only `docker image inspect`; no pull.
+Next the older command assumed
+`${QWEN38_MODEL_ROOT:-$HOME/models}/qwen3.8-flash-next-orcarouter/config.json`
+and stopped at `STOP: Original config missing`
+**before** running the maintained checkpoint inspector.
+
+**This does not prove the original OrcaRouter checkpoint or
+config was deleted.** The assumed default path was
+not independently verified as the existing Docker
+`/model` bind `Source`; actual current protected
+Docker mounts are better provenance than a guessed
+home directory. No model config comparison, safetensors
+header read, image-source delta or benchmark was
+performed in that physical run.
+
+Follow-up is implemented SOURCE_ONLY as
+`scripts/model/inspect_orcarouter_mount_config_readonly.py`:
+it reuses the exact-ID current protected postcheck,
+reads the existing protected `/model` directory
+and nested `/model/config.json` bind sources from
+Docker metadata and opens **only two bounded small
+JSON configs**, never full model tensors or files.
+It emits sanitized categories and CT/layer-type
+counts without printing source paths, JSON or secrets,
+and compares existing generated override to the
+narrow `prepare_config.convert_layer_types` function.
+It fails closed on changed identities, multiple/missing
+or non-RO binds, differing managed/legacy source
+directories, missing/invalid config files and
+unreadable or unqualified data. Host execution of
+the new code remains **NOT_OBSERVED**; no remote image,
+model download or Docker mutation is authorized.
+[OrcaRouter community comparator](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+
 ## 2026-10-18 — OrcaRouter-first recovery from community reference, flags mostly already matched
 
 The owner specifically requested revisiting **OrcaRouter
