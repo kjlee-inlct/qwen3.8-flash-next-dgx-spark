@@ -649,3 +649,70 @@ sensitivity**, identify any destination/type/RW/other
 field differences via non-sensitive classification labels,
 and test failure cases. No source reread, new temporary
 container, Docker mutation or GPU activity is authorized.
+
+## 2026-10-18 — ACTUAL_DGX order-aware protected postcheck PASS_CURRENT_ONLY
+
+The operator physically ran the revised, **read-only**
+`inspect_ple_postcheck_readonly.py` at a clean local
+`feature/wizard-modular-phase1-20261014` checkout,
+fast-forwarded `4fa3a83..a24cd3a` and SHA-checked
+`a24cd3a7ce48c7531cabbdfec0139327eefce18a`.
+The operator's exact-HEAD CI guard printed
+`EXACT_HEAD_CI=SUCCESS_2_OF_2`.
+Actual DGX terminal output was:
+
+```text
+PLE_POSTCHECK_RESULT_KIND=CURRENT_READ_ONLY_NOT_HISTORICAL_REPLAY
+PLE_POSTCHECK_TEMP_ABSENCE=ABSENT_ID_AND_NAME
+PLE_POSTCHECK_HISTORICAL_FAILURE_CAUSE=UNRECOVERABLE_WITHOUT_PRE_POST_FIELD_SNAPSHOTS
+PLE_POSTCHECK_DOCKER_MUTATION=NONE
+PLE_POSTCHECK_DOCKER_COPY=NOT_PERFORMED
+PLE_POSTCHECK_GPU_RUN=NOT_PERFORMED
+PLE_POSTCHECK_IMAGE=MATCH_PINNED_ID_AND_SIZE
+PLE_POSTCHECK_MANAGED_IDENTITY=MATCH_EXACT_ID_IMAGE_NAME
+PLE_POSTCHECK_MANAGED_STATE=EXITED
+PLE_POSTCHECK_MANAGED_ROOTFS=READONLY_FALSE
+PLE_POSTCHECK_MANAGED_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_POSTCHECK_MANAGED_NAME_VS_ID_MOUNTS=ORDER_ONLY
+PLE_POSTCHECK_MANAGED_NAME_VS_ID_FIELDS=MATCH
+PLE_POSTCHECK_LEGACY_IDENTITY=MATCH_EXACT_ID_IMAGE_NAME
+PLE_POSTCHECK_LEGACY_STATE=EXITED
+PLE_POSTCHECK_LEGACY_ROOTFS=READONLY_FALSE
+PLE_POSTCHECK_LEGACY_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_POSTCHECK_LEGACY_NAME_VS_ID_MOUNTS=IDENTICAL_ORDER
+PLE_POSTCHECK_LEGACY_NAME_VS_ID_FIELDS=MATCH
+PLE_POSTCHECK_CURRENT_STATIC_POSTCHECK=PASS_CURRENT_ONLY
+```
+
+**New verified physical state:** the previously created one-off
+temporary object remains **absent by exact ID and unique name**.
+Pinned image ID/size and both existing protected container
+names/full IDs/Image SHA remain matched; both are `exited`,
+both have `ReadonlyRootfs=false` and the previously verified
+nested `/model` + `/model/config.json` read-only bind topology.
+The managed object's name-vs-ID inspect `Mounts` comparison
+reported **`ORDER_ONLY`** (all complete mount record values
+equal, only list order differs); legacy A/B object reported
+**`IDENTICAL_ORDER`**. Name-vs-ID comparison of the other
+original fingerprint fields also returned `MATCH`. No
+Docker create/copy/delete/start, host changes or GPU use
+occurred in this follow-up.
+
+**Decision:** current protected-state triage
+`PASS_CURRENT_ONLY`; the earlier ambiguous raw-array
+`DIFFERENT_Mounts` is **not a reproduced substantive
+mount-record difference in this new snapshot**. This is
+NOT proof that the prior `FAIL_REVIEW` was solely mount
+ordering or that the historical before/after metadata were
+identical. The one-shot physical image source extraction
+remains `SOURCE_SHA256_CAPTURED`, but the original
+`FAIL_REVIEW` evidence is immutable and historically
+`UNCLASSIFIED` because raw pre/post field snapshots were
+not retained.
+
+Next work may proceed **source-only** on
+`compressed-tensors` vs native `Fp8Config` routing,
+BF16 global scale tensor loader semantics and single GB10
+TP=1 non-GPU preconditions. No additional Docker temp,
+GPU execution, model installation, weight download or
+protected-object mutation is approved.
