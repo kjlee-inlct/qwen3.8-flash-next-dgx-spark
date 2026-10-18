@@ -44,6 +44,77 @@ class Lychee888LoaderSourceGateTests(unittest.TestCase):
         self.assertEqual(result["global_weight_scale_keys"], 1)
         self.assertEqual(result["single_gb10_tp1"], "NOT_VERIFIED")
 
+    def test_actual_installed_sha_and_class_gate_are_recorded_without_runtime_pass(self):
+        docs = fixture()
+        docs[1]["quantization_config"]["format"] = "mixed-precision"
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(result["installed_image_id"], gate.INSTALLED_IMAGE_ID)
+        self.assertEqual(result["installed_ple_source_sha256"], gate.INSTALLED_PLE_SHA256)
+        self.assertEqual(
+            result["installed_ple_source_dispatch"], "NATIVE_FP8_CONFIG_ONLY_SOURCE"
+        )
+        self.assertEqual(
+            result["quant_declared_format_class"],
+            "COMPRESSED_TENSORS_MIXED_PRECISION_CONFIRMED_IN_METADATA",
+        )
+        self.assertEqual(
+            result["runtime_quant_class_expectation"],
+            "COMPRESSED_TENSORS_CLASS_EXPECTED_NOT_RUNTIME_ATTESTED",
+        )
+        self.assertEqual(
+            result["installed_native_gate_reachability"],
+            "NO_DIRECT_NATIVE_FP8_CLASS_MATCH_PROVEN",
+        )
+        self.assertEqual(result["ple_dtype_dispatch"], "NOT_PROVEN_IN_INSTALLED_SOURCE")
+        self.assertEqual(
+            result["bf16_global_scale_loader_gate"],
+            "FP8_METHOD_CONDITIONAL_ONLY_BF16_SCALE_LOAD_UNVERIFIED",
+        )
+        self.assertEqual(result["ct_prefix_scheme_resolution"],
+                         "NOT_AUDITED_FOR_INSTALLED_IMAGE")
+        self.assertEqual(result["installed_loader_contract"],
+                         "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+        self.assertEqual(result["verdict"], "SOURCE_ONLY_LOADER_UNQUALIFIED")
+        self.assertEqual(result["single_gb10_tp1"], "NOT_VERIFIED")
+        self.assertIn("HISTORICAL_FAIL_REVIEW_RETAINED",
+                      result["physical_protected_postcheck"])
+
+    def test_missing_or_unexpected_ct_format_cannot_be_called_valid_mixed(self):
+        docs = fixture()
+        unknown = gate.installed_ple_dispatch_contract(docs[1])
+        self.assertEqual(
+            unknown["quant_declared_format_class"],
+            "COMPRESSED_TENSORS_FORMAT_NOT_CONFIRMED_AS_MIXED_PRECISION",
+        )
+        docs[1]["quantization_config"]["format"] = "packed-quantized"
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(
+            result["quant_declared_format_class"],
+            "COMPRESSED_TENSORS_FORMAT_NOT_CONFIRMED_AS_MIXED_PRECISION",
+        )
+        self.assertEqual(result["installed_loader_contract"],
+                         "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+
+    def test_modelopt_is_not_mistaken_for_compressed_tensors(self):
+        docs = fixture(method="modelopt_mixed")
+        info = gate.installed_ple_dispatch_contract(docs[1])
+        self.assertEqual(info["quant_declared_format_class"], "MODELOPT_MIXED_DECLARATION")
+        self.assertEqual(info["installed_native_gate_reachability"],
+                         "NATIVE_FP8_GATE_NOT_A_MODELOPT_MIXED_ROUTE")
+        self.assertEqual(info["installed_loader_contract"], "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+
+    def test_unknown_format_and_no_quant_cannot_be_admitted(self):
+        docs = fixture(method="unknown-quant")
+        info = gate.installed_ple_dispatch_contract(docs[1])
+        self.assertEqual(info["runtime_quant_class_expectation"],
+                         "UNKNOWN_RUNTIME_QUANT_CLASS")
+        self.assertEqual(info["installed_native_gate_reachability"], "UNRESOLVED")
+        self.assertEqual(info["installed_loader_contract"],
+                         "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+        docs[1]["quantization_config"] = None
+        with self.assertRaisesRegex(ple.MetadataError, "quantization_config"):
+            gate.installed_ple_dispatch_contract(docs[1])
+
     def test_even_modelopt_mixed_is_not_a_runtime_pass(self):
         result = gate.assess(*fixture(method="modelopt_mixed"), PATCH, DOCKERFILE)
         self.assertIn("CLASS_ONLY", result["nvidia_patch_source_dispatch"])
