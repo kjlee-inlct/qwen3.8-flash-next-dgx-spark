@@ -43,12 +43,18 @@ wizard_advanced_menu() {
     wizard_header 'Advanced / 고급'
     wizard_menu_option 1 'OrcaRouter A/B status (read-only) / 기록 상태'
     wizard_menu_option 2 'Evidence index / 증거 목록'
+    wizard_menu_option 3 'Official ARM64 OrcaRouter C plan (source-only) / C 계획'
+    wizard_menu_option 4 'Official ARM64 OrcaRouter C preflight (read-only) / C 사전 점검'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
       1) python3 "${ROOT_DIR}/scripts/runtime/orcarouter-ab-trial.py" status ||
         wizard_warning 'Status unavailable.' ;;
       2) printf 'Evidence index: %s\n' "${ROOT_DIR}/scripts/benchmark/evidence/README.md" ;;
+      3) python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-readonly.py" plan ||
+        wizard_warning 'C plan unavailable.' ;;
+      4) python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-readonly.py" preflight ||
+        wizard_warning 'C preflight BLOCKED; this does not authorize image pull or GPU start.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
