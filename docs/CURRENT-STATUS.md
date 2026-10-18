@@ -1,3 +1,37 @@
+## 2026-10-18 — ACTUAL_DGX legacy name-vs-ID Mounts raw difference; exact temp absent
+
+At clean local SHA `4fa3a83f33be508736ea4d79f0ed97d24bc0be60`,
+the owner verified exact-head CI `SUCCESS_2_OF_2`
+and ran the seven-inspect **read-only** protected
+postcheck on DGX. It reported
+`PLE_POSTCHECK_TEMP_ABSENCE=ABSENT_ID_AND_NAME`,
+`IMAGE=MATCH_PINNED_ID_AND_SIZE`, both protected
+container exact name/ID/image matches, both `EXITED`,
+`ROOTFS=READONLY_FALSE`, and
+`MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS`.
+The **managed** container's whole name-vs-ID inspect
+sections were `MATCH`; the **legacy** A/B object's
+`NAME_VS_ID_FIELDS=DIFFERENT_Mounts`, so the script
+returned `CURRENT_STATIC_POSTCHECK=STOP_REVIEW_REQUIRED`.
+
+This is not evidence that a mount disappeared or that the
+protected container was damaged. The older tool compared
+`Mounts` as a **serialized ordered list**: order-only
+reordering and a real mount-record drift are not
+distinguished. The original one-time source probe's
+`FAIL_REVIEW` remains in the record; lost before/after
+field-level details cannot be recreated by reinspection.
+
+A **SOURCE_ONLY** enhancement to
+`scripts/model/inspect_ple_postcheck_readonly.py`
+now classifies exact mount-record equality, reordering
+only, and destination/type/RW/other mount metadata
+differences without disclosing source paths. The next
+physical action is ONLY this new read-only diagnosis
+after exact-HEAD CI SUCCESS, not creating another
+container or using an old mutation approval.
+[ACTUAL_DGX transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — SOURCE_ONLY postcheck differential diagnostic ready after physical probe partial result
 
 After recording the actual physical installed-image PLE source
