@@ -1,6 +1,6 @@
 # Official ARM64 OrcaRouter peer C — source-only plan and actual-DGX admission
 
-**Date:** 2026-10-18. **Class:** proposed, not installed, not launched, not measured.
+**Date:** 2026-10-18. **Class:** official ARM64 Docker image installed and digest/OCI verified; **independent C runtime not created or launched; benchmark not measured**.
 **Owner goal:** quickly obtain comparable model throughput and identify a usable, repeatably stable single-DGX-Spark runtime, without destroying A/B forensic evidence or the protected managed predecessor.
 
 ## Physical IMAGE VERIFIED after download-only approval — 2026-10-18
@@ -164,7 +164,7 @@ Wizard: `./wizard.sh` -> Advanced / 연구 기록 -> official ARM64 C plan or re
 
 ## Later independent C live design — not implemented or approved
 
-1. Operator first reviews exact image/tag identity and root Docker storage headroom. A *separate explicit owner approval* is required before any **network Docker pull** of the published pinned image. Pinned reference: `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`. After pull verify `linux/arm64` plus `RepoDigests` equals the expected manifest, not merely image `.Id` equality.
+1. **Completed, download-only-approved 2026-10-18:** the operator downloaded the pinned official ARM64 image `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` and verified OS/arch, RepoDigest and image config ID, and preserved A/B IDs. This approval **does not** extend to any C create/start/GPU trial.
 2. Independent C live launcher, **still to be implemented and CI/synthetic tested**, must be Wizard-owned and locked, use a unique never-reused Docker name such as `qwen38-orca-peer-c-<timestamp>-<nonce>`, never touch old managed/A/B IDs and names, use separate state and local-only 127.0.0.1:18891, no host-port exposure, no automatic restarts or `--rm`. It must create-only, capture exact new ID/labels, arm a watchdog *before* starting the exact candidate, then verify heartbeat. Do not translate this into a direct `docker run` bypass.
 3. Candidate must use the **same pinned OrcaRouter checkpoint**, RO model source and checked override; `VLLM_PLE_CPU_OFFLOAD=1`, `VLLM_PLE_OFFLOAD_READY_TIMEOUT=1800`, MP TP1, MTP k2, 262144 configured max, concurrency 3, disabled prefix caching and async scheduling. **Start KV16GiB**, not external reporter's KV24. The official ARM64 vLLM CLI acceptability of legacy `--kv-cache-memory` and all model/PLE features must be established, not assumed from an image tag.
 4. Bound to the existing unchanged memory-protection thresholds. Record exact Docker image ID, effective runtime flags and config mount identity, trial start, ready time, `/health`, `/v1/models` exact served model, RAM/non-CMA/swap, monitor heartbeat/protection samples, kernel NVRM/Xid/RM error window and 180s soak. Any strict RM OOM, watchdog stop or API mismatch fails live qualification. Preserve failed logs instead of claiming `0 tok/s`.
