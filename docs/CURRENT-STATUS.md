@@ -1,3 +1,24 @@
+## 2026-10-18 — ACTUAL DGX C systemd inventory: exact managed unit NOT_FOUND in system AND user managers
+
+The owner ran `systemctl show qwen38-flash-next.service` and
+`systemctl --user show qwen38-flash-next.service` with read-only
+`--property=LoadState,ActiveState,SubState,UnitFileState`.
+**Both** outputs were
+`LoadState=not-found`, `ActiveState=inactive`, `SubState=dead`,
+`UnitFileState=` (empty). Thus the exact named unit is
+**not installed/recognized in either systemd scope** at inspection
+time, **not** an installed stopped service. This resolves the
+earlier `INACTIVE_OR_UNKNOWN` ambiguity to `NOT_FOUND` for this
+specific physical observation, but does not rule out differently named
+units or unmanaged processes.
+
+An independent new C Wizard controller cannot inherit a requirement
+that this actual unit be installed, nor claim a managed service
+is healthy; it must independently guard port ownership, running
+Docker objects and unfinished lifecycle state and arm the existing
+memory-protection watchdog before starting the exact C candidate.
+**No systemd change, C create/start, GPU execution or benchmark.**
+[Read-only physical receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
 ## 2026-10-18 — ACTUAL DGX C full preflight PASS (READ-ONLY); still no C model runtime
 
 Operator successfully fast-forward synchronized DGX clean local branch
