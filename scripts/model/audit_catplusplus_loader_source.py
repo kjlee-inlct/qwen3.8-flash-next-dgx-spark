@@ -96,6 +96,10 @@ def scan_config(cfg: dict) -> dict:
     bad = [k for k in qkvz if not isinstance(layers[k], dict)]
     if bad:
         raise SourceAuditBlocked("QKVZ_NONOBJECT_QUANT_LAYER")
+    # Alias presence alone does not establish MXFP8 quantization:
+    # NVFP4 or unspecified qkvz entries must never pass this source gate.
+    mxfp8_qkvz = [k for k in qkvz if layers[k].get("quant_algo") == "MXFP8"]
+    non_mxfp8_qkvz = [k for k in qkvz if k not in mxfp8_qkvz]
     algo = quant.get("quant_algo")
     method = quant.get("quant_method")
     txt = cfg.get("text_config")
@@ -105,11 +109,14 @@ def scan_config(cfg: dict) -> dict:
         "quant_algo": algo,
         "quantized_layer_count": len(layers),
         "fused_qkvz_quantized_alias_count": len(qkvz),
+        "fused_qkvz_mxfp8_alias_count": len(mxfp8_qkvz),
+        "fused_qkvz_non_mxfp8_alias_count": len(non_mxfp8_qkvz),
         "fused_qkvz_alias_sample": qkvz[:2],
         "ple_embedding_dtype": dtype,
         "modelopt_mixed_config": method == "modelopt_mixed" and
                                  algo == "MIXED_PRECISION",
-        "fused_qkvz_quantization_declared": len(qkvz) > 0,
+        "fused_qkvz_quantization_declared": len(qkvz) > 0 and
+                                            not non_mxfp8_qkvz,
         "fp8_ple_dtype_declared": dtype == "float8_e4m3fn",
     }
 
@@ -201,6 +208,10 @@ def main() -> int:
         print("CATPLUSPLUS_SOURCE_QUANT_ALGO=" + str(cfg["quant_algo"]))
         print("CATPLUSPLUS_SOURCE_QKVZ_ALIAS_COUNT=" +
               str(cfg["fused_qkvz_quantized_alias_count"]))
+        print("CATPLUSPLUS_SOURCE_QKVZ_MXFP8_ALIAS_COUNT=" +
+              str(cfg["fused_qkvz_mxfp8_alias_count"]))
+        print("CATPLUSPLUS_SOURCE_QKVZ_NON_MXFP8_ALIAS_COUNT=" +
+              str(cfg["fused_qkvz_non_mxfp8_alias_count"]))
         print("CATPLUSPLUS_SOURCE_PLE_DTYPE=" + str(cfg["ple_embedding_dtype"]))
         print("CATPLUSPLUS_SOURCE_DECLARATIONS=" + report["source_declarations"])
         for flag, present in report["publisher_launcher"]["flags_mentioned"].items():
