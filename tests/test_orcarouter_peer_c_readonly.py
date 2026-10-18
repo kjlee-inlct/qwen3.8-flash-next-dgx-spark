@@ -158,6 +158,84 @@ class PeerCReadOnlyTests(TestCase):
         self.assertIn("PEER_C_MANAGED_SERVICE=ACTIVE_OR_UNCLASSIFIED", out.getvalue())
         self.assertIn("PEER_C_ADMISSION=BLOCKED_REVIEW", out.getvalue())
 
+    @staticmethod
+    def good_host_snapshot():
+        return {
+            "docker": (0, "\n".join((
+                '{"Names":"open-webui","Image":"ghcr.io/open-webui/open-webui:main"}',
+                '{"Names":"portainer","Image":"portainer/portainer-ce:latest"}',
+            ))),
+            "ss": (0, ""),
+            "swapon": (0, "/swap-ple.img\n/swap.img\n"),
+        }
+
+    @staticmethod
+    def good_meminfo():
+        return {"MemFree": 119400264, "MemAvailable": 123921280,
+                "CmaFree": 69320, "SwapFree": 149950172}
+
+    def test_host_check_only_readonly_queries_pass_snapshot(self):
+        calls = []
+        data = self.good_host_snapshot()
+        def fake_command(*args):
+            calls.append(args)
+            return data[args[0]]
+        with mock.patch.object(MOD, "command", side_effect=fake_command), \
+             mock.patch.object(MOD, "read_meminfo_kib",
+                               return_value=self.good_meminfo()), \
+             redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(MOD.host_check(), 0)
+        self.assertEqual(calls, [
+            ("docker", "ps", "--format", "{{json .}}"),
+            ("ss", "-H", "-ltn", "( sport = :18891 )"),
+            ("swapon", "--show=NAME", "--noheadings"),
+        ])
+        self.assertIn("PEER_C_OPERATION=HOST_CHECK_READ_ONLY", out.getvalue())
+        self.assertIn("PEER_C_NONCMA_FREE_KIB=119330944", out.getvalue())
+        self.assertIn("PEER_C_HOST_CHECK=PASS_SNAPSHOT_NOT_LIVE_APPROVAL", out.getvalue())
+
+    def test_host_check_fails_closed_on_port_swap_docker_and_memory(self):
+        cases = (
+            ("port-in-use", {"ss": (0, "LISTEN 0 128 127.0.0.1:18891")}, None),
+            ("ss-command-fails", {"ss": (127, "")}, None),
+            ("swap-missing", {"swapon": (0, "/swap.img\n")}, None),
+            ("swap-command-fails", {"swapon": (1, "")}, None),
+            ("unexpected-container", {"docker": (0, '{"Names":"new-engine","Image":"test"}')}, None),
+            ("docker-command-fails", {"docker": (127, "")}, None),
+            ("invalid-docker-json", {"docker": (0, "{invalid")}, None),
+            ("insufficient-memory", {}, {"MemFree": 100, "MemAvailable": 100,
+                                         "CmaFree": 0, "SwapFree": 100}),
+            ("unreadable-memory", {}, None),
+        )
+        for name, overrides, mem_override in cases:
+            with self.subTest(name=name):
+                commands = self.good_host_snapshot()
+                commands.update(overrides)
+                def fake_command(*args):
+                    return commands[args[0]]
+                values = (self.good_meminfo()
+                          if mem_override is None and name != "unreadable-memory"
+                          else mem_override)
+                with mock.patch.object(MOD, "command", side_effect=fake_command), \
+                     mock.patch.object(MOD, "read_meminfo_kib",
+                                       return_value=values), \
+                     redirect_stdout(io.StringIO()) as out:
+                    self.assertEqual(MOD.host_check(), 2)
+                self.assertIn("PEER_C_HOST_CHECK=BLOCKED_REVIEW", out.getvalue())
+
+    def test_host_check_meminfo_missing_field_fails_closed(self):
+        with mock.patch.object(MOD.Path, "read_text",
+                               return_value="MemFree: 100 kB\nCmaFree: 0 kB\n"):
+            self.assertIsNone(MOD.read_meminfo_kib())
+
+    def test_host_check_does_not_change_existing_preflight_contract(self):
+        with mock.patch.object(MOD, "command", side_effect=AssertionError("host check")), \
+             mock.patch.object(MOD, "read_meminfo_kib",
+                               side_effect=AssertionError("meminfo")), \
+             redirect_stdout(io.StringIO()) as out:
+            MOD.plan()
+        self.assertIn("PEER_C_OPERATION=PLAN_ONLY_NO_HOST_INSPECTION", out.getvalue())
+
     def test_docker_metadata_uses_inspect_only(self):
         def fake_command(*args):
             self.assertEqual(args[0], "docker")
