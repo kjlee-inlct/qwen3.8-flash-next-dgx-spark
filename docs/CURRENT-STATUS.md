@@ -1,3 +1,40 @@
+## 2026-10-18 — ACTUAL DGX official ARM64 peer C CPU-only CLI probe FAILED; package inventory verified
+
+Owner executed source SHA `4873016f1d9fd864e6cce30c18fb96634b412fe3`
+via the explicitly approved one-time CPU-only disposable OCI
+probe. Pre-Docker host-check passed, and after-run managed/A/B
+objects were unchanged; new probe container auto-removed.
+Evidence directory:
+`/home/inlc/orcarouter-bench-evidence/peer-c-cli-20261018T115111Z-5e41d75a`.
+
+**Physical verified packages:**
+`vllm=0.1.dev20073+g8e685d198`,
+`torch=2.13.0+cu130`, `transformers=5.15.1`,
+`flashinfer-python=0.6.17`, `compressed-tensors=0.17.0`.
+**Critical result:** the `vllm serve --help=all` invocation failed
+(help exit 1; probe-container exit 13; host helper exit 2).
+The physical output's all-`NOT_FOUND_IN_HELP` flags
+are **not evidence those flags are unsupported** because
+the help command did not succeed. The saved decoded
+`vllm-serve-help-all.txt` is the source of the next root-cause
+inspection and has not yet been pasted. No model loader, GPU,
+API or performance sample was run.
+
+**Approved action consumed:** do not rerun CPU Docker, alter
+runtime flags, or initiate live C. New GitHub source adds a
+`report` **read-only** action for already persisted CLI
+stderr/stdout and repurposes Wizard Advanced option 6
+to inspect saved failure rather than repeating the one-shot
+probe; still requires CI-qualified source sync for DGX.
+
+**P0 hierarchy:** normal easy Wizard checkpoint installation,
+switching, diagnostics and safe removal remain the primary
+product goal; official C is a candidate backend of existing
+OrcaRouter and **not a newly verified selectable checkpoint**.
+Keep C disabled from normal production selection until
+real CLI/model/host proof is available. Do not reframe research
+helpers or manual Docker commands as the primary deliverable.
+[Complete physical probe receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
 ## 2026-10-18 — Explicit approval: one-time CPU-only C image CLI/version probe (NOT EXECUTED)
 
 Following physical DGX `host-check` PASS at source SHA
