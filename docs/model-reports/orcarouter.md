@@ -1,3 +1,27 @@
+## 2026-10-18 — OrcaRouter original-config missing at guessed path; current protection check PASS
+
+Actual DGX source sync reached
+`28d54295725499bbaba2adef3d0ed7e8146dbaad`
+with 2/2 CI SUCCESS; protected read-only
+postcheck **`PASS_CURRENT_ONLY`**, both
+managed/legacy RO mount inventories equal modulo
+order, official community image **not locally
+installed**. The manual `$HOME/models`-based
+`config.json` prerequisite failed
+`STOP: Original config missing`. No original
+config or tensor-header inspector actually ran;
+**model deletion or checkpoint corruption is
+not established** by this negative path check.
+
+Follow-up `inspect_orcarouter_mount_config_readonly.py`
+uses the real protected Docker mount sources,
+not the standard profile's assumed local root,
+to inspect two bounded JSONs and report sanitized
+config-shape/quant/override parity. This is
+SOURCE_ONLY until run on the physical owner DGX.
+No Docker mutation or GPU operation.
+[Comparator and triage](../COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+
 ## 2026-10-18 — source-only OrcaRouter recovery from single Spark reference
 
 The operator wishes to revisit **OrcaRouter**, not only
