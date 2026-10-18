@@ -516,3 +516,77 @@ with identity/resource/STOP/postcheck/cleanup rules.
 The plan does **not** implement or run any Docker mutation.
 Installed PLE source SHA and lychee888 TP=1 still
 `NOT_CAPTURED / NOT_QUALIFIED`.
+
+## 2026-10-18 — ACTUAL_DGX isolated temporary source captured but protected postcheck failed
+
+Owner supplied **actual physical DGX** terminal output, not a CI/synthetic run.
+Clean `feature/wizard-modular-phase1-20261014` checkout fast-forwarded
+`7693321..f1bce18`, and the checked-out exact full source SHA was
+`f1bce18ef6ab444ced20f4efed2ba8ec42a250f0`. The command
+read GitHub exact-head CI and obtained `EXACT_HEAD_CI=SUCCESS_2_OF_2`.
+The default preflight was metadata-only, with
+`PLAN_ONLY_PROTECTED_IDENTITIES_MATCH`, no create/copy.
+
+**Actual approved single-operation result:**
+
+```text
+PLE_TEMP_PRE_FREE_BYTES=448726278144
+PLE_TEMP_PRE_FREE_INODES=59498649
+PLE_TEMP_PLANNED_NAME=qwen38-ple-read-e7e7bac84a0b79e85020ff51
+PLE_TEMP_CREATED_ID=eb91d18dd1a1b45a4cba233160165bbe43b7835afa21873686402b505aac9375
+PLE_TEMP_CREATED_STATE=CREATED_NO_MOUNTS
+PLE_TEMP_COPY_CONTROL=SMALL_REGULAR_TAR_READABLE
+PLE_TEMP_SOURCE_PATH=/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py
+PLE_TEMP_SOURCE_SHA256=a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7
+PLE_TEMP_SOURCE_SHA256=a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7
+PLE_TEMP_FP8_PLE_SELECTION_SOURCE=NATIVE_FP8_CONFIG_ONLY_SOURCE
+PLE_TEMP_BF16_GLOBAL_SCALE_REGISTRATION_SOURCE=PRESENT
+PLE_TEMP_FP8_SCALE_MULTIPLY_SOURCE=PRESENT
+PLE_TEMP_SOURCE_AUDIT=STATIC_ONLY_NOT_EXECUTION
+PLE_TEMP_LYCHEE888_TP1_LOADER=NOT_QUALIFIED
+PLE_TEMP_CLEANUP=EXACT_ID_REMOVED_VERIFIED
+PLE_TEMP_PROTECTED_POSTCHECK=FAIL_REVIEW
+```
+
+The duplicate `SOURCE_SHA256` lines were emitted by two stages of the same
+source-processing function, not evidence of two independent captures.
+The copied source itself was **not stored** in this evidence report, but
+the installed-image-derived, no-bind, unstarted container's source path,
+SHA256 and bounded static AST signatures were captured.
+
+**Established:** on Docker Engine 29.6.2, a temporary container created
+from exact installed image SHA256
+`01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+without nested model binds permitted a small generic TAR copy and
+PLE source copy. The newly created exact ID
+`eb91d18dd1a1b45a4cba233160165bbe43b7835afa21873686402b505aac9375`
+was reportedly removed and absence checked via
+`EXACT_ID_REMOVED_VERIFIED` (not yet independently re-observed later).
+No container start, model load or GPU usage is reported.
+
+**Critical unresolved:** `PLE_TEMP_PROTECTED_POSTCHECK=FAIL_REVIEW`.
+The implementation compared serialized `Id`, `Image`, `Name`,
+`Mounts`, entire `State`, entire `HostConfig` before/after;
+the boolean result did **not** disclose which field(s) differed.
+It is **not proof of actual container damage**, nor proof of
+unchanged protected resource state. Differences may be caused by a
+changing metadata field, unrelated concurrent activity, or an
+unexpected Docker operation; do not assert root cause without
+separate physical evidence. The `set -e` subshell exited to the
+caller after the nonzero physical return; code did not emit
+`SOURCE_CAPTURED_STATIC_ONLY`. No re-run, new Docker temp
+object, forced cleanup, service restart or inference is authorized.
+
+**Assessment: `PLE_SOURCE_SNAPSHOT=CAPTURED_STATIC_ONLY`,
+`TEMP_CLEANUP=REPORTED_EXACT_ID_REMOVED_VERIFIED`,
+`PROTECTED_POSTCHECK=FAIL_REVIEW_UNCLASSIFIED`,
+`TOTAL_OPERATION=PARTIAL`,
+`LYCHEE888_TP1=NOT_QUALIFIED`.**
+
+Next **read-only only**: verify exact temp ID/name absence, current
+protected image IDs, container state, nested mount topology, and
+normal metadata drift by comparing name/ID Docker inspect snapshots
+without showing bind source paths or environment secrets. This
+later current-state check **cannot recreate the missing historical
+before/after field-level difference**. Preserve existing objects,
+do not replay already-consumed one-time approval.
