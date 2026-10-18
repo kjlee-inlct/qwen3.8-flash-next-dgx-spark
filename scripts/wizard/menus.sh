@@ -45,6 +45,7 @@ wizard_advanced_menu() {
     wizard_menu_option 2 'Evidence index / 증거 목록'
     wizard_menu_option 3 'Official ARM64 OrcaRouter C plan (source-only) / C 계획'
     wizard_menu_option 4 'Official ARM64 OrcaRouter C preflight (read-only) / C 사전 점검'
+    wizard_menu_option 5 'Official ARM64 OrcaRouter C host snapshot (read-only) / C 호스트 확인'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -55,6 +56,8 @@ wizard_advanced_menu() {
         wizard_warning 'C plan unavailable.' ;;
       4) python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-readonly.py" preflight ||
         wizard_warning 'C preflight BLOCKED; this does not authorize image pull or GPU start.' ;;
+      5) python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-readonly.py" host-check ||
+        wizard_warning 'C host snapshot BLOCKED; no Docker create or GPU start was attempted.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
