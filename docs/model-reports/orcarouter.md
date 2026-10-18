@@ -1,3 +1,27 @@
+## 2026-10-18 — Official ARM64 peer C image download confirmed; no inference run
+
+The DGX operator performed the separately approved
+`docker pull --platform linux/arm64` by immutable manifest digest
+`vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`.
+Post-pull image inspect returned `linux/arm64`, exact RepoDigest and
+local config image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`.
+Existing managed/legacy A/v0.29 B exact Docker IDs, image IDs,
+status, Running, OOMKilled were all unchanged, and SHA256 receipt
+files were produced at
+`/home/inlc/orcarouter-bench-evidence/peer-c-image-20261018T093728Z`.
+User-pasted terminal showed `PEER_C_VERIFY=PASS`,
+`PEER_C_PROTECTED_DOCKER=UNCHANGED`,
+`PEER_C_GPU_RUN=NOT_PERFORMED`,
+`PEER_C_MODEL_BENCHMARK=NOT_MEASURED`.
+
+The newly installed Docker image is **not** a measured or qualified
+OrcaRouter runtime; it does not attest installed vLLM wheel/source
+commit, working PLE loader, inference accuracy, host RM safety, or
+throughput. Existing historic OrcaRouter A/B evidence is untouched;
+**BENCHMARK_STATUS remains NOT_MEASURED**.
+[Actual physical digest and protected pre/post evidence](../../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+[C source-only plan](../ORCAROUTER-PEER-C-PLAN-20261018.md).
 ## 2026-10-18 — Physical B post-trial status: monitor-protection stop, no bench samples
 
 Current operator read-only status confirms the existing isolated v0.29
