@@ -1,3 +1,32 @@
+## 2026-10-19 — catplusplus pinned Hub header-only redirect triage (SOURCE ONLY)
+
+Physical DGX Wizard **5 → 23 → 7** previously returned
+`CATPLUSPLUS_M1_BLOCKED=SOURCE_REDIRECT_BLOCKED`, with
+neither redirect target/route nor which of the two files
+established. Hugging Face `resolve` may redirect to same-Hub
+cache routes or external data endpoints; no raw fallback
+or target-host trust can be inferred without bounded evidence.
+
+New Wizard **5 → 23 → 8** delegates to M1
+`source-transport` and a dedicated constrained
+`probe_transport()` to make four **HEAD only**
+requests (`resolve`/`raw` for exactly the
+two pinned tiny text file paths). No response bodies
+are read, redirect following is disabled, and only
+sanitized status, same-host/external-host classification
+and bounded route class are displayed. No signed URL,
+authentication tokens, redirect query strings,
+weights, scripts or engine binaries are fetched.
+Existing **5 → 23 → 7** GET source audit
+retains its strict redirect-blocking behavior and
+all catplusplus M1 GPU/load/memory/live admission
+gates remain BLOCKED. New source-only tests
+mock network transport and assert HEAD-only,
+four fixed URLs, no-follow, no token disclosure
+and independent live block. Current physical
+HEAD diagnosis **NOT_YET_EXECUTED**; do not
+claim the redirect resolved until real DGX output.
+
 ## 2026-10-19 — ACTUAL DGX mazinb final read-only retirement audit PASS
 
 **Owner-pasted DGX terminal transcript (physical, not CI):** The owner
