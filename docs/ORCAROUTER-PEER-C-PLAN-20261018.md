@@ -138,6 +138,28 @@ monitor arm-before-start exact ID, no `--rm`, no change to old objects.
 Confirm actual official image CLI support for KV16GiB/CPU PLE/MTP
 before any model-loaded start. No C start has been authorized.
 [Actual DGX service evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
+## Actual DGX host-resource snapshot passed read-only inspection (2026-10-18)
+
+The physical owner confirmed only running Docker containers are
+`open-webui` and `portainer`; `ss` found no listener on planned
+host TCP `18891`. `/swap-ple.img` (128 GiB, used 1020.3 MiB)
+and `/swap.img` (16 GiB, unused) were active. From raw
+`/proc/meminfo`, non-CMA **free** RAM was approximately **113.8 GiB**,
+non-CMA **available** approximately **118.1 GiB**, and swap free
+approximately **143.0 GiB**. The exact system/user managed service
+was independently verified `LoadState=not-found` in both scopes.
+[Actual host snapshot](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-host-readonly-20261018.md).
+
+A new strictly **read-only**
+`python3 -B scripts/runtime/orcarouter-peer-c-readonly.py host-check`
+action (Wizard Advanced option 5) makes these snapshot conditions
+repeatable using only Docker ps, ss, swapon and `/proc/meminfo` reads.
+It fails closed if a new running Docker container, port listener,
+missing PLE swap, low non-CMA memory/swap or failed OS query appears.
+**This helper and its tests are GitHub source-only until the owner
+synchronizes a CI-passed SHA; it has NOT yet run on the physical DGX.**
+`host-check` returning PASS would only establish a **dynamic
+point-in-time observation, not permit Docker create/start or GPU**.
 ## ACTUAL DGX source-only C preflight PASS — 2026-10-18
 
 Operator performed exact 30-commit safe Git fast-forward to
