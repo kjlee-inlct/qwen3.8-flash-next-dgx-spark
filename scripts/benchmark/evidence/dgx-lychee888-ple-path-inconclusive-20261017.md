@@ -716,3 +716,85 @@ BF16 global scale tensor loader semantics and single GB10
 TP=1 non-GPU preconditions. No additional Docker temp,
 GPU execution, model installation, weight download or
 protected-object mutation is approved.
+
+## 2026-10-18 — ACTUAL_DGX pinned lychee888 JSON L0: 132279699754 indexed bytes, loader blocked
+
+The operator provided full actual DGX terminal results, not
+a CI or synthetic simulation. Local clean checkout:
+`b9114544eb35d7275740cf0ca2e9d010134f7cbb`,
+branch `feature/wizard-modular-phase1-20261014`;
+`git fetch` reported already up to date.
+The earlier two exact-head CI workflows were both
+`SUCCESS`. The operator executed the standalone
+**pinned JSON-only**, read-only
+`assess_lychee888_loader.py --json` command, which
+finished with `LYCHEE888_METADATA_COMMAND=COMPLETED`.
+It did not execute Docker, GPU, checkpoint tensor
+downloads, or model loading.
+
+The physically observed report contained:
+
+```text
+checkpoint=lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE
+immutable_revision=1b3c3cedc14fb3bee4294dea5e3515af74b8268a
+installed_image_id=sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4
+installed_ple_source_path=/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py
+installed_ple_source_sha256=a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7
+installed_ple_source_dispatch=NATIVE_FP8_CONFIG_ONLY_SOURCE
+installed_source_evidence=ACTUAL_DGX_SHA_AND_STATIC_AST_ONLY_NOT_FULL_SOURCE_ARCHIVE
+physical_protected_postcheck=PASS_CURRENT_ONLY_HISTORICAL_FAIL_REVIEW_RETAINED
+quant_declared_format_class=COMPRESSED_TENSORS_MIXED_PRECISION_CONFIRMED_IN_METADATA
+runtime_quant_class_expectation=COMPRESSED_TENSORS_CLASS_EXPECTED_NOT_RUNTIME_ATTESTED
+installed_native_gate_reachability=NO_DIRECT_NATIVE_FP8_CLASS_MATCH_PROVEN
+bf16_global_scale_loader_gate=FP8_METHOD_CONDITIONAL_ONLY_BF16_SCALE_LOAD_UNVERIFIED
+ple_dtype_dispatch=NOT_PROVEN_IN_INSTALLED_SOURCE
+ct_prefix_scheme_resolution=NOT_AUDITED_FOR_INSTALLED_IMAGE
+installed_loader_contract=BLOCKED_SOURCE_ONLY_UNQUALIFIED
+indexed_tensor_bytes=132279699754
+dgx_spark_nominal_unified_bytes=128000000000
+full_resident_nominal_memory_screen=INDEXED_TENSOR_BYTES_EXCEED_NOMINAL_UNIFIED_MEMORY
+runtime_peak_memory=NOT_MEASURED
+l0_verdict=INDEX_STRUCTURE_PASS_METADATA_ONLY
+index_tensor_keys=223047
+ple_weight_shards=128
+ple_files=10
+global_weight_scale_keys=1
+ple_embedding_dtype=float8_e4m3fn
+quant_method=compressed-tensors
+quant_algo=null
+quant_format=mixed-precision
+nvidia_patch_source_dispatch=NOT_APPLICABLE; NVIDIA PATCH EXPECTS ModelOptMixedPrecisionConfig
+managed_runtime_adapter=NOT_IMPLEMENTED_OR_NOT_QUALIFIED
+single_gb10_tp1=NOT_VERIFIED
+verdict=SOURCE_ONLY_LOADER_UNQUALIFIED
+```
+
+**Important provenance split:** the pinned model revision and
+`indexed_tensor_bytes` were obtained in this actual
+metadata-only Hub read; the
+`installed_image_id`, `installed_ple_source_path`,
+`installed_ple_source_sha256`, `installed_ple_source_dispatch`,
+and physical postcheck label in this particular JSON
+are **fixed, previously recorded code constants** from
+earlier separately attested DGX probes, **not** fresh
+independent image inspection on this execution.
+
+The pinned safetensors index declares
+`metadata.total_size=132279699754` bytes; that is
+**4,279,699,754 bytes over** nominal DGX Spark unified
+memory `128000000000` bytes, before any other memory.
+This is a necessary caution for a hypothetical fully
+resident untransformed checkpoint, **not a host memory
+measurement or proof of model load failure**. mmap,
+quantization transformations and offload residency
+are entirely unqualified. The metadata-only test
+does not inspect actual safetensors tensor headers
+or hashes; global BF16 scale dtype and loading
+are not attested by the index key alone.
+
+**Disposition:** L0 pinned metadata
+`INDEX_STRUCTURE_PASS_METADATA_ONLY`; exact source
+snapshot SHA available as a historical attestation;
+**loader contract `BLOCKED_SOURCE_ONLY_UNQUALIFIED`**;
+GB10 TP=1 **`NOT_VERIFIED`**, candidate **NOT_INSTALLABLE**.
+No new Docker or GPU operation is authorized.
