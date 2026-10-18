@@ -1,3 +1,38 @@
+## 2026-10-18 — ACTUAL_DGX order-insensitive PLE postcheck PASS_CURRENT_ONLY; historical failure retained
+
+Operator fast-forwarded to clean exact local
+`a24cd3a7ce48c7531cabbdfec0139327eefce18a`,
+verified same-head GitHub CI `SUCCESS_2_OF_2` and
+executed `inspect_ple_postcheck_readonly.py` on the
+actual DGX. Current protected-state verdict:
+**`PLE_POSTCHECK_CURRENT_STATIC_POSTCHECK=PASS_CURRENT_ONLY`**.
+The one-time temp is **ABSENT_ID_AND_NAME**, installed
+image SHA256/size match, both original protected
+containers have exact expected identity, `EXITED`,
+`ReadonlyRootfs=false` and nested RO model binds.
+The managed `NAME_VS_ID_MOUNTS=ORDER_ONLY`
+(all complete mount-record values identical, ordering
+alone differs), historical A/B
+`NAME_VS_ID_MOUNTS=IDENTICAL_ORDER`;
+both `NAME_VS_ID_FIELDS=MATCH`. The command made
+**no Docker mutation/copy and no GPU run**.
+
+This confirms **current** matching protection
+metadata and addresses the previous unqualified
+raw `DIFFERENT_Mounts` ambiguity for this new
+snapshot. It does **NOT** recover the initial physical
+one-shot source probe's unrecorded pre/post field-level
+differences. Preserve original `FAIL_REVIEW` as
+historical `UNRECOVERABLE_WITHOUT_PRE_POST_FIELD_SNAPSHOTS`;
+do not reinterpret it as `PASS` or proven damage.
+Physical source-only image PLE SHA remains
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`,
+with native `Fp8Config`-only selector and BF16
+scale source signatures. lychee888 checkpoint
+`compressed-tensors` routing and GB10 TP=1
+remain **NOT_QUALIFIED**.
+[Full actual-DGX evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — ACTUAL_DGX legacy name-vs-ID Mounts raw difference; exact temp absent
 
 At clean local SHA `4fa3a83f33be508736ea4d79f0ed97d24bc0be60`,
