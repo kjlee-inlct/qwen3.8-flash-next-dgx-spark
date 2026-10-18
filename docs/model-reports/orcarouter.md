@@ -1,3 +1,33 @@
+## 2026-10-18 — source-only OrcaRouter recovery from single Spark reference
+
+The operator wishes to revisit **OrcaRouter**, not only
+lychee888, against
+https://arca.live/b/alpaca/181506470.
+This external TP=1 OrcaRouter runtime is a useful
+third-party comparison, **not our DGX qualification**.
+Past physical proof includes one clean managed
+16GiB `READY + 180s soak PASS/PASS`, subsequent
+strict RM-failing but functional 16GiB restarts,
+a v0.29 mmap R22 READY with RM OOM and Oct-13
+Legacy A monitor `PROTECT` during load.
+OrcaRouter is therefore not simply `never started`;
+**repeatable strict-stability and current A/B
+benchmark are unqualified**.
+
+Current `serve.sh` already sets MP executor,
+PLE CPU offload for legacy, MTP k=2, 1800s PLE
+timeout, max 262144, concurrency 3 and
+disabled async scheduling. Raising managed
+KV from 16 to the peer's 24GiB is contraindicated
+by prior physical A/B evidence. The distinctive
+candidate delta is the external official ARM64
+CUDA13 runtime image, not one obvious missing
+flag. The community's config override exactness
+and image's allocation path remain unverified.
+[Detailed risk and next source gates](../COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+No independent new Docker/GPU trial is authorized;
+old protected objects and original RM proof are retained.
+
 # orcarouter — benchmark report
 
 ## 2026-10-13 17:59:36 KST — ACTUAL_DGX Legacy A protective stop CONFIRMED
