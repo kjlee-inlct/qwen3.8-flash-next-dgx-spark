@@ -141,6 +141,9 @@ class CatplusplusM1Tests(unittest.TestCase):
                 "CATPLUSPLUS_M1_SOURCE_DECLARATIONS=PRESENT_NOT_ENGINE_ATTESTED",
                 result.stdout)
             self.assertIn("CATPLUSPLUS_M1_FUSED_QKVZ_ALIAS_COUNT=1", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_FUSED_QKVZ_MXFP8_ALIAS_COUNT=1", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_FUSED_QKVZ_NON_MXFP8_ALIAS_COUNT=0", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_FP8_PLE_DTYPE=float8_e4m3fn", result.stdout)
             self.assertIn("CATPLUSPLUS_M1_ENGINE_LOADER=NOT_ATTESTED_BY_SOURCE_TEXT",
                           result.stdout)
             self.assertIn("CATPLUSPLUS_M1_LIVE_ADMISSION=BLOCKED_", result.stdout)
