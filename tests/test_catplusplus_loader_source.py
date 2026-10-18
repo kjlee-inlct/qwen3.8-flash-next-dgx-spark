@@ -92,6 +92,28 @@ class LoaderSourceAuditTests(unittest.TestCase):
             self.assertFalse(result["gpu_execution"])
             self.assertFalse(result["weight_download"])
 
+    def test_fused_alias_requires_explicit_mxfp8_per_layer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prepare(root)
+            cfg = config()
+            key = "model.layers.0.linear_attn.in_proj_qkvz"
+            for bad_algo in ("NVFP4", None):
+                with self.subTest(quant_algo=bad_algo):
+                    if bad_algo is None:
+                        cfg["quantization_config"]["quantized_layers"][key].pop("quant_algo", None)
+                    else:
+                        cfg["quantization_config"]["quantized_layers"][key]["quant_algo"] = bad_algo
+                    (root / "config.json").write_text(
+                        json.dumps(cfg), encoding="utf-8")
+                    result = AUDIT.audit(root)
+                    self.assertEqual(result["source_declarations"],
+                                     "MISSING_EXPECTED_DECLARATIONS")
+                    self.assertEqual(result["config"]["fused_qkvz_quantized_alias_count"], 1)
+                    self.assertEqual(result["config"]["fused_qkvz_mxfp8_alias_count"], 0)
+                    self.assertEqual(result["config"]["fused_qkvz_non_mxfp8_alias_count"], 1)
+                    self.assertFalse(result["config"]["fused_qkvz_quantization_declared"])
+
     def test_missing_fused_alias_is_not_silently_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
