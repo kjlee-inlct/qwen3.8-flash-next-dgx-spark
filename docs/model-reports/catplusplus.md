@@ -4,6 +4,19 @@
 
 **CHECKPOINT_STATUS: RESEARCH_ONLY / NOT_REGISTERED / NOT_DOWNLOADED / GPU_NOT_TESTED** according to the last actual DGX L0 metadata inspection. This document is a source-only benchmark **plan**, not a successful model installation, inference run or benchmark report.
 
+## mazinb M1-style session implementation status (source-only)
+
+Wizard Benchmark **5 -> 23** now presents the *same six operator
+actions* as mazinb M1: plan, status, preflight, benchmark admission,
+live-start gate and journal reconciliation. The full exact-ID
+create-only/watchdog-before-start/READY/180s soak/smoke/Terminal-B
+bench/STOP/evidence lifecycle is documented as a **contract only**.
+`scripts/runtime/catplusplus-m1.py` intentionally rejects
+preflight, GPU start and benchmark admission until checkpoint,
+mixed-MXFP8/FP8 PLE loader, memory/offload, image and separate
+owner approval are qualified. This is **not a runnable trial**.
+Actual catplusplus throughput, TTFT and safety remain
+**NOT_MEASURED**. See [catplusplus M1 Wizard contract](../CATPLUSPLUS-M1-WIZARD.md).
 ## Immutable target and prior physical metadata evidence
 
 | Item | Recorded value | Qualification |
