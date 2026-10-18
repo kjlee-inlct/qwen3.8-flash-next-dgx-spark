@@ -276,3 +276,18 @@ Any absent CT group information remains unknown,
 and malformed target/ignore structures STOP.
 No weights are fetched; the original image
 or stopped containers are not modified.
+
+### Community OrcaRouter offload evidence is an external comparison, not loader acceptance
+
+The Oct-18 community TP=1 OrcaRouter post (see
+`docs/COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md`)
+documents a different image and checkpoint with
+`VLLM_PLE_CPU_OFFLOAD=1`, high (~97%) unified
+memory use and a short reported benchmark.
+Its CT groups do not explicitly identify a
+lychee888-style FP8 PLE ngram table.
+It does **not** change the pinned metadata
+`SOURCE_ONLY_LOADER_UNQUALIFIED` verdict;
+future source work should compare file-backed
+PLE alternatives #58439 / #58815 with isolated
+synthetic proofs, not host mutations.
