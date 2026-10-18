@@ -436,3 +436,37 @@ or copying launch flags. Actual image not locally
 installed according to the prior owner's image
 inspect. New physical startup/image pull requires
 separate explicit approval.
+
+## 2026-10-18 — Future KV=24GiB independent A/B eligibility
+
+The owner's later question explicitly raised the 24GiB setting
+used in the community recipe as a possible OrcaRouter option.
+**This is an eligible FUTURE A/B candidate, not authorization
+to increase the current KV reservation or start a trial.**
+Preserve the managed default **16GiB** and the established
+negative 2026-10-03 adverse-state A/B result in
+[`orcarouter-kv-ab-adverse-state-20261003.md`](../scripts/benchmark/evidence/orcarouter-kv-ab-adverse-state-20261003.md):
+24GiB functional FAIL/host-stability FAIL with seven strict
+RM allocation events and protection stop, versus 16GiB
+PASS/PASS in the measured follow-up. A later 16GiB
+restart reached READY yet emitted six RM allocation events
+**before KV reservation**, so neither KV size explains or
+fixes the early allocation failure.
+
+**Only after** a specific image/checkpoint build on this
+DGX completes protected startup/READY, API smoke, bounded
+post-READY soak and **zero strict RM `NV_ERR_NO_MEMORY`**,
+preserve that exact 16GiB configuration/identity as a baseline.
+Then prepare a **separately reviewed and explicitly approved**
+one-variable KV=24GiB A/B for the *same* image, model revision,
+PLE/executor/MTP/other flags and preflight, with the same
+memory/swap/RM/protection monitors, safe abort, rollback,
+postconditions and timing evidence. Account for the DGX
+allocator/history state; do not label a cross-image or
+cross-boot anecdote a controlled KV-only comparison.
+No launch, pull, model mutation, restart or PR merge
+is authorized by merely documenting this future candidate.
+
+**Current gate:** `KV_DEFAULT=16GiB`,
+`KV_24GiB=FUTURE_CONDITIONALLY_ELIGIBLE_AB_NOT_APPROVED`,
+`RM_EARLY_ALLOCATION_ROOT_CAUSE=UNRESOLVED`.
