@@ -1,3 +1,28 @@
+## 2026-10-18 — SOURCE_ONLY postcheck differential diagnostic ready after physical probe partial result
+
+After recording the actual physical installed-image PLE source
+SHA256 and **`PLE_TEMP_PROTECTED_POSTCHECK=FAIL_REVIEW`**,
+the branch adds the independent read-only
+`scripts/model/inspect_ple_postcheck_readonly.py` and
+offline synthetic tests. It requests only current Docker
+metadata (7 `inspect` calls), checks actual temporary
+object absence under both **exact ID and name**, protected
+image ID/size, protected container IDs, stopped status,
+rootfs flag, nested RO mounts and current same-time
+name-vs-ID differences in the original fingerprint
+fields. It emits only field CATEGORY labels, never bind
+source paths, env, inspect JSON or credentials.
+
+**Crucial:** the earlier entire-dictionary pre/post comparison
+has no retained field-level receipts; the historical
+`FAIL_REVIEW` root cause is **NOT_RECONSTRUCTIBLE**
+from a new snapshot. Even if the current-state check
+passes, original physical outcome remains
+`SOURCE_CAPTURED_STATIC_ONLY, POSTCHECK_FAILED`.
+This new script is SOURCE_ONLY until owner runs it;
+no new Docker temp create/copy/removal or GPU use is
+authorized. [Evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — ACTUAL_DGX isolated PLE source SHA captured; protected postcheck FAIL_REVIEW
 
 The owner's actual DGX ran the narrowly approved **single**
