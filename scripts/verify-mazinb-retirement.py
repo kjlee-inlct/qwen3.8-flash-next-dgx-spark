@@ -75,8 +75,10 @@ def sha256(path: Path) -> str:
 
 
 def archive_check(home: Path, model_root: Path, state: Path) -> Path:
-    # Provenance is rechecked independently from the already-retired Docker.
-    RETIRE.evidence(home, model_root, state)
+    # Recheck original benchmark and M1 journal evidence, but do not require
+    # the Hybrid H3-H6 directories: those were intentionally retired later.
+    # The initial destructive-retirement plan still requires Hybrid stages.
+    RETIRE.evidence(home, model_root, state, require_hybrid_stages=False)
     record = json.loads((state / "mazinb-m1/active.json").read_text(encoding="utf-8"))
     marker_path = state / "mazinb-m1/retired-docker.json"
     require(strict_file(marker_path), "M1_RETIREMENT_MARKER_MISSING")
