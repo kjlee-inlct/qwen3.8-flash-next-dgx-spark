@@ -1,3 +1,22 @@
+## 2026-10-18 SOURCE-ONLY pinned loader declaration audit introduced
+
+Follow-up to M0 inventory and mazinb M1 lifecycle reuse:
+`scripts/model/audit_catplusplus_loader_source.py` now checks
+exactly two bounded text paths on the same immutable Hub
+revision (config.json <=256KiB and
+`extra/inference/inference_qwen38_flash_next_sglang.sh`
+<=128KiB). It prints file SHA256, exact config
+MXFP8 fused `.linear_attn.in_proj_qkvz` alias count, PLE
+`float8_e4m3fn`, SGLang command/PLE file-offload flag
+mentions and operational hazards (`sudo`, cache dropping,
+`--host 0.0.0.0`). Redirected or oversized responses fail closed.
+No shell scripts from the model repository are executed.
+No weights/packages/bundles downloaded, no Docker/GPU/host
+changes. Source-level positive is **not** engine-compatibility
+attestation, memory/residency proof, or live approval.
+Wizard path: **5 -> 23 -> 7**.
+See [M1 Wizard runbook](CATPLUSPLUS-M1-WIZARD.md).
+
 ## 2026-10-18 — catplusplus M0 benchmark plan is source-only (NOT MEASURED)
 
 Owner prioritized preparing catplusplus comparison ahead of further
