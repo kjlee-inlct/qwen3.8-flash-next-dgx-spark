@@ -3,6 +3,37 @@
 **Date:** 2026-10-18. **Class:** proposed, not installed, not launched, not measured.
 **Owner goal:** quickly obtain comparable model throughput and identify a usable, repeatably stable single-DGX-Spark runtime, without destroying A/B forensic evidence or the protected managed predecessor.
 
+## Physical IMAGE VERIFIED after download-only approval — 2026-10-18
+
+**This newer finding supersedes older `No such image` / `NOT_LOCAL`
+findings on this page; earlier read-only absences remain historical.**
+
+The operator explicitly approved the exact official ARM64 image pull
+and digest verification only, then reported:
+
+```text
+PEER_C_IMAGE_OS=linux
+PEER_C_IMAGE_ARCH=arm64
+PEER_C_IMAGE_ID=sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a
+PEER_C_REPODIGEST=vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e
+PEER_C_VERIFY=PASS
+PEER_C_PROTECTED_DOCKER=UNCHANGED
+PEER_C_GPU_RUN=NOT_PERFORMED
+PEER_C_MODEL_BENCHMARK=NOT_MEASURED
+PEER_C_IMAGE_STAGE=VERIFIED
+```
+
+Pre/post Docker identity/status/image/Running/OOMKilled fields
+were unchanged for original managed + A + B, all stopped.
+Full historical receipt and artifact names:
+[2026-10-18 actual owner image-pull evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+
+**New actionable gate**: run read-only C source preflight on the
+qualified exact GitHub HEAD (and privately check the pinned image
+history/Entrypoint/Cmd/Env without container execution), then
+design/CI-qualify a fresh Wizard-owned C protected launcher.
+An approved image pull does **not** approve Docker create/start,
+GPU, a benchmark, service modification, KV24, deletion, or PR merge.
 ## What is and is not evidenced
 
 - External community reference https://arca.live/b/alpaca/181506470 *reports* using `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` with one GB10, OrcaRouter NVFP4, CPU PLE offload, MP TP1, MTP k=2, KV24GiB. That is **third-party reported runtime**, not evidence from our DGX.
