@@ -1,0 +1,74 @@
+# catplusplus M1 — mazinb M1-style isolated benchmark workflow
+
+**Status (2026-10-18): SOURCE-ONLY / NOT_REGISTERED / NOT_DOWNLOADED / NO GPU SESSION / NO BENCHMARK.**
+
+This follows the **same user-facing process as the successful mazinb M1**, not its assumption of a working model loader. The primary goal remains the integrated interactive `./wizard.sh` (and eventually normal `install.sh` / `uninstall.sh`) rather than manual Docker commands.
+
+## Operator Wizard menu
+
+```text
+./wizard.sh
+  5 — Benchmark
+    22 — catplusplus M0 plan (read-only)
+    23 — catplusplus M1 lifecycle (SAFE SOURCE-ONLY GATES)
+       1 — M1 plan
+       2 — M1 status
+       3 — M1 preflight
+       4 — M1 Terminal-B benchmark admission
+       5 — M1 GPU start gate — explicitly blocked
+       6 — M1 journal reconcile — no Docker
+       0 — Back
+```
+
+The Wizard routes to the maintained `scripts/runtime/catplusplus-m1.py` read-only source scaffold, NOT to `scripts/runtime/mazinb-m1.py` (which binds different checkpoint, image, service assumptions and localhost port). The six familiar action names are intentional; `run`, `preflight` and `bench-admission` currently **return exit code 2**, and none creates or starts Docker, changes services, downloads weights, queries a model API or touches GPU. `status` is a strict, bounded read-only local journal view, not live Docker/API verification. `reconcile` is a no-op only when no journal exists; it does not stop/remove an unknown object.
+
+## The mazinb M1-style state sequence — contract ONLY
+
+1. `READ_ONLY_PREFLIGHT`: exact model revision and release, existing protected objects and pending lifecycle markers, filesystem/swap, memory and image source.
+2. `EXACT_PROTECTED_OLD_IDENTITY_AND_LIFECYCLE_LOCK`: protect managed OrcaRouter and historical A/B; acquire a shared lifecycle lock, never silently adopt/restart them.
+3. `UNIQUE_CANDIDATE_DOCKER_CREATE_ONLY`: model-specific isolated name, local-only port (proposed TCP `18892`, **not reserved**), no automatic restart.
+4. `PERSIST_EXACT_ID_AND_ARM_WATCHDOG_BEFORE_START`: secure owner journal, pinned Docker ID, watchdog threshold and fresh heartbeat.
+5. `EXACT_ID_START_AND_WATCHDOG_HEARTBEAT`: no unmonitored model loading, preserve GPU/RM/host telemetry.
+6. `EXACT_MODEL_API_READY`: read `/health` and `/v1/models` on localhost, require exact served checkpoint identity.
+7. `POST_READY_180_SECOND_SOAK`: continuous exact-ID and non-CMA/swap/RM safety supervision.
+8. `INFERENCE_SMOKE_AND_RM_AUDIT`: functional response with no persisted generated text.
+9. `TERMINAL_B_BENCH_ADMISSION_WITH_LEASE`: only if monitored candidate remains READY and under a pinned session and source identity; separate benchmark lock.
+10. `LLAMA_BENCHY_C1_PP512_2048_TG128_WARMUP1_RUNS3`: pinned `e9be344578cec17745066b220798b80a0d2686d3` `llama-benchy`; directly comparable **shape** to mazinb M1, not necessarily performance of differently quantized runtime.
+11. `FOREGROUND_EXPLICIT_STOP_EXACT_ID`: end only the newly created candidate, defer on active benchmark and preserve Docker object.
+12. `PRESERVE_RAW_JSON_KERNEL_MEMORY_AND_DOCKER_EVIDENCE`: exact revision/image/release/source SHA, timestamp, actual JSON and SHA256, measured reports, STOP cause and final protected-old identities.
+
+A future implementation must have a complete **create-only → arm → exact-ID start → READY → 180-second safety soak → smoke → bench → STOP → archive** path with tested crash/signal recovery and rollback, not a direct `docker run` shortcut. mazinb M1 proof is historical and not inherited by a new checkpoint.
+
+## catplusplus-specific blockers — why the identical live M1 code is not reusable today
+
+The physical pinned Hub API L0 inventory on 2026-10-16 validated revision `3251fd8afbd08f76368a9bfa71132d9aef364813` and 188,540,029,444 repository bytes (~175.59 GiB). Root safetensors rounded ~174.8553 GiB, exceeding the nominal single DGX Spark 128 **decimal GB** RAM before extra allocations; even with host swap, GPU/RM allocation and peak transient requirements are unproven. This is a model **physical-capacity and loader/quantization** problem, not a missing benchmark CLI flag.
+
+The publisher describes an MXFP8 fused `linear_attn.in_proj_qkvz` mapping, NVFP4 experts, global FP8 PLE and customized SGLang/vLLM source. Their separate **Thor** measurements are not accepted as our **GB10** results. The repo's previously validated `mazinb` loader/image is not evidence it handles fused mixed-MXFP8 scales or mmap/file-backed FP8 PLE. The target engine source and exact immutable image/commit for GB10 have **not** been qualified. Do not use publisher snippets that drop host caches, run `sudo` or expose API on `0.0.0.0`.
+
+Block conditions deliberately retained in the new controller:
+
+```text
+CATPLUSPLUS_M1_GATE_CHECKPOINT=BLOCKED_NOT_DOWNLOADED_OR_HASH_ATTESTED
+CATPLUSPLUS_M1_GATE_ENGINE=BLOCKED_NO_PINNED_GB10_IMAGE
+CATPLUSPLUS_M1_GATE_MIXED_LOADER=BLOCKED_MXFP8_QKVZ_AND_SCALE_NOT_VERIFIED
+CATPLUSPLUS_M1_GATE_FP8_PLE=BLOCKED_OFFLOAD_RESIDENCY_NOT_QUALIFIED
+CATPLUSPLUS_M1_GATE_MEMORY_RM=BLOCKED_PEAK_GPU_RM_AND_NONCMA_BUDGET_NOT_QUALIFIED
+CATPLUSPLUS_M1_GATE_PROTECTED_SESSION=BLOCKED_CREATE_ONLY_EXACT_ID_WATCHDOG_NOT_IMPLEMENTED
+CATPLUSPLUS_M1_GATE_OWNER_APPROVAL=BLOCKED_NO_CATPLUSPLUS_LIVE_AUTHORIZATION
+CATPLUSPLUS_M1_ADMISSION=BLOCKED_COMPATIBILITY_MEMORY_AND_LIVE_AUTHORIZATION
+CATPLUSPLUS_M1_BENCHMARK=NOT_MEASURED
+```
+
+These are **conservative qualification states**, not assertions that a future approved download can never work. Source CI and a safe physical **Wizard read-only** run may prove only that these refusal paths function.
+
+## Concrete next implementation gates
+
+1. Investigate repository-pinned `extra/inference` and `extra/packages` *source*, safe against external/untrusted scripts; attest correct mixed-precision loader against revision-pinned `config.json` and tensor/header inventory, keeping actual downloaded weights absent.
+2. Design peak memory/RM protection and offload plan with measured or justified evidence for single GB10. Never assume swap size equals safe allocatable unified GPU memory.
+3. Plan and separately request operator approval for the large checkpoint download (or a separately approved minimal header/metadata experiment), including disk limits and provenance checks. No bulk weights were requested by the phrase “same form.”
+4. After loader/weights and host safety gates qualify, add an independent catplusplus M1 *real* controller by reusing tested mazinb M1 state/lock/watchdog conventions and new explicit owner approval for physical GPU startup.
+5. Reuse existing mazinb pinned `llama-benchy` benchmark/reporting only upon true exact-model API READY, functional smoke and a protected 180-second soak. Until then every catplusplus throughput and TTFT remains **NOT_MEASURED**.
+
+Links: [catplusplus metadata evidence](CATPLUSPLUS-METADATA-COMPATIBILITY.md), [catplusplus benchmark report plan](model-reports/catplusplus.md), [mazinb M1 original](MAZINB-M1-WIZARD.md).
+
+**Do not merge Draft PR #261 or change actual DGX Docker, host services, model files, swap, watchdog or GPU without separately justified owner authorization.**
