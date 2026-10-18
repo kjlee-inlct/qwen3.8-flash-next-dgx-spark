@@ -177,6 +177,12 @@ def source_audit(offline_dir: Path | None) -> int:
     print("CATPLUSPLUS_M1_SOURCE_DECLARATIONS=" + report["source_declarations"])
     print("CATPLUSPLUS_M1_FUSED_QKVZ_ALIAS_COUNT=" +
           str(report["config"]["fused_qkvz_quantized_alias_count"]))
+    print("CATPLUSPLUS_M1_FUSED_QKVZ_MXFP8_ALIAS_COUNT=" +
+          str(report["config"]["fused_qkvz_mxfp8_alias_count"]))
+    print("CATPLUSPLUS_M1_FUSED_QKVZ_NON_MXFP8_ALIAS_COUNT=" +
+          str(report["config"]["fused_qkvz_non_mxfp8_alias_count"]))
+    print("CATPLUSPLUS_M1_FP8_PLE_DTYPE=" +
+          str(report["config"]["ple_embedding_dtype"]))
     for hazard, value in report["publisher_launcher"]["script_operational_hazards"].items():
         print("CATPLUSPLUS_M1_PUBLISHER_LAUNCH_HAZARD_" + hazard.upper() +
               "=" + ("PRESENT_DO_NOT_EXECUTE" if value else "NOT_DETECTED"))
