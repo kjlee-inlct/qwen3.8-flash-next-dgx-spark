@@ -8,6 +8,14 @@ usage() {
 }
 
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then usage; exit 0; fi
+SLOT=historical
+if [[ "${1:-}" == --session-slot ]]; then
+  [[ "${2:-}" == reinstall ]] || {
+    echo 'BENCH_M1=BLOCKED_INVALID_SESSION_SLOT' >&2; exit 2;
+  }
+  SLOT=reinstall
+  shift 2
+fi
 if [[ "${1:-}" == -- ]]; then shift; fi
 if (( $# == 0 )); then usage >&2; exit 2; fi
 
@@ -32,6 +40,7 @@ if ! flock -n -s "$BENCH_LOCK_FD"; then
     exit 3
 fi
 M1_STATE="$STATE_DIR/mazinb-m1"
+[[ "$SLOT" != reinstall ]] || M1_STATE="$STATE_DIR/mazinb-m1-reinstall"
 M1_EXCLUSIVE="$M1_STATE/benchmark.lock"
 if [[ ! -d "$M1_STATE" || -L "$M1_STATE" || "$(stat -c %u -- "$M1_STATE")" != "$(id -u)" ]]; then
     echo "BENCH_M1=BLOCKED unsafe_session_directory" >&2
@@ -54,13 +63,13 @@ if ! flock -n -x "$BENCH_M1_FD"; then
     exit 3
 fi
 CONTROLLER="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)/scripts/runtime/mazinb-m1.py"
-python3 "$CONTROLLER" bench-admission || { echo "BENCH_M1=BLOCKED attestation_failed" >&2; exit 2; }
+python3 "$CONTROLLER" bench-admission --session-slot "$SLOT" || { echo "BENCH_M1=BLOCKED attestation_failed" >&2; exit 2; }
 echo "BENCH_M1=ATTESTED_SHARED_LIFECYCLE_EXCLUSIVE_BENCH" >&2
 echo "BENCH_MODEL_START=NOT_PERFORMED_BY_WRAPPER" >&2
 echo "BENCH_READY_AND_HOST_SAFETY=EXTERNAL_PREREQUISITES" >&2
 rc=0
 "$@" || rc=$?
-if ! python3 "$CONTROLLER" bench-admission; then
+if ! python3 "$CONTROLLER" bench-admission --session-slot "$SLOT"; then
   echo "BENCH_M1=POST_RUN_ATTESTATION_FAILED" >&2
   rc=2
 fi
