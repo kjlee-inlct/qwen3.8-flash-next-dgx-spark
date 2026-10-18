@@ -1,3 +1,30 @@
+## 2026-10-18 — catplusplus real-path pinned source compatibility audit implemented (NOT DGX EXECUTED)
+
+Progress beyond the previous source-only M1 lifecycle skeleton:
+GitHub now has a maintained real-world read-only source
+inspection path. Wizard **5 -> 23 -> 7** invokes
+`scripts/runtime/catplusplus-m1.py source-audit`,
+which delegates to
+`scripts/model/audit_catplusplus_loader_source.py`.
+This fetches (only if the owner physically selects that
+menu) pinned **config.json** and the publisher's small
+**SGLang launcher text**, checks quantization config
+(ModelOpt MIXED_PRECISION, MXFP8 fused `in_proj_qkvz`
+declarations, FP8 PLE dtype), PLE file-offload flags
+and warns about `sudo`, `drop_caches`, public bind.
+Read-only network requests cap the individual files
+(256/128KiB), block redirects and do not pull model
+weights, packages or bundles. Unit fixtures cover both
+positive source declarations and missing/dangerous sources.
+
+**IMPORTANT:** no physical DGX output for the new source
+audit has been received. No actual backend loader/wheel
+verified, no model downloaded, no 128GB capacity workaround
+proven; GPU readiness/benchmark remains NOT_MEASURED.
+The M1 live paths are still separately blocked, with
+all old managed/A/B objects preserved. Positive source
+declarations must not open the actual GPU start gate.
+
 ## 2026-10-18 — catplusplus M1 mazinb-parity lifecycle source scaffold; ALL LIVE GATES BLOCKED
 
 The operator specified that catplusplus should follow the same **form**
