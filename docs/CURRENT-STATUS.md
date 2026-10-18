@@ -1,3 +1,18 @@
+## 2026-10-18 — catplusplus M1 fused-qkvz declaration guard tightened (SOURCE ONLY)
+
+Follow-up to the pinned two-file source audit: `scan_config` now
+requires each declared fused `.linear_attn.in_proj_qkvz` quantized
+layer to have explicit `quant_algo=MXFP8`. An NVFP4 or unspecified
+algorithm no longer counts as a positive MXFP8 source declaration.
+Wizard **5 → 23 → 7** now reports total, MXFP8 and non-MXFP8
+fused alias counts and declared PLE dtype; offline negative fixtures
+cover invalid qkvz algorithms. This is a conservative parser
+correctness fix, **not pinned Hub source verification or a
+real DGX result**. All engine/scale consumption, 128GB GB10 residency,
+physical audit, weights, GPU start and M1 benchmark gates remain
+unqualified; catplusplus stays **NOT_MEASURED**.
+See [catplusplus M1 Wizard](CATPLUSPLUS-M1-WIZARD.md).
+
 ## 2026-10-18 — catplusplus real-path pinned source compatibility audit implemented (NOT DGX EXECUTED)
 
 Progress beyond the previous source-only M1 lifecycle skeleton:
