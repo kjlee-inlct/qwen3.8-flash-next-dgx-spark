@@ -590,3 +590,62 @@ without showing bind source paths or environment secrets. This
 later current-state check **cannot recreate the missing historical
 before/after field-level difference**. Preserve existing objects,
 do not replay already-consumed one-time approval.
+
+## 2026-10-18 — ACTUAL_DGX second read-only postcheck: legacy Mounts differs between name and ID
+
+The operator synced clean local source
+`f1bce18ef6ab444ced20f4efed2ba8ec42a250f0` to
+`4fa3a83f33be508736ea4d79f0ed97d24bc0be60`,
+verified `EXACT_HEAD_CI=SUCCESS_2_OF_2`, and physically ran
+**only** the read-only
+`python3 -B scripts/model/inspect_ple_postcheck_readonly.py`.
+
+```text
+PLE_POSTCHECK_RESULT_KIND=CURRENT_READ_ONLY_NOT_HISTORICAL_REPLAY
+PLE_POSTCHECK_TEMP_ABSENCE=ABSENT_ID_AND_NAME
+PLE_POSTCHECK_HISTORICAL_FAILURE_CAUSE=UNRECOVERABLE_WITHOUT_PRE_POST_FIELD_SNAPSHOTS
+PLE_POSTCHECK_DOCKER_MUTATION=NONE
+PLE_POSTCHECK_DOCKER_COPY=NOT_PERFORMED
+PLE_POSTCHECK_GPU_RUN=NOT_PERFORMED
+PLE_POSTCHECK_IMAGE=MATCH_PINNED_ID_AND_SIZE
+PLE_POSTCHECK_MANAGED_IDENTITY=MATCH_EXACT_ID_IMAGE_NAME
+PLE_POSTCHECK_MANAGED_STATE=EXITED
+PLE_POSTCHECK_MANAGED_ROOTFS=READONLY_FALSE
+PLE_POSTCHECK_MANAGED_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_POSTCHECK_MANAGED_NAME_VS_ID_FIELDS=MATCH
+PLE_POSTCHECK_LEGACY_IDENTITY=MATCH_EXACT_ID_IMAGE_NAME
+PLE_POSTCHECK_LEGACY_STATE=EXITED
+PLE_POSTCHECK_LEGACY_ROOTFS=READONLY_FALSE
+PLE_POSTCHECK_LEGACY_MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS
+PLE_POSTCHECK_LEGACY_NAME_VS_ID_FIELDS=DIFFERENT_Mounts
+PLE_POSTCHECK_CURRENT_STATIC_POSTCHECK=STOP_REVIEW_REQUIRED
+```
+
+**Confirmed**: the temporary object is absent under its exact
+full ID **and** its unique name; the pre-existing pinned
+image ID and size remain the same; both protected objects
+retain exact expected names/IDs, exited state, writable
+container rootfs flags and the expected nested `/model`
+and `/model/config.json` read-only bind topology.
+Neither protected object was started or modified by this
+read-only inspection.
+
+**Unresolved**: `qwen38-ab-legacy`'s `Mounts`
+**serialized array** differs between querying its Docker
+name and exact full ID. The first script compared arrays
+with order significance and emitted only the section name
+`DIFFERENT_Mounts`. This may be an **order-only reordering**
+from Docker inspect serialization, or a material change
+within the mount records; the physical output cannot
+distinguish. Do **not** assert mount damage or automatic
+resolution. Original one-shot source probe's
+`PROTECTED_POSTCHECK=FAIL_REVIEW` remains historical
+`FAIL_REVIEW` with unrecorded before/after field-level
+details.
+
+**Next SOURCE_ONLY fix:** extend the same read-only tool to
+compare complete mount records **without list-order
+sensitivity**, identify any destination/type/RW/other
+field differences via non-sensitive classification labels,
+and test failure cases. No source reread, new temporary
+container, Docker mutation or GPU activity is authorized.
