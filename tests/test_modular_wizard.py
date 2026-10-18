@@ -41,7 +41,7 @@ class ModularWizardTests(unittest.TestCase):
     def test_orcarouter_backend_status_is_read_only_and_blocks_unqualified_c(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            result = self.run_case(home, ["--lang", "en"], "3\\n8\\n0\\n0\\n".replace("\\n", "\n"))
+            result = self.run_case(home, ["--lang", "en"], "3\n7\n5\n0\n0\n0\n")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("ORCAROUTER_PROFILE=orcarouter", result.stdout)
             self.assertIn("ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED",
