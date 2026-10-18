@@ -1,3 +1,39 @@
+## 2026-10-18 — ACTUAL_DGX isolated PLE source SHA captured; protected postcheck FAIL_REVIEW
+
+The owner's actual DGX ran the narrowly approved **single**
+temporary created-only container source probe at exact clean
+code SHA `f1bce18ef6ab444ced20f4efed2ba8ec42a250f0`
+with verified `EXACT_HEAD_CI=SUCCESS_2_OF_2`.
+Exact existing image SHA256 unchanged; Docker Engine 29.6.2;
+created no-mount, unstarted temp
+`eb91d18dd1a1b45a4cba233160165bbe43b7835afa21873686402b505aac9375`
+(name `qwen38-ple-read-e7e7bac84a0b79e85020ff51`).
+Generic Docker-copy transport succeeded and the actual
+installed-image-derived PLE source path was
+`/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py`
+with SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`.
+Static AST labels:
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`;
+BF16 global scale parameter registration `PRESENT`;
+scale multiply `PRESENT`.
+All are **source signatures**, not checkpoint loader or TP=1 proof.
+
+Temp cleanup reported `EXACT_ID_REMOVED_VERIFIED`,
+**but protected before/after fingerprint comparison reported
+`FAIL_REVIEW`**. The script compared full `State`,
+`HostConfig`, `Mounts` alongside immutable identity
+without field-specific output. **Do not assert protected
+resources were preserved unchanged**, or that they were
+damaged; root cause remains UNCLASSIFIED pending read-only
+physical identity/state inspection. The overall probe did
+not reach `SOURCE_CAPTURED_STATIC_ONLY`; physical status
+is **PARTIAL / POSTCHECK_FAILED**. No replay of the
+already used one-temp approval, no destructive cleanup or
+GPU work. Current installed source bytes were not archived,
+but file SHA and static signatures were captured.
+[Full physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — owner approved exactly one isolated unstarted PLE source probe
 
 The owner explicitly answered **허용** to creating one **new**
