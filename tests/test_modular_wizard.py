@@ -38,6 +38,26 @@ class ModularWizardTests(unittest.TestCase):
             self.assertIn("Invalid selection", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_catplusplus_m1_ma_zinb_parity_gated_submenu(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            # Benchmark -> catplusplus M1 -> plan, status, preflight,
+            # bench admission, run gate, reconcile -> back -> exit.
+            result = self.run_case(
+                home, ["--lang", "en"], "5\n23\n1\n2\n3\n4\n5\n6\n0\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CATPLUSPLUS_M1_WORKFLOW=MAZINB_M1_PARITY_SOURCE_CONTRACT",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_SESSION=ABSENT", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_ADMISSION=BLOCKED_", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_BENCH_ADMISSION=BLOCKED_", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_LIVE_START=NOT_IMPLEMENTED_OR_AUTHORIZED",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_RECONCILE=NO_SESSION_OR_JOURNAL",
+                          result.stdout)
+            self.assertNotIn("CATPLUSPLUS_M1_READY_FOR_BENCH=PASS", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
     def test_catplusplus_benchmark_plan_in_wizard_never_starts_a_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
