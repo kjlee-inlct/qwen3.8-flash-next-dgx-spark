@@ -1,3 +1,19 @@
+## 2026-10-18 — ACTUAL_DGX legacy Mounts name-vs-ID raw-array difference
+
+[Physical current-only protected postcheck](dgx-lychee888-ple-path-inconclusive-20261017.md)
+at exact `4fa3a83f33be508736ea4d79f0ed97d24bc0be60`
+and exact-head 2/2 successful CI confirms temp **absent
+by ID and name**, image identity/size preserved and both
+protected containers exited with the expected nested RO
+mount topology. Managed object name-vs-ID metadata
+`MATCH`; historical A/B object
+`DIFFERENT_Mounts` under a raw ordered-array
+comparison. Overall current-only `STOP_REVIEW_REQUIRED`.
+Read-only mount-order-aware source and offline tests
+added to classify benign ordering versus material
+differences; **pending physical retest**. Original
+`FAIL_REVIEW` remains historical and unclassified.
+
 ## 2026-10-18 — ACTUAL_DGX source SHA captured; protected postcheck FAIL_REVIEW
 
 [Actual owner terminal transcript and error classification](dgx-lychee888-ple-path-inconclusive-20261017.md):
