@@ -1,3 +1,20 @@
+## 2026-10-18 — ACTUAL_DGX source SHA captured; protected postcheck FAIL_REVIEW
+
+[Actual owner terminal transcript and error classification](dgx-lychee888-ple-path-inconclusive-20261017.md):
+the once-approved source-only probe created an unstarted
+no-mount temporary object from pinned image ID, read a small
+generic file and PLE `ple_layer.py` at Python 3.12,
+recorded SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`.
+Static classification: native `Fp8Config` selection only,
+BF16 global-scale registration/multiply source signatures.
+The exact temp ID was reportedly deleted and its absence
+checked, but **protected resource postcheck was
+`FAIL_REVIEW` with no field-level reason**. Overall
+physical result **PARTIAL / NOT_CLEARED**; no repeat
+temp creation, restart or deletion. Read-only classified
+postcheck is the next step.
+
 ## 2026-10-18 — owner-scoped temp PLE-source workflow source-only
 
 The owner explicitly permitted **one** new temporary
