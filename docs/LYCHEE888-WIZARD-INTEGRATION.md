@@ -876,3 +876,26 @@ DGX Spark TP=1. A future patch must be isolated,
 based on verified source bytes, and validated without
 changing the protected image/containers; approval
 for such modification has **NOT** been given.
+
+## 2026-10-18 — Nominal single-GB10 memory screen independent of loader dispatch
+
+Separate from `compressed-tensors` FP8 PLE method
+dispatch, the pinned metadata gate now checks optional
+safetensors index `metadata.total_size` against
+[DGX Spark's nominal 128 GB unified LPDDR5x](https://docs.nvidia.com/dgx/dgx-spark/hardware.html).
+The model card reports 123.25 GiB checkpoint on disk
+and `total_size=132279699754` bytes in the index.
+If verified from the pinned JSON index, this exceeds
+128,000,000,000 nominal memory bytes before Python,
+vLLM runner, KV cache or other headroom, meaning a
+naively **fully resident, untransformed** checkpoint
+has no feasible headroom under that simple comparison.
+It is **not** a physical memory-use measurement:
+in-memory transforms, mmap, PLE row streaming and
+offload can change residency, and none are qualified
+for this installed image/lychee888 TP=1.
+The new assessor reports `NOT_VERIFIED` when the
+index has no positive integer `total_size`; it
+never reports a positive fit qualification merely
+because indexed bytes are smaller than nominal RAM.
+No disk/host/GPU workload was run.
