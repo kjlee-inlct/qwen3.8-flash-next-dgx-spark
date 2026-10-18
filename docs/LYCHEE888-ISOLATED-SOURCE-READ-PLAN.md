@@ -253,3 +253,31 @@ field-level snapshots; preserve `FAIL_REVIEW` in original
 evidence and report `HISTORICAL_FAILURE_CAUSE=UNRECOVERABLE`.
 Do not confuse this tool with permission for another Docker
 mutation.
+
+## 2026-10-18 — Physical no-mutation follow-up: legacy Docker mount array mismatch
+
+The owner physically ran the standalone 7-inspect current-only
+postcheck at exact clean `4fa3a83f33be508736ea4d79f0ed97d24bc0be60`
+and successful 2/2 CI. The temporary object is independently
+confirmed **absent by exact ID and name**. Both protected
+containers retain their expected exact identities,
+`exited` state, rootfs flag and nested model RO binds;
+the pinned image ID/size match. The managed name-vs-ID
+snapshot fully matches, but legacy `qwen38-ab-legacy`
+reported `DIFFERENT_Mounts` and
+`STOP_REVIEW_REQUIRED`.
+
+The original comparison treats Docker mount **list order**
+as significant. This means `DIFFERENT_Mounts`
+cannot distinguish benign entry reordering from
+changed mount-record values. Do not attribute the
+initial `FAIL_REVIEW` to list ordering as proven:
+the original pre/post snapshots do not survive.
+The maintained postcheck is being strengthened to
+report `ORDER_ONLY` versus actual membership/type/
+RW/other-metadata differences using allowlisted
+**classification labels only**, comparing any mount
+host source strings privately. Retain the stop gate
+for any material/invalid mount difference.
+No further temp create/remove, `docker cp` or GPU
+activity is authorized.
