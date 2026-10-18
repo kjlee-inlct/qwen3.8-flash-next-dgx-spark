@@ -1,3 +1,24 @@
+## 2026-10-18 — ACTUAL DGX peer C OCI ENTRYPOINT attested; vLLM embedded wheel remains unknown
+
+The owner inspected local pinned official ARM64 image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`
+read-only. Output: `ENTRYPOINT=["vllm", "serve"]`,
+`CMD=NOT_SET`, `WORKDIR=/vllm-workspace`,
+`CUDA_VERSION=13.0.1`, `OCI_REVISION=unknown`,
+`VLLM_BUILD_COMMIT=unknown`, `VLLM_IMAGE_TAG=local/vllm-openai:dev`,
+`VLLM_VERSION=NOT_SET`, `FLASHINFER_VERSION=NOT_SET`.
+
+Existing `serve.sh` appends `/model` and runtime flags after the
+image, which produces the intended **argument shape**
+`vllm serve /model ...`. It does not prove option acceptance,
+Qwen4Exp/OrcaRouter/CPU PLE loader support or compatible
+CUDA/allocator behavior, and no actual Docker start occurred.
+The image is installed and SHA verified but its embedded vLLM
+wheel/source is still **UNATTESTED**. Current new C
+read-only preflight now inspects the actual Entrypoint, optional
+Cmd, WorkingDir and CUDA_VERSION; this is a static gate only.
+**No launch, API READY, memory/host qualification or C benchmark.**
+[Actual OCI metadata receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
 ## 2026-10-18 — ACTUAL DGX official ARM64 peer C image pull VERIFIED, protected Docker unchanged
 
 The operator explicitly authorized **only pinned image download and
