@@ -1,3 +1,28 @@
+## 2026-10-18 — catplusplus M0 benchmark plan is source-only (NOT MEASURED)
+
+Owner prioritized preparing catplusplus comparison ahead of further
+OrcaRouter C GPU work, while retaining P0 Wizard-first install/switch.
+The pinned L0 tree metadata (`3251fd8afbd08f76368a9bfa71132d9aef364813`)
+already established **188,540,029,444 repository bytes (175.59158564 GiB)**
+and **about 174.8553 GiB root weights** on the actual DGX.
+A simple 128GB single-GB10 fully resident unchanged-weight load
+is impossible without special offload/residency design.
+
+**GitHub SOURCE-ONLY M0:** Added `scripts/benchmark/catplusplus-plan.py`
+and Wizard Benchmark **5 -> 22** read-only plan, plus synthetic
+tests and `llama-benchy-report.py` profile label support for
+future **actual** measured JSON. Baseline shape matches physical mazinb
+M1: PP512/TG128 and PP2048/TG128, concurrency1, 1 warmup + 3 runs,
+pinned upstream benchy `e9be344578cec17745066b220798b80a0d2686d3`.
+Every catplusplus throughput/latency stays `NOT_MEASURED`.
+
+**Still blocked:** exact MXFP8 fused qkvz/scale, ModelOpt mixed NVFP4
+and FP8 PLE loader source compatibility, bounded offload/host RM
+memory reserve, model payload availability, separate download
+and GPU-start authorization, isolated protected lifecycle.
+No checkpoint downloaded, no Docker/GPU, no new model registered
+or switched. [Detailed M0 plan](model-reports/catplusplus.md).
+
 # catplusplus mixed-NVFP4 — metadata and GB10 compatibility
 
 Status 2026-10-16: RESEARCH_ONLY / NOT_REGISTERED / NOT_DOWNLOADED / GPU_NOT_TESTED.
