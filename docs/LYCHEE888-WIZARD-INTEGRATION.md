@@ -929,3 +929,27 @@ the BF16 global scale and TP=1 memory remain
 `NOT_QUALIFIED`. Loader cannot be made
 installable solely from L0.
 [Actual physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — CT group target inventory remains structural, not PLE loader resolution
+
+The maintained pinned JSON-only diagnostic now
+exposes `ct_config_groups`, `ct_declared_targets`,
+`ct_ple_target_string_mentions`,
+`ct_ignore_entries`,
+`ct_ple_ignore_string_mentions` and
+`ct_target_resolution`. This is only a
+**checkpoint configuration structure inventory**:
+the CT quantization scheme can name module types,
+exact prefixes and regexes and apply ignore
+rules; the installed vLLM runtime's full
+matching semantics have not been inspected.
+Consequently no positive count, even an exact
+PLE prefix, proves that
+`_get_ple_embedding_quant_method` selects an
+FP8 method; zero mention may also coexist
+with class-targeted rules.
+The independent native `Fp8Config` vs
+`compressed-tensors` mismatch and
+`BF16_SCALE_LOAD_UNVERIFIED` remain blocked.
+No unapproved installation, image rebuild or
+GPU run is permitted.
