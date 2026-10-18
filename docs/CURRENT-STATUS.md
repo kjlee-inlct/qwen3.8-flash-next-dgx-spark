@@ -44,8 +44,10 @@ action names `plan`, `status`, `preflight`, `run`,
 paths **fail closed** (rc2); no Docker/API/GPU/weight download.
 Only read-only plan, journal status and no-journal reconcile
 can return PASS without claiming actual candidate readiness.
-- Wizard Benchmark **5 -> 23** gives its own six-action
-catplusplus sub-menu, alongside the existing **5 -> 22 M0 plan**.
+- Wizard Benchmark **5 -> 23** gives its own seven-action
+catplusplus sub-menu (the six mazinb-parity lifecycle checks plus
+read-only pinned-source audit option **7**), alongside the existing
+**5 -> 22 M0 plan**.
 - Offline tests verify all 12 workflow markers, refused live
 start, refused benchmark with even forged ready journal,
 no-local-state side effects, symlink refusal and safe Wizard
