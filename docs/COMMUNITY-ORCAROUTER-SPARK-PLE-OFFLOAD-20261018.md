@@ -172,3 +172,149 @@ compressed-tensors PLE adapter, or permission to run.
 `LYCHEE888_FP8_PLE_UNVERIFIED`,
 `LYCHEE888_GB10_FIT_UNVERIFIED`,
 `NO_DGX_MUTATION`.
+
+## 2026-10-18 — OrcaRouter-first recovery decision against actual historical failures
+
+**Operator objective update:** repair **OrcaRouter first** using this
+reference, not only apply the reference to lychee888.
+This is a source-only differential assessment; a new GPU/Docker
+trial or pull requires a separately reviewed proposal and consent.
+
+### Existing direct DGX results supersede assumptions of `never ran`
+
+- [2026-10-03 strict 24/16GiB controlled A/B](../scripts/benchmark/evidence/orcarouter-kv-ab-adverse-state-20261003.md):
+  legacy OrcaRouter 24GiB failed under the adverse state,
+  but 16GiB reached READY, API 200 and 180s soak with
+  **functional/host-stability PASS/PASS** in that specific run.
+  A subsequent managed 16GiB promotion reached READY yet
+  recorded six recoverable `NV_ERR_NO_MEMORY` events:
+  functional PASS, **strict host-stability FAIL**.
+- [2026-10-04 R22 v0.29 mmap](../scripts/benchmark/evidence/orcarouter-managed-rmsys-r22-v029-mmap-result-20261004.md):
+  `api_ready=1`, no protected stop, **one strict RM
+  sysmem OOM**, host-stability FAIL. Replacing CPU PLE
+  with mmap reduced sustained swapping but did **not**
+  fix a common early memory allocation burst.
+- [R23–R32 mechanism closure](../scripts/benchmark/evidence/orcarouter-r23-r32-allocation-localization-closure-20261006.md):
+  around 75–77GiB NVIDIA RM order-4 system-page
+  allocation activity during early model construction
+  before the long weight-shard fill; 48 x 400MiB linked
+  to packed MoE `w13_weight`; the interleaved
+  800MiB family is pre-`create_weights`, not
+  proven owned by a separate model tensor.
+  This is not proof that the external CUDA 13.0
+  image changes those allocation semantics.
+- [2026-10-13 Legacy A physical stop](../scripts/benchmark/evidence/dgx-orcarouter-legacy-a-protection-confirmed-20261013.md):
+  during early shard loading, sustained swap growth and
+  non-CMA immediate free at **914MiB** triggered the
+  project's **required** monitor `PROTECT 5/5`.
+  `ExitCode=137`, `OOMKilled=false`; this is
+  monitor protection, **not a demonstrated Docker OOM**.
+  Neither API READY nor benchmark was reached in A.
+
+### Parity: which published flags are already implemented?
+
+The maintained [`scripts/serve.sh`](../scripts/serve.sh)
+sets `EXECUTOR=mp` by default,
+`VLLM_PLE_CPU_OFFLOAD=1` for legacy
+`PLE_MODE=cpu-offload`,
+`VLLM_PLE_OFFLOAD_READY_TIMEOUT=1800`,
+`DEFAULT_NSPEC=2`, `--max-model-len 262144`,
+`DEFAULT_MAXSEQS=3`, disabled prefix cache,
+disabled async scheduling, FlashInfer autotune disabled
+and `--gpu-memory-utilization 0.85` for legacy.
+This explicitly includes the upstream
+[`TP=1` CPU-offload uniproc hang workaround](https://github.com/vllm-project/vllm/issues/53960)
+(`--distributed-executor-backend mp`).
+Changing only those already-set options is therefore
+not a plausible independent remediation.
+
+Our project's **16 GiB** KV default is deliberately
+different from the peer's **24 GiB**: prior controlled
+on-host testing found 24 GiB less resilient.
+Do **NOT** raise to 24 GiB on a forum analogy.
+The v0.29 mmap case is a different loader image/flag
+set, not automatically interchangeable with the
+stock `--kv-cache-memory` semantics.
+
+### Real deltas to research
+
+1. **Official image implementation**: external
+   `vllm/vllm-openai:qwen38-flash-next-arm64-cu130`
+   is not any of our preinstalled
+   `vllm-skinny-tp1:v1` or
+   `vllm-orcarouter-v029:v1` images. The official
+   external manifest
+   `sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`
+   is linux/arm64, CUDA 13.0.
+   Manifest ID is **remote source**; it is
+   NOT evidence the image was pulled, present or
+   used on the user's DGX. Exact embedded vLLM
+   source revisions/quant modules, memory/graph
+   behavior, PLE worker and config compatibility
+   must be source-attested before making claims.
+2. **Checkpoint/config identity**: peer explicitly
+   binds its own rewritten `config.json`.
+   It contains two compressed-tensors groups,
+   300 + 1 targets and 753 excluded entries,
+   but whether those rewrites equal our
+   `prepare_config.py` layer-type-only conversion
+   has **not been proved**. Inspect existing
+   source config/override **read-only** with the
+   maintained checkpoint inspector first.
+   Do not replace or overwrite either original.
+3. **Memory ownership**: the peer's reported
+   118.4/122GB (97.3%) is **not stability
+   headroom proof**. GB10 shared system memory,
+   pageable/PINNED PLE, and early large RM allocations
+   make replay sensitive to page/allocator state.
+   Do not interpret its benchmark as evidence
+   our historical `NV_ERR_NO_MEMORY` disappears.
+4. **Externally documented deadlock**:
+   vLLM [#53960](https://github.com/vllm-project/vllm/issues/53960)
+   shows TP=1 CPU PLE offload can hang if the
+   single-process executor never spawns a PLE
+   worker. Using MP was the workaround. It is
+   **already our default**, so this is a
+   closed flag-parity lead, not a new fix.
+
+### Safe sequential diagnosis and future candidate design
+
+**Step A — no mutation now:** verify exact local
+branch/source/CI, protected container/image identities
+from existing Docker-read-only tooling, manifest
+checkpoint path/revision, pinned original config
+versus the already-created override via the
+maintained `inspect_model.py` (read-only local
+headers may be inspected only on approved existing files);
+current memory/swap snapshots and presence of the
+external image tag only via `docker image inspect`
+(no `pull`, `create`, `run`, `cp`, `rm`).
+
+**Step B — source only:** inspect image-specific
+vLLM model construction/quantization allocation
+behavior, metadata/config differences,
+offload/graph flags and direct compile/runtime
+dependencies without assuming the official
+image is installed or safe. Show exact
+immutable image/source provenance and reproducible
+offline/synthetic validations.
+
+**Step C — not authorized yet:** if Steps A/B reveal
+a materially different plausible root-cause
+path, design a new **separately approved**
+Wizard-managed, protected, rollback-safe
+single-candidate experiment with explicit exact
+image/checkpoint ID, 16GiB KV first, strict RM
+monitors unchanged, no old-container overwrite,
+clear automatic STOP and postchecks.
+Only after physical READY + API smoke +
+bounded soak + zero strict RM errors should
+llama-benchy/performance testing be considered.
+Do not run the peer's direct `docker run --rm`
+or relax safety protections.
+
+**Decision:** `ORCAROUTER_RECOVERY=SOURCE_REVIEW_ACTIVE`,
+`COMMUNITY_CONFIG_FLAGS=ALREADY_MOSTLY_MATCHED`,
+`OFFICIAL_IMAGE_DELTA=UNQUALIFIED`,
+`STRICT_HOST_STABILITY=NOT_QUALIFIED`,
+`NO_NEW_DGX_MUTATION`.
