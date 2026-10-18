@@ -342,3 +342,39 @@ matches. An exact file-to-file comparison
 of *current existing* original and override
 remains the next non-mutating step.
 
+## 2026-10-18 — Latest actual DGX OrcaRouter path-preflight stop: original config not reached
+
+At local exact SHA `28d54295725499bbaba2adef3d0ed7e8146dbaad`
+with successful 2/2 CI, the owner ran only
+non-mutating existing checks:
+`PASS_CURRENT_ONLY` for both protected
+stopped exact IDs and their original nested
+RO model/config mounts, temp exact-ID/name
+absent, installed image pinned; peer
+`qwen38-flash-next-arm64-cu130`
+**`OFFICIAL_IMAGE_LOCAL=NOT_PRESENT`**.
+
+The *manual* script then used a guessed model
+directory from `$HOME/models`, and stopped
+with `STOP: Original config missing` **before
+calling the checkpoint inspector**. This is
+only evidence that that guessed location
+does not contain `config.json`, **not**
+evidence of deleted checkpoint data. The
+real existing Docker mount `Source` was
+not emitted; do not infer its value.
+
+Next maintained read-only tool:
+`inspect_orcarouter_mount_config_readonly.py`
+reads exact protected Docker `/model` and nested
+`/model/config.json` bind `Source` internally,
+verifies both protected references and reads
+bounded small config JSON files from those
+paths. It compares generated config against
+the source-to-vLLM layer-type rewrite, and
+reports CT groups, target/ignore counts and
+36/12 reported layer-shape parity as
+**count-only evidence**. It never attempts
+another Docker-create, pull, service start,
+checkpoint download or GPU benchmark; these
+still require explicit separate approval.
