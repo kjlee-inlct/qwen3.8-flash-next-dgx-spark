@@ -1,3 +1,37 @@
+## 2026-10-18 — Actual official ARM64 C image vLLM distribution attested; help failed
+
+One owner-authorized, offline/GPU-less Docker CLI probe of the pinned
+`vllm/vllm-openai@sha256:3b0e188f...` ARM64 C image found
+installed `vllm=0.1.dev20073+g8e685d198`,
+`torch=2.13.0+cu130`, `transformers=5.15.1`,
+`flashinfer-python=0.6.17`,
+`compressed-tensors=0.17.0`.
+The probe intentionally had no GPU, checkpoint mounts or network,
+and created exactly one disposable isolated test container.
+
+**Critical failure:** `vllm serve --help=all` returned exit
+code 1, outer helper status 2. The reported 17
+`PEER_C_FLAG_*=NOT_FOUND_IN_HELP` fields **do not prove** those
+options are unsupported: the command never produced a
+successfully parsed help result. Underlying traceback remains
+unread from saved `vllm-serve-help-all.txt`.
+After check, protected old managed/A/B ID and state snapshot
+was unchanged, and the new temporary container was removed.
+One-time approval was consumed; do not retry CPU Docker or
+launch GPU/model without separately reviewed authorization.
+
+The OrcaRouter checkpoint identity is unchanged; official C is
+a **candidate backend**, NOT a newly installable model family.
+Keep the original P0 Wizard mission: easy install, switch,
+inspect and safe removal; do not expose C as production-ready
+while its actual parser, PLE, KV cache flags, model READY
+and host memory safety remain unqualified.
+
+Read-only saved-help error report is now source-implemented
+behind Wizard Advanced option 6 and the maintained
+`scripts/runtime/orcarouter-peer-c-cli-probe.py report`
+action (CI/Git sync required before first physical run).
+[Actual DGX CPU probe receipt](../../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
 ## 2026-10-18 — Official ARM64 C source metadata: entrypoint compatible, package still unattested
 
 Following successful physical pinned image pull, the owner read
