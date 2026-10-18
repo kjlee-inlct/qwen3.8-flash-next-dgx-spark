@@ -38,6 +38,19 @@ class ModularWizardTests(unittest.TestCase):
             self.assertIn("Invalid selection", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_catplusplus_benchmark_plan_in_wizard_never_starts_a_model(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "5\n22\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CATPLUSPLUS_OPERATION=SOURCE_ONLY_BENCHMARK_PLAN", result.stdout)
+            self.assertIn("CATPLUSPLUS_PINNED_REVISION=3251fd8afbd08f76368a9bfa71132d9aef364813",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_BENCHMARK_STATUS=NOT_MEASURED", result.stdout)
+            self.assertIn("CATPLUSPLUS_DOCKER_GPU_DOWNLOAD=NOT_PERFORMED", result.stdout)
+            self.assertIn("CATPLUSPLUS_ADMISSION=BLOCKED_", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
     def test_orcarouter_backend_status_is_read_only_and_blocks_unqualified_c(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
