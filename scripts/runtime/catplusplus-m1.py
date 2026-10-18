@@ -161,6 +161,21 @@ def blocked(action: str) -> int:
     return 2
 
 
+def source_transport() -> int:
+    """HEAD-only transport diagnosis; no response bodies or redirect following."""
+    spec = importlib.util.spec_from_file_location(
+        "catplusplus_transport_audit", SOURCE_AUDIT_FILE)
+    if spec is None or spec.loader is None:
+        raise M1Blocked("pinned source transport module missing")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    result = module.probe_transport()
+    print("CATPLUSPLUS_M1_SOURCE_AUDIT=NOT_PERFORMED")
+    print("CATPLUSPLUS_M1_LIVE_ADMISSION=BLOCKED")
+    print("CATPLUSPLUS_M1_DOCKER_GPU_MODEL_DOWNLOAD=NOT_PERFORMED")
+    return result
+
+
 def source_audit(offline_dir: Path | None) -> int:
     """Optional pinned small-text source gate; never imports/executes loader."""
     spec = importlib.util.spec_from_file_location(
@@ -196,7 +211,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=(
         "plan", "status", "preflight", "run", "bench-admission", "reconcile",
-        "source-audit",
+        "source-audit", "source-transport",
     ))
     parser.add_argument("--offline-dir", type=Path,
                         help="only with source-audit; offline fixtures")
@@ -206,6 +221,8 @@ def main() -> int:
             return source_audit(args.offline_dir)
         if args.offline_dir is not None:
             raise M1Blocked("--offline-dir is only permitted for source-audit")
+        if args.action == "source-transport":
+            return source_transport()
         if args.action == "plan":
             return plan()
         if args.action == "status":
