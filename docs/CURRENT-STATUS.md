@@ -1,3 +1,38 @@
+## 2026-10-18 — ACTUAL DGX C full preflight PASS (READ-ONLY); still no C model runtime
+
+Operator successfully fast-forward synchronized DGX clean local branch
+`feature/wizard-modular-phase1-20261014` from
+`ad3855a0a64e25deed3b9c11d7b3168f06730d68` to
+`ff339c1eb9eb77cb774b50b3fcdc7fa009ecd74d`
+(`GIT_SYNC=PASS`). The same physical DGX executed
+`python3 -B scripts/runtime/orcarouter-peer-c-readonly.py preflight`,
+returning `PREFLIGHT_EXIT_CODE=0`,
+`PEER_C_LOCAL_IMAGE=PINNED_MATCH`,
+`PEER_C_RUNTIME_CONTRACT=ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED`,
+`PEER_C_PROTECTED_OBJECTS=THREE_STOPPED_EXISTING_IDS`,
+`PEER_C_HOST_ARCH=ARM64`, `PEER_C_ROOT_DISK_FREE_GIB=417`,
+`PEER_C_MANAGED_SERVICE=INACTIVE_OR_UNKNOWN`,
+`PEER_C_ADMISSION=SOURCE_READ_ONLY_PREFLIGHT_PASS_NOT_LIVE_APPROVAL`.
+
+**Important limits:** status `INACTIVE_OR_UNKNOWN` is only an ambiguous
+combined result for systemctl exit codes 3 and 4; it cannot affirm
+the systemd unit's existence/status. It also cannot attest exact
+embedded vLLM wheel or flag compatibility, memory behavior, API READY,
+or performance; **no C Docker create/start, GPU or bench** occurred.
+
+Static code review: current `scripts/serve.sh` allows create-only
+variants `mazinb-m1`, `hybrid-h6-m1` or old `legacy/v029`, **not C**.
+When using a distinct image for OrcaRouter it selects CPU PLE but
+default KV flag `--kv-cache-memory`; public vLLM docs instead expose
+`--kv-cache-memory-bytes`. Specific pinned official image CLI parser
+must be checked before writing a live C launcher. Do not use direct
+`docker run` or reuse historical A/B container names to bypass this.
+
+Read-only C helper source was later improved to label its true host
+inspection and distinguish `INACTIVE` vs `UNKNOWN_NOT_LIVE_APPROVED`
+rather than printing `PLAN_ONLY` and `INACTIVE_OR_UNKNOWN` on preflight;
+the owner has **not** synchronized or run these later changes.
+[Exact operator transcript and static blocker evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
 ## 2026-10-18 — ACTUAL DGX peer C OCI ENTRYPOINT attested; vLLM embedded wheel remains unknown
 
 The owner inspected local pinned official ARM64 image ID
