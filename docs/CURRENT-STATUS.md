@@ -1,3 +1,42 @@
+## 2026-10-18 — ACTUAL DGX OrcaRouter full peer config parity 7/7 verified
+
+The DGX operator pasted the output of the existing bounded,
+read-only `inspect_orcarouter_mount_config_readonly.py` from
+`~/Workspace/llm/qwen3.8-flash-next-dgx-spark`.
+Current protected container postcheck `PASS_CURRENT_ONLY`;
+managed/legacy RO bind sources match and original+override configs
+are readable. The override equals the expected narrow
+`qwen_sparse_attention -> full_attention` rewrite and retains
+48 layers, 36 linear / 12 full, 2 CT groups / 301 targets /
+753 ignores.
+
+**New physical finding:** canonical SHA256 values for the FULL
+operator-supplied community `config.json` and all six separately
+reported subtrees (quant, CT groups, ignore list, text, **ordered**
+layer types, vision) are **7/7 MATCH_REFERENCE_CANONICAL_VALUES**.
+This closes *JSON-value parity with the supplied third-party reference*
+as a remaining config-difference question; earlier count-only
+conclusions are preserved as the preceding measurement.
+**Not** proof of peer weight/tensor identity, actual runtime-selected
+config, image source equivalence, READY/API success, protection
+continuity or strict RM host-stability.
+
+Provenance: `ACTUAL_DGX_OPERATOR_TERMINAL`, but the displayed
+terminal portion does **not** include exact local HEAD, clean
+worktree or exit status; those are `NOT_CAPTURED_IN_THIS_TRANSCRIPT`.
+Do not attribute the run to GitHub HEAD `ad3855a0...` or its
+successful PR CI without a separate local checkout receipt.
+[Original and follow-up physical evidence](../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+No weights, GPU or Docker mutation during this inspector run.
+
+**Current active next gate:** exact provenance of official ARM64
+CUDA13 vLLM wheel/commit and source-based 48 x 400MiB
+`w13_weight` / 48 x 800MiB pre-create allocator comparison
+against preserved R23–R32 source and memory evidence. Official
+image still `NOT_PRESENT` in the last owner's local inspect;
+no new image pull/container start, host mutation, protection
+relaxation, KV24, or Draft PR merge is authorized.
+
 ## 2026-10-18 — OrcaRouter official ARM64 image registry provenance checked; embedded source still unattributed
 
 GitHub PR #261 and #259 are **Draft / Open / Unmerged**. The
