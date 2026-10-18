@@ -64,6 +64,7 @@ if ! flock -n -x "$BENCH_M1_FD"; then
 fi
 CONTROLLER="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)/scripts/runtime/mazinb-m1.py"
 python3 "$CONTROLLER" bench-admission --session-slot "$SLOT" || { echo "BENCH_M1=BLOCKED attestation_failed" >&2; exit 2; }
+export QWEN38_M1_BENCH_LEASE_HELD=1 QWEN38_M1_BENCH_SLOT="$SLOT"
 echo "BENCH_M1=ATTESTED_SHARED_LIFECYCLE_EXCLUSIVE_BENCH" >&2
 echo "BENCH_MODEL_START=NOT_PERFORMED_BY_WRAPPER" >&2
 echo "BENCH_READY_AND_HOST_SAFETY=EXTERNAL_PREREQUISITES" >&2
