@@ -269,6 +269,7 @@ wizard_catplusplus_m1_menu() {
     wizard_menu_option 4 'M1 Terminal-B bench admission (blocked) / 벤치 허용 검사'
     wizard_menu_option 5 'M1 GPU start gate (disabled) / 실행 차단 사유'
     wizard_menu_option 6 'M1 journal reconcile (no Docker) / 기록 확인'
+    wizard_menu_option 7 'Pinned config and SGLang loader source audit (read-only) / 로더 소스 점검'
     wizard_menu_option 0 'Back / 이전'
     wizard_input selection 'Select / 선택' 0
     case "${selection}" in
@@ -278,6 +279,7 @@ wizard_catplusplus_m1_menu() {
       4) action=bench-admission ;;
       5) action=run ;;
       6) action=reconcile ;;
+      7) action=source-audit ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.'; continue ;;
     esac
