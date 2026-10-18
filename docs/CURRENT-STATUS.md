@@ -1,3 +1,38 @@
+## 2026-10-18 — ACTUAL DGX OrcaRouter v0.29 B protection stop proven; official ARM64 C image NOT LOCAL
+
+New owner physical **read-only observation** of the preserved Oct-13 B:
+`qwen38-ab-v029` exact ID `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`,
+image `sha256:dba5d8af...`, Docker `exited`, `ExitCode=137`,
+**`OOMKilled=false`**, 2026-10-13 20:56:13–21:04:01 KST.
+Five monitor samples at 21:03:22–30 triggered `protect=1/5` →
+`5/5`, low immediately-free non-CMA **1969 → 1171 MiB** and
+`swapgrowth=3207MiB`, while `noncma_available` remained
+approximately 40–42GiB. `STOP_REASON=memory-protection` and
+`PROTECT stopping` occurred at **21:03:30 KST**. This is
+a **confirmed watchdog stop**, *not* proof of NVIDIA RM or Docker OOM.
+No actual B API READY or throughput was measured.
+
+The same owner performed `docker image inspect` on the exact published
+`linux/arm64` vLLM image manifest
+`vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`,
+and got **`No such image`**. This only proves that exact reference is
+not local; an alias under a different tag still requires separate
+`RepoDigests` inspection. **No C image pull, Docker start, GPU use,
+or C performance measurement occurred.**
+
+New GitHub **SOURCE_ONLY**
+`scripts/runtime/orcarouter-peer-c-readonly.py` plus offline tests
+and Advanced Wizard read-only plan/preflight entries identify the
+official ARM64 digest and preserve existing managed/A/B objects.
+`preflight` blocks if the pinned digest/tag is not locally attested.
+This is a planner, **not a C GPU launch implementation or live approval**.
+The operator's DGX was last shown on clean `ad3855a0...`; do not imply
+new GitHub commits have been executed locally. PR #261 remains
+Draft/Open/Unmerged. Real pinned Docker pull and C live startup still
+require separate operator approval; keep KV=16GiB and protection unchanged.
+
+[Actual B timeline and no-image evidence](../scripts/benchmark/evidence/dgx-orcarouter-v029-b-readonly-status-20261018.md).
+[Independent C plan and gate](ORCAROUTER-PEER-C-PLAN-20261018.md).
 ## 2026-10-18 — ACTUAL DGX v0.29 B trial stopped from memory protection; benchmark had no API
 
 The owner executed the maintained **read-only** OrcaRouter A/B trial
