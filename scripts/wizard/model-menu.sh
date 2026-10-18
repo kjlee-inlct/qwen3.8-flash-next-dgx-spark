@@ -50,8 +50,18 @@ wizard_mazinb_source_reclaim() {
 }
 
 wizard_mazinb_docker_retire() {
-  local confirmed
+  local confirmed marker
   wizard_header 'mazinb stopped Docker retirement / mazinb Docker 종료 컨테이너 정리'
+  # The five exact historic objects were archived and retired in 2026-10-14.
+  # A marker's presence is NOT proof of completed retirement; never attempt
+  # the one-time deletion a second time or auto-adopt its provenance.
+  marker="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark/mazinb-m1/retired-docker.json"
+  if [[ -e "${marker}" || -L "${marker}" ]]; then
+    printf 'MAZINB_DOCKER_RETIRE=BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED\n'
+    wizard_warning 'Historical retirement marker exists; do not rerun exact-five deletion.'
+    wizard_info 'Marker alone is not verified proof. Select Models 3 -> 6 for read-only full retirement audit.'
+    return 0
+  fi
   wizard_warning 'This is separate from source checkpoint deletion (already completed).'
   wizard_warning 'Exactly five stopped mazinb experiment containers are candidates; all other Docker objects stay.'
   wizard_warning 'Original container logs and metadata will be archived privately and SHA256-verified BEFORE any Docker removal.'
