@@ -23,7 +23,7 @@ class PeerCReadOnlyTests(TestCase):
              redirect_stdout(io.StringIO()) as out:
             MOD.plan()
         self.assertIn("PEER_C_MODEL_START=NOT_IMPLEMENTED_OR_AUTHORIZED", out.getvalue())
-        self.assertIn("PEER_C_IMAGE_PULL=NOT_PERFORMED_OR_AUTHORIZED", out.getvalue())
+        self.assertIn("PEER_C_IMAGE_PULL=NO_ACTION_BY_THIS_READ_ONLY_TOOL", out.getvalue())
         self.assertIn(MOD.DIGEST, out.getvalue())
 
     def test_no_image_blocks(self):
@@ -32,7 +32,7 @@ class PeerCReadOnlyTests(TestCase):
 
     def test_pinned_manifest_is_not_config_image_id(self):
         exact = {"Os": "linux", "Architecture": "arm64",
-                 "RepoDigests": [MOD.PINNED], "Id": "sha256:" + "a" * 64}
+                 "RepoDigests": [MOD.PINNED], "Id": MOD.EXPECTED_IMAGE_ID}
         with mock.patch.object(MOD, "metadata",
                                side_effect=lambda name, *, image: exact if name == MOD.PINNED else None):
             self.assertEqual(MOD.image_receipt(), "PINNED_MATCH")
@@ -45,19 +45,20 @@ class PeerCReadOnlyTests(TestCase):
                                side_effect=lambda name, *, image: tagged if name == MOD.TAG else None):
             self.assertEqual(MOD.image_receipt(), "DIGEST_NOT_ATTESTED")
 
-    def test_mixed_alias_ids_block(self):
+    def test_same_digest_wrong_image_config_id_blocks(self):
         exact = {"Os": "linux", "Architecture": "arm64",
-                 "RepoDigests": [MOD.PINNED], "Id": "sha256:" + "a" * 64}
+                 "RepoDigests": [MOD.PINNED], "Id": MOD.EXPECTED_IMAGE_ID}
         tagged = {**exact, "Id": "sha256:" + "b" * 64}
         with mock.patch.object(MOD, "metadata",
                                side_effect=lambda name, *, image: exact if name == MOD.PINNED else tagged):
-            self.assertEqual(MOD.image_receipt(), "TAG_ID_DIFFERS_FROM_PINNED")
+            self.assertEqual(MOD.image_receipt(), "IMAGE_CONFIG_ID_MISMATCH")
 
     def test_protected_three_stopped_exact_ids(self):
-        def stopped(i):
-            return {"Id": str(i) * 64, "State": {
+        def stopped(name):
+            cid, image_id = MOD.PROTECTED_IDENTITIES[name]
+            return {"Id": cid, "Image": image_id, "State": {
                 "Status": "exited", "Running": False, "OOMKilled": False}}
-        data = dict(zip(MOD.PROTECTED, [stopped(1), stopped(2), stopped(3)]))
+        data = {name: stopped(name) for name in MOD.PROTECTED}
         with mock.patch.object(MOD, "metadata",
                                side_effect=lambda name, *, image: data.get(name)):
             self.assertEqual(MOD.protected_receipt(), "THREE_STOPPED_EXISTING_IDS")
@@ -65,6 +66,16 @@ class PeerCReadOnlyTests(TestCase):
         with mock.patch.object(MOD, "metadata",
                                side_effect=lambda name, *, image: data.get(name)):
             self.assertEqual(MOD.protected_receipt(), "PROTECTED_CONTAINER_NOT_STOPPED")
+
+    def test_protected_image_id_drift_blocks(self):
+        data = {name: {"Id": identity[0], "Image": identity[1],
+                        "State": {"Status": "exited", "Running": False,
+                                  "OOMKilled": False}}
+                for name, identity in MOD.PROTECTED_IDENTITIES.items()}
+        data["qwen38-ab-v029"]["Image"] = "sha256:" + "f" * 64
+        with mock.patch.object(MOD, "metadata",
+                               side_effect=lambda name, *, image: data.get(name)):
+            self.assertEqual(MOD.protected_receipt(), "PROTECTED_ID_OR_IMAGE_DRIFT")
 
     def test_missing_pinned_image_is_not_live_admission(self):
         with mock.patch.object(MOD, "image_receipt", return_value="ABSENT_EXACT_AND_TAG"), \
