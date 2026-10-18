@@ -291,3 +291,36 @@ It does **not** change the pinned metadata
 future source work should compare file-backed
 PLE alternatives #58439 / #58815 with isolated
 synthetic proofs, not host mutations.
+
+### OrcaRouter mounted config source-only preflight after guessed path failure
+
+Use `python3 -B scripts/model/inspect_orcarouter_mount_config_readonly.py`
+**only on a clean, qualified source checkout**
+to inspect the *existing* stopped managed and
+legacy protected Docker objects. An earlier
+operator command stopped at missing
+`$HOME/models/...` guessed config; this is
+not evidence of data deletion.
+
+The tool reuses the exact-ID protection snapshot,
+reads `/model` and nested `/model/config.json`
+**Docker RO bind host sources** internally,
+checks both references, then reads at most the
+two original/override **small JSON** files,
+never weights, tensor headers or directory walks.
+It emits only classification labels and
+small shape counts without host paths or model
+config bodies. The recognized override
+comparison uses existing
+`prepare_config.convert_layer_types` and
+reports whether it exactly matches the
+original-to-vLLM `qwen_sparse_attention`
+rewrite. Source differences, missing configs,
+bad source bind identity, invalid CT groups and
+symlinks fail closed; PASS only means
+`PASS_SOURCE_CONFIG_ONLY_NOT_RUNTIME`.
+This is an independent developer diagnostic,
+not an extra Wizard menu item.
+Host execution, official-image install/boot
+and OrcaRouter stability are still
+`NOT_QUALIFIED`.
