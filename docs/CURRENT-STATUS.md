@@ -1,3 +1,50 @@
+## 2026-10-18 — SOURCE_ONLY lychee888 installed PLE native-FP8 versus compressed-tensors dispatch gate
+
+The prior actual-DGX `PASS_CURRENT_ONLY` resource safeguard
+and physical PLE source SHA remain valid; the historical
+one-shot `FAIL_REVIEW` is preserved and not retroactively
+explained. The existing independent metadata-vs-source
+gate `scripts/model/assess_lychee888_loader.py` now
+reports the **installed local Docker image ID**,
+physical image-derived PLE Python file SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`
+and actual static resolver classification
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`. It differentiates
+pinned model `quant_method=compressed-tensors`,
+`format=mixed-precision` from repository NVIDIA patch
+`ModelOptMixedPrecisionConfig`, and explicitly
+labels the vLLM runtime quant class as **expected but
+not independently runtime-attested**.
+
+**Static compatibility: `BLOCKED_SOURCE_ONLY_UNQUALIFIED`.**
+The pinned lychee888 metadata has 128 PLE shards and
+one index-listed global scale; the installed native
+`Fp8Config` selector does **not** prove that a
+`CompressedTensorsConfig` checkpoint can take the
+FP8 path. Registering BF16 `weight_scale` and
+multiplying by scale are only conditional **source
+signatures**, not evidence that the scale tensor
+was loaded or exercised. Its dtype routing is
+`NOT_PROVEN_IN_INSTALLED_SOURCE`, and the CT
+prefix/scheme resolution, expert quantization,
+actual tensor header dtype and single GB10 TP=1
+remain unverified. The source bytes are **not
+archived**, so the new gate uses the preserved
+ACTUAL_DGX SHA/AST receipt, not runtime execution.
+
+New vLLM PLE documentation exposes explicit
+`ple_embedding_dtype` / `CompressedTensorsConfig`
+handling (external/reference-only); do **not**
+attribute this new implementation to the measured
+older installed image without identical-source evidence:
+https://docs.vllm.ai/en/latest/api/vllm/models/qwen4_exp/common/ngram_embedding/
+
+This update includes synthetic tests; **SOURCE_ONLY**
+until pinned metadata-only CLI is run by an operator.
+No image rebuild/patch, source reread, Docker mutation,
+checkpoint download or GPU run is authorized.
+[Actual source and protection evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — ACTUAL_DGX order-insensitive PLE postcheck PASS_CURRENT_ONLY; historical failure retained
 
 Operator fast-forwarded to clean exact local
