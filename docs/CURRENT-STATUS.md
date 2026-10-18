@@ -29,8 +29,9 @@ claim the redirect resolved until real DGX output.
 
 ## 2026-10-19 — ACTUAL DGX mazinb final read-only retirement audit PASS
 
-**Owner-pasted DGX terminal transcript (physical, not CI):** The owner
-synchronized the sole canonical checkout on
+**Owner-pasted DGX terminal transcript (physical, not CI):**
+[Permanent exact-key physical evidence](../scripts/benchmark/evidence/dgx-mazinb-retirement-audit-physical-20261019.md).
+The owner synchronized the sole canonical checkout on
 `feature/wizard-modular-phase1-20261014` from
 `14a44f0` to **exact source SHA**
 `5164042ed5d784fe3469ad0207e4d8ecf8d5869f` by
