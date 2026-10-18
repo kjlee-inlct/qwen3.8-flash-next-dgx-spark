@@ -247,3 +247,18 @@ After a successful move, the physical data lives under `./models`.
 manifests or older scripts that still contain `$HOME/models/...` continue to resolve.
 The historical repository `./model` symlink is refreshed to the relocated OrcaRouter
 checkpoint. The command is idempotent and should always be previewed with `--dry-run`.
+
+### lychee888 physical PLE SHA plus source-only dispatch contract
+
+The reusable `assess_lychee888_loader.py` checks
+pinned HF metadata only. It carries the validated
+image ID + physically obtained PLE source SHA and
+AST route `NATIVE_FP8_CONFIG_ONLY_SOURCE`
+as fixed **evidence receipts**, not as available
+full source bytes or a runnable image test.
+It classifies `compressed-tensors` declarations
+separately from the NVIDIA ModelOpt adapter and
+keeps scale load/CT scheme dispatch/TP=1
+`NOT_QUALIFIED`. Any real image/quant-loader
+changes are outside this diagnostic and require
+independent approval.
