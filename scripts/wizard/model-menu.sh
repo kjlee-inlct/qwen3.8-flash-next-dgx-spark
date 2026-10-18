@@ -131,8 +131,8 @@ wizard_model_menu() {
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
     wizard_menu_option 7 'Candidate Hub metadata (read-only) / 후보 모델 파일·용량 조사'
-    wizard_menu_option 8 'mazinb restore preflight (small Hub metadata, no weights) / 재설치 사전 점검'
-    wizard_menu_option 9 'Restore pinned mazinb checkpoint (explicit download approval) / 재설치'
+    wizard_menu_option 11 'mazinb restore preflight (small Hub metadata, no weights) / 재설치 사전 점검'
+    wizard_menu_option 12 'Restore pinned mazinb checkpoint (explicit download approval) / 재설치'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -143,9 +143,9 @@ wizard_model_menu() {
       5) wizard_mazinb_docker_retire ;;
       6) wizard_mazinb_retirement_audit ;;
       7) wizard_candidate_metadata_menu ;;
-      8) bash "$ROOT_DIR/scripts/wizard/mazinb-restore.sh" preflight ||
+      11) bash "$ROOT_DIR/scripts/wizard/mazinb-restore.sh" preflight ||
            wizard_warning 'mazinb restore admission BLOCKED; no model downloaded.' ;;
-      9) wizard_mazinb_restore_checkpoint ;;
+      12) wizard_mazinb_restore_checkpoint ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
