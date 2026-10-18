@@ -271,7 +271,7 @@ wizard_catplusplus_m1_menu() {
     wizard_menu_option 6 'M1 journal reconcile (no Docker) / 기록 확인'
     wizard_menu_option 0 'Back / 이전'
     wizard_input selection 'Select / 선택' 0
-    case "\${selection}" in
+    case "${selection}" in
       1) action=plan ;;
       2) action=status ;;
       3) action=preflight ;;
@@ -281,7 +281,7 @@ wizard_catplusplus_m1_menu() {
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.'; continue ;;
     esac
-    python3 -B "\${ROOT_DIR}/scripts/runtime/catplusplus-m1.py" "\${action}" ||
+    python3 -B "${ROOT_DIR}/scripts/runtime/catplusplus-m1.py" "${action}" ||
       wizard_warning 'catplusplus M1 admission remains BLOCKED; no Docker/GPU/download action.'
   done
 }
