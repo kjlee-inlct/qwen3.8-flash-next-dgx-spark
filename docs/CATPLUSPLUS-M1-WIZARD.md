@@ -53,10 +53,11 @@ This follows the **same user-facing process as the successful mazinb M1**, not i
        4 — M1 Terminal-B benchmark admission
        5 — M1 GPU start gate — explicitly blocked
        6 — M1 journal reconcile — no Docker
+       7 — Pinned config and SGLang launcher source audit (small HTTPS text only)
        0 — Back
 ```
 
-The Wizard routes to the maintained `scripts/runtime/catplusplus-m1.py` read-only source scaffold, NOT to `scripts/runtime/mazinb-m1.py` (which binds different checkpoint, image, service assumptions and localhost port). The six familiar action names are intentional; `run`, `preflight` and `bench-admission` currently **return exit code 2**, and none creates or starts Docker, changes services, downloads weights, queries a model API or touches GPU. `status` is a strict, bounded read-only local journal view, not live Docker/API verification. `reconcile` is a no-op only when no journal exists; it does not stop/remove an unknown object.
+The Wizard routes to the maintained `scripts/runtime/catplusplus-m1.py` read-only source scaffold, NOT to `scripts/runtime/mazinb-m1.py` (which binds different checkpoint, image, service assumptions and localhost port). The original six familiar mazinb-style actions remain; the seventh `source-audit` action is a separate bounded read-only source-inspection gate. `run`, `preflight` and `bench-admission` currently **return exit code 2**, and none creates or starts Docker, changes services, downloads weights, queries a model API or touches GPU. `status` is a strict, bounded read-only local journal view, not live Docker/API verification. `reconcile` is a no-op only when no journal exists; it does not stop/remove an unknown object.
 
 ## The mazinb M1-style state sequence — contract ONLY
 
