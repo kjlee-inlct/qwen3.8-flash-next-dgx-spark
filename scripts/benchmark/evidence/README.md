@@ -1,3 +1,21 @@
+## 2026-10-18 — ACTUAL_DGX OrcaRouter mounted config exact rewrite and CT counts 2/301/753
+
+[Actual DGX read-only OrcaRouter protected-mount
+config receipt](dgx-orcarouter-mounted-config-parity-20261018.md):
+the original config and nested override exist
+at their **actual protected Docker bind sources**,
+matching under both stopped protected containers;
+current protection `PASS_CURRENT_ONLY`;
+override exactly matches expected layer-type
+conversion; 48 layers (36 Linear, 12 Full after
+conversion); CT quant config 2 groups, 301 targets,
+753 ignored. This is **counts** equality with
+the separate community reference, not proof of
+identical full config or runtime model stability.
+No weights or Docker/GPU mutation. New source-only
+reference full/subtree canonical hash comparison
+is implemented, **not yet physically executed**.
+
 ## 2026-10-18 — ACTUAL_DGX lychee888 pinned JSON metadata and 132279699754 tensor bytes
 
 [Physical metadata-only loader assessment](dgx-lychee888-ple-path-inconclusive-20261017.md)
