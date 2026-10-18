@@ -109,9 +109,8 @@ load_download_profile() {
       PROFILE_CONFIG_OVERRIDE=0
       ;;
     mazinb)
-      # Short immutable Hugging Face commit ID verified for the qualified checkpoint.
-      # download-weights.sh records the resolved full SHA in its local manifest.
-      PROFILE_REVISION="f2c21eb"
+      # Full immutable revision from the original DGX measured mazinb provenance.
+      PROFILE_REVISION="f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f"
       PROFILE_MODEL_DIR="${model_root}/qwen3.8-flash-next-mazinb"
       PROFILE_IMAGE="vllm-orcarouter-v029:v1"
       PROFILE_SERVED_NAME="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
