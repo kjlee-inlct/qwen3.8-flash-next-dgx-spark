@@ -66,6 +66,15 @@ fi
 [[ "${QWEN38_MAZINB_RESTORE_APPROVED:-0}" == 1 && -t 0 ]] || {
   echo 'MAZINB_RESTORE=BLOCKED_WIZARD_INTERACTIVE_APPROVAL_MISSING' >&2; exit 2;
 }
+# Hold the existing managed lifecycle lock throughout the potentially long transfer.
+# This is an explicit owner-approved mutation, never part of the preflight.
+source "$ROOT_DIR/scripts/lib/operation-lock.sh"
+acquire_operation_lock "$(dirname -- "$STATE")" "pinned mazinb checkpoint restore" || {
+  echo 'MAZINB_RESTORE=BLOCKED_LIFECYCLE_LOCK' >&2; exit 2;
+}
+python3 -B "$ROOT_DIR/scripts/diagnostics/verify-managed-idle.py" || {
+  echo 'MAZINB_RESTORE=BLOCKED_HOST_DRIFT_AFTER_LOCK' >&2; exit 2;
+}
 echo 'MAZINB_RESTORE_DOWNLOAD=EXPLICITLY_APPROVED'
 echo 'MAZINB_RESTORE_NOTE=Temporary CPU-only Docker download helper possible; no GPU/inference'
 bash "$ROOT_DIR/scripts/download-weights.sh" --candidate || {
