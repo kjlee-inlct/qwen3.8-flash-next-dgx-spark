@@ -79,3 +79,36 @@ legacy, v0.29, custom, symlink/invalid and absent manifests.
 **Source-only until CI on the final SHA and owner DGX sync**;
 the newly corrected read-only output has NOT yet been seen
 on the physical DGX.
+
+## Later physical DGX confirmation: corrected configured-versus-registry UI actually rendered
+
+The owner posted a **second actual DGX Wizard backend-screen output** after the source-side repair. This physical output explicitly confirmed that the strict installed-manifest result and registry candidate are shown separately:
+
+```text
+OrcaRouter backend compatibility / 실행 백엔드 호환성
+P0: choose model and backend through the install/switch Wizard after qualification.
+Configured in installed manifest / 설치 매니페스트: profile=orcarouter, image=vllm-skinny-tp1:v1
+Configured variant / 기록된 백엔드: LEGACY_SKINNY_MANIFEST_IMAGE
+Configured image is NOT evidence that any runtime is currently running or READY.
+Registry default candidate / 레지스트리 기본 후보: vllm-orcarouter-v029:v1
+Registry candidate differs from installed configuration unless exact image names match.
+Official ARM64 C: pinned image/packages verified, but CLI help failed before options were printed.
+Cause: DeviceConfig could not infer GPU type in the deliberately GPU-hidden CPU-only probe.
+C options, PLE, KV16GiB, MTP, model READY and host stability remain UNQUALIFIED.
+Official C install/switch is DISABLED. Protected managed/A/B Docker objects are not changed.
+Saved C diagnostic / 저장 로그: Advanced -> Official ARM64 C saved CLI result (read-only).
+ORCAROUTER_PROFILE=orcarouter
+ORCAROUTER_MANIFEST_STATE=valid
+ORCAROUTER_CONFIGURED_PROFILE=orcarouter
+ORCAROUTER_CONFIGURED_IMAGE=vllm-skinny-tp1:v1
+ORCAROUTER_CONFIGURED_VARIANT=LEGACY_SKINNY_MANIFEST_IMAGE
+ORCAROUTER_LIVE_RUNTIME=NOT_PROBED
+ORCAROUTER_V029_BACKEND=REGISTRY_IMPLEMENTED_NOT_LIVE_ATTESTED_HERE
+ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY
+ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED
+WIZARD_MUTATION=NONE
+```
+
+**Physical acceptance now:** exact configured manifest image and version classification, distinct registry candidate, unqualified official C and read-only/no-mutation marker were visually observed on real DGX. The prior note saying this corrective screen was source-only is **superseded** by this second physical evidence.
+
+**Remaining limits:** operator did not paste a `git rev-parse HEAD` in the second screen, so an exact physical Git SHA is **NOT ATTESTED** by this snippet, although the strings match the earlier source changes. This screen does not query running Docker, infer API READY, prove any image's loaded weights or show actually completed model switching. Old managed/A/B Docker identities were not independently rechecked in this UI turn.
