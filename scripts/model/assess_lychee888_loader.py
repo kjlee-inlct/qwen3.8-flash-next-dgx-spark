@@ -34,6 +34,9 @@ INSTALLED_PLE_SHA256 = (
 )
 INSTALLED_PLE_ROUTE = "NATIVE_FP8_CONFIG_ONLY_SOURCE"
 ACTUAL_DGX_POSTCHECK = "PASS_CURRENT_ONLY_HISTORICAL_FAIL_REVIEW_RETAINED"
+# NVIDIA documented nominal DGX Spark 128 GB *unified* system memory.
+# Decimal bytes, NOT a claim of current MemAvailable or allocatable VRAM.
+DGX_SPARK_NOMINAL_UNIFIED_BYTES = 128_000_000_000
 ROOT = Path(__file__).resolve().parents[2]
 PATCH = ROOT / "scripts/patch-nv-mixed.py"
 DOCKERFILE = ROOT / "scripts/Dockerfile.nv-mixed"
@@ -113,6 +116,35 @@ def installed_ple_dispatch_contract(config: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def nominal_full_resident_size_screen(index: dict[str, Any]) -> dict[str, Any]:
+    """Necessary size comparison only, never a runtime peak-memory model.
+
+    The safetensors index metadata total_size is file-side tensor bytes,
+    not a validated sum of actual resident pages, CUDA allocations, cache
+    or disk-mmap/offload behavior. Missing and malformed values fail closed.
+    """
+    meta = index.get("metadata")
+    raw = meta.get("total_size") if isinstance(meta, dict) else None
+    if not isinstance(raw, int) or isinstance(raw, bool) or raw <= 0:
+        return {
+            "indexed_tensor_bytes": None,
+            "dgx_spark_nominal_unified_bytes": DGX_SPARK_NOMINAL_UNIFIED_BYTES,
+            "full_resident_nominal_memory_screen": "NOT_VERIFIED_INDEX_TOTAL_SIZE_MISSING",
+            "runtime_peak_memory": "NOT_MEASURED",
+        }
+    verdict = (
+        "INDEXED_TENSOR_BYTES_EXCEED_NOMINAL_UNIFIED_MEMORY"
+        if raw > DGX_SPARK_NOMINAL_UNIFIED_BYTES
+        else "INDEXED_TENSOR_BYTES_WITHIN_NOMINAL_ONLY_NO_HEADROOM_PROOF"
+    )
+    return {
+        "indexed_tensor_bytes": raw,
+        "dgx_spark_nominal_unified_bytes": DGX_SPARK_NOMINAL_UNIFIED_BYTES,
+        "full_resident_nominal_memory_screen": verdict,
+        "runtime_peak_memory": "NOT_MEASURED",
+    }
+
+
 def assess(
     api: dict[str, Any], config: dict[str, Any], index: dict[str, Any],
     patch_source: str, dockerfile_source: str,
@@ -141,10 +173,12 @@ def assess(
         patch_match = "NOT_APPLICABLE; NVIDIA PATCH EXPECTS ModelOptMixedPrecisionConfig"
 
     installed_gate = installed_ple_dispatch_contract(config)
+    memory_screen = nominal_full_resident_size_screen(index)
     return {
         "checkpoint": REPO,
         "immutable_revision": REVISION,
         **installed_gate,
+        **memory_screen,
         "l0_verdict": l0["verdict"],
         "index_tensor_keys": l0["index_tensor_keys"],
         "ple_weight_shards": l0["ple_weight_shards"],
@@ -199,7 +233,10 @@ def main() -> int:
             "quant_declared_format_class", "runtime_quant_class_expectation",
             "installed_native_gate_reachability", "bf16_global_scale_loader_gate",
             "ple_dtype_dispatch", "ct_prefix_scheme_resolution",
-            "installed_loader_contract", "managed_runtime_adapter",
+            "installed_loader_contract", "indexed_tensor_bytes",
+            "dgx_spark_nominal_unified_bytes",
+            "full_resident_nominal_memory_screen", "runtime_peak_memory",
+            "managed_runtime_adapter",
             "single_gb10_tp1", "verdict",
         ):
             print(f"{name}={result[name]}")
