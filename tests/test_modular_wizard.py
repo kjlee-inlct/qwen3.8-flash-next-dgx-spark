@@ -73,8 +73,8 @@ class ModularWizardTests(unittest.TestCase):
 
     def test_pinned_mazinb_restore_menu_source_requires_approval(self):
         source = (ROOT / "scripts/wizard/model-menu.sh").read_text()
-        self.assertIn("wizard_menu_option 8 'mazinb restore preflight", source)
-        self.assertIn("wizard_menu_option 9 'Restore pinned mazinb", source)
+        self.assertIn("wizard_menu_option 11 'mazinb restore preflight", source)
+        self.assertIn("wizard_menu_option 12 'Restore pinned mazinb", source)
         self.assertIn("wizard_yes_no 'Approve pinned mazinb large download", source)
         self.assertIn("RESTORE_MAZINB_PINNED", source)
         self.assertIn("QWEN38_MAZINB_RESTORE_APPROVED=1", source)
