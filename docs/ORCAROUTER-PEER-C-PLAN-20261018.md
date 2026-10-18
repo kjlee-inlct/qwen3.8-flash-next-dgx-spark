@@ -12,6 +12,41 @@
 - The OrcaRouter original and override JSON checked out on DGX matched the pasted third-party reference 7/7 in canonical values; this is only **config-value parity**, not actual installed wheel/weights/driver allocation equivalence.
 - The only verified fresh five-profile protocol llama-benchy measurements so far are for `mazinb` (v0.29); OrcaRouter is `NOT_MEASURED`.
 
+## Additional actual DGX Docker tag and storage read-only receipts — 2026-10-18
+
+The owner independently inspected the **tag**, after earlier exact
+`@sha256:` inspection returned `No such image`: 
+
+```text
+docker image inspect vllm/vllm-openai:qwen38-flash-next-arm64-cu130
+Error response from daemon: No such image: vllm/vllm-openai:qwen38-flash-next-arm64-cu130
+
+df -h "$(docker info --format '{{.DockerRootDir}}')"
+/dev/nvme0n1p2  916G  451G  418G  52%  /
+
+docker system df
+Images          10  6  47.22GB  146.6kB (0%)
+Containers       8  2   1.552GB   1.506GB (97%)
+Local Volumes    3  3   34.16kB  0B (0%)
+Build Cache    127  0   1.163MB  7.433kB
+```
+
+Interpretation: both the exact pinned image reference and the matching
+human-readable tag were absent from local Docker at inspection.
+Other aliases remain theoretically possible, not attested. Root Docker
+storage has **418G filesystem free**, which gives substantial headroom
+for a proposed image pull but is **not** a measured compressed+expanded
+peak storage budget. `RECLAIMABLE` is **not** deletion approval.
+Preserve all eight containers, especially old A/B and managed evidence;
+no prune, image pull or service start was authorized by this inspection.
+
+Following source-only C additions, Push and PR CI at HEAD `5a3c484d...`
+each failed *one* of 1,300 unittest cases because
+`tests/test_script_layout.py` treated a Markdown evidence-document
+reference to `scripts/model/` as a runtime code dependency. **All nine
+new C unit tests passed**. Source lint has since been corrected to
+exclude Markdown evidence from executable dependency analysis; a fresh
+full CI run must establish PASS before recommending an operator sync.
 ## Source-only implemented C preview
 
 Use the current successful-CI Git SHA **after operator-specified repository synchronization**, not an unverified current branch checkout:
