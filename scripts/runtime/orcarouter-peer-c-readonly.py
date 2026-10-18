@@ -128,8 +128,8 @@ def protected_receipt() -> str:
     return "THREE_STOPPED_EXISTING_IDS"
 
 
-def plan() -> None:
-    print("PEER_C_OPERATION=PLAN_ONLY_NO_HOST_INSPECTION")
+def plan(*, operation: str = "PLAN_ONLY_NO_HOST_INSPECTION") -> None:
+    print("PEER_C_OPERATION=" + operation)
     print("PEER_C_REGISTRY_TAG=" + TAG)
     print("PEER_C_REGISTRY_MANIFEST_DIGEST=" + DIGEST)
     print("PEER_C_REGISTRY_PLATFORM=linux/arm64")
@@ -145,7 +145,7 @@ def plan() -> None:
 
 
 def preflight() -> int:
-    plan()
+    plan(operation="PREFLIGHT_READ_ONLY_HOST_INSPECTION")
     machine = platform.machine().lower()
     host_ok = machine in ("aarch64", "arm64")
     print("PEER_C_HOST_ARCH=" + ("ARM64" if host_ok else "NOT_ARM64"))
@@ -158,9 +158,14 @@ def preflight() -> int:
     print("PEER_C_PROTECTED_OBJECTS=" + protected)
     service_rc, _ = command("systemctl", "is-active", "--quiet",
                             "qwen38-flash-next.service")
-    service_ok = service_rc in (3, 4)  # inactive or unknown; no start attempted
-    print("PEER_C_MANAGED_SERVICE=" + ("INACTIVE_OR_UNKNOWN" if service_ok else
-                                      "ACTIVE_OR_UNCLASSIFIED"))
+    # systemctl is-active --quiet: 3=inactive, 4=unknown/not-found.
+    # Unknown is acceptable for a SOURCE-ONLY inventory receipt, but is
+    # explicitly *not* evidence a live trial may safely start.
+    service_ok = service_rc in (3, 4)
+    service_text = {3: "INACTIVE", 4: "UNKNOWN_NOT_LIVE_APPROVED"}.get(
+        service_rc, "ACTIVE_OR_UNCLASSIFIED"
+    )
+    print("PEER_C_MANAGED_SERVICE=" + service_text)
     try:
         free_gib = shutil.disk_usage("/").free // (1024 ** 3)
         print("PEER_C_ROOT_DISK_FREE_GIB=" + str(free_gib))
