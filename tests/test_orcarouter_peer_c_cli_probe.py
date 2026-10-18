@@ -152,6 +152,89 @@ class PeerCCliProbeTest(unittest.TestCase):
              self.assertRaisesRegex(MOD.ProbeError, "image/config ID"):
             MOD.preadmission()
 
+    def test_failed_help_is_classified_as_not_evaluated(self):
+        self.assertIn('"NOT_EVALUATED_HELP_FAILED" if p.returncode != 0',
+                      MOD.IN_CONTAINER)
+        self.assertIn('"PRESENT_IN_HELP" if re.search(pattern, combined)',
+                      MOD.IN_CONTAINER)
+
+    def test_report_reads_consumed_failed_probe_without_new_docker(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            out = root / "peer-c-cli-20261018T115111Z-5e41d75a"
+            out.mkdir()
+            (root / "peer-c-cli-approved-once-20261018.json").write_text(
+                json.dumps({
+                    "operation": "one-time-cpu-cli-probe",
+                    "approved_scope": "NO_GPU_NO_MODEL_NO_NETWORK",
+                    "source_sha": "4873016f1d9fd864e6cce30c18fb96634b412fe3",
+                    "name": "qwen38-peer-c-cpu-cli-20261018T115111Z-5e41d75a",
+                    "evidence": str(out),
+                }),
+                encoding="utf-8")
+            (out / "vllm-serve-help-all.txt").write_text(
+                "Traceback (most recent call last):\n"
+                "RuntimeError: No CUDA platform was detected\n",
+                encoding="utf-8")
+            (out / "raw.log").write_text(
+                "PEER_C_PACKAGE_VLLM=0.1.dev20073+g8e685d198\n"
+                "PEER_C_HELP_EXIT_CODE=1\nPEER_C_CLI_HELP=FAILED\n"
+                "PEER_C_HELP_BASE64=THIS_IS_NOT_PRINTED\n",
+                encoding="utf-8")
+            record = {"qwen38-flash-next": {"id": "a" * 64}}
+            (out / "before-protected.json").write_text(json.dumps(record))
+            (out / "after-protected.json").write_text(json.dumps(record))
+            with mock.patch.object(MOD, "OUTROOT", root), \
+                 mock.patch.object(MOD, "ONCE",
+                                   root / "peer-c-cli-approved-once-20261018.json"), \
+                 mock.patch.object(MOD, "query", side_effect=AssertionError("Docker")), \
+                 mock.patch.object(MOD.subprocess, "run",
+                                   side_effect=AssertionError("subprocess")), \
+                 mock.patch("sys.argv", ["probe.py", "report"]), \
+                 redirect_stdout(io.StringIO()) as stdout:
+                self.assertEqual(MOD.main(), 0)
+            text = stdout.getvalue()
+            self.assertIn("PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED", text)
+            self.assertIn("PEER_C_SAVED_PROTECTED=UNCHANGED", text)
+            self.assertIn("RuntimeError: No CUDA platform was detected", text)
+            self.assertNotIn("THIS_IS_NOT_PRINTED", text)
+            self.assertIn("PEER_C_SAVED_REPORT=READ_ONLY_COMPLETE_NO_REPEAT", text)
+
+    def test_report_no_receipt_blocks_without_spawning_docker(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with mock.patch.object(MOD, "OUTROOT", root), \
+                 mock.patch.object(MOD, "ONCE", root / "missing.json"), \
+                 mock.patch.object(MOD.subprocess, "run",
+                                   side_effect=AssertionError("Docker")), \
+                 mock.patch("sys.argv", ["probe.py", "report"]), \
+                 redirect_stdout(io.StringIO()) as stdout:
+                self.assertEqual(MOD.main(), 2)
+            self.assertIn("PEER_C_SAVED_REPORT=NO_APPROVED_RECEIPT",
+                          stdout.getvalue())
+
+    def test_report_rejects_external_evidence_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "peer-c-cli-approved-once-20261018.json").write_text(
+                json.dumps({
+                    "operation": "one-time-cpu-cli-probe",
+                    "approved_scope": "NO_GPU_NO_MODEL_NO_NETWORK",
+                    "source_sha": "a" * 40,
+                    "name": "qwen38-peer-c-cpu-cli-foo",
+                    "evidence": "/tmp/unrelated/peer-c-cli-foo",
+                }))
+            with mock.patch.object(MOD, "OUTROOT", root), \
+                 mock.patch.object(MOD, "ONCE",
+                                   root / "peer-c-cli-approved-once-20261018.json"), \
+                 mock.patch.object(MOD.subprocess, "run",
+                                   side_effect=AssertionError("Docker")), \
+                 mock.patch("sys.argv", ["probe.py", "report"]), \
+                 redirect_stdout(io.StringIO()) as stdout:
+                self.assertEqual(MOD.main(), 2)
+            self.assertIn("PEER_C_SAVED_REPORT=BLOCKED_READ_ERROR",
+                          stdout.getvalue())
+
     def test_timeout_stop_rejects_unowned_or_protected_containers(self):
         protected_id = MOD.PEER.PROTECTED_IDENTITIES["qwen38-flash-next"][0]
         obj = {
