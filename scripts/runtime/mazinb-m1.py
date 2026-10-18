@@ -127,6 +127,21 @@ def read_manifest(state: Path) -> tuple[dict, str]:
     return manifest, digest
 
 
+def pinned_clean_source_sha() -> str:
+    """A live reinstall and its Terminal B must run the identical clean HEAD."""
+    git_dir = call("git", "-C", str(ROOT), "rev-parse", "--show-toplevel")
+    require(git_dir.stdout.strip() == str(ROOT.resolve()),
+            "unexpected repository worktree root")
+    branch = call("git", "-C", str(ROOT), "branch", "--show-current")
+    require(branch.stdout.strip() == "feature/wizard-modular-phase1-20261014",
+            "unexpected project source branch")
+    dirty = call("git", "-C", str(ROOT), "status", "--porcelain=v1")
+    require(not dirty.stdout.strip(), "project source worktree not clean")
+    sha = call("git", "-C", str(ROOT), "rev-parse", "HEAD").stdout.strip()
+    require(bool(HEX64.fullmatch(sha)), "project source SHA not 40-hex")
+    return sha
+
+
 def historical_retirement_snapshot(state: Path) -> dict[str, str]:
     """Hash-pin the already archived M1 session; never write original files."""
     old_root = state / "mazinb-m1"
@@ -240,6 +255,7 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
     old = snapshot_old(expected)
     historical = (historical_retirement_snapshot(state)
                   if SESSION_SLOT == "reinstall" else None)
+    source_sha = pinned_clean_source_sha() if SESSION_SLOT == "reinstall" else None
     if SESSION_SLOT == "reinstall":
         idle = call("python3", "-B",
                     str(ROOT / "scripts/diagnostics/verify-managed-idle.py"),
@@ -282,7 +298,8 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
     require(current.resolve() == release, "release changed in preflight")
     return {"old": old, "release": str(release), "manifest_sha256": digest,
             "image_id": image_id, "model_path": str(model_path),
-            "monitor": manifest, "historical_snapshot": historical}
+            "monitor": manifest, "historical_snapshot": historical,
+            "source_sha": source_sha}
 
 
 def read_json(path: Path) -> dict:
@@ -444,6 +461,9 @@ def verify_host(record: dict, snap: dict, state: Path, data: Path) -> None:
                 and historical_retirement_snapshot(state) == snap["historical_snapshot"],
                 "archived historical M1 evidence drift")
         assert_project_units_nonstarting()
+        require(snap.get("source_sha") is not None
+                and pinned_clean_source_sha() == snap["source_sha"],
+                "project source SHA or clean-worktree drift")
     require(not (Path(record["monitor_dir"]) / "runtime-stop.env").exists(),
             "candidate triggered memory-protection stop")
     require(not kernel_rm_since(record["kernel_since"]), "NVIDIA RM memory allocation error")
@@ -548,7 +568,8 @@ def reconcile() -> None:
         other = json.loads(recovery_file(per_trial))
         require(isinstance(other, dict), "per-trial M1 journal must be an object")
         immutable_keys = ("schema", "name", "id", "old_id", "old_image_id",
-                          "image_id", "release", "manifest_sha256", "model",
+                          "image_id", "release", "manifest_sha256", "source_sha",
+                          "historical_snapshot", "model",
                           "port", "kv_bytes", "monitor_dir", "trial_home",
                           "started_at", "kernel_since")
         require(all(record.get(key) == other.get(key) for key in immutable_keys),
@@ -696,6 +717,7 @@ def run_session(expected: str) -> None:
                   "image_id": snap["image_id"], "release": snap["release"],
                   "manifest_sha256": snap["manifest_sha256"],
                   "historical_snapshot": snap["historical_snapshot"],
+                  "source_sha": snap["source_sha"],
                   "model": MODEL, "port": PORT, "kv_bytes": KV_BYTES,
                   "monitor_dir": str(monitor_dir),
                   "trial_home": str(trial_home), "started_at": now.isoformat(),
@@ -877,7 +899,8 @@ def bench_admission() -> None:
             "M1 watchdog heartbeat stale")
     snap = {"old": snapshot_old(record["old_id"]), "release": record["release"],
             "manifest_sha256": record["manifest_sha256"],
-            "historical_snapshot": record.get("historical_snapshot")}
+            "historical_snapshot": record.get("historical_snapshot"),
+            "source_sha": record.get("source_sha")}
     verify_host(record, snap, state, data)
     require(api_healthy(), "M1 API not ready with exact mazinb model identity")
     print(f"M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY")
