@@ -1,3 +1,34 @@
+## 2026-10-18 — ACTUAL DGX official ARM64 peer C image pull VERIFIED, protected Docker unchanged
+
+The operator explicitly authorized **only pinned image download and
+identity verification**. On physical DGX, `docker pull --platform linux/arm64`
+of `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`
+completed and live local `docker image inspect` produced
+`PEER_C_VERIFY=PASS` with `OS=linux`, `Architecture=arm64`,
+exact expected `RepoDigests` and distinct image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`.
+Source registry label information is not yet proof of actual embedded
+wheel revision or runtime model compatibility.
+
+The exact protected `qwen38-flash-next`, `qwen38-ab-legacy`,
+`qwen38-ab-v029` container ID/image/status/running/OOMKilled metadata
+were identical before and after the pull; `diff -u` passed and operator
+printed `PEER_C_PROTECTED_DOCKER=UNCHANGED`.
+Evidence root `/home/inlc/orcarouter-bench-evidence/peer-c-image-20261018T093728Z`
+holds `pull.log`, JSON image inspect, verification output, pre/post
+protected receipts and a `SHA256SUMS.txt` file. The owner's terminal
+did not paste checksum contents nor attest post-run verification.
+
+**Current gate:** `PEER_C_IMAGE_STAGE=VERIFIED`,
+`PEER_C_MODEL_START=NOT_PERFORMED`,
+`PEER_C_BENCHMARK=NOT_MEASURED`.
+Run the independently developed **read-only** C preflight on a
+known-clean, explicitly synchronized exact source SHA; check
+image/guard/runtime metadata before designing live candidate.
+**No live Docker create/start/exec, GPU, service, cleanup or
+PR merge approval is implied by the download-only approval.**
+[Exact actual DGX image receipt and protected postcheck](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+[Peer C planning](ORCAROUTER-PEER-C-PLAN-20261018.md).
 ## 2026-10-18 — ACTUAL DGX OrcaRouter v0.29 B protection stop proven; official ARM64 C image NOT LOCAL
 
 New owner physical **read-only observation** of the preserved Oct-13 B:
