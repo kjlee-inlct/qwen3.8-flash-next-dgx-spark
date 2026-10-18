@@ -138,6 +138,47 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("profile     : nvidia", result.stdout)
         self.assertIn("DRY-RUN complete", result.stdout)
 
+    def test_official_arm64_c_backend_is_disabled_in_primary_install_wizard(self) -> None:
+        result = self.run_wizard("official-arm64-c\n2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Not selectable: OrcaRouter official ARM64 C runtime", result.stdout)
+        self.assertIn("BLOCKED: Official ARM64 C", result.stdout)
+        self.assertIn("not", result.stdout.lower())
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertNotIn("image       : vllm/vllm-openai@", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_official_c_cli_alias_does_not_bypass_wizard_qualification(self) -> None:
+        for value in ("c", "official-c", "official-arm64-c"):
+            with self.subTest(value=value):
+                result = subprocess.run(
+                    [str(ROOT / "install.sh"), "--lang", "en",
+                     "--orcarouter-runtime", value, "--no-start", "--dry-run"],
+                    cwd=ROOT, env=os.environ, capture_output=True, text=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("not qualified for install/switch", result.stderr)
+                self.assertNotIn("DRY-RUN complete", result.stdout)
+
+    def test_vllm_variant_registry_separates_model_backend_and_runtime(self) -> None:
+        script = (
+            'source scripts/backend/backends.sh; '
+            'for runtime in v029 legacy official-arm64-c; do '
+            'describe_orcarouter_vllm_variant "$runtime" || exit 2; '
+            'printf "%s|%s|%s\\n" "$runtime" '
+            '"$ORCA_VARIANT_STATUS" "$ORCA_VARIANT_SELECTABLE"; '
+            'done'
+        )
+        result = subprocess.run(
+            ["bash", "-c", script], cwd=ROOT, text=True,
+            capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("v029|implemented|1", result.stdout)
+        self.assertIn("legacy|experimental|1", result.stdout)
+        self.assertIn("official-arm64-c|unqualified|0", result.stdout)
+
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
             [str(ROOT / "install.sh"), "--list-backends"],
