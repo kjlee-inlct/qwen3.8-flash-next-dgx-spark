@@ -92,5 +92,5 @@ python3 -B "$ROOT_DIR/scripts/benchmark/llama-benchy-report.py" \
   --upstream-sha "$UPSTREAM"
 (cd -- "$OUT" && sha256sum -- mazinb.json mazinb-report.md > SHA256SUMS &&
    sha256sum -c SHA256SUMS)
-echo 'MAZINB_R2_BENCH=MEASURED_CHECKSUMS_PASS_IF_WRAPPER_POST_ADMISSION_PASSES'
+echo 'MAZINB_R2_BENCH=RAW_SAVED_CHECKSUMS_PASS_AWAIT_WRAPPER_POST_ADMISSION'
 echo 'MAZINB_R2_OFF_HOST_BACKUP=REQUIRED_NOT_PERFORMED'
