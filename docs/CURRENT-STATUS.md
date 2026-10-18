@@ -1,3 +1,46 @@
+## 2026-10-18 — EXTERNAL_ONLY OrcaRouter single-Spark CPU-offload reference; not lychee888 qualification
+
+The operator supplied the **full third-party report and posted
+config.json** from https://arca.live/b/alpaca/181506470.
+Its author reports serving **orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4**
+on one DGX Spark, TP=1, using
+`vllm/vllm-openai:qwen38-flash-next-arm64-cu130`,
+`VLLM_PLE_CPU_OFFLOAD=1`, MP executor,
+24GiB KV, configured 262144 max context, concurrency 3 and
+MTP=2. Author-reported memory 118.4/122GB (~97%);
+mixed concurrency-3 output 52.4 tok/s on a short 12-request
+benchmark. This is **external third-party user evidence**,
+NOT our physical DGX evidence and NOT proof that a real
+262K input or long-term stable benchmark passed.
+
+We parsed the posted OrcaRouter config: Qwen4Exp,
+`compressed-tensors` `mixed-precision`, 2 CT groups
+(300 FP8 channel targets + 1 NVFP4 experts regex),
+753 ignored entries, 2 explicitly ignored PLE projection
+strings, **no direct PLE ngram target** and
+**no `ple_embedding_dtype` declaration**. Thus it is
+**NOT the lychee888 FP8 PLE / BF16 global-scale
+checkpoint** and cannot clear the actual installed
+`NATIVE_FP8_CONFIG_ONLY_SOURCE` dispatch blocker.
+
+Single GB10 has shared system/GPU memory:
+pinned CPU PLE offload still costs physical memory
+and does not alone resolve lychee888's pinned index
+`132279699754` bytes exceeding 128GB nominal.
+External upstream file-backed alternatives
+[#58439](https://github.com/vllm-project/vllm/pull/58439)
+`checkpoint_mapped` and
+[#58815](https://github.com/vllm-project/vllm/pull/58815)
+`host_file_gather` are **OPEN/UNMERGED** as of
+2026-10-18, potentially more relevant than
+simple pinned-CPU offload but not part of our
+installed image and NOT QUALIFIED for lychee888.
+[Full external-evidence comparison](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+No Docker/model download/GPU action is authorized;
+current physical protected resources remain
+`PASS_CURRENT_ONLY`, original historical
+`FAIL_REVIEW` preserved.
+
 ## 2026-10-18 — SOURCE_ONLY compressed-tensors config_groups shape inventory for lychee888
 
 The first actual DGX pinned model JSON L0 completed at
