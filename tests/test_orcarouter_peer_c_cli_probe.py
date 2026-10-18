@@ -174,7 +174,9 @@ class PeerCCliProbeTest(unittest.TestCase):
                 encoding="utf-8")
             (out / "vllm-serve-help-all.txt").write_text(
                 "Traceback (most recent call last):\n"
-                "RuntimeError: No CUDA platform was detected\n",
+                '  File "/usr/local/lib/python3.12/dist-packages/vllm/config/device.py", line 56\n'
+                "    default = default.default_factory()\n"
+                "RuntimeError: Failed to infer device type\n",
                 encoding="utf-8")
             (out / "raw.log").write_text(
                 "PEER_C_PACKAGE_VLLM=0.1.dev20073+g8e685d198\n"
@@ -196,9 +198,37 @@ class PeerCCliProbeTest(unittest.TestCase):
             text = stdout.getvalue()
             self.assertIn("PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED", text)
             self.assertIn("PEER_C_SAVED_PROTECTED=UNCHANGED", text)
-            self.assertIn("RuntimeError: No CUDA platform was detected", text)
+            self.assertIn("RuntimeError: Failed to infer device type", text)
+            self.assertIn(
+                "PEER_C_SAVED_FAILURE_CLASS=DEVICE_INFERENCE_FAILED_IN_GPU_HIDDEN_PROBE",
+                text)
+            self.assertIn("PEER_C_GPU_RUNTIME=NOT_TESTED_BY_CPU_ONLY_PROBE", text)
+            self.assertIn("PEER_C_BACKEND_WIZARD_INSTALL_SWITCH=NOT_QUALIFIED",
+                          text)
             self.assertNotIn("THIS_IS_NOT_PRINTED", text)
             self.assertIn("PEER_C_SAVED_REPORT=READ_ONLY_COMPLETE_NO_REPEAT", text)
+
+    def test_saved_help_failure_unknown_is_not_misattributed_to_gpu(self):
+        raw = "PEER_C_HELP_EXIT_CODE=1\nPEER_C_CLI_HELP=FAILED\n"
+        text = "Traceback:\nImportError: unrelated missing module"
+        self.assertEqual(
+            MOD.classify_saved_help_error(text, raw),
+            "HELP_FAILED_CAUSE_UNDETERMINED")
+
+    def test_saved_help_success_is_never_called_device_failure(self):
+        raw = "PEER_C_HELP_EXIT_CODE=0\nPEER_C_CLI_HELP=PASS_METADATA_ONLY_NO_MODEL\n"
+        text = ("vllm/config/device.py\nRuntimeError: Failed to infer device type"
+                "\ndefault.default_factory()")
+        self.assertEqual(
+            MOD.classify_saved_help_error(text, raw),
+            "NOT_A_RECORDED_HELP_FAILURE")
+
+    def test_missing_traceback_frames_is_unknown_not_proof(self):
+        raw = "PEER_C_CLI_HELP=FAILED\n"
+        self.assertEqual(
+            MOD.classify_saved_help_error(
+                "RuntimeError: Failed to infer device type", raw),
+            "HELP_FAILED_CAUSE_UNDETERMINED")
 
     def test_report_no_receipt_blocks_without_spawning_docker(self):
         with tempfile.TemporaryDirectory() as td:
