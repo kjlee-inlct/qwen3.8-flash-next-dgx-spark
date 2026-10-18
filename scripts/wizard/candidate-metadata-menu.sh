@@ -43,6 +43,25 @@ wizard_installed_ple_source_audit() {
   wizard_warning 'lychee888 remains NOT installable. Runtime adapter and memory admission are still blocked.'
 }
 
+wizard_orcarouter_backend_status() {
+  wizard_header 'OrcaRouter backend compatibility / 실행 백엔드 호환성'
+  wizard_info 'P0: select checkpoint and backend in the install/switch Wizard after qualification.'
+  wizard_info 'Checkpoint profile: orcarouter (one model, multiple possible runtime backends).'
+  wizard_info 'Registry configured backend: vllm-orcarouter-v029:v1 (implementation entry exists).'
+  wizard_warning 'A registry entry does not prove the currently installed runtime is READY.'
+  wizard_warning 'Official ARM64 C: image digest/package versions verified; CPU-only CLI help failed before printing options.'
+  wizard_warning 'Failure: DeviceConfig could not infer GPU type in deliberately GPU-hidden probe.'
+  wizard_warning 'CLI options, PLE, KV16GiB, MTP, model READY and host stability remain UNQUALIFIED.'
+  wizard_warning 'Official C cannot be selected for ordinary install/switch; historical A/B preserved.'
+  wizard_info 'Saved traceback: Advanced -> Official ARM64 C saved CLI result (read-only).'
+  printf '%s\n' \
+    'ORCAROUTER_PROFILE=orcarouter' \
+    'ORCAROUTER_V029_BACKEND=REGISTRY_IMPLEMENTED_NOT_LIVE_ATTESTED_HERE' \
+    'ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY' \
+    'ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED' \
+    'WIZARD_MUTATION=NONE'
+}
+
 wizard_candidate_metadata_menu() {
   local choice
   while true; do
@@ -53,6 +72,7 @@ wizard_candidate_metadata_menu() {
     wizard_menu_option 2 'catplusplus full JSON file inventory / 전체 파일 목록 출력'
     wizard_menu_option 3 'lychee888 pinned FP8-PLE source gate / FP8-PLE 로더 소스 점검'
     wizard_menu_option 4 'Existing image PLE loader source (read-only) / 기존 이미지 PLE 소스 검사'
+    wizard_menu_option 5 'OrcaRouter backend qualification (read-only) / 백엔드 호환성'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -60,6 +80,7 @@ wizard_candidate_metadata_menu() {
       2) wizard_catplusplus_metadata_check full ;;
       3) wizard_lychee888_source_gate ;;
       4) wizard_installed_ple_source_audit ;;
+      5) wizard_orcarouter_backend_status ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
