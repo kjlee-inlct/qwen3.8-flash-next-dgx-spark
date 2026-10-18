@@ -46,7 +46,7 @@ wizard_advanced_menu() {
     wizard_menu_option 3 'Official ARM64 OrcaRouter C plan (source-only) / C 계획'
     wizard_menu_option 4 'Official ARM64 OrcaRouter C preflight (read-only) / C 사전 점검'
     wizard_menu_option 5 'Official ARM64 OrcaRouter C host snapshot (read-only) / C 호스트 확인'
-    wizard_menu_option 6 'Official ARM64 C one-shot CPU CLI probe (new disposable container) / C CPU CLI 점검'
+    wizard_menu_option 6 'Official ARM64 C saved CLI result (read-only) / C 호환성 검사 결과'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -59,11 +59,8 @@ wizard_advanced_menu() {
         wizard_warning 'C preflight BLOCKED; this does not authorize image pull or GPU start.' ;;
       5) python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-readonly.py" host-check ||
         wizard_warning 'C host snapshot BLOCKED; no Docker create or GPU start was attempted.' ;;
-      6) wizard_warning 'One-time CPU-only Docker container: no GPU, network, mounts or model. Disposable NEW probe is automatically removed.'
-         wizard_yes_no 'Approve the already-authorized CPU CLI probe on this DGX? / CPU 전용 단일 CLI 검사를 진행합니까?' no ||
-           continue
-         python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-cli-probe.py" run --approved-cpu-only ||
-           wizard_warning 'C CPU CLI probe FAILED or BLOCKED; inspect evidence. Do not retry without a new approval.' ;;
+      6) python3 -B "${ROOT_DIR}/scripts/runtime/orcarouter-peer-c-cli-probe.py" report ||
+           wizard_warning 'Saved C CLI diagnostic unavailable. No new Docker probe was started.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
