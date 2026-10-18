@@ -290,6 +290,47 @@ wizard_catplusplus_m1_menu() {
   done
 }
 
+wizard_mazinb_reinstall_m1_menu() {
+  local selection approval
+  while true; do
+    wizard_header 'mazinb reinstalled M1 isolated service / mazinb 재설치 실험 서비스'
+    wizard_warning 'Foreground-localhost experimental API; NOT a boot-persistent systemd service.'
+    wizard_warning 'Requires restored pinned ~174 GiB checkpoint and independent owner GPU approval.'
+    wizard_warning 'Original 2026-10-14 M1 journal/tombstone and OrcaRouter remain immutable.'
+    wizard_menu_option 1 'Reinstalled M1 plan (no start) / 계획'
+    wizard_menu_option 2 'Reinstalled M1 status (read-only) / 상태'
+    wizard_menu_option 3 'Reinstalled M1 physical preflight (read-only) / 사전 점검'
+    wizard_menu_option 4 'Reinstalled M1 protected GPU start (explicit approval) / 보호 기동'
+    wizard_menu_option 0 'Back / 이전'
+    wizard_input selection 'Select / 선택' 0
+    case "$selection" in
+      1) python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" plan --session-slot reinstall ||
+           wizard_warning 'M1 reinstall plan unavailable.' ;;
+      2) python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" status --session-slot reinstall ||
+           wizard_warning 'M1 reinstall session status unavailable.' ;;
+      3)
+         wizard_m1_confirm_old_id || continue
+         wizard_m1_authenticate_read_only_kernel || continue
+         python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" preflight --session-slot reinstall \
+           --expected-old-id "$WIZARD_M1_EXPECTED_ID" ||
+           wizard_warning 'Reinstalled M1 admission BLOCKED; no Docker/GPU start.' ;;
+      4)
+         wizard_yes_no 'Approve NEW GPU-heavy isolated mazinb live session? / 새 GPU 실행 승인?' no || continue
+         wizard_m1_confirm_old_id || continue
+         wizard_input approval 'Type START_RESTORED_MAZINB_16G exactly' ''
+         [[ "$approval" == START_RESTORED_MAZINB_16G ]] || {
+           wizard_warning 'GPU start not approved exactly; cancelled.'; continue;
+         }
+         wizard_m1_authenticate_read_only_kernel || continue
+         QWEN38_M1_WIZARD_APPROVED=1 python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" \
+           run --session-slot reinstall --expected-old-id "$WIZARD_M1_EXPECTED_ID" ||
+           wizard_warning 'Reinstalled M1 ended/blocked; inspect preserved new journal; never bypass watchdog.' ;;
+      0|q|Q) return 0 ;;
+      *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
+    esac
+  done
+}
+
 wizard_benchmark_menu() {
   local choice
   while true; do
@@ -318,6 +359,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 21 'Hybrid H6 stopped trial forensic audit (read-only) / 보호 중지 원인 검사'
     wizard_menu_option 22 'catplusplus M0 benchmark plan (NO weights/GPU) / 실측 전 계획'
     wizard_menu_option 23 'catplusplus M1 mazinb-parity workflow (safe gates) / M1 진행 단계'
+    wizard_menu_option 24 'Restored mazinb M1 isolated serve + bench (protected) / 재설치 M1 실측'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -362,6 +404,7 @@ wizard_benchmark_menu() {
           wizard_warning 'Research-only: ~174.86 GiB root weights exceed nominal 128GB unified RAM.'
           wizard_warning 'Actual benchmark BLOCKED until loader/offload/monitor qualification and separate approval.' ;;
       23) wizard_catplusplus_m1_menu ;;
+      24) wizard_mazinb_reinstall_m1_menu ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
