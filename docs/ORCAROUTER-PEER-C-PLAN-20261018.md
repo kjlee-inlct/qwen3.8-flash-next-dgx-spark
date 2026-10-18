@@ -402,6 +402,37 @@ existing assets. New offline tests cover candidate submenu
 navigation, protected retired option numbers, normal install
 and CLI rejection. Await exact-head CI plus real DGX verification
 before claiming installed Wizard behavior.
+## 2026-10-18 physical Wizard result: current manifest is legacy skinny TP1, NOT registry v0.29
+
+The operator navigated physical DGX Wizard `3 -> 7 -> 5`
+and confirmed the C read-only backend-qualification screen
+renders and returns safely; `WIZARD_MUTATION=NONE`.
+The **main Wizard header**, however, reported
+`Manifest: valid (phase=complete)`, `Profile: orcarouter`,
+`Image: vllm-skinny-tp1:v1`, `Runtime: NOT_PROBED`.
+The C screen's `vllm-orcarouter-v029:v1` is a **registry
+default candidate, not the manifest-configured image**.
+Do not equate either with a running/READY service.
+
+A subsequent source-only Wizard UX fix uses the existing
+strict manifest parser to show the configured image
+(recognized `vllm-skinny-tp1:v1` ->
+`LEGACY_SKINNY_MANIFEST_IMAGE`) distinctly from the
+registry default `vllm-orcarouter-v029:v1`; it also
+displays `ORCAROUTER_LIVE_RUNTIME=NOT_PROBED`,
+and fails closed for absent/invalid/unknown manifests.
+All C install/switch selection remains blocked.
+Regression tests include distinct manifest images and unsafe
+symlink/missing manifest cases. This new output has not
+yet been executed on the physical DGX.
+
+Keep P0 operator goal in focus: an eventual ordinary
+install/switch Wizard must show **installed configuration,
+candidate backend, compatibility, live runtime and safe
+transition eligibility** as separate states. The existing
+managed/old A/B Docker evidence stays protected, and the
+one-time CPU probe approval stays consumed.
+[Exact physical Wizard transcript](../scripts/benchmark/evidence/dgx-orcarouter-wizard-backend-status-20261018.md).
 ## Later independent C live design — not implemented or approved
 
 1. **Completed, download-only-approved 2026-10-18:** the operator downloaded the pinned official ARM64 image `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` and verified OS/arch, RepoDigest and image config ID, and preserved A/B IDs. This approval **does not** extend to any C create/start/GPU trial.
