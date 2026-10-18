@@ -357,7 +357,7 @@ keeps `PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED`,
 `PEER_C_BACKEND_WIZARD_INSTALL_SWITCH=NOT_QUALIFIED`.
 Unrelated help tracebacks remain cause-undetermined. The
 normal *Model management* Wizard now exposes a **read-only**
-OrcaRouter backend qualification screen (model-menu option 8)
+OrcaRouter backend qualification screen (Model management -> 7 Candidate metadata -> 5 OrcaRouter qualification)
 which distinguishes the configured v0.29 implementation from
 official C's disabled/unqualified backend. This improves the
 primary install/switch control plane without falsely allowing
@@ -370,6 +370,38 @@ fail-closed OrcaRouter backend selection/switch in the Wizard
 using existing managed lifecycle semantics, not a standalone
 manual Docker script path.
 [Recovered physical traceback and exact scope](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
+## 2026-10-18 Wizard P0 extension — C eligibility in primary install/switch
+
+The earlier top-level Model management menu option 8 conflicted with
+the deliberately retired Hybrid research menu slots 8, 9 and 10.
+CI on source `714717c7d663bdc0c3c337bd6a8e71c4af17df48`
+failed exactly two synthetic navigation tests due to this collision.
+The correction keeps these old numbers invalid and moves the
+read-only C eligibility screen under existing Model management
+**7 Candidate metadata -> 5 OrcaRouter backend qualification**.
+No retired Hybrid operation was re-enabled.
+
+`install.sh` additionally uses a side-effect-free
+`scripts/backend/backends.sh` runtime variant registry:
+`v029=implemented/selectable`, `legacy=experimental/selectable`
+(fresh install only),
+`official-arm64-c=unqualified/not selectable`.
+The **ordinary first-install and existing-install switch**
+model selection views now show the official C backend as disabled
+with the evidence-based reason (device inference during
+GPU-hidden CPU-help probe, options/PLE/KV/model READY untested).
+Attempted interactive aliases `c`, `official-c` and
+`official-arm64-c` are explicitly blocked and the matching
+`--orcarouter-runtime` CLI forms fail closed before mutation.
+No model profile or default image was changed.
+
+This improves operator-facing Wizard diagnostics only.
+It does **not** qualify the official C runtime, complete
+live profile switching, start a Docker/GPU workload, or alter
+existing assets. New offline tests cover candidate submenu
+navigation, protected retired option numbers, normal install
+and CLI rejection. Await exact-head CI plus real DGX verification
+before claiming installed Wizard behavior.
 ## Later independent C live design — not implemented or approved
 
 1. **Completed, download-only-approved 2026-10-18:** the operator downloaded the pinned official ARM64 image `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` and verified OS/arch, RepoDigest and image config ID, and preserved A/B IDs. This approval **does not** extend to any C create/start/GPU trial.
