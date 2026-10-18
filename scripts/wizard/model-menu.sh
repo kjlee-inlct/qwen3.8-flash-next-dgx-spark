@@ -22,25 +22,6 @@ wizard_profile_preview() {
   wizard_warning 'Live switching not yet connected in the modular controller.'
 }
 
-wizard_orcarouter_backend_status() {
-  wizard_header 'OrcaRouter backend compatibility / 실행 백엔드 호환성'
-  wizard_info 'P0: select checkpoint and backend in the install/switch Wizard after qualification.'
-  wizard_info 'Checkpoint profile: orcarouter (one model, multiple possible runtime backends).'
-  wizard_info 'Registry configured backend: vllm-orcarouter-v029:v1 (implementation entry exists).'
-  wizard_warning 'A registry entry does not prove the currently installed runtime is READY.'
-  wizard_warning 'Official ARM64 C: image digest/package versions verified; CPU-only CLI help failed before printing options.'
-  wizard_warning 'Failure: DeviceConfig could not infer GPU type in deliberately GPU-hidden probe.'
-  wizard_warning 'CLI options, PLE, KV16GiB, MTP, model READY and host stability remain UNQUALIFIED.'
-  wizard_warning 'Official C cannot be selected for ordinary install/switch; historical A/B preserved.'
-  wizard_info 'Saved traceback: Advanced -> Official ARM64 C saved CLI result (read-only).'
-  printf '%s\n' \
-    'ORCAROUTER_PROFILE=orcarouter' \
-    'ORCAROUTER_V029_BACKEND=REGISTRY_IMPLEMENTED_NOT_LIVE_ATTESTED_HERE' \
-    'ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY' \
-    'ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED' \
-    'WIZARD_MUTATION=NONE'
-}
-
 wizard_mazinb_source_reclaim() {
   local confirmed
   wizard_header 'mazinb original checkpoint reclamation / 원본 모델 정리'
@@ -117,7 +98,6 @@ wizard_model_menu() {
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
     wizard_menu_option 7 'Candidate Hub metadata (read-only) / 후보 모델 파일·용량 조사'
-    wizard_menu_option 8 'OrcaRouter backend compatibility (read-only) / 백엔드 선택 가능 상태'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -128,7 +108,6 @@ wizard_model_menu() {
       5) wizard_mazinb_docker_retire ;;
       6) wizard_mazinb_retirement_audit ;;
       7) wizard_candidate_metadata_menu ;;
-      8) wizard_orcarouter_backend_status ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
