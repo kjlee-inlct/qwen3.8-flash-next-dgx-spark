@@ -1,3 +1,33 @@
+## 2026-10-18 — SOURCE_ONLY nominal unified memory screen for lychee888 index
+
+The same standalone pinned metadata/source assessor now
+screens `model.safetensors.index.json` `metadata.total_size`
+against NVIDIA DGX Spark's **nominal 128 GB decimal
+unified system memory** (128,000,000,000 bytes).
+The model card reports ~123.25 GiB on disk and an
+index tensor size of 132,279,699,754 bytes,
+which **exceeds** the nominal memory capacity.
+However those card claims and the model-index JSON
+are **file-side metadata**, not a real pinned-host
+`MemAvailable`, vLLM loaded tensor residency,
+peak allocations, CPU/disk offload, mmap behavior,
+or usable KV-cache/headroom measurement.
+When the indexed `total_size` value is not present,
+positive integral, and explicitly returned by the
+pinned metadata source, the code fails closed with
+`NOT_VERIFIED_INDEX_TOTAL_SIZE_MISSING`.
+It never outputs `FIT` or `INSTALLABLE`, even when
+index bytes are below nominal size.
+
+One Spark **TP=1** still `NOT_VERIFIED`. This
+source-only screen does not authorize checkpoint
+download, disk-mmap or GPU experiments, and should
+not be used to claim either measured OOM or
+measured stable fit. Source: NVIDIA
+https://docs.nvidia.com/dgx/dgx-spark/hardware.html;
+model card:
+https://huggingface.co/lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE.
+
 ## 2026-10-18 — SOURCE_ONLY lychee888 installed PLE native-FP8 versus compressed-tensors dispatch gate
 
 The prior actual-DGX `PASS_CURRENT_ONLY` resource safeguard
