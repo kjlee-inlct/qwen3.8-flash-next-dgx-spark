@@ -61,6 +61,15 @@ class CandidateMetadataWizardTests(unittest.TestCase):
         for forbidden in ("docker run", "docker rm", "rm -rf", "--install", "--yes", "curl -O", "hf download"):
             self.assertNotIn(forbidden, menu)
 
+    def test_orcarouter_backend_status_in_existing_candidate_menu(self):
+        result, calls = self.run_menu("5\\n0\\n".replace("\\n", "\n"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, "")
+        self.assertIn("ORCAROUTER_PROFILE=orcarouter", result.stdout)
+        self.assertIn("ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED",
+                      result.stdout)
+        self.assertIn("WIZARD_MUTATION=NONE", result.stdout)
+
     def test_summary_only_invokes_pinned_metadata_probe(self):
         result, calls = self.run_menu("1\n0\n")
         self.assertEqual(result.returncode, 0, result.stderr)
