@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
+import urllib.error
 import json
 from pathlib import Path
 import subprocess
@@ -175,6 +178,77 @@ class LoaderSourceAuditTests(unittest.TestCase):
         handler = AUDIT.NoRedirect()
         with self.assertRaisesRegex(AUDIT.SourceAuditBlocked, "REDIRECT"):
             handler.redirect_request(fake_req, None, 302, "Found", {}, "https://unexpected.invalid")
+
+    def test_transport_probe_is_bounded_head_only_and_redacts_redirect(self) -> None:
+        """The Wizard diagnostic never follows redirects or reads response bodies."""
+        calls = []
+
+        class Reply:
+            status = 200
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self, *_):
+                raise AssertionError("probe must never read body")
+
+        class Opener:
+            def open(self, request, timeout):
+                calls.append((request.full_url, request.get_method(), timeout))
+                self_case.assertEqual(request.get_method(), "HEAD")
+                self_case.assertEqual(timeout, 15)
+                if "/resolve/" in request.full_url:
+                    raise urllib.error.HTTPError(
+                        request.full_url, 302, "Found",
+                        {"Location": "/api/resolve-cache/signed?token=SECRET"},
+                        None)
+                return Reply()
+
+        self_case = self
+        output = io.StringIO()
+        with mock.patch.object(AUDIT.urllib.request, "build_opener",
+                               return_value=Opener()) as builder, \
+             contextlib.redirect_stdout(output):
+            self.assertEqual(AUDIT.probe_transport(), 0)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual({v[1] for v in calls}, {"HEAD"})
+        self.assertEqual({v[0] for v in calls}, {
+            AUDIT.BASE + AUDIT.CONFIG,
+            AUDIT.BASE + AUDIT.LAUNCHER,
+            AUDIT.RAW_BASE + AUDIT.CONFIG,
+            AUDIT.RAW_BASE + AUDIT.LAUNCHER,
+        })
+        self.assertEqual(builder.call_count, 1)
+        result = output.getvalue()
+        self.assertIn("CONFIG_RESOLVE_HTTP_STATUS=302", result)
+        self.assertIn("CONFIG_RESOLVE_LOCATION_CLASS=HF_SAME_HOST", result)
+        self.assertIn("CONFIG_RESOLVE_LOCATION_ROUTE=API_RESOLVE_CACHE", result)
+        self.assertIn("CONFIG_RAW_HTTP_STATUS=200", result)
+        self.assertIn("CATPLUSPLUS_TRANSPORT_BODIES_READ=NONE", result)
+        self.assertIn("CATPLUSPLUS_TRANSPORT_REDIRECT_FOLLOWED=NO", result)
+        self.assertIn("CATPLUSPLUS_TRANSPORT_LIVE_ADMISSION=BLOCKED", result)
+        self.assertNotIn("SECRET", result)
+        self.assertNotIn("signed?token", result)
+
+    def test_transport_never_follows_or_trusts_external_redirects(self) -> None:
+        handler = AUDIT.ProbeNoRedirect()
+        self.assertIsNone(handler.redirect_request(
+            None, None, 302, "Found", {}, "https://bad.invalid/a"))
+        self.assertEqual(
+            AUDIT.classify_location(
+                AUDIT.BASE + AUDIT.CONFIG, "https://other.example/signed?x=private"),
+            ("EXTERNAL_HOST", "OTHER_ROUTE"))
+        self.assertEqual(
+            AUDIT.classify_location(
+                AUDIT.BASE + AUDIT.CONFIG, "http://huggingface.co/untrusted"),
+            ("NON_HTTPS", "OTHER_ROUTE"))
+        self.assertEqual(
+            AUDIT.classify_location(AUDIT.BASE + AUDIT.CONFIG, None),
+            ("NONE", "NONE"))
 
     def test_no_unbounded_network_or_exec_surface(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
