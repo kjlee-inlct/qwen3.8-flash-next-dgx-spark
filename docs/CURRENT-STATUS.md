@@ -1,3 +1,47 @@
+## 2026-10-18 — catplusplus M0 benchmark plan uploaded to GitHub: SOURCE ONLY / NOT_MEASURED
+
+The operator suggested prioritizing catplusplus benchmark preparation
+before additional OrcaRouter C attempts. The project remains
+**P0 Wizard-first install/switch/inspect/safe-uninstall**.
+
+Earlier ACTUAL DGX pinned L0 metadata for
+`catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed`
+revision `3251fd8afbd08f76368a9bfa71132d9aef364813`:
+`TREE_METADATA_COMPLETE`, 17,448 entries, 96 `.safetensors`
+files, complete repository 188,540,029,444 bytes (~175.59 GiB)
+and root weights ~174.8553 GiB (rounded).
+These weights exceed nominal 128 decimal GB unified RAM even
+before KV cache, loader staging and safety reserve, so naive
+fully-resident single-GB10 inference is not a safe next step.
+
+**GitHub source-only M0 added:**
+- `scripts/benchmark/catplusplus-plan.py plan [--json]`: purely
+static pinned candidate plan with NO host/API/Docker/GPU/download
+actions, correct baseline C1/PP512+2048/TG128/warmup1/repeats3,
+empty `measurements` and `NOT_MEASURED` terminal status.
+- Operator Wizard main **5 Benchmark -> 22 catplusplus M0 plan**
+provides same read-only status and memory/loader blockers.
+- Existing strict `llama-benchy-report.py` accepts optional
+`--profile catplusplus` **only to convert future real JSON**;
+this does NOT make the candidate model installable or prove READY.
+- Synthetic tests for the M0 plan, menu and report identity/numeric
+guards. New standalone
+`docs/model-reports/catplusplus.md` explains source gates
+and actual mazinb M1 benchmark reference without fake cat metrics.
+
+**LIVE/INSTALL GATE REMAINS CLOSED:** no catplusplus weights
+downloaded, no actual model/driver runtime qualified, no
+MXFP8 qkvz+scale/ModelOpt mixed/FP8 PLE loader proof, no safe
+partial memory-residency plan or GPU/RM watch, no catplusplus
+API READY, no inference and **NO CATPLUSPLUS BENCHMARK**.
+The previously owner-approved one-time C CPU CLI probe was
+consumed and does not authorize catplusplus actions.
+No new DGX/container/service changes, no Docker removal or
+PR merge. A real downloaded model or GPU run still requires
+new explicit owner authorization and independent host gates.
+
+[M0 benchmark plan and comparison boundaries](model-reports/catplusplus.md).
+[Last physical pinned metadata evidence](CATPLUSPLUS-METADATA-COMPATIBILITY.md).
 ## 2026-10-18 — ACTUAL DGX corrected OrcaRouter backend Wizard status now physically verified
 
 Owner provided the **second actual DGX Wizard compatibility-screen output**
