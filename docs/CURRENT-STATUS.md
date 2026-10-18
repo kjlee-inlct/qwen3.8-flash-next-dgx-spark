@@ -1,3 +1,30 @@
+## 2026-10-18 — ACTUAL DGX peer C read-only host resources: free TCP port, swap and RAM
+
+The owner ran `docker ps`, `ss -H -ltn '( sport = :18891 )'`,
+`swapon --show` and a `/proc/meminfo` grep on the real DGX.
+Only two Docker containers were currently running:
+`open-webui` (id-prefix `9219d017e6ca`, exposed TCP 3000, healthy)
+and `portainer` (id-prefix `360cc353a945`, exposed TCP 9443).
+The `ss` check displayed **no listener** for C's planned TCP port
+`18891` at that instant. `/swap-ple.img` was active at 128G with
+`1020.3M` used, and `/swap.img` was active at 16G with 0 used.
+Raw `/proc/meminfo`: `MemFree=119400264 kB`,
+`MemAvailable=123921280 kB`, `CmaFree=69320 kB`,
+`SwapTotal=150994936 kB`, `SwapFree=149950172 kB`.
+So immediate **non-CMA free** was approximately **113.8 GiB**
+and **non-CMA available** approximately **118.1 GiB**;
+swap free was about **143.0 GiB**.
+
+Interpretation: the *current* host snapshot is far above previous
+low-free-RAM B protection samples, and no existing TCP listener
+collides on port 18891. This is **NOT a port reservation, allocation
+guarantee, GPU model compatibility result, proof other services are
+absent, or authorization for live C start**. Existing A/B/managed
+full exact IDs remain preserved per prior physical preflight.
+No source deploy, host operation, Docker creation, model READY,
+RAM-soak test or benchmark occurred in this inspection.
+
+[Exact operator host resource and running-container evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-host-readonly-20261018.md).
 ## 2026-10-18 — ACTUAL DGX C systemd inventory: exact managed unit NOT_FOUND in system AND user managers
 
 The owner ran `systemctl show qwen38-flash-next.service` and
