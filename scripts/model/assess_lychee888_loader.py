@@ -116,6 +116,65 @@ def installed_ple_dispatch_contract(config: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def ct_static_target_inventory(config: dict[str, Any]) -> dict[str, Any]:
+    """Inspect pinned CT config-group SHAPE, never emulate vLLM matching.
+
+    CT targets can be exact names, regex expressions, or module types, and
+    may be remapped by runtime. An unqualified substring match is strictly
+    a lead for source review, not a proven resolver outcome.
+    """
+    quant = config.get("quantization_config")
+    if not isinstance(quant, dict):
+        raise MetadataError("quantization_config missing for CT target inventory")
+    if quant.get("quant_method") != "compressed-tensors":
+        return {
+            "ct_config_groups": None,
+            "ct_declared_targets": None,
+            "ct_ple_target_string_mentions": None,
+            "ct_ignore_entries": None,
+            "ct_ple_ignore_string_mentions": None,
+            "ct_target_resolution": "NOT_APPLICABLE_NON_CT",
+        }
+    groups = quant.get("config_groups")
+    if groups is None:
+        return {
+            "ct_config_groups": None,
+            "ct_declared_targets": None,
+            "ct_ple_target_string_mentions": None,
+            "ct_ignore_entries": None,
+            "ct_ple_ignore_string_mentions": None,
+            "ct_target_resolution": "NOT_VERIFIED_CONFIG_GROUPS_ABSENT",
+        }
+    if not isinstance(groups, dict):
+        raise MetadataError("compressed-tensors config_groups must be an object")
+    count = 0
+    ple_mentions = 0
+    for group, scheme in groups.items():
+        if not isinstance(group, str) or not isinstance(scheme, dict):
+            raise MetadataError("invalid CT group identifier or entry")
+        targets = scheme.get("targets")
+        if not isinstance(targets, list) or any(
+            not isinstance(t, str) or not t for t in targets
+        ):
+            raise MetadataError("invalid compressed-tensors targets")
+        count += len(targets)
+        ple_mentions += sum("ple" in target.lower() for target in targets)
+    ignored = quant.get("ignore", [])
+    if not isinstance(ignored, list) or any(
+        not isinstance(item, str) for item in ignored
+    ):
+        raise MetadataError("invalid compressed-tensors ignore list")
+    ignore_ple_mentions = sum("ple" in target.lower() for target in ignored)
+    return {
+        "ct_config_groups": len(groups),
+        "ct_declared_targets": count,
+        "ct_ple_target_string_mentions": ple_mentions,
+        "ct_ignore_entries": len(ignored),
+        "ct_ple_ignore_string_mentions": ignore_ple_mentions,
+        "ct_target_resolution": "STRUCTURAL_ONLY_MATCHING_NOT_EMULATED",
+    }
+
+
 def nominal_full_resident_size_screen(index: dict[str, Any]) -> dict[str, Any]:
     """Necessary size comparison only, never a runtime peak-memory model.
 
@@ -174,11 +233,13 @@ def assess(
 
     installed_gate = installed_ple_dispatch_contract(config)
     memory_screen = nominal_full_resident_size_screen(index)
+    ct_inventory = ct_static_target_inventory(config)
     return {
         "checkpoint": REPO,
         "immutable_revision": REVISION,
         **installed_gate,
         **memory_screen,
+        **ct_inventory,
         "l0_verdict": l0["verdict"],
         "index_tensor_keys": l0["index_tensor_keys"],
         "ple_weight_shards": l0["ple_weight_shards"],
@@ -236,6 +297,9 @@ def main() -> int:
             "installed_loader_contract", "indexed_tensor_bytes",
             "dgx_spark_nominal_unified_bytes",
             "full_resident_nominal_memory_screen", "runtime_peak_memory",
+            "ct_config_groups", "ct_declared_targets",
+            "ct_ple_target_string_mentions", "ct_ignore_entries",
+            "ct_ple_ignore_string_mentions", "ct_target_resolution",
             "managed_runtime_adapter",
             "single_gb10_tp1", "verdict",
         ):
