@@ -214,3 +214,42 @@ postchecks. A complete physical cycle must report
 `PLE_TEMP_CLEANUP=EXACT_ID_REMOVED_VERIFIED` and
 `PLE_TEMP_PROTECTED_POSTCHECK=MATCH`. The script and Synthetic
 tests are SOURCE_ONLY until a DGX terminal result is supplied.
+
+## 2026-10-18 — Actual probe partial outcome and read-only follow-up after consumed approval
+
+The owner physically executed the approved one-shot created-only,
+no-mount image source probe at exact clean checkout
+`f1bce18ef6ab444ced20f4efed2ba8ec42a250f0`
+with 2/2 successful CI. Actual Python 3.12 PLE source
+was copied and statically audited: SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`,
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`, BF16 global scale
+registration and scale multiply source signatures
+`PRESENT`. The temporary object with exact ID
+`eb91d18dd1a1b45a4cba233160165bbe43b7835afa21873686402b505aac9375`
+was reported removed and missing under
+`EXACT_ID_REMOVED_VERIFIED`.
+
+**A critical protected postcheck failed:** `FAIL_REVIEW`.
+The original one-shot script compared whole sensitive Docker
+state/config/mount dictionaries without recording which
+field differed. This is not proof of actual damage and
+not evidence that protected state was identical.
+The one-temporary-container approval has been **used**;
+do not repeat the mutating probe, create another container,
+force-clean anything, restart services or launch GPU tests.
+
+Read-only follow-up source tool:
+`python3 -B scripts/model/inspect_ple_postcheck_readonly.py`.
+It checks temp absence **by both exact full ID and unique name**,
+current image exact SHA256/size, existing protected IDs,
+current `exited` state, `ReadonlyRootfs=false`,
+nested RO bind topology and same-time name-vs-ID
+Docker inspect section comparisons. No sources, labels,
+raw HostConfig, env or sensitive paths are printed.
+A successful current-only result **cannot determine the
+original historical mismatch** without retained pre/post
+field-level snapshots; preserve `FAIL_REVIEW` in original
+evidence and report `HISTORICAL_FAILURE_CAUSE=UNRECOVERABLE`.
+Do not confuse this tool with permission for another Docker
+mutation.
