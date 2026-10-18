@@ -1,3 +1,36 @@
+## 2026-10-18 — SOURCE_ONLY compressed-tensors config_groups shape inventory for lychee888
+
+The first actual DGX pinned model JSON L0 completed at
+`b9114544eb35d7275740cf0ca2e9d010134f7cbb`:
+index `total_size=132279699754` bytes, 223047 tensor
+keys, 128 PLE shards, one global scale and
+`compressed-tensors` `mixed-precision`.
+The installed-image PLE selector remains known
+only via prior physical SHA/AST evidence
+`NATIVE_FP8_CONFIG_ONLY_SOURCE` with no
+CT resolver runtime attestation.
+
+The same existing metadata-only assessor was extended
+with a **structural CT config-group inventory**:
+group count, target-pattern count, PLE substring
+mentions in group targets, ignored-target entries
+and PLE substring mentions in ignore list.
+These counts can help identify which fixed
+checkpoint scheme declarations need source review.
+**They are NOT runtime target matching.**
+Actual CT matching may use layer class names,
+regexes, fused remapping and ignored layers;
+the installed image's `CompressedTensorsConfig`
+implementation and prefix rules are **not
+audited**, and a literal string mention alone
+does not qualify FP8 PLE dispatch. Missing or
+malformed structures are explicitly unknown
+or fail-closed; no silent fallback to success.
+The implementation is SOURCE_ONLY + synthetic tests.
+The next operator command is the same pinned
+JSON-only CLI at a successfully validated new HEAD.
+No Docker/GPU/weight operations are authorized.
+
 ## 2026-10-18 — ACTUAL_DGX pinned lychee888 metadata L0 success and over-nominal index bytes
 
 The operator on the physical DGX verified clean local
