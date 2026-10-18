@@ -830,3 +830,49 @@ Next independent L1/L2 source-only gate: investigate
 dispatch and scale-load contract without runtime
 mutation or checkpoint download.
 [Physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — installed-source receipt versus compressed-tensors checkpoint dispatch
+
+**Actual image-derived PLE source is known by SHA256/static AST receipt only:**
+`/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py`
+SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`.
+The bounded AST found
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`, a BF16
+`weight_scale` registration signature and a scale
+multiplication signature. The actual source bytes
+are not retained in GitHub; do not infer a complete
+installed loader path or method invocation from signatures.
+
+Pinned lychee888 uses `compressed-tensors`
+`mixed-precision` (not `modelopt_mixed`),
+FP8 PLE dtype metadata, 128 indexed PLE weight
+shards and one indexed global scale. The vLLM native
+`Fp8Config` selector is **not proved reachable** from
+the expected `CompressedTensorsConfig` class. The
+NVIDIA MIXED_PRECISION-specific project patch
+is **not a tested CT adapter**, and merely
+forcing the FP8 selection branch would not yet
+prove exact prefix/scheme matching, global scale
+`weight_scale` register/load/validate semantics
+or checkpoint-specific MoE dispatch.
+
+A maintained source-only gate, `assess_lychee888_loader.py`,
+now emits both the pinned checkpoint declaration
+and the physical installed source SHA/route,
+`NO_DIRECT_NATIVE_FP8_CLASS_MATCH_PROVEN` and
+`BLOCKED_SOURCE_ONLY_UNQUALIFIED` with offline
+negative/positive-metadata tests. Do not promote
+the lychee888 profile to installable.
+
+**External comparator, not installed proof:** newer
+[vLLM PLE embedding API](https://docs.vllm.ai/en/latest/api/vllm/models/qwen4_exp/common/ngram_embedding/)
+exposes explicit `embedding_dtype=float8_e4m3fn`
+and `CompressedTensorsConfig` checks. That implementation
+may inform a separately approved adapter design, but
+its newer code and runtime assumptions cannot simply
+be applied to the pinned 20.63-GB image or a single
+DGX Spark TP=1. A future patch must be isolated,
+based on verified source bytes, and validated without
+changing the protected image/containers; approval
+for such modification has **NOT** been given.
