@@ -1,3 +1,19 @@
+## 2026-10-18 — Official ARM64 C source metadata: entrypoint compatible, package still unattested
+
+Following successful physical pinned image pull, the owner read
+`docker image inspect` runtime metadata without starting a container.
+The same image ID `sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`
+and exact RepoDigest were present; OCI Entrypoint is
+`["vllm", "serve"]`, `Cmd` absent, workdir `/vllm-workspace`,
+`CUDA_VERSION=13.0.1`, but `VLLM_BUILD_COMMIT=unknown`,
+`org.opencontainers.image.revision=unknown` and runtime env
+`VLLM_VERSION` not set. Existing `serve.sh` appends `/model` and
+flags, which matches the expected `vllm serve /model ...` argv
+shape **only**. CPU PLE/offload, compressed-tensors loader, MTP,
+KV memory flag, vLLM wheel version and host stability remain
+UNATTESTED. No container or model was launched, no API READY
+and no OrcaRouter benchmark obtained.
+[Actual physical source/Entrypoint evidence](../../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
 ## 2026-10-18 — Official ARM64 peer C image download confirmed; no inference run
 
 The DGX operator performed the separately approved
