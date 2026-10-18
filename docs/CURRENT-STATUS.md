@@ -1,3 +1,34 @@
+## 2026-10-18 — ACTUAL DGX NEW C host-check PASS (CI-qualified source; static only)
+
+Owner safely fast-forwarded to exact Git HEAD
+`c54248245376565c24c96893ba27f00032d6bffa`
+(`GIT_SYNC=PASS`), then executed
+`python3 -B scripts/runtime/orcarouter-peer-c-readonly.py host-check`
+on the physical DGX.
+Actual output: `PEER_C_OPERATION=HOST_CHECK_READ_ONLY`,
+`PEER_C_RUNNING_DOCKER=ONLY_KNOWN_ADMIN_CONTAINERS`,
+`PEER_C_PORT_18891=NO_LISTENER_AT_CHECK`,
+`PEER_C_PLE_SWAP=PLE_SWAP_ACTIVE`,
+`PEER_C_NONCMA_FREE_KIB=119329120`,
+`PEER_C_NONCMA_AVAILABLE_KIB=123853516`,
+`PEER_C_SWAP_FREE_KIB=149950172`,
+`PEER_C_MEMORY_MARGIN=MINIMUM_STATIC_MARGIN_MET`,
+`PEER_C_HOST_CHECK=PASS_SNAPSHOT_NOT_LIVE_APPROVAL`,
+`HOST_CHECK_EXIT_CODE=0`.
+Github CI on the exact DGX synchronized SHA was Push+PR SUCCESS.
+
+**Scope:** only an independent read-only momentary host readiness
+check passed. No C trial create/start, new services, model load,
+host protected monitor arming, GPU execution, 180s soak or throughput
+was performed. Existing managed/A/B identity/stop evidence remains
+preserved; today's host snapshot does not replace the exact-ID check.
+
+**Next source gate:** confirm the pinned official ARM64 image's
+**actual** vLLM CLI/wheel and 16GiB KV/CPU PLE/MTP options, then
+finish an independent uniquely named C create-only and protected
+watchdog-before-start controller with synthetic CI tests. Any Docker
+create/run or GPU model test needs separate owner approval.
+[Physical host-check receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-host-readonly-20261018.md).
 ## 2026-10-18 — ACTUAL DGX peer C read-only host resources: free TCP port, swap and RAM
 
 The owner ran `docker ps`, `ss -H -ltn '( sport = :18891 )'`,
