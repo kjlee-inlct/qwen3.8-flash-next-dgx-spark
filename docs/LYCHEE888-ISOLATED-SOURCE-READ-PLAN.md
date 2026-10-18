@@ -281,3 +281,30 @@ host source strings privately. Retain the stop gate
 for any material/invalid mount difference.
 No further temp create/remove, `docker cp` or GPU
 activity is authorized.
+
+## 2026-10-18 — Final physical current-state triage PASS_CURRENT_ONLY; one-time probe retired
+
+On the actual DGX, the operator executed the
+mount-order-aware, read-only postcheck at
+`a24cd3a7ce48c7531cabbdfec0139327eefce18a`,
+CI `SUCCESS_2_OF_2`. All current fixed protected
+resource checks passed: the one-time temp is absent
+by ID and name; pinned original image ID/size matches;
+both protected containers remain stopped with intact
+expected names/IDs, immutable image references and
+nested RO model bind topology. Managed name/ID mount
+record difference was **ordering-only**; legacy A/B
+records matched exactly with identical order.
+`PASS_CURRENT_ONLY` is grounded on this later
+current-state snapshot and does not rewrite the
+original one-shot source probe's historical
+`FAIL_REVIEW` without retained field-level
+before/after evidence.
+
+The previously owner-approved single create/copy/remove
+cycle was **consumed** and its temporary object verified
+absent. No new temporary Docker object, repeat copy,
+full image export, service start, GPU inference, checkpoint
+download or model admission is authorized. Continue only
+offline/source/metadata analysis until a distinct
+future scope is reviewed and approved.
