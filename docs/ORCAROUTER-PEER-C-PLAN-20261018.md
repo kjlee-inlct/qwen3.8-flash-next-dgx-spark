@@ -160,6 +160,29 @@ missing PLE swap, low non-CMA memory/swap or failed OS query appears.
 synchronizes a CI-passed SHA; it has NOT yet run on the physical DGX.**
 `host-check` returning PASS would only establish a **dynamic
 point-in-time observation, not permit Docker create/start or GPU**.
+## ACTUAL DGX new `host-check` script PASS — 2026-10-18
+
+On clean fast-forward-synchronized Git HEAD
+`c54248245376565c24c96893ba27f00032d6bffa`,
+the owner ran the newly introduced *read-only* command
+`python3 -B scripts/runtime/orcarouter-peer-c-readonly.py host-check`.
+Source and both GitHub CI workflows were PASS for that synchronized
+HEAD; the on-host script returned code `0`,
+`PEER_C_HOST_CHECK=PASS_SNAPSHOT_NOT_LIVE_APPROVAL`.
+Observed running Docker names were only `open-webui` and `portainer`,
+port `18891` had no listener, PLE swap was active,
+`noncmafree=119329120 KiB` (~113.8 GiB),
+`noncma_available=123853516 KiB` (~118.1 GiB), and
+`swapfree=149950172 KiB` (~143.0 GiB).
+[Physical executed host-check evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-host-readonly-20261018.md).
+
+**What remains blocked:** exact installed image CLI and vLLM wheel
+identity, CPU PLE/KV16GiB/MTP parsing/semantics, and an isolated
+Wizard-managed uniquely named C create-only controller with watchdog
+armed before any actual start. The previous owner approval covers
+the completed Docker image **download/verification only**;
+any new Docker container creation/CPU-only CLI probe, live GPU
+start or benchmark requires separate explicit authorization.
 ## ACTUAL DGX source-only C preflight PASS — 2026-10-18
 
 Operator performed exact 30-commit safe Git fast-forward to
