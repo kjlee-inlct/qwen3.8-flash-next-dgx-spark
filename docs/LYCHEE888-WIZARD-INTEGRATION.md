@@ -787,3 +787,19 @@ protected-state change caused the mismatch; never assume
 either. Next step is narrowly scoped read-only identity,
 state, topology and inspect-field-drift diagnosis.
 [Full physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — Read-only follow-up to failed protected postcheck without repeated temp creation
+
+The previous one-shot actual DGX source probe achieved a
+source SHA256 and reported exact temp removal but
+`PLE_TEMP_PROTECTED_POSTCHECK=FAIL_REVIEW` with
+unclassified field drift. An isolated read-only
+`inspect_ple_postcheck_readonly.py` module and
+offline tests now inspect the current protected
+containers and pinned image by known IDs/name, plus
+temporary name/ID absence. Its sanitized output may
+prove current static configuration without claiming
+the historical pre/post comparison passed.
+**No second temporary probe is authorized.**
+[Original transcript and result](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
