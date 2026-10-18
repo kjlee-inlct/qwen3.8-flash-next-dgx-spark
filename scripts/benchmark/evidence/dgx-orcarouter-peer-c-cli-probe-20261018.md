@@ -66,3 +66,62 @@ The operator has not yet supplied the decoded CLI failure text or verified the l
 
 The permanent product mission is operator-friendly **`./install.sh` and `./uninstall.sh` Wizards for install/switch/inspect/safe removal**, not an indefinite series of manual trial scripts. The peer C official image is a proposed *backend option* of the existing OrcaRouter model, not a new checkpoint family and **NOT** installable/qualified yet. Diagnose this one-shot help failure from preserved evidence via a read-only Wizard detail/report flow; then implement a reusable model+backend compatibility gate that unqualified backends block in normal Wizard install/switch screens. Only after exact image CLI, true model support, live host safety and explicit GPU approval may the backend become wizard-selectable for actual install/switch. Do not change production defaults or misrepresent success.
 
+
+## Owner-recovered exact 34-line decoded CLI error — 2026-10-18 (later evidence)
+
+The operator read the original preserved
+`/home/inlc/orcarouter-bench-evidence/peer-c-cli-20261018T115111Z-5e41d75a/vllm-serve-help-all.txt`
+**without** rerunning Docker. The file had `TOTAL_LINES=34`, ended
+with `CLI_ERROR_EVIDENCE=READ_ONLY`; relevant original lines:
+
+```text
+1: INFO 10-18 11:51:21 [importing.py:53] Triton is installed but 0 active driver(s) found (expected 1). Disabling Triton to prevent runtime errors.
+2: INFO 10-18 11:51:21 [importing.py:88] Triton not installed or not compatible; certain GPU-related functions will not be available.
+4: W1018 11:51:21.804000 7 torch/utils/cpp_extension.py:178] No CUDA runtime is found, using CUDA_HOME='/usr/local/cuda'
+5: Traceback (most recent call last):
+6:   File "/usr/local/bin/vllm", line 10, in <module>
+9:   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/cli/main.py", line 90, in main
+12:   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/cli/serve.py", line 168, in subparser_init
+15:   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/cli_args.py", line 408, in make_arg_parser
+16:     parser = AsyncEngineArgs.add_cli_args(parser)
+19:   File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 1606, in add_cli_args
+22:     vllm_kwargs = get_kwargs(VllmConfig)
+27:   File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 318, in _compute_kwargs
+28:     default = default.default_factory()  # type: ignore[call-arg]
+32:   File "/usr/local/lib/python3.12/dist-packages/vllm/config/device.py", line 56, in __post_init__
+33:     raise RuntimeError(
+34: RuntimeError: Failed to infer device type, please set the environment variable `VLLM_LOGGING_LEVEL=DEBUG` to turn on verbose logging to help debug the issue.
+```
+
+**Root-cause class confirmed by traceback:** vLLM CLI calls its
+argument-parser construction (`make_arg_parser` -> `EngineArgs` ->
+`get_kwargs(VllmConfig)` -> Pydantic `default_factory` ->
+`vllm/config/device.py __post_init__`) **before printing flags**.
+That DeviceConfig default-factory raised
+`RuntimeError: Failed to infer device type`.
+**Reasonable environment attribution:** the explicitly approved
+CPU-only probe deliberately provided no NVIDIA driver/GPU
+(`--runtime runc`, no `--gpus`, `NVIDIA_VISIBLE_DEVICES=void`,
+`CUDA_VISIBLE_DEVICES=-1`); its Triton import and torch diagnostics
+also report no usable CUDA driver/runtime. This is a **deliberate
+GPU-less environment limitation of this specific CLI-help attempt**,
+not evidence the official ARM64 image has a broken GPU inference
+engine. The exact vLLM wheel revision remains unverified at
+source-tree level despite its distribution version string.
+
+**Qualification split (mandatory):**
+- `PEER_C_CPU_ONLY_HELP=FAILED_DURING_DEVICE_INFERENCE` — physical result.
+- `PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED` — no valid positive or
+negative result for any of the 17 requested CLI flags.
+- `PEER_C_GPU_RUNTIME_COMPATIBILITY=UNTESTED`,
+`PEER_C_MODEL_READY=NOT_MEASURED`,
+`PEER_C_BENCHMARK=NOT_MEASURED`.
+- The exact consumed one-time CPU approval must **not** be treated
+as reusable; do not try environment overrides or rerun new Docker
+containers on this permission.
+
+**Next approved action:** only GitHub source/document updates and
+read-only report of preserved artifacts. The normal operator-facing
+goal is the P0 install/switch/diagnose/uninstall Wizard with a clear
+unqualified C backend reason; do not ask operators to repeat
+low-level trial commands as the end product.
