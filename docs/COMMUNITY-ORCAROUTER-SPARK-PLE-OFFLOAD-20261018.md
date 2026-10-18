@@ -470,3 +470,57 @@ is authorized by merely documenting this future candidate.
 **Current gate:** `KV_DEFAULT=16GiB`,
 `KV_24GiB=FUTURE_CONDITIONALLY_ELIGIBLE_AB_NOT_APPROVED`,
 `RM_EARLY_ALLOCATION_ROOT_CAUSE=UNRESOLVED`.
+
+## 2026-10-18 — Official ARM64 CUDA 13 image provenance: source-only evidence and blocker
+
+New independent public *registry metadata* review of the peer image at the
+explicit **linux/arm64 manifest digest**
+`sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`:
+[Docker Hub exact manifest](https://hub.docker.com/layers/vllm/vllm-openai/qwen38-flash-next-arm64-cu130/images/sha256-3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e).
+
+- The published image is `linux/arm64`, with Ubuntu 24.04 base,
+  `CUDA_VERSION=13.0.1`, Python 3.12 build arguments and
+  `FLASHINFER_VERSION=0.6.17` build argument; the registry lists
+  ~9.04 GB compressed size. These identify a *registry artifact*, not
+  actual installed package imports, engine execution, or host memory behavior.
+- The image's build history sets `VLLM_BUILD_COMMIT=unknown` and
+  OCI `org.opencontainers.image.revision=unknown`, with
+  `VLLM_IMAGE_TAG=local/vllm-openai:dev`. Its wheel is copied from
+  build workspace artifacts, so this OCI metadata does **not** pin the
+  wheel's original Git revision or prove the full wheel source bytes.
+- **Corroborating but external-only** reports about the special
+  Qwen3.8 preview image describe vLLM runtime
+  `0.1.dev20073+g8e685d198`: see
+  [upstream user environment report #54426](https://github.com/vllm-project/vllm/issues/54426)
+  (same ARM64 manifest reported in a DGX Spark comment) and
+  [another published single-Spark deployment](https://github.com/dolf3131/dgx-spark-llm-serving).
+  This *reported version* cannot replace provenance from the exact
+  ARM64 image bytes. A GitHub contents lookup of public
+  `vllm-project/vllm` at ref `8e685d198` returned
+  `404 No commit found for the ref` during this review.
+  Do not claim this commit is a verified public upstream source checkout.
+- No approved Docker pull, image-layer extraction or new container execution
+  was performed; the latest operator check had
+  `OFFICIAL_IMAGE_LOCAL=NOT_PRESENT`.
+  **IMAGE_SOURCE_EXACT_REVISION=UNATTESTED**;
+  **OFFICIAL_IMAGE_ALLOCATOR_DIFF=NOT_PROVED**.
+
+**Next non-mutating source gate, after the on-host full/section JSON parity:**
+obtain an independently reproducible mapping from this immutable
+manifest to the actual installed vLLM wheel / Python source tree
+(with trusted wheel SHA256 or source provenance), then compare its
+`Qwen4Exp` model constructors, `CompressedTensors` NVFP4/FP8
+dispatch, PLE CPU worker/weight loader, FusedMoE allocation routing,
+and allocator/graph configuration with the project's **exact**
+preserved R23–R32 image provenance and source receipts.
+The physical R30 48 x 400 MiB `w13_weight` ownership and R31
+48 x 800 MiB pre-`create_weights` allocator/backing-growth inference
+remain the comparison targets. A change in CUDA/FlashInfer/version
+or an external successful startup is **not** evidence that either
+RM burst or strict `NV_ERR_NO_MEMORY` disappears.
+
+**Execution gate unchanged:** configuration-digest probe is
+read-only and source/CI-qualified only until the owner runs it on
+the qualified exact HEAD; image pull/build, Docker create/run, GPU,
+KV 24GiB, guard changes, protected asset cleanup, and PR merge all
+require separate explicit approval.
