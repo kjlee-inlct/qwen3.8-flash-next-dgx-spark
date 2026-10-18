@@ -44,18 +44,52 @@ wizard_installed_ple_source_audit() {
 }
 
 wizard_orcarouter_backend_status() {
+  local configured_image=NOT_AVAILABLE configured_variant=UNKNOWN
+  local installed_profile=NOT_AVAILABLE manifest_state=UNKNOWN
+
   wizard_header 'OrcaRouter backend compatibility / 실행 백엔드 호환성'
-  wizard_info 'P0: select checkpoint and backend in the install/switch Wizard after qualification.'
-  wizard_info 'Checkpoint profile: orcarouter (one model, multiple possible runtime backends).'
-  wizard_info 'Registry configured backend: vllm-orcarouter-v029:v1 (implementation entry exists).'
-  wizard_warning 'A registry entry does not prove the currently installed runtime is READY.'
-  wizard_warning 'Official ARM64 C: image digest/package versions verified; CPU-only CLI help failed before printing options.'
-  wizard_warning 'Failure: DeviceConfig could not infer GPU type in deliberately GPU-hidden probe.'
-  wizard_warning 'CLI options, PLE, KV16GiB, MTP, model READY and host stability remain UNQUALIFIED.'
-  wizard_warning 'Official C cannot be selected for ordinary install/switch; historical A/B preserved.'
-  wizard_info 'Saved traceback: Advanced -> Official ARM64 C saved CLI result (read-only).'
+  wizard_info 'P0: choose model and backend through the install/switch Wizard after qualification.'
+  # Do not source install.env: its fields must come from the strict
+  # maintenance parser in status.sh. This is a manifest snapshot only.
+  if ! declare -F wizard_read_manifest >/dev/null 2>&1; then
+    # This submenu is also sourced directly by some test/diagnostic callers.
+    # status.sh defines read-only helpers and has no import-time effects.
+    # shellcheck source=scripts/wizard/status.sh
+    source "${ROOT_DIR}/scripts/wizard/status.sh"
+  fi
+  wizard_read_manifest || return $?
+  manifest_state="${WIZARD_MANIFEST_STATE}"
+  if [[ "${manifest_state}" == valid ]]; then
+    installed_profile="${WIZARD_PROFILE}"
+    configured_image="${WIZARD_IMAGE}"
+    case "${configured_image}" in
+      vllm-skinny-tp1:v1) configured_variant=LEGACY_SKINNY_MANIFEST_IMAGE ;;
+      vllm-orcarouter-v029:v1) configured_variant=V029_MANIFEST_IMAGE ;;
+      *) configured_variant=OTHER_IMAGE_NOT_CLASSIFIED ;;
+    esac
+    wizard_info "Configured in installed manifest / 설치 매니페스트: profile=${installed_profile}, image=${configured_image}"
+    wizard_info "Configured variant / 기록된 백엔드: ${configured_variant}"
+    wizard_warning 'Configured image is NOT evidence that any runtime is currently running or READY.'
+  elif [[ "${manifest_state}" == invalid ]]; then
+    wizard_warning 'Installed manifest invalid or unsafe; cannot identify a configured runtime.'
+  else
+    wizard_info 'No installed manifest found; no active backend can be inferred.'
+  fi
+
+  wizard_info 'Registry default candidate / 레지스트리 기본 후보: vllm-orcarouter-v029:v1'
+  wizard_warning 'Registry candidate differs from installed configuration unless exact image names match.'
+  wizard_warning 'Official ARM64 C: pinned image/packages verified, but CLI help failed before options were printed.'
+  wizard_warning 'Cause: DeviceConfig could not infer GPU type in the deliberately GPU-hidden CPU-only probe.'
+  wizard_warning 'C options, PLE, KV16GiB, MTP, model READY and host stability remain UNQUALIFIED.'
+  wizard_warning 'Official C install/switch is DISABLED. Protected managed/A/B Docker objects are not changed.'
+  wizard_info 'Saved C diagnostic / 저장 로그: Advanced -> Official ARM64 C saved CLI result (read-only).'
   printf '%s\n' \
     'ORCAROUTER_PROFILE=orcarouter' \
+    "ORCAROUTER_MANIFEST_STATE=${manifest_state}" \
+    "ORCAROUTER_CONFIGURED_PROFILE=${installed_profile}" \
+    "ORCAROUTER_CONFIGURED_IMAGE=${configured_image}" \
+    "ORCAROUTER_CONFIGURED_VARIANT=${configured_variant}" \
+    'ORCAROUTER_LIVE_RUNTIME=NOT_PROBED' \
     'ORCAROUTER_V029_BACKEND=REGISTRY_IMPLEMENTED_NOT_LIVE_ATTESTED_HERE' \
     'ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY' \
     'ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED' \
