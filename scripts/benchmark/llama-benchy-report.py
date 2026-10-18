@@ -16,6 +16,7 @@ import sys
 
 PROFILES = (
     "orcarouter", "nvidia", "mazinb", "orcarouter-hybrid", "lychee888",
+    "catplusplus",  # REPORT LABEL ONLY; not installed/registered for serving
 )
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 MEASURES = (
