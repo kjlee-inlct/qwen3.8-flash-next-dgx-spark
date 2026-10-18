@@ -318,3 +318,27 @@ or relax safety protections.
 `OFFICIAL_IMAGE_DELTA=UNQUALIFIED`,
 `STRICT_HOST_STABILITY=NOT_QUALIFIED`,
 `NO_NEW_DGX_MUTATION`.
+
+### Community posted 48-layer config type breakdown (owner-supplied full JSON)
+
+The complete JSON attachment was parsed as one complete object:
+`text_config.num_hidden_layers=48`;
+`text_config.layer_types` has exactly **36
+`linear_attention`** and **12 `full_attention`**
+entries; `text_config.ple_layer_ids=[2]`.
+The project already has
+`scripts/model/prepare_config.py`,
+whose narrow rewrite maps exact unsupported
+`qwen_sparse_attention` strings into
+`full_attention` without modifying checkpoint
+tensor files. Thus the community override's
+normalized layer-type terminology is **consistent
+with our conversion's intent**. It does NOT
+prove that their complete config JSON matches
+our actual on-disk source/override, that the
+12 positions align exactly, or that backend
+checkpoint quantization and allocation behavior
+matches. An exact file-to-file comparison
+of *current existing* original and override
+remains the next non-mutating step.
+
