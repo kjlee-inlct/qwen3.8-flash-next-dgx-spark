@@ -1,3 +1,23 @@
+## 2026-10-18 — Physical B post-trial status: monitor-protection stop, no bench samples
+
+Current operator read-only status confirms the existing isolated v0.29
+B Docker `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`
+is `stopped/exited`, `ExitCode=137`, with a trial stop
+journal showing `STOP_REASON=memory-protection`. These observations
+do **not** date the model startup to 2026-10-18 or prove NVIDIA RM
+OOM/Docker OOM; exact B monitor sequence, Docker `OOMKilled`
+flag and kernel evidence remain uncollected in this transcript.
+Owner's 18888 `/health` and `/v1/models` both refused
+connections. The source benchmark client created two
+`status=fail` **error-only** qualification/decode records
+(`/health` connection refused); **no performance samples**
+were measured. Normal manager status reported installed/enabled/active
+all `no`; only `open-webui`/`portainer` shown running.
+Do not reuse/delete the existing B or bypass the wizard; new
+candidate design and live run require separate admission/approval.
+**BENCHMARK_STATUS stays NOT_MEASURED.**
+[Exact DGX operator output and classification](../../scripts/benchmark/evidence/dgx-orcarouter-v029-b-readonly-status-20261018.md).
+
 ## 2026-10-18 — Actual DGX mounted OrcaRouter override equals the posted peer JSON (7/7)
 
 Owner-provided terminal output from
