@@ -191,6 +191,91 @@ class M1SafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(M1.M1Error, "invalid completion"):
                 M1.inference_smoke()
 
+    def test_reinstall_session_uses_new_journal_and_preserves_archived_m1(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "qwen38-spark"
+            old_dir = state / "mazinb-m1"
+            old_dir.mkdir(parents=True)
+            old = old_dir / "active.json"
+            marker = old_dir / "retired-docker.json"
+            prior = {"phase": "stopped", "id": "a"*64, "name": "old-m1"}
+            old.write_text(json.dumps(prior), encoding="utf-8")
+            marker.write_text(json.dumps({
+                "state": "archived_docker_removed",
+                "id": prior["id"], "name": prior["name"],
+            }), encoding="utf-8")
+            before = (old.read_bytes(), marker.read_bytes())
+            with mock.patch.dict(os.environ, {"XDG_STATE_HOME": tmp}), \
+                 mock.patch.object(M1, "SESSION_SLOT", "reinstall"):
+                root, _, target = M1.state_paths()
+                self.assertEqual(root, state)
+                self.assertEqual(target, state / "mazinb-m1-reinstall")
+                self.assertEqual(
+                    M1.historical_retirement_snapshot(state)["active_sha256"],
+                    __import__("hashlib").sha256(before[0]).hexdigest())
+                self.assertFalse(target.exists())
+                bad = json.loads(marker.read_text())
+                bad["id"] = "b"*64
+                marker.write_text(json.dumps(bad))
+                with self.assertRaisesRegex(M1.M1Error, "retirement identities"):
+                    M1.historical_retirement_snapshot(state)
+                marker.write_bytes(before[1])
+            self.assertEqual((old.read_bytes(), marker.read_bytes()), before)
+
+    def test_reinstall_slot_refuses_managed_enabled_or_owned_service(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "install.env").write_text("synthetic")
+            data = {"PHASE": "complete", "MODEL_PROFILE": "orcarouter",
+                    "MONITOR_ENABLED": "1", "MONITOR_PROTECT": "1",
+                    "SERVICE_ENABLED": "0", "SERVICE_OWNED": "0"}
+            with mock.patch.object(M1, "parse_install", return_value=data), \
+                 mock.patch.object(M1, "SESSION_SLOT", "reinstall"):
+                M1.read_manifest(root)
+                data["SERVICE_OWNED"] = "1"
+                with self.assertRaisesRegex(M1.M1Error, "disabled/unowned"):
+                    M1.read_manifest(root)
+                data["SERVICE_OWNED"] = "0"
+                data["SERVICE_ENABLED"] = "1"
+                with self.assertRaisesRegex(M1.M1Error, "disabled/unowned"):
+                    M1.read_manifest(root)
+            with mock.patch.object(M1, "parse_install", return_value=data), \
+                 mock.patch.object(M1, "SESSION_SLOT", "historical"):
+                M1.read_manifest(root)
+
+    def test_reinstalled_slot_cli_is_separate_and_cannot_start_unapproved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "XDG_STATE_HOME": tmp}
+            env.pop("QWEN38_M1_WIZARD_APPROVED", None)
+            for action, expected, code in (
+                ("status", "M1_SESSION=ABSENT", 0),
+                ("plan", "M1_SESSION_SLOT=reinstall", 0),
+                ("run", "requires Wizard", 2),
+            ):
+                p = subprocess.run(
+                    [sys.executable, str(SCRIPT), action,
+                     "--session-slot", "reinstall"],
+                    env=env, cwd=ROOT, text=True, capture_output=True, check=False)
+                self.assertEqual(p.returncode, code, p.stdout + p.stderr)
+                self.assertIn(expected, p.stdout + p.stderr)
+            self.assertFalse((Path(tmp) / "qwen38-spark").exists())
+            bench = (ROOT / "scripts/wizard/m1-benchmark-lock.sh").read_text()
+            self.assertIn('M1_STATE="$STATE_DIR/mazinb-m1-reinstall"', bench)
+            self.assertIn('bench-admission --session-slot "$SLOT"', bench)
+
+    def test_reinstall_unit_check_blocks_autostart_and_active_proxy(self) -> None:
+        def mock_call(*args, **kwargs):
+            return mock.Mock(returncode=0, stdout=(
+                "LoadState=not-found\nActiveState=inactive\nUnitFileState=not-found\n"))
+        with mock.patch.object(M1, "call", side_effect=mock_call):
+            M1.assert_project_units_nonstarting()
+        def active_call(*args, **kwargs):
+            return mock.Mock(returncode=0, stdout=(
+                "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n"))
+        with mock.patch.object(M1, "call", side_effect=active_call):
+            with self.assertRaisesRegex(M1.M1Error, "boot enabled"):
+                M1.assert_project_units_nonstarting()
+
     def test_source_enforces_create_before_armed_monitor_and_nonremoval(self) -> None:
         serve=(ROOT/"scripts/serve.sh").read_text()
         watchdog=(ROOT/"scripts/runtime/monitor-runtime.sh").read_text()
