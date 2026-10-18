@@ -254,6 +254,41 @@ class ModularWizardTests(unittest.TestCase):
                     self.assertEqual("retire-mazinb-containers --yes" in calls, applied)
                     self.assertFalse((home / "xdg").exists())
 
+    def test_mazinb_retired_marker_blocks_stale_deletion_route(self) -> None:
+        """Historical marker requires independent read-only audit, not a second delete."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            state = home / "xdg/qwen38-spark/mazinb-m1"
+            state.mkdir(parents=True)
+            marker = state / "retired-docker.json"
+            marker.write_text('{"state": "archived_docker_removed"}', encoding="utf-8")
+            original = marker.read_bytes()
+            fake = home / "bin"
+            fake.mkdir()
+            stub = fake / "bash"
+            stub.write_text(
+                '#!/bin/sh\\n'
+                'printf "%s\\\\n" "$*" >> "$HOME/calls"\\n'
+                'exit 99\\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env = {**os.environ, "HOME": str(home),
+                   "XDG_STATE_HOME": str(home / "xdg"),
+                   "PATH": str(fake) + os.pathsep + os.environ.get("PATH", "")}
+            result = subprocess.run(
+                ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                cwd=ROOT, env=env, input="3\\n5\\n0\\n0\\n",
+                text=True, capture_output=True, timeout=20, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "MAZINB_DOCKER_RETIRE=BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED",
+                result.stdout)
+            self.assertIn("Models 3 -> 6", result.stdout)
+            self.assertEqual(marker.read_bytes(), original)
+            self.assertFalse((home / "calls").exists())
+
     def test_eof_aborts_before_default_choice(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_case(Path(tmp), ["--lang", "en"])
