@@ -19,6 +19,21 @@ from inspect_lychee888_metadata import (
 )
 
 REVISION = "1b3c3cedc14fb3bee4294dea5e3515af74b8268a"
+# Actual DGX one-time approved, unstarted/no-mount image-source extraction.
+# THESE ARE ATTESTED STATIC RECEIPTS, NOT THE IMAGE'S REPRODUCED SOURCE BYTES.
+# Never infer loader execution, checkpoint tensor dtype, or TP=1 support.
+INSTALLED_IMAGE_ID = (
+    "sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4"
+)
+INSTALLED_PLE_PATH = (
+    "/usr/local/lib/python3.12/dist-packages/"
+    "vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py"
+)
+INSTALLED_PLE_SHA256 = (
+    "a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7"
+)
+INSTALLED_PLE_ROUTE = "NATIVE_FP8_CONFIG_ONLY_SOURCE"
+ACTUAL_DGX_POSTCHECK = "PASS_CURRENT_ONLY_HISTORICAL_FAIL_REVIEW_RETAINED"
 ROOT = Path(__file__).resolve().parents[2]
 PATCH = ROOT / "scripts/patch-nv-mixed.py"
 DOCKERFILE = ROOT / "scripts/Dockerfile.nv-mixed"
@@ -44,6 +59,58 @@ def fetch_pinned() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         fetch_json(f"{base}/config.json"),
         fetch_json(f"{base}/model.safetensors.index.json"),
     )
+
+
+def installed_ple_dispatch_contract(config: dict[str, Any]) -> dict[str, str]:
+    """Fail-closed static dispatch assessment, using an ACTUAL_DGX source receipt.
+
+    The real image-source bytes were NOT retained, only its SHA and source
+    classifier. Do not conflate the model's top-level quantization format
+    with the class instantiated by the installed vLLM runtime.
+    """
+    quant = config.get("quantization_config")
+    if not isinstance(quant, dict):
+        raise MetadataError("missing quantization_config for installed source contract")
+    method = quant.get("quant_method")
+    fmt = quant.get("format")
+    if not isinstance(method, str) or not method.strip():
+        raise MetadataError("quant_method absent from installed source contract")
+    if method == "compressed-tensors" and fmt == "mixed-precision":
+        declaration = "COMPRESSED_TENSORS_MIXED_PRECISION_CONFIRMED_IN_METADATA"
+        expected_class = "COMPRESSED_TENSORS_CLASS_EXPECTED_NOT_RUNTIME_ATTESTED"
+        native_gate = "NO_DIRECT_NATIVE_FP8_CLASS_MATCH_PROVEN"
+        scale = "FP8_METHOD_CONDITIONAL_ONLY_BF16_SCALE_LOAD_UNVERIFIED"
+    elif method == "compressed-tensors":
+        declaration = "COMPRESSED_TENSORS_FORMAT_NOT_CONFIRMED_AS_MIXED_PRECISION"
+        expected_class = "COMPRESSED_TENSORS_CLASS_EXPECTED_NOT_RUNTIME_ATTESTED"
+        native_gate = "NO_DIRECT_NATIVE_FP8_CLASS_MATCH_PROVEN"
+        scale = "FP8_METHOD_CONDITIONAL_ONLY_BF16_SCALE_LOAD_UNVERIFIED"
+    elif method == "modelopt_mixed":
+        declaration = "MODELOPT_MIXED_DECLARATION"
+        expected_class = "MODELOPT_MIXED_CLASS_EXPECTED_NOT_RUNTIME_ATTESTED"
+        native_gate = "NATIVE_FP8_GATE_NOT_A_MODELOPT_MIXED_ROUTE"
+        scale = "FP8_METHOD_CONDITIONAL_ONLY_BF16_SCALE_LOAD_UNVERIFIED"
+    else:
+        declaration = "OTHER_QUANT_DECLARATION_UNQUALIFIED"
+        expected_class = "UNKNOWN_RUNTIME_QUANT_CLASS"
+        native_gate = "UNRESOLVED"
+        scale = "BF16_SCALE_LOAD_UNVERIFIED"
+
+    return {
+        "installed_image_id": INSTALLED_IMAGE_ID,
+        "installed_ple_source_path": INSTALLED_PLE_PATH,
+        "installed_ple_source_sha256": INSTALLED_PLE_SHA256,
+        "installed_ple_source_dispatch": INSTALLED_PLE_ROUTE,
+        "installed_source_evidence": "ACTUAL_DGX_SHA_AND_STATIC_AST_ONLY_NOT_FULL_SOURCE_ARCHIVE",
+        "physical_protected_postcheck": ACTUAL_DGX_POSTCHECK,
+        "quant_declared_format_class": declaration,
+        "runtime_quant_class_expectation": expected_class,
+        "installed_native_gate_reachability": native_gate,
+        "bf16_global_scale_loader_gate": scale,
+        "ple_dtype_dispatch": "NOT_PROVEN_IN_INSTALLED_SOURCE",
+        "ct_prefix_scheme_resolution": "NOT_AUDITED_FOR_INSTALLED_IMAGE",
+        "installed_loader_contract": "BLOCKED_SOURCE_ONLY_UNQUALIFIED",
+    }
 
 
 def assess(
@@ -73,9 +140,11 @@ def assess(
     else:
         patch_match = "NOT_APPLICABLE; NVIDIA PATCH EXPECTS ModelOptMixedPrecisionConfig"
 
+    installed_gate = installed_ple_dispatch_contract(config)
     return {
         "checkpoint": REPO,
         "immutable_revision": REVISION,
+        **installed_gate,
         "l0_verdict": l0["verdict"],
         "index_tensor_keys": l0["index_tensor_keys"],
         "ple_weight_shards": l0["ple_weight_shards"],
@@ -91,8 +160,8 @@ def assess(
         "single_gb10_tp1": "NOT_VERIFIED",
         "verdict": "SOURCE_ONLY_LOADER_UNQUALIFIED",
         "not_verified": [
-            "the selected installed image's exact digest and loader code",
-            "actual PLE FP8 method chosen for this checkpoint by pinned backend",
+            "full installed PLE source bytes were not archived; physical SHA/AST signature only",
+            "the exact vLLM quantization class and FP8 PLE method instantiated for lychee888",
             "global BF16 PLE scale parameter registration, load and use",
             "safetensors tensor headers/dtypes and weight hashes",
             "single DGX Spark TP=1 functional readiness and safe peak memory",
@@ -125,7 +194,12 @@ def main() -> int:
             "immutable_revision", "l0_verdict", "index_tensor_keys",
             "ple_weight_shards", "ple_files", "global_weight_scale_keys",
             "ple_embedding_dtype", "quant_method", "quant_algo", "quant_format",
-            "nvidia_patch_source_dispatch", "managed_runtime_adapter",
+            "nvidia_patch_source_dispatch", "installed_image_id",
+            "installed_ple_source_sha256", "installed_ple_source_dispatch",
+            "quant_declared_format_class", "runtime_quant_class_expectation",
+            "installed_native_gate_reachability", "bf16_global_scale_loader_gate",
+            "ple_dtype_dispatch", "ct_prefix_scheme_resolution",
+            "installed_loader_contract", "managed_runtime_adapter",
             "single_gb10_tp1", "verdict",
         ):
             print(f"{name}={result[name]}")
