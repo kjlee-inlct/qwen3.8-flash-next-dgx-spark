@@ -1,3 +1,35 @@
+## 2026-10-19 — ACTUAL DGX catplusplus pinned-source audit redirected and blocked
+
+**Evidence: owner-pasted DGX Wizard transcript**, not GitHub CI or
+a backend loader test. Wizard **5 → 23 → 7** on the host printed
+`CATPLUSPLUS_M1_BLOCKED=SOURCE_REDIRECT_BLOCKED` followed by
+`catplusplus M1 admission remains BLOCKED; no Docker/GPU/download action`.
+The Wizard's displayed manifest was valid/complete, configured profile
+`orcarouter`, image `vllm-skinny-tp1:v1`, runtime
+`NOT_PROBED`. The transcript did **not** print a Git HEAD,
+redirect HTTP response/location or file-specific request, and does not
+establish that either pinned file was downloaded/parsed. The
+read-only audit intentionally rejects HTTP redirects; the redirect
+cause remains **UNDETERMINED** pending bounded transport diagnosis.
+Do not bypass the allowlist or automatically follow an unverified
+redirect; positive declarations and engine/GB10 compatibility remain
+**NOT_ATTESTED**, catplusplus **NOT_MEASURED**.
+
+The operator next prioritizes collecting mazinb runtime provenance
+before returning to catplusplus. **Crucial existing physical
+history:** mazinb's ~173.65 GiB source checkpoint and five stopped
+trial Docker containers were already retired with preserved
+SHA-verified M1 benchmark evidence on 2026-10-14. The historical
+successful M1 is *not* evidence of currently installed mazinb
+weights. Verify present host assets using Wizard **3 → 2** and
+**3 → 6** before considering a *new* owner-approved download or
+isolated M1 GPU run. Do not use managed model switching as a
+shortcut: the last physically confirmed managed API/service state
+had `SERVICE_ENABLED=0`, and actual current state must be rechecked.
+The archive and [benchmark report](model-reports/mazinb.md)
+can support static loader/benchmark comparison without
+recreating a ~174 GiB checkpoint.
+
 ## 2026-10-18 — catplusplus M1 fused-qkvz declaration guard tightened (SOURCE ONLY)
 
 Follow-up to the pinned two-file source audit: `scan_config` now
