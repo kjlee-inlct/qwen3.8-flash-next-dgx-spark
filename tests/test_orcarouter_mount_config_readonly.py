@@ -119,7 +119,19 @@ class OrcaMountConfigTests(unittest.TestCase):
             self.assertEqual(report["peer_quant_parity"],
                              "DIFFERENT_REFERENCE_CANONICAL_VALUES")
             self.assertEqual(report["peer_layers_parity"],
-                             "MATCH_REFERENCE_CANONICAL_VALUES")
+                             "DIFFERENT_REFERENCE_CANONICAL_VALUES")
+            # The source reference has the SAME totals but interleaved
+            # Full Attention at layers 3,7,...,47.
+            reference_layers = [
+                "full_attention" if i % 4 == 3 else "linear_attention"
+                for i in range(48)
+            ]
+            self.assertEqual(
+                checker.peer_semantic_parity({
+                    "text_config": {"layer_types": reference_layers}
+                })["peer_layers_parity"],
+                "MATCH_REFERENCE_CANONICAL_VALUES",
+            )
             self.assertEqual(report["peer_vision_parity"], "MISSING")
             self.assertEqual(
                 report["peer_reference_scope"], "THIRD_PARTY_POSTED_JSON_NOT_IMAGE_RUNTIME"
