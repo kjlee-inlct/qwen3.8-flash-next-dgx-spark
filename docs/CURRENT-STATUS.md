@@ -1,3 +1,49 @@
+## 2026-10-18 — ACTUAL_DGX OrcaRouter mounted original and override config verified, reference counts match
+
+The physical DGX owner ran the protected Docker-mount-derived,
+read-only `inspect_orcarouter_mount_config_readonly.py`
+at exact HEAD `2812aa01fdc33d7d4b6b52cdc6e7a1ecec038948`,
+with exact-head CI 2/2 SUCCESS. All current protected
+image/container identity and RO mount checks **PASS**;
+both protected stopped containers share the same
+real on-host model root and config override source.
+Original `config.json` and existing override are
+bounded, readable regular files. **The earlier
+`$HOME/models` guessed-path failure was NOT evidence
+of checkpoint loss.**
+
+`CONFIG_REWRITE=EXACT_EXPECTED_LAYER_TYPE_REWRITE`;
+the original uses 48 layers (36 linear, 12
+`qwen_sparse_attention`), the override uses 36
+linear + 12 `full_attention`. CT declaration
+shape in both: **2 groups / 301 targets / 753 ignored**,
+matching the third-party OrcaRouter posted config
+**counts only**. Neither the ordered 48 layer
+positions nor all CT target/ignore values have
+yet been compared to the posted config. The
+operation read no weights and performed no Docker
+mutation or GPU run.
+
+**Important finding:** direct review of maintained
+`scripts/serve.sh` confirms the peer's CUDA/PLE/
+FlashInfer environment and resource/security flags
+(32g shm, IPC host, memlock, privilege additions),
+8192 batching, tool/reasoning parsers, TP=1/mp,
+MTP2 and caching switches are all already
+present. Raising KV from 16GiB to peer's 24GiB
+remains contradicted by our physical stability
+tests. The only prominent remaining unresolved
+delta is the **official ARM64 CUDA13 image and
+its embedded vLLM/allocator/PLE implementation**
+(the owner previously confirmed NOT_PRESENT
+locally). The new source-only extension performs
+private SHA256 comparisons of the full community
+pasted JSON and critical subtrees against the
+current mounted override, emitting sanitized
+MATCH/DIFFERENT/MISSING labels. This extra
+comparison is **not yet physically measured**.
+[New ACTUAL_DGX evidence](../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+
 ## 2026-10-18 — ACTUAL_DGX OrcaRouter read-only preflight stopped on guessed model path
 
 The owner fast-forwarded local
