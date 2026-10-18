@@ -1,3 +1,20 @@
+## 2026-10-18 — ACTUAL_DGX mount-order-aware current protected-state PASS; historical unclassified
+
+[Latest actual DGX read-only PLE postcheck](dgx-lychee888-ple-path-inconclusive-20261017.md)
+at code `a24cd3a7ce48c7531cabbdfec0139327eefce18a`
+and 2/2 CI SUCCESS reports
+`PASS_CURRENT_ONLY`, temp `ABSENT_ID_AND_NAME`,
+exact original image and protected container identities,
+stopped states and nested RO mount topology.
+Managed name-vs-ID `Mounts=ORDER_ONLY` (complete
+record values equal, ordering differs), historical
+A/B `Mounts=IDENTICAL_ORDER`, both overall
+`NAME_VS_ID_FIELDS=MATCH`. No Docker/GPU mutation.
+The older one-shot probe's `FAIL_REVIEW` must stay
+historical `UNCLASSIFIED`; no retained field-level
+pre/post receipt exists. Source SHA captured, checkpoint
+loader/TP=1 unqualified.
+
 ## 2026-10-18 — ACTUAL_DGX legacy Mounts name-vs-ID raw-array difference
 
 [Physical current-only protected postcheck](dgx-lychee888-ple-path-inconclusive-20261017.md)
