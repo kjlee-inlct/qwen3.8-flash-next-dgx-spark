@@ -115,6 +115,44 @@ class Lychee888LoaderSourceGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ple.MetadataError, "quantization_config"):
             gate.installed_ple_dispatch_contract(docs[1])
 
+    def test_pinned_index_total_size_over_nominal_128gb_is_source_only_risk(self):
+        docs = fixture()
+        docs[1]["quantization_config"]["format"] = "mixed-precision"
+        docs[2]["metadata"] = {"total_size": 132_279_699_754}
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(result["indexed_tensor_bytes"], 132_279_699_754)
+        self.assertEqual(result["dgx_spark_nominal_unified_bytes"], 128_000_000_000)
+        self.assertEqual(
+            result["full_resident_nominal_memory_screen"],
+            "INDEXED_TENSOR_BYTES_EXCEED_NOMINAL_UNIFIED_MEMORY",
+        )
+        self.assertEqual(result["runtime_peak_memory"], "NOT_MEASURED")
+        self.assertEqual(result["single_gb10_tp1"], "NOT_VERIFIED")
+        self.assertEqual(result["installed_loader_contract"],
+                         "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+
+    def test_memory_screen_missing_invalid_and_smaller_values_not_claimed_safe(self):
+        docs = fixture()
+        self.assertEqual(
+            gate.assess(*docs, PATCH, DOCKERFILE)["full_resident_nominal_memory_screen"],
+            "NOT_VERIFIED_INDEX_TOTAL_SIZE_MISSING",
+        )
+        for value in (True, -1, 0, "132279699754", None, 12.5):
+            docs[2]["metadata"] = {"total_size": value}
+            result = gate.assess(*docs, PATCH, DOCKERFILE)
+            self.assertIsNone(result["indexed_tensor_bytes"])
+            self.assertEqual(
+                result["full_resident_nominal_memory_screen"],
+                "NOT_VERIFIED_INDEX_TOTAL_SIZE_MISSING",
+            )
+        docs[2]["metadata"]["total_size"] = 80_000_000_000
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(
+            result["full_resident_nominal_memory_screen"],
+            "INDEXED_TENSOR_BYTES_WITHIN_NOMINAL_ONLY_NO_HEADROOM_PROOF",
+        )
+        self.assertEqual(result["runtime_peak_memory"], "NOT_MEASURED")
+
     def test_even_modelopt_mixed_is_not_a_runtime_pass(self):
         result = gate.assess(*fixture(method="modelopt_mixed"), PATCH, DOCKERFILE)
         self.assertIn("CLASS_ONLY", result["nvidia_patch_source_dispatch"])
