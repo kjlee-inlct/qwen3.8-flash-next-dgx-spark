@@ -44,3 +44,44 @@ Interpretation (Linux `/proc/meminfo` kB converted by 1048576 per GiB):
 - `qwen38-flash-next.service` was earlier independently observed `LoadState=not-found`, `ActiveState=inactive`, `SubState=dead` in **both** system and user managers. This does not rule out other systemd units or non-Docker processes.
 - The official pinned C ARM64 image and OCI Entrypoint were independently verified, the earlier source-only preflight exited 0. **No C Docker object exists in this terminal evidence, no vLLM wheel source was attested, and no model inference or throughput was run.**
 - Recheck all dynamic safety gates *immediately before* an independent C trial: exact protected Docker IDs/images/states, run/port collisions, memory and swap, phase journal, watchdog readiness, image and weights, and host kernel NVRM/RM baseline. Such a launch would require separate owner approval and must be under an exact-ID armed protective monitor.
+
+## Follow-up: ACTUAL DGX CI-qualified host-check PASS after safe FF sync
+
+The operator later synchronized the clean branch to the exact
+`c54248245376565c24c96893ba27f00032d6bffa` HEAD,
+printing `GIT_SYNC=PASS`. This checkout includes the newly introduced
+read-only `host-check` subcommand (and Wizard Advanced option 5).
+On the physical DGX the operator ran:
+
+```text
+python3 -B scripts/runtime/orcarouter-peer-c-readonly.py host-check
+PEER_C_OPERATION=HOST_CHECK_READ_ONLY
+PEER_C_RUNNING_DOCKER=ONLY_KNOWN_ADMIN_CONTAINERS
+PEER_C_PORT_18891=NO_LISTENER_AT_CHECK
+PEER_C_PLE_SWAP=PLE_SWAP_ACTIVE
+PEER_C_NONCMA_FREE_KIB=119329120
+PEER_C_NONCMA_AVAILABLE_KIB=123853516
+PEER_C_SWAP_FREE_KIB=149950172
+PEER_C_MEMORY_MARGIN=MINIMUM_STATIC_MARGIN_MET
+PEER_C_HOST_CHECK=PASS_SNAPSHOT_NOT_LIVE_APPROVAL
+HOST_CHECK_EXIT_CODE=0
+```
+
+These are the **later** sample values and should not be conflated
+with the raw `/proc/meminfo` numbers in the earlier independent
+host snapshot above (which reported non-CMA free 119330944 KiB and
+non-CMA available 123851960 KiB). Both passed the stated static
+margin criteria at their respective observations.
+
+The new read-only helper checks Docker ps/known names, TCP port
+`18891` listeners, active `/swap-ple.img`, and non-CMA
+`MemFree-CmaFree`, `MemAvailable-CmaFree` and `SwapFree`.
+**It does not** attest all other systemd units or host processes,
+lock an unowned port, inspect checkpoint tensors, verify executable
+vLLM CLI flags, create/arm a candidate/watchdog, or start a GPU model.
+The operator did **not** run the new C launcher, inference or
+benchmark; **NO LIVE START APPROVAL** follows from this PASS.
+
+Github's Push and PR CI runs on HEAD
+`c54248245376565c24c96893ba27f00032d6bffa`
+were independently observed **SUCCESS**.
