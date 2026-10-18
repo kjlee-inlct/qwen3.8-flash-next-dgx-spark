@@ -1,3 +1,32 @@
+## 2026-10-18 — Explicit approval: one-time CPU-only C image CLI/version probe (NOT EXECUTED)
+
+Following physical DGX `host-check` PASS at source SHA
+`c54248245376565c24c96893ba27f00032d6bffa`, the owner
+explicitly approved a **single** CLI help/package metadata
+inspection using the already installed official ARM64 C image.
+This is **not** permission to run GPU or load OrcaRouter weights.
+
+GitHub implements a new *source-only until DGX execution*
+`scripts/runtime/orcarouter-peer-c-cli-probe.py` (`plan` and
+`run --approved-cpu-only`), Wizard Advanced default-no option 6,
+and synthetic offline tests.
+The CPU probe uses exact image manifest/config IDs, Docker
+`--pull=never --runtime runc --network none --read-only`, no GPU
+devices, no model mounts, restricted non-root resources,
+`vllm serve --help=all` and `importlib.metadata` packages.
+Only a new randomly named disposable probe is auto-removed;
+existing managed/A/B are exact-ID protected and untouched.
+Evidence is collected to `$HOME/orcarouter-bench-evidence/`;
+a one-time approval marker prevents accidental repeated execution.
+No C container has yet been created under this authorization;
+the tool requires a new CI-successful source sync on DGX.
+
+**Persistent STOP boundaries:** do not claim the image's actual
+CLI support or wheel/source revision before operator returns
+the CPU-only probe output; even a parser-help PASS does not
+prove model CPU PLE/KV/MTP runtime compatibility. No GPU start,
+bench, service changes or cleanup of old containers authorized.
+[Plan and approval receipt](ORCAROUTER-PEER-C-PLAN-20261018.md).
 ## 2026-10-18 — ACTUAL DGX NEW C host-check PASS (CI-qualified source; static only)
 
 Owner safely fast-forwarded to exact Git HEAD
