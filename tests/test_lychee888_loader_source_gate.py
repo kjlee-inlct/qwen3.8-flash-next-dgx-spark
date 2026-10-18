@@ -153,6 +153,72 @@ class Lychee888LoaderSourceGateTests(unittest.TestCase):
         )
         self.assertEqual(result["runtime_peak_memory"], "NOT_MEASURED")
 
+    def test_pinned_ct_group_structure_only_never_runtime_dispatch(self):
+        docs = fixture()
+        docs[1]["quantization_config"].update({
+            "format": "mixed-precision",
+            "config_groups": {
+                "group_0": {"targets": ["Linear", "RoutedExperts"]},
+                "group_1": {"targets": ["model.language_model.ple.ple_embedding"]},
+            },
+            "ignore": ["model.language_model.ple.optional"],
+        })
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(result["ct_config_groups"], 2)
+        self.assertEqual(result["ct_declared_targets"], 3)
+        self.assertEqual(result["ct_ple_target_string_mentions"], 1)
+        self.assertEqual(result["ct_ignore_entries"], 1)
+        self.assertEqual(result["ct_ple_ignore_string_mentions"], 1)
+        self.assertEqual(
+            result["ct_target_resolution"], "STRUCTURAL_ONLY_MATCHING_NOT_EMULATED"
+        )
+        self.assertEqual(result["installed_loader_contract"],
+                         "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+        self.assertEqual(result["verdict"], "SOURCE_ONLY_LOADER_UNQUALIFIED")
+
+    def test_missing_groups_or_unknown_group_shapes_fail_closed(self):
+        docs = fixture()
+        missing = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(
+            missing["ct_target_resolution"], "NOT_VERIFIED_CONFIG_GROUPS_ABSENT"
+        )
+        self.assertIsNone(missing["ct_config_groups"])
+        for groups in (
+            [],
+            {"bad": {"targets": None}},
+            {"bad": {"targets": [5]}},
+            {"bad": False},
+        ):
+            docs[1]["quantization_config"]["config_groups"] = groups
+            with self.assertRaisesRegex(ple.MetadataError, "config_groups|targets|entry"):
+                gate.assess(*docs, PATCH, DOCKERFILE)
+
+    def test_ignored_ple_string_is_not_equivalent_to_runtime_ignore(self):
+        docs = fixture()
+        docs[1]["quantization_config"].update({
+            "config_groups": {"g": {"targets": ["re:.*ple.*"]}},
+            "ignore": ["re:.*ple\\.ple_embedding"],
+        })
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(result["ct_ple_target_string_mentions"], 1)
+        self.assertEqual(result["ct_ple_ignore_string_mentions"], 1)
+        self.assertEqual(
+            result["ct_target_resolution"], "STRUCTURAL_ONLY_MATCHING_NOT_EMULATED"
+        )
+        self.assertEqual(result["ct_prefix_scheme_resolution"],
+                         "NOT_AUDITED_FOR_INSTALLED_IMAGE")
+        docs[1]["quantization_config"]["ignore"] = "re:.*ple"
+        with self.assertRaisesRegex(ple.MetadataError, "ignore"):
+            gate.assess(*docs, PATCH, DOCKERFILE)
+
+    def test_non_ct_inventory_has_no_implicit_ct_route(self):
+        docs = fixture(method="modelopt_mixed")
+        result = gate.assess(*docs, PATCH, DOCKERFILE)
+        self.assertEqual(result["ct_target_resolution"], "NOT_APPLICABLE_NON_CT")
+        self.assertIsNone(result["ct_config_groups"])
+        self.assertEqual(result["installed_loader_contract"],
+                         "BLOCKED_SOURCE_ONLY_UNQUALIFIED")
+
     def test_even_modelopt_mixed_is_not_a_runtime_pass(self):
         result = gate.assess(*fixture(method="modelopt_mixed"), PATCH, DOCKERFILE)
         self.assertIn("CLASS_ONLY", result["nvidia_patch_source_dispatch"])
