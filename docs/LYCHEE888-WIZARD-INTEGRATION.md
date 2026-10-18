@@ -803,3 +803,30 @@ the historical pre/post comparison passed.
 **No second temporary probe is authorized.**
 [Original transcript and result](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
 
+## 2026-10-18 — Physical postcheck CURRENT_ONLY pass after mount-order classification
+
+A new actual-DGX read-only check at exact clean
+`a24cd3a7ce48c7531cabbdfec0139327eefce18a`
+and CI 2/2 SUCCESS reports
+`PLE_POSTCHECK_CURRENT_STATIC_POSTCHECK=PASS_CURRENT_ONLY`.
+The approved one-off temporary Docker object remains
+absent by exact ID and name; pinned image and both
+stopped protected container identities, rootfs flags,
+nested RO mount topology all match. Managed
+name/ID full-mount record values match modulo ordering
+(`ORDER_ONLY`); historical A/B mount records match
+including ordering (`IDENTICAL_ORDER`). All other
+original name-vs-ID metadata fields match.
+The historical original source-probe `FAIL_REVIEW`
+is NOT retroactively cleared; lost pre/post field-level
+information precludes definitive explanation.
+
+Installed-image-derived source static snapshot SHA:
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`,
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`, BF16 scale
+registration and multiply signatures `PRESENT`.
+Next independent L1/L2 source-only gate: investigate
+`compressed-tensors` `mixed-precision` to FP8 PLE
+dispatch and scale-load contract without runtime
+mutation or checkpoint download.
+[Physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
