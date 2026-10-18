@@ -17,12 +17,14 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from urllib.parse import urljoin, urlsplit
 
 MODEL = "catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed"
 REVISION = "3251fd8afbd08f76368a9bfa71132d9aef364813"
 BASE = f"https://huggingface.co/{MODEL}/resolve/{REVISION}/"
 CONFIG = "config.json"
 LAUNCHER = "extra/inference/inference_qwen38_flash_next_sglang.sh"
+RAW_BASE = f"https://huggingface.co/{MODEL}/raw/{REVISION}/"
 ALLOWED = {CONFIG: 256 * 1024, LAUNCHER: 128 * 1024}
 MAX_OFFLINE = 256 * 1024
 
@@ -34,6 +36,75 @@ class SourceAuditBlocked(ValueError):
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise SourceAuditBlocked("SOURCE_REDIRECT_BLOCKED")
+
+
+class ProbeNoRedirect(urllib.request.HTTPRedirectHandler):
+    """Return redirect headers to the caller; never issue a second request."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def classify_location(request_url: str, location: str | None) -> tuple[str, str]:
+    """Emit only bounded categories, never untrusted URLs or signed query strings."""
+    if not location:
+        return "NONE", "NONE"
+    target = urlsplit(urljoin(request_url, location))
+    source = urlsplit(request_url)
+    if target.scheme != "https":
+        return "NON_HTTPS", "OTHER_ROUTE"
+    if target.netloc != source.netloc:
+        return "EXTERNAL_HOST", "OTHER_ROUTE"
+    if target.path.startswith("/api/resolve-cache/"):
+        return "HF_SAME_HOST", "API_RESOLVE_CACHE"
+    if f"/resolve/{REVISION}/" in target.path:
+        return "HF_SAME_HOST", "PINNED_RESOLVE"
+    if f"/raw/{REVISION}/" in target.path:
+        return "HF_SAME_HOST", "PINNED_RAW"
+    return "HF_SAME_HOST", "OTHER_ROUTE"
+
+
+def probe_transport() -> int:
+    """Probe headers only, for exactly two pinned small paths and two Hub routes.
+
+    This is a diagnostic of network routing, not a source audit. HEAD never
+    reads response bodies, and redirects are categorically not followed.
+    """
+    routes = (("RESOLVE", BASE), ("RAW", RAW_BASE))
+    sources = (("CONFIG", CONFIG), ("LAUNCHER", LAUNCHER))
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), ProbeNoRedirect())
+    print("CATPLUSPLUS_TRANSPORT_PROBE=PINNED_TEXT_HEAD_HEADERS_ONLY", flush=True)
+    failed = False
+    for name, path in sources:
+        for route, base in routes:
+            key = "CATPLUSPLUS_TRANSPORT_" + name + "_" + route
+            url = base + path
+            req = urllib.request.Request(
+                url, headers={"Accept": "text/plain, application/json"},
+                method="HEAD")
+            try:
+                with opener.open(req, timeout=15) as reply:
+                    status = reply.status
+                    location = reply.headers.get("Location")
+            except urllib.error.HTTPError as exc:
+                status = exc.code
+                location = exc.headers.get("Location") if exc.headers else None
+            except (urllib.error.URLError, OSError, ValueError):
+                print(key + "_RESULT=NETWORK_ERROR", flush=True)
+                failed = True
+                continue
+            loc_class, loc_route = classify_location(url, location)
+            print(key + "_HTTP_STATUS=" + str(status), flush=True)
+            print(key + "_LOCATION_CLASS=" + loc_class, flush=True)
+            print(key + "_LOCATION_ROUTE=" + loc_route, flush=True)
+            if not (200 <= status < 400):
+                failed = True
+    print("CATPLUSPLUS_TRANSPORT_REDIRECT_FOLLOWED=NO", flush=True)
+    print("CATPLUSPLUS_TRANSPORT_BODIES_READ=NONE", flush=True)
+    print("CATPLUSPLUS_TRANSPORT_SOURCE_DECLARATIONS=NOT_INSPECTED", flush=True)
+    print("CATPLUSPLUS_TRANSPORT_LIVE_ADMISSION=BLOCKED", flush=True)
+    return 2 if failed else 0
 
 
 def source_bytes(path: str, offline: Path | None) -> bytes:
