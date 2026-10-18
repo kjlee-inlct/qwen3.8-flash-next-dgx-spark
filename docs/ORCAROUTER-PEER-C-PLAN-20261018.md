@@ -333,6 +333,43 @@ and rollback without touching preserved A/B, (d) equivalent
 ordinary install/switch and uninstall paths, and (e) separate
 actual GPU approval. New shell/Python diagnostics are supporting
 modules behind this journey, not product milestones by themselves.
+## 2026-10-18 subsequent diagnosis: original CPU-only CLI traceback recovered
+
+**This supersedes the preceding 'traceback not yet supplied' statement.**
+The owner read (no Docker) the **34-line** decoded file
+`vllm-serve-help-all.txt` from the consumed one-shot probe.
+CLI parser construction reached `get_kwargs(VllmConfig)`,
+`_compute_kwargs` and `default.default_factory()`, then
+`vllm/config/device.py:56 __post_init__` raised
+`RuntimeError: Failed to infer device type`.
+Triton separately observed **zero active GPU drivers** and torch
+observed no CUDA runtime in this intentionally GPU-hidden environment.
+Read-only source evidence points to **failed device auto-detection
+before the CLI option list could be assembled**. The operator has
+not demonstrated either GPU incompatibility or non-support of
+individual vLLM options. The actual protected A/B state stayed
+unchanged and the disposable CPU probe was removed.
+
+The saved-report module now classifies this **exact traceback** as
+`DEVICE_INFERENCE_FAILED_IN_GPU_HIDDEN_PROBE` and explicitly
+keeps `PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED`,
+`PEER_C_GPU_RUNTIME=NOT_TESTED_BY_CPU_ONLY_PROBE`,
+`PEER_C_BACKEND_WIZARD_INSTALL_SWITCH=NOT_QUALIFIED`.
+Unrelated help tracebacks remain cause-undetermined. The
+normal *Model management* Wizard now exposes a **read-only**
+OrcaRouter backend qualification screen (model-menu option 8)
+which distinguishes the configured v0.29 implementation from
+official C's disabled/unqualified backend. This improves the
+primary install/switch control plane without falsely allowing
+a C production selection.
+
+Next implementation gate: investigate actual official-image
+CLI defaults and loader at source level without reusing the
+consumed Docker approval; then implement transactional,
+fail-closed OrcaRouter backend selection/switch in the Wizard
+using existing managed lifecycle semantics, not a standalone
+manual Docker script path.
+[Recovered physical traceback and exact scope](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
 ## Later independent C live design — not implemented or approved
 
 1. **Completed, download-only-approved 2026-10-18:** the operator downloaded the pinned official ARM64 image `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` and verified OS/arch, RepoDigest and image config ID, and preserved A/B IDs. This approval **does not** extend to any C create/start/GPU trial.
