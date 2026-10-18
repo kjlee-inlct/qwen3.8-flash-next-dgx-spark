@@ -1,3 +1,35 @@
+## 2026-10-18 — OrcaRouter official ARM64 image registry provenance checked; embedded source still unattributed
+
+GitHub PR #261 and #259 are **Draft / Open / Unmerged**. The
+previous source HEAD `dacbdc21d31bd0d1a82169297b6726fd30b7ea53`
+completed both exact-head Push CI #39104104591 and
+PR CI #39104107142 **SUCCESS** (one validate job each).
+This proves CI status for that exact revision only,
+not the subsequent documentation commit or a physical DGX run.
+
+Independent public Docker Hub registry review of the peer's
+pinned `linux/arm64` image manifest
+`sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`
+confirms CUDA 13.0.1 build metadata, Python 3.12 and FlashInfer
+0.6.17 build arguments. But OCI/vLLM revision labels say
+`unknown` / `local/vllm-openai:dev`; no immutable exact
+wheel-source commit can be derived from those labels.
+External deployments report
+`vLLM 0.1.dev20073+g8e685d198`, but a public upstream
+GitHub contents lookup for `8e685d198` returned 404.
+**Official-image exact source and RM allocator differences:
+NOT_ATTESTED / NOT_PROVED.** See
+[the source-only image review](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md#2026-10-18--official-arm64-cuda-13-image-provenance-source-only-evidence-and-blocker).
+
+The already-implemented `inspect_orcarouter_mount_config_readonly.py`
+digest comparison remains **NOT_RUN_ON_PHYSICAL_DGX**,
+pending a clean checkout pinned to a newly CI-qualified exact HEAD
+and the protected current-only postcheck.
+Historical 2/301/753 + 36/12 shape evidence is counts-only;
+no new Docker, checkpoint, PLE, GPU, KV or PR state mutation
+was carried out. Default KV=16GiB, 24GiB future conditional
+A/B only, strict RM error zero requirement unchanged.
+
 ## 2026-10-18 — ACTUAL_DGX OrcaRouter mounted original and override config verified, reference counts match
 
 The physical DGX owner ran the protected Docker-mount-derived,
