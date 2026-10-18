@@ -67,6 +67,21 @@ class MzinbDockerRetirementTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Blocked, "evidence digest mismatch"):
             MODULE.evidence(self.home, self.root, self.state)
 
+    def test_hybrid_retired_later_is_allowed_only_for_post_retirement_audit(self):
+        """Relax old H3-H6 existence only; never relax archive hashes or initial deletion."""
+        for name in ("qwen3.8-hybrid-quant-layout", "qwen3.8-h4-orca-all",
+                     "qwen3.8-h5-neutral-input-scale", "qwen3.8-h6-modelopt-w4a16"):
+            (self.root / name).rmdir()
+        with self.assertRaisesRegex(MODULE.Blocked, "hybrid dependency missing"):
+            MODULE.evidence(self.home, self.root, self.state)
+        MODULE.evidence(self.home, self.root, self.state,
+                        require_hybrid_stages=False)
+        original = self.home / "Workspace/llm/qwen38-m1-bench-results" / MODULE.TRIAL
+        (original / "mazinb.json").write_text("tampered")
+        with self.assertRaisesRegex(MODULE.Blocked, "evidence digest mismatch"):
+            MODULE.evidence(self.home, self.root, self.state,
+                            require_hybrid_stages=False)
+
     def test_present_source_checkpoint_blocks_cleanup(self):
         (self.root / "qwen3.8-flash-next-mazinb").mkdir()
         with self.assertRaisesRegex(MODULE.Blocked, "must be previously removed"):
