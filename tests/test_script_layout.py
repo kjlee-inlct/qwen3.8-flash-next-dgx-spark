@@ -174,7 +174,9 @@ class ScriptLayoutTests(unittest.TestCase):
 
         for category in sorted(categories):
             for path in sorted((SCRIPTS / category).rglob("*")):
-                if not path.is_file() or path.name == "README.md":
+                # Evidence Markdown documents cite other script categories for
+                # provenance; those citations are not executable dependencies.
+                if not path.is_file() or path.suffix == ".md":
                     continue
                 text = path.read_text(encoding="utf-8", errors="replace")
                 referenced: set[str] = set()
