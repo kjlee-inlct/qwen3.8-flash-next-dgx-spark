@@ -899,3 +899,33 @@ index has no positive integer `total_size`; it
 never reports a positive fit qualification merely
 because indexed bytes are smaller than nominal RAM.
 No disk/host/GPU workload was run.
+
+## 2026-10-18 — Pinned physical JSON L0 confirms larger-than-nominal index and CT loader block
+
+The actual DGX owner ran `assess_lychee888_loader.py
+--json` at exact clean `b9114544eb35d7275740cf0ca2e9d010134f7cbb`
+with 2/2 CI SUCCESS; pinned revision
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`.
+L0 index: 223047 keys, 128 FP8 PLE n-gram shards
+in ten expected files, exactly one indexed global
+scale, declared FP8 e4m3fn embedding dtype;
+`compressed-tensors` / `mixed-precision`.
+Pinned index `metadata.total_size=132279699754`
+bytes, **4,279,699,754 bytes** above nominal
+single Spark 128 GB system-wide unified memory,
+without measuring any resident, cached or
+transformed allocation. The on-host execution
+downloaded no weight shards and launched no GPU
+work.
+
+The output reuses the older physically acquired
+PLE source SHA and route as **static code constants**:
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`,
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`. It did not
+re-audit Docker or execute the installed PLE
+quantization method. The native FP8 selector
+and `CompressedTensorsConfig` prefix resolution,
+the BF16 global scale and TP=1 memory remain
+`NOT_QUALIFIED`. Loader cannot be made
+installable solely from L0.
+[Actual physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
