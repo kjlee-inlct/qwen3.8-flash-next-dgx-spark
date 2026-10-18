@@ -10,7 +10,7 @@
 |---|---|---|
 | Checkpoint | `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` | Research candidate; not in selectable model registry |
 | Hub revision | `3251fd8afbd08f76368a9bfa71132d9aef364813` | Pinned |
-| Actual DGX metadata | 17,448 repository entries; 96 root safetensors | `TREE_METADATA_COMPLETE`, metadata only |
+| Actual DGX metadata | 17,448 repository entries; 96 `.safetensors` files | `TREE_METADATA_COMPLETE`, metadata only |
 | Total repository size | 188,540,029,444 bytes ≈ 175.59 GiB | Actual pinned complete tree; NOT required-download minimum |
 | Root weights | ≈ 174.8553 GiB | **Rounded** actual DGX inventory output, not exact bytes or resident RAM |
 | DGX Spark RAM | 128 *decimal* GB ≈ 119.21 GiB | Nominal unified-memory capacity, not measured free memory |
