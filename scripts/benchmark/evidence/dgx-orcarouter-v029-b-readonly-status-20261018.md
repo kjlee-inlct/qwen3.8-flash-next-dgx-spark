@@ -1,5 +1,22 @@
 # Actual DGX OrcaRouter v0.29 B current stopped state — 2026-10-18
 
+## Follow-up physical B Docker and memory-monitor evidence (owner, 2026-10-18 inspection)
+
+These outputs retrospectively inspect a 2026-10-13 stopped trial. They do NOT demonstrate a new GPU start on 2026-10-18. The shell paste included a garbled grep line, but the resulting read-only observations were present:
+
+- Exact B ID: `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`.
+- Image ID: `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`; state `exited`, `ExitCode=137`, **`OOMKilled=false`**.
+- Start `2026-10-13T11:56:13.596597655Z` (20:56:13 KST); finish `2026-10-13T12:04:01.821891458Z` (21:04:01 KST).
+- B monitor had recurrent transient `protect=0/5` low-free warnings/recovery from 20:58 through 21:02 KST, swap consumption initially 0–4 MiB.
+- At 21:03:22, 24, 26, 28 and 30 KST, five consecutive `protect=1/5` to `5/5` samples were observed. `noncmafree` MiB: **1969 → 1508 → 1115 → 1210 → 1171**; `noncma_available` MiB: **41610 → 41387 → 40861 → 41028 → 40702**; `swapgrowth=3207MiB`, `swapfree` about 143230MiB.
+- At 21:03:30 KST the monitor printed `PROTECT stopping qwen38-ab-v029 gracefully to preserve host stability`. `monitor/runtime-stop.env` reported `STOP_REASON=memory-protection`, `STOP_CONTAINER_NAME=qwen38-ab-v029` and the same exact Docker ID.
+
+The container finished ~31.8 seconds after the protected-stop marker. These facts confirm a **watchdog protection stop** at low immediately-free non-CMA memory and considerable swap activity, despite high reclaimable non-CMA available memory. `ExitCode=137` with `OOMKilled=false` does NOT independently prove NVIDIA RM OOM or kernel/Docker OOM. The exact B kernel error window and model-loading phase logs are still missing; no inference/bench result was obtained.
+
+The owner also inspected the exact published official ARM64 registry reference `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` locally. Docker returned `No such image`. **Only that exact reference is proven absent**; a differently tagged same image is not excluded. C has not been pulled, started or benchmarked. Do not prune the existing A/B containers or relax monitoring.
+
+---
+
 **Provenance:** `ACTUAL_DGX_OPERATOR_TERMINAL` pasted by the owner in the
 2026-10-18 conversation. This is a **current read-only inspection of an
 existing trial**, not evidence that the B model was started on this date.
