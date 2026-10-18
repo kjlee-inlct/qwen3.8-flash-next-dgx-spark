@@ -34,7 +34,7 @@ class MzinbReinstallTests(unittest.TestCase):
         self.assertIn(sha, registry)
         self.assertIn("verify-managed-idle.py", script)
         self.assertIn('d.get("SERVICE_ENABLED") != "0"', script)
-        self.assertIn('d.get("SERVICE_OWNED")', CONTROLLER.read_text())
+        self.assertIn('manifest.get("SERVICE_OWNED")', CONTROLLER.read_text())
         self.assertIn('bash "$ROOT_DIR/scripts/download-weights.sh" --candidate --check', script)
         self.assertIn('bash "$ROOT_DIR/scripts/download-weights.sh" --candidate ||', script)
         self.assertIn("QWEN38_MAZINB_RESTORE_APPROVED", script)
