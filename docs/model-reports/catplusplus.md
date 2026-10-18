@@ -1,3 +1,19 @@
+## Pinned model/source compatibility tool — still NOT a qualified loader
+
+Source-only M1 Wizard **5 -> 23 -> 7** compares the
+immutable catplusplus mixed-precision config and official
+SGLang launcher declarations using two capped small-text
+requests. The new
+`scripts/model/audit_catplusplus_loader_source.py`
+does not import or run publisher scripts and reports SHA256
+hashes plus security-relevant launch hazards.
+It does **not** inspect safetensors or establish executable
+GB10 wheel support, peak unified-memory residency or MTP
+correctness. Even a positive declaration result leaves
+all live-start and benchmark gates blocked. Synthetic
+offline tests cover fused qkvz alias, FP8 PLE, missing
+flags, redirect/symlink/oversized refusal and no weight fetch.
+
 # catplusplus — single-DGX benchmark preparation
 
 **BENCHMARK_STATUS: NOT_MEASURED**
