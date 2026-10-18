@@ -41,3 +41,30 @@ print_serving_backends() {
       "${backend}" "${BACKEND_STATUS}" "${BACKEND_INSTALLABLE}" "${BACKEND_DESCRIPTION}"
   done
 }
+
+# OrcaRouter vLLM *image/runtime variant* is orthogonal to serving
+# backend (vLLM versus planned SGLang) and to the model checkpoint.
+# One stable source of status for the normal installation Wizard.
+describe_orcarouter_vllm_variant() {
+  case "$1" in
+    v029)
+      ORCA_VARIANT_STATUS=implemented
+      ORCA_VARIANT_SELECTABLE=1
+      ORCA_VARIANT_DESCRIPTION='Configured OrcaRouter v0.29 image (runtime health is separately verified)'
+      ;;
+    legacy)
+      ORCA_VARIANT_STATUS=experimental
+      ORCA_VARIANT_SELECTABLE=1
+      ORCA_VARIANT_DESCRIPTION='Legacy CPU PLE image, fresh-install only'
+      ;;
+    official-arm64-c)
+      ORCA_VARIANT_STATUS=unqualified
+      ORCA_VARIANT_SELECTABLE=0
+      ORCA_VARIANT_DESCRIPTION='Official ARM64 C: CPU-only CLI help failed during device auto-detection; options, PLE, KV16GiB and model READY unverified'
+      ;;
+    *)
+      printf 'ERROR: unknown OrcaRouter vLLM runtime variant: %s\n' "$1" >&2
+      return 2
+      ;;
+  esac
+}
