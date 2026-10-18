@@ -27,6 +27,7 @@ SPEC.loader.exec_module(PLAN)
 MODEL = PLAN.MODEL
 REVISION = PLAN.PINNED_REVISION
 SESSION_ID = "catplusplus-m1"
+SOURCE_AUDIT_FILE = ROOT / "scripts" / "model" / "audit_catplusplus_loader_source.py"
 PROPOSED_PORT = 18892  # Never bind/publish this during an M0 source gate.
 PHASES = (
     "candidate_qualified", "created", "armed", "started_unqualified",
@@ -160,13 +161,45 @@ def blocked(action: str) -> int:
     return 2
 
 
+def source_audit(offline_dir: Path | None) -> int:
+    """Optional pinned small-text source gate; never imports/executes loader."""
+    spec = importlib.util.spec_from_file_location(
+        "catplusplus_source_audit", SOURCE_AUDIT_FILE)
+    if spec is None or spec.loader is None:
+        raise M1Blocked("pinned source audit module missing")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    report = module.audit(offline_dir)
+    print("CATPLUSPLUS_M1_SOURCE_REVISION=" + str(report["revision"]))
+    print("CATPLUSPLUS_M1_SOURCE_TRANSPORT=" + str(report["transport"]))
+    print("CATPLUSPLUS_M1_SOURCE_CONFIG_SHA256=" + report["config_sha256"])
+    print("CATPLUSPLUS_M1_SOURCE_LAUNCHER_SHA256=" + report["launcher_sha256"])
+    print("CATPLUSPLUS_M1_SOURCE_DECLARATIONS=" + report["source_declarations"])
+    print("CATPLUSPLUS_M1_FUSED_QKVZ_ALIAS_COUNT=" +
+          str(report["config"]["fused_qkvz_quantized_alias_count"]))
+    for hazard, value in report["publisher_launcher"]["script_operational_hazards"].items():
+        print("CATPLUSPLUS_M1_PUBLISHER_LAUNCH_HAZARD_" + hazard.upper() +
+              "=" + ("PRESENT_DO_NOT_EXECUTE" if value else "NOT_DETECTED"))
+    print("CATPLUSPLUS_M1_ENGINE_LOADER=NOT_ATTESTED_BY_SOURCE_TEXT")
+    print("CATPLUSPLUS_M1_LIVE_ADMISSION=" + report["live_admission"])
+    print("CATPLUSPLUS_M1_DOCKER_GPU_MODEL_DOWNLOAD=NOT_PERFORMED")
+    return 0 if report["source_declarations"] == "PRESENT_NOT_ENGINE_ATTESTED" else 2
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=(
         "plan", "status", "preflight", "run", "bench-admission", "reconcile",
+        "source-audit",
     ))
+    parser.add_argument("--offline-dir", type=Path,
+                        help="only with source-audit; offline fixtures")
     args = parser.parse_args()
     try:
+        if args.action == "source-audit":
+            return source_audit(args.offline_dir)
+        if args.offline_dir is not None:
+            raise M1Blocked("--offline-dir is only permitted for source-audit")
         if args.action == "plan":
             return plan()
         if args.action == "status":
