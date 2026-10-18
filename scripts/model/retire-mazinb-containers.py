@@ -77,7 +77,16 @@ def digest(path: Path) -> str:
     return sha.hexdigest()
 
 
-def evidence(home: Path, model_root: Path, state: Path) -> None:
+def evidence(home: Path, model_root: Path, state: Path, *,
+             require_hybrid_stages: bool = True) -> None:
+    """Shared immutable bench/journal evidence.
+
+    The initial one-time Docker retirement MUST require Hybrid H3-H6.
+    The later post-retirement audit may waive only that old dependency
+    existence precondition, since H3-H6 were separately retired; all
+    hashes, journal identity, source absence and Docker/archive checks
+    remain independently enforced.
+    """
     candidate = model_root / "qwen3.8-flash-next-mazinb"
     require(is_directory(model_root) and not candidate.exists() and not candidate.is_symlink(),
             "source checkpoint must be previously removed before retiring containers")
@@ -103,12 +112,14 @@ def evidence(home: Path, model_root: Path, state: Path) -> None:
             "M1 journal not reconciled to stopped")
     require(record.get("id") == EXPECTED["qwen38-mazinb-m1-20261014013811-16ced779"],
             "M1 journal Docker identity changed")
-    for stage in ("qwen3.8-hybrid-quant-layout", "qwen3.8-h4-orca-all",
-                  "qwen3.8-h5-neutral-input-scale", "qwen3.8-h6-modelopt-w4a16"):
-        require(is_directory(model_root / stage), f"hybrid dependency missing: {stage}")
+    if require_hybrid_stages:
+        for stage in ("qwen3.8-hybrid-quant-layout", "qwen3.8-h4-orca-all",
+                      "qwen3.8-h5-neutral-input-scale", "qwen3.8-h6-modelopt-w4a16"):
+            require(is_directory(model_root / stage), f"hybrid dependency missing: {stage}")
     print("MAZINB_DOCKER_EVIDENCE=ORIGINAL_AND_REPOSITORY_SHA256_PASS")
     print("MAZINB_DOCKER_JOURNAL=STOPPED_EXACT_ID")
-    print("MAZINB_DOCKER_HYBRID_STAGES=PRESERVED")
+    print("MAZINB_DOCKER_HYBRID_STAGES=" +
+          ("PRESERVED" if require_hybrid_stages else "POST_RETIREMENT_NOT_REQUIRED"))
 
 
 def docker(*args: str, timeout: int = 45) -> str:
