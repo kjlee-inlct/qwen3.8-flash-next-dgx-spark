@@ -1,3 +1,52 @@
+## 2026-10-18 — SOURCE-ONLY P0 Wizard backend admission integrated; legacy menu contract restored
+
+Continuing from physical DGX vLLM C CPU-only help failure
+(`RuntimeError: Failed to infer device type` before CLI argument
+printing), focus returns to **P0 easy Wizard install, profile
+switch, diagnostics and safe uninstall**, NOT manual Docker trials.
+
+CI on earlier head `714717c7d663bdc0c3c337bd6a8e71c4af17df48`
+FAILED both Push and PR workflows, exactly two synthetic
+retired-Hybrid menu tests (`8/9/10` must each return Invalid
+selection). New Model management option 8 had improperly
+revived retired slot 8. Source remediation keeps **8–10**
+non-routable and moves the read-only OrcaRouter backend
+qualification view to existing **Model management -> 7 Candidate
+metadata -> 5 OrcaRouter qualification**. No Hybrid artifacts
+or test protections are removed.
+
+Additional new **source-only** operator integration:
+- `scripts/backend/backends.sh` now distinguishes vLLM image
+variants of existing OrcaRouter model: `v029` implemented,
+`legacy` experimental fresh-install-only, `official-arm64-c`
+**UNQUALIFIED/NOT_SELECTABLE**. This axis is distinct from the
+vLLM vs SGLang backend axis and from model/checkpoint identity.
+- Main `install.sh` Wizard model selection (both fresh install
+and existing profile switch selection) explicitly displays
+why official C cannot be selected: an intentionally GPU-hidden
+CPU-only CLI probe died in device inference **before**
+CLI flags could be assessed; real option, PLE/KV16GiB/MTP,
+model READY and host-safety remain unverified.
+- Typing `c`, `official-c`, `official-arm64-c` in Wizard,
+or providing these as `--orcarouter-runtime` CLI arguments,
+does **not** authorize/load/run C and is blocked by the
+qualified runtime selector. Original v029/legacy contracts
+and original default model/serving image are unchanged.
+- Synthetic tests added to cover direct installer blocking,
+candidate-menu nested navigation, and preserved invalid
+retired menu numbers. No physical C start and no new
+CPU-only Docker probe were performed by these commits.
+
+**Current qualification:** GitHub source changes are NOT
+DGX deployed/physically verified until exact-head CI PASS
+and operator-controlled safe Git fast-forward. Prior actual
+physical DGX state remains CLI-help failure with all protected
+managed/A/B objects unchanged, disposable CPU probe removed.
+**No approval for model GPU start, service changes, destructive
+operations or PR merge.**
+
+[C official runtime and wizard integration plan](ORCAROUTER-PEER-C-PLAN-20261018.md).
+[Physical CPU CLI root-cause evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
 ## 2026-10-18 — ACTUAL DGX saved vLLM traceback: CPU-only CLI died in DeviceConfig before flag help
 
 The operator read the existing, already-consumed CPU-probe output
