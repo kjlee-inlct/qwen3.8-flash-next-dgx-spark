@@ -26,6 +26,36 @@ class MzinbReinstallTests(unittest.TestCase):
                 self.assertIn("BLOCKED_MANIFEST_OR_MODEL_ROOT_UNSAFE", r.stderr)
                 self.assertFalse((home / "xdg").exists())
 
+    def test_terminal_b_benchmark_plan_and_unapproved_run_never_access_host(self):
+        script = ROOT / "scripts/wizard/mazinb-reinstall-bench.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "HOME": tmp, "XDG_STATE_HOME": str(Path(tmp) / "xdg")}
+            env.pop("QWEN38_M1_BENCH_LEASE_HELD", None)
+            plan = subprocess.run(
+                ["bash", str(script), "--plan"], env=env, cwd=ROOT,
+                capture_output=True, text=True, timeout=10, check=False)
+            self.assertEqual(plan.returncode, 0, plan.stderr)
+            self.assertIn("MAZINB_R2_BENCH=PLAN_ONLY_NO_API_OR_HOST_MUTATION",
+                          plan.stdout)
+            run = subprocess.run(
+                ["bash", str(script), "--run"], env=env, cwd=ROOT,
+                capture_output=True, text=True, timeout=10, check=False)
+            self.assertEqual(run.returncode, 2, run.stderr)
+            self.assertIn("BLOCKED_WRAPPER_LEASE", run.stderr)
+            self.assertFalse((Path(tmp) / "xdg").exists())
+
+    def test_terminal_b_benchmark_fixed_workloads_no_install_or_delete(self):
+        script = (ROOT / "scripts/wizard/mazinb-reinstall-bench.sh").read_text()
+        for required in ("--pp 512 2048 --tg 128 --depth 0",
+                         "--concurrency 1 --runs 3 --warmup-runs 1",
+                         "--latency-mode generation", "--save-result",
+                         "llama-benchy-report.py", "sha256sum -c SHA256SUMS",
+                         "QWEN38_M1_BENCH_SLOT"):
+            self.assertIn(required, script)
+        for forbidden in ("systemctl start", "docker start", "docker rm",
+                          "rm -rf", "uv pip install", "uvx llama-benchy"):
+            self.assertNotIn(forbidden, script)
+
     def test_pinned_model_identity_and_no_managed_service_reactivation(self):
         script = SCRIPT.read_text()
         registry = (ROOT / "scripts/model/model-profiles.sh").read_text()
