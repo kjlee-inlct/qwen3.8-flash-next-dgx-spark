@@ -77,8 +77,40 @@ class PeerCReadOnlyTests(TestCase):
                                side_effect=lambda name, *, image: data.get(name)):
             self.assertEqual(MOD.protected_receipt(), "PROTECTED_ID_OR_IMAGE_DRIFT")
 
+    def test_runtime_entrypoint_matches_without_source_attestation(self):
+        data = {"Config": {
+            "Entrypoint": ["vllm", "serve"], "WorkingDir": "/vllm-workspace",
+            "Env": ["CUDA_VERSION=13.0.1", "VLLM_BUILD_COMMIT=unknown",
+                    "VLLM_IMAGE_TAG=local/vllm-openai:dev"]}}
+        with mock.patch.object(MOD, "metadata", return_value=data):
+            self.assertEqual(MOD.image_runtime_receipt(),
+                             "ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED")
+
+    def test_runtime_cmd_absent_is_valid_but_unexpected_cmd_blocks(self):
+        data = {"Config": {
+            "Entrypoint": ["vllm", "serve"], "WorkingDir": "/vllm-workspace",
+            "Cmd": ["unexpected"], "Env": ["CUDA_VERSION=13.0.1"]}}
+        with mock.patch.object(MOD, "metadata", return_value=data):
+            self.assertEqual(MOD.image_runtime_receipt(),
+                             "UNEXPECTED_IMAGE_DEFAULT_CMD")
+
+    def test_runtime_entrypoint_mismatch_blocks(self):
+        data = {"Config": {
+            "Entrypoint": ["/bin/bash"], "WorkingDir": "/vllm-workspace",
+            "Env": ["CUDA_VERSION=13.0.1"]}}
+        with mock.patch.object(MOD, "metadata", return_value=data):
+            self.assertEqual(MOD.image_runtime_receipt(),
+                             "ENTRYPOINT_MISMATCH")
+
+    def test_runtime_absent_image_blocks(self):
+        with mock.patch.object(MOD, "metadata", return_value=None):
+            self.assertEqual(MOD.image_runtime_receipt(),
+                             "PINNED_IMAGE_NOT_INSPECTABLE")
+
     def test_missing_pinned_image_is_not_live_admission(self):
         with mock.patch.object(MOD, "image_receipt", return_value="ABSENT_EXACT_AND_TAG"), \
+             mock.patch.object(MOD, "image_runtime_receipt",
+                               return_value="PINNED_IMAGE_NOT_INSPECTABLE"), \
              mock.patch.object(MOD, "protected_receipt", return_value="THREE_STOPPED_EXISTING_IDS"), \
              mock.patch.object(MOD, "command", return_value=(3, "")), \
              mock.patch.object(MOD.platform, "machine", return_value="aarch64"), \
@@ -89,6 +121,8 @@ class PeerCReadOnlyTests(TestCase):
 
     def test_pass_still_does_not_authorize_runtime(self):
         with mock.patch.object(MOD, "image_receipt", return_value="PINNED_MATCH"), \
+             mock.patch.object(MOD, "image_runtime_receipt",
+                               return_value="ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED"), \
              mock.patch.object(MOD, "protected_receipt", return_value="THREE_STOPPED_EXISTING_IDS"), \
              mock.patch.object(MOD, "command", return_value=(3, "")), \
              mock.patch.object(MOD.platform, "machine", return_value="aarch64"), \
