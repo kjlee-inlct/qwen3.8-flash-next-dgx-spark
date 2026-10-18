@@ -598,7 +598,7 @@ The operator synced clean local source
 `4fa3a83f33be508736ea4d79f0ed97d24bc0be60`,
 verified `EXACT_HEAD_CI=SUCCESS_2_OF_2`, and physically ran
 **only** the read-only
-`python3 -B scripts/model/inspect_ple_postcheck_readonly.py`.
+`inspect_ple_postcheck_readonly.py` (maintained read-only model diagnostic).
 
 ```text
 PLE_POSTCHECK_RESULT_KIND=CURRENT_READ_ONLY_NOT_HISTORICAL_REPLAY
