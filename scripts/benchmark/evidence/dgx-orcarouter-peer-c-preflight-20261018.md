@@ -98,3 +98,39 @@ References: [`serve.sh`](../../serve.sh),
 [C plan](../../../docs/ORCAROUTER-PEER-C-PLAN-20261018.md),
 [image pull receipt](dgx-orcarouter-peer-c-image-pull-20261018.md),
 [vLLM current engine arguments](https://docs.vllm.ai/en/stable/configuration/engine_args/).
+
+## Additional actual DGX systemd service inventory (owner, 2026-10-18)
+
+Read-only operator shell separately ran `systemctl show` and
+`systemctl --user show` for **the exact unit name**
+`qwen38-flash-next.service`, requesting `LoadState`, `ActiveState`,
+`SubState`, `UnitFileState`, and `--no-pager`:
+
+```text
+=== MANAGED SERVICE DETAIL ===
+LoadState=not-found
+ActiveState=inactive
+SubState=dead
+UnitFileState=
+=== USER SERVICE DETAIL ===
+LoadState=not-found
+ActiveState=inactive
+SubState=dead
+UnitFileState=
+```
+
+**Grounded conclusion:** neither the system service manager nor the
+current user's service manager has a loaded/known systemd unit by
+this exact name. Its inactive/dead status is not proof of a healthy
+installed-but-stopped unit. This resolves the earlier
+`PEER_C_MANAGED_SERVICE=INACTIVE_OR_UNKNOWN` ambiguity for the
+**physical timestamp**: specifically `LoadState=not-found` in both
+namespaces. It does not prove that no differently named units,
+unmanaged containers or model-serving processes exist.
+
+**C live gate:** do not reuse the historical A/B trial assumption
+that `SERVICE_ENABLED=1` means a physical systemd unit is present;
+a future independent C admission must be explicit about absent
+services while still excluding any running colliding process,
+unfinished lifecycle transition and incompatible Docker objects.
+No unit was installed, enabled, disabled, started or removed.
