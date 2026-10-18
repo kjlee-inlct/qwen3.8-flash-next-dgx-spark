@@ -40,6 +40,44 @@ EVIDENCE_DIR=/home/inlc/orcarouter-bench-evidence/peer-c-image-20261018T093728Z
 
 The shell execution printed `=== EVIDENCE SHA256 ===` and passed the `sha256sum ... > SHA256SUMS.txt` step under `set -Eeuo pipefail`; the terminal **does not display** the actual SHA256SUMS content or its independent verification. Pasted heredoc text was partially garbled, but the output includes the complete expected identity and protected postcheck stages, with a final interactive prompt. Do not infer any unshown execution beyond that output.
 
+## Follow-up physical image runtime-config metadata (owner read-only terminal, 2026-10-18)
+
+The operator ran `docker image inspect` on the same exact pinned C
+registry reference, parsed the JSON with Python after a first Docker
+Go-template read failed because `.Config.Cmd` was not present.
+Corrected **read-only** output is:
+
+```text
+IMAGE_ID=sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a
+OS=linux
+ARCH=arm64
+REPO_DIGESTS=["vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e"]
+ENTRYPOINT=["vllm", "serve"]
+CMD=NOT_SET
+WORKDIR=/vllm-workspace
+USER=NOT_SET
+OCI_REVISION=unknown
+CUDA_VERSION=13.0.1
+FLASHINFER_VERSION=NOT_SET
+VLLM_BUILD_COMMIT=unknown
+VLLM_IMAGE_TAG=local/vllm-openai:dev
+VLLM_VERSION=NOT_SET
+IMAGE_INSPECTION=READ_ONLY_COMPLETE
+```
+
+**Source-level inference only:** the existing `scripts/serve.sh`
+puts `/model` and CLI flags after the Docker IMAGE. For this entrypoint
+it composes `vllm serve /model [flags]`, so the entrypoint/argv *shape*
+matches; the internal vLLM wheel, supported flags, CPU PLE worker,
+model architecture, compressed-tensors loader, MTP implementation
+and safe memory allocations are **NOT PROVED**. `CMD=NOT_SET` here
+is absence of an image default `Cmd` property, not a malformed image.
+`FLASHINFER_VERSION=NOT_SET` means absent from the inspected runtime
+Env whitelist, not that FlashInfer is uninstalled; OCI image build
+history may report build arguments separately. `unknown` labels
+cannot attest a commit. No Docker run/exec/copy or runtime import
+was performed. The pasted multiline input was partly mangled but
+the labeled Python output and interactive shell return were visible.
 ## Qualification remains blocked
 
 - This is **IMAGE_PRESENT_VERIFIED_ONLY**, not embedded vLLM wheel/source attestation; image runtime/loader compatibility remains **UNQUALIFIED**.
