@@ -1,3 +1,56 @@
+## 2026-10-19 — ACTUAL DGX mazinb final read-only retirement audit PASS
+
+**Owner-pasted DGX terminal transcript (physical, not CI):** The owner
+synchronized the sole canonical checkout on
+`feature/wizard-modular-phase1-20261014` from
+`14a44f0` to **exact source SHA**
+`5164042ed5d784fe3469ad0207e4d8ecf8d5869f` by
+`git fetch` + `git merge --ff-only`, with expected branch and
+clean-worktree gates; the shell printed `SOURCE_SYNC=VERIFIED`.
+The preceding GitHub Push and PR CI both had success conclusions.
+
+**Wizard 3 → 6** on that DGX returned
+`MAZINB_RETIREMENT_AUDIT=PASS_READ_ONLY_DEDICATED_ARTIFACTS_ABSENT`
+and `MAZINB_RETIREMENT_HOST_MUTATION=NONE`.
+Specific independently observed read-only results:
+- `MAZINB_DOCKER_EVIDENCE=ORIGINAL_AND_REPOSITORY_SHA256_PASS`,
+  `MAZINB_DOCKER_JOURNAL=STOPPED_EXACT_ID`,
+  `MAZINB_DOCKER_HYBRID_STAGES=POST_RETIREMENT_NOT_REQUIRED`.
+- `MAZINB_AUDIT_ARCHIVE=PASS_EXACT_FIVE_INSPECT_AND_LOG_PAIRS_SHA256`
+  and `MAZINB_AUDIT_ORIGINAL_AND_GITHUB_BENCHMARK=SHA256_PASS`.
+  The private historical Docker evidence archive remains
+  `/home/inlc/.local/state/qwen38-spark/retirement-archives/mazinb-docker-20261014T103718Z-7e238b9aeb`.
+- `MAZINB_AUDIT_DOCKER=EXACT_FIVE_ABSENT_NO_OTHER_MAZINB`,
+  protected predecessor ID
+  `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+  is still present and the shared vLLM image is preserved.
+- Dedicated system and user units both ABSENT, the three project
+  shared runtime/proxy units `load=not-found active=inactive`,
+  mazinb 18889 port and shared 8888/8000/8001 ports have NO_LISTENER,
+  no known mazinb worker/watchdog processes.
+
+**Wizard 3 → 5** after this independently confirmed
+`MAZINB_DOCKER_RETIRE=BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED`,
+demonstrating the new no-repeat-delete protection physically; this
+was not a second deletion. **Wizard 5 → 7** reported M1
+`phase=stopped`, `Running=False`, `ExitCode=0`, historical
+session `qwen38-mazinb-m1-20261014013811-16ced779`,
+Docker ID `7af3966f3d0cae79f8277eaf9ad003fb04c1e15ea01f86574c2d8eeac396e7a1`,
+`M1_DOCKER_REMOVED=YES_ARCHIVED` and the same archive path.
+No Docker/service/GPU/weight/download action performed by these
+read-only checks; all 2026-10-14 M1 benchmark observations remain
+historical, not freshly measured or proof of a current live mazinb service.
+
+**Closed:** prior post-retirement audit physical-run gap, old
+H3-H6 false dependency and the repeated-retirement prevention
+physical-check gap. **Still open:** catplusplus pinned-source
+`SOURCE_REDIRECT_BLOCKED`, exact pinned loader/GB10 capacity,
+checkpoint acquisition and separate approved model GPU launch.
+mazinb checkpoint remains absent, as verified by prior physical
+Wizard assets inventory; re-running mazinb requires separately
+reviewed reinstallation and physical startup authorization.
+PR #261 remains Draft/unmerged.
+
 ## 2026-10-19 — SOURCE fix for post-retirement mazinb audit after H3-H6 deletion
 
 The actual DGX **3 → 5** historical cleanup attempt stopped in
