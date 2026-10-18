@@ -116,6 +116,28 @@ reference to `scripts/model/` as a runtime code dependency. **All nine
 new C unit tests passed**. Source lint has since been corrected to
 exclude Markdown evidence from executable dependency analysis; a fresh
 full CI run must establish PASS before recommending an operator sync.
+## Physical systemd-unit absence resolved (2026-10-18 read-only result)
+
+The owner checked **both** `systemctl show` and
+`systemctl --user show` for `qwen38-flash-next.service`.
+Both returned `LoadState=not-found`, `ActiveState=inactive`,
+`SubState=dead`, and empty `UnitFileState`.
+This refines the earlier preflight `INACTIVE_OR_UNKNOWN`: the
+**specific unit does not exist in either checked manager**; it
+is not an installed-but-idle managed service. This is a neutral
+fact for an independent C candidate, not evidence that the entire
+host is quiescent. Do not reuse the legacy A/B service-install
+precondition without an explicit independent C-specific admission.
+
+**Next C launcher gate (source-only, no live authorization):**
+read-only enumerate other running model containers and port `18891`,
+unfinished lifecycle state and swap/memory margin; reject collisions
+and untrusted object identities. Separate C must be Wizard-locked,
+unique-name create-only with `--restart no`, local-only host publish,
+monitor arm-before-start exact ID, no `--rm`, no change to old objects.
+Confirm actual official image CLI support for KV16GiB/CPU PLE/MTP
+before any model-loaded start. No C start has been authorized.
+[Actual DGX service evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
 ## ACTUAL DGX source-only C preflight PASS — 2026-10-18
 
 Operator performed exact 30-commit safe Git fast-forward to
