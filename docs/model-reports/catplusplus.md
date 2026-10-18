@@ -22,9 +22,10 @@ flags, redirect/symlink/oversized refusal and no weight fetch.
 
 ## mazinb M1-style session implementation status (source-only)
 
-Wizard Benchmark **5 -> 23** now presents the *same six operator
+Wizard Benchmark **5 -> 23** presents the *same six lifecycle
 actions* as mazinb M1: plan, status, preflight, benchmark admission,
-live-start gate and journal reconciliation. The full exact-ID
+live-start gate and journal reconciliation, plus **option 7** for a
+bounded, pinned config/SGLang launcher text-only source audit. The full exact-ID
 create-only/watchdog-before-start/READY/180s soak/smoke/Terminal-B
 bench/STOP/evidence lifecycle is documented as a **contract only**.
 `scripts/runtime/catplusplus-m1.py` intentionally rejects
