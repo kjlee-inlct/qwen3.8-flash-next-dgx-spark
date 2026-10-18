@@ -49,6 +49,7 @@ MODEL = "mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
 KV_BYTES = "17179869184"
 PORT = 18889
 HEX64 = re.compile(r"[a-f0-9]{64}\Z")
+HEX40 = re.compile(r"[a-f0-9]{40}\Z")
 NAME_RE = re.compile(r"qwen38-mazinb-m1-[0-9]{14}-[a-f0-9]{8}\Z")
 MARKERS = (
     "runtime-transition.env", "update-transition.env", "profile-switch-transition.env",
@@ -138,7 +139,7 @@ def pinned_clean_source_sha() -> str:
     dirty = call("git", "-C", str(ROOT), "status", "--porcelain=v1")
     require(not dirty.stdout.strip(), "project source worktree not clean")
     sha = call("git", "-C", str(ROOT), "rev-parse", "HEAD").stdout.strip()
-    require(bool(HEX64.fullmatch(sha)), "project source SHA not 40-hex")
+    require(bool(HEX40.fullmatch(sha)), "project source SHA not 40-hex")
     return sha
 
 
