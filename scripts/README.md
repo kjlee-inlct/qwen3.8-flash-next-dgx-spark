@@ -439,3 +439,20 @@ but **cannot rewrite or prove** the original
 single-source-probe pre/post `FAIL_REVIEW`.
 All source copies and Docker mutations remain stopped.
 
+### Installed-source-aware lychee888 loader metadata gate
+
+`python3 -B scripts/model/assess_lychee888_loader.py --json`
+fetches only **pinned** lychee888 API/config/index JSON.
+It now includes the immutable **actual DGX**
+image ID and installed Python PLE source SHA256
+(static evidence previously captured, **source bytes
+not stored**). It distinguishes checkpoint-declared
+`compressed-tensors` `mixed-precision` from
+NVIDIA's `ModelOptMixedPrecisionConfig` patch, and
+does not claim the native `Fp8Config` branch is
+reachable, that the global BF16 scale is loaded,
+or that GB10 TP=1 is supported.
+No model weights, Docker or GPU activity is performed.
+Tests use fully synthetic offline triplets. The profile
+remains non-installable; any real adapter/image change
+needs a separately approved operation.
