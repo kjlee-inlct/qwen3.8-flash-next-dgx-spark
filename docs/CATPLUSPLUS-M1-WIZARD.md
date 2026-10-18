@@ -1,3 +1,39 @@
+## New pinned-source inspection gate (source-only; no engine proof)
+
+Operator Wizard: **5 Benchmark -> 23 catplusplus M1 -> 7 pinned
+configuration/loader source audit**. The new
+`scripts/model/audit_catplusplus_loader_source.py audit` is a
+strict HTTPS read of exactly **two** small text files from the
+immutable Hugging Face revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`:
+`config.json` (256 KiB max) and
+`extra/inference/inference_qwen38_flash_next_sglang.sh`
+(128 KiB max). It explicitly refuses redirects and
+does **not** fetch safetensors, giant packages, git bundles,
+an arbitrary publisher command, or actual engine wheels.
+The maintained M1 controller action is `source-audit`; tests
+can pass `--offline-dir` with two fixture files.
+
+The diagnostic checks ModelOpt `MIXED_PRECISION` config,
+fused `.linear_attn.in_proj_qkvz` entries in
+`quantized_layers`, `ple_embedding_dtype=float8_e4m3fn`,
+the SGLang launcher entry point, file-based PLE offload
+flags, hierarchy cache declarations, and risk-bearing
+`sudo`, `/proc/sys/vm/drop_caches` and `--host 0.0.0.0`.
+Any mentioned flag is **SOURCE_DECLARATION_ONLY**, not proof
+it is supported by the target built engine. A source-audit
+return code 0 means only expected declarations were present
+under a two-file bound; it cannot admit checkpoint download,
+start GPU, validate MXFP8 block scales in actual tensors,
+enable swap paging, or certify memory headroom.
+
+The user-confirmed publisher README advertises a custom
+SGLang backend, file PLE offload and a fused qkvz scaling fix;
+**the example must not be executed verbatim on GB10**.
+An actual DGX output from the new audit is still required;
+neither synthetic CI nor a read-only tool's presence attests
+the immutable revision's exact two fetched files.
+
 # catplusplus M1 — mazinb M1-style isolated benchmark workflow
 
 **Status (2026-10-18): SOURCE-ONLY / NOT_REGISTERED / NOT_DOWNLOADED / NO GPU SESSION / NO BENCHMARK.**
