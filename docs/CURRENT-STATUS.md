@@ -1,3 +1,36 @@
+## 2026-10-19 — SOURCE fix for post-retirement mazinb audit after H3-H6 deletion
+
+The actual DGX **3 → 5** historical cleanup attempt stopped in
+`retire-mazinb-containers.py evidence()` because it still required
+Hybrid H3-H6 directories, even though the 2026-10-14 physical Docker
+retirement was already completed and those Hybrid checkpoints were
+separately retired later.
+
+**Distinct phase-specific contracts now enforced:**
+- Historical *destructive* mazinb Docker retirement plan/apply still
+  requires H3-H6 to exist, exact five stopped Docker IDs, prior source
+  retirement and immutable benchmark/M1 provenance. No deletion
+  protections were relaxed.
+- Current *read-only* `verify-mazinb-retirement.py` archive check
+  invokes shared benchmark/journal evidence with
+  `require_hybrid_stages=False`; later removal of unrelated
+  Hybrid stages no longer invalidates a historical mazinb archive.
+  Exact benchmark original+repository SHA256, M1 journal,
+  tombstone/ten Docker archive SHA256 files, Docker IDs,
+  ports, dedicated units and processes remain fail-closed.
+- Wizard **3 → 5** now detects an existing historical
+  `retired-docker.json` marker, refuses any repeat cleanup
+  and points operators to **3 → 6** for full read-only
+  independent verification. Marker *presence* is not evidence
+  of completion.
+
+Host-free tests check both the non-relaxed destructive gate and
+the later post-retirement audit exception, archive tampering rejection
+and wizard refusal to call a deletion manager when a marker exists.
+The new source fix needs exact-HEAD CI, DGX fast-forward and actual
+**3 → 6** result before claiming physical post-retirement audit PASS.
+No GPU/Docker/model files/service changes were performed.
+
 ## 2026-10-19 — ACTUAL DGX mazinb assets absent; historical retirement menu re-entry blocked
 
 **Owner-supplied physical Wizard transcript**, not a source/CI simulation:
