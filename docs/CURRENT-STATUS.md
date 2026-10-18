@@ -1,3 +1,48 @@
+## 2026-10-18 — catplusplus M1 mazinb-parity lifecycle source scaffold; ALL LIVE GATES BLOCKED
+
+The operator specified that catplusplus should follow the same **form**
+as the first physical mazinb M1 benchmark: Wizard-owned independent
+session, exact protected predecessor identities, lifecycle lock,
+Docker create-only, exact-ID watchdog armed BEFORE start,
+model API identity and functional smoke, protected post-ready
+180-second soak, pinned llama-benchy Terminal-B admission and
+PP512/TG128 + PP2048/TG128 C1 warmup1/runs3, exact-ID STOP,
+archived raw evidence and SHA256.
+
+**GitHub SOURCE ONLY now implemented:**
+- `scripts/runtime/catplusplus-m1.py` exposes mazinb-compatible
+action names `plan`, `status`, `preflight`, `run`,
+`bench-admission`, `reconcile`. The 12-step lifecycle is a
+**contract, not runnable implementation**. All live/bench
+paths **fail closed** (rc2); no Docker/API/GPU/weight download.
+Only read-only plan, journal status and no-journal reconcile
+can return PASS without claiming actual candidate readiness.
+- Wizard Benchmark **5 -> 23** gives its own six-action
+catplusplus sub-menu, alongside the existing **5 -> 22 M0 plan**.
+- Offline tests verify all 12 workflow markers, refused live
+start, refused benchmark with even forged ready journal,
+no-local-state side effects, symlink refusal and safe Wizard
+nested navigation. No user data, services, releases or running
+Docker objects are modified.
+- Persistent runbook: [catplusplus M1 Wizard](CATPLUSPLUS-M1-WIZARD.md).
+
+**Reason for rejecting an actual mazinb-style load TODAY:**
+Actual DGX pinned catplusplus metadata shows root model
+safetensors ~174.8553 GiB versus a single GB10 nominal
+128GB unified memory. Neither exact mixed MXFP8 fused qkvz
+scale consumer/ModelOpt NVFP4 loader nor file-offloaded FP8
+PLE, peak RM/CPU/swap budget or exact pinned GB10 image
+is currently qualified. The checkpoint was not downloaded,
+and no owner approval for catplusplus download/GPU startup
+was granted. Therefore catplusplus actual API
+READY/inference/benchmark remains **NOT_MEASURED**.
+
+Safety: do NOT inherit mazinb's known-good vLLM image
+or systemd installed-service assumption. Existing three
+managed/OrcaRouter A/B Docker protected objects remain intact.
+Only after specific source/offload qualification and separate
+download/GPU approvals may a full protected M1 controller
+be implemented/executed on the physical DGX.
 ## 2026-10-18 — catplusplus M0 benchmark plan uploaded to GitHub: SOURCE ONLY / NOT_MEASURED
 
 The operator suggested prioritizing catplusplus benchmark preparation
