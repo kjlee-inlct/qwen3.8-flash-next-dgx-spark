@@ -1,3 +1,44 @@
+## 2026-10-18 — ACTUAL_DGX pinned lychee888 metadata L0 success and over-nominal index bytes
+
+The operator on the physical DGX verified clean local
+`b9114544eb35d7275740cf0ca2e9d010134f7cbb`
+(exact-head two CI SUCCESS), then completed
+`assess_lychee888_loader.py --json` with
+`LYCHEE888_METADATA_COMMAND=COMPLETED`.
+Pinned Hub revision:
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`.
+`l0_verdict=INDEX_STRUCTURE_PASS_METADATA_ONLY`;
+223,047 indexed keys, exactly 128 PLE weight shards
+across ten FP8-PLE filenames, and one listed global
+`weight_scale`; PLE config dtype `float8_e4m3fn`.
+Pinned quant metadata
+`quant_method=compressed-tensors` and
+`format=mixed-precision` differs from the
+repository NVIDIA `ModelOptMixedPrecisionConfig`
+patch. Source dispatch `NATIVE_FP8_CONFIG_ONLY_SOURCE`
+comes from an older independently captured physical
+source SHA receipt, not a fresh Docker check.
+
+New pinned index `metadata.total_size=132279699754`
+bytes, exceeding nominal DGX Spark 128 GB unified
+system memory by **4,279,699,754 bytes** under a
+hypothetical untransformed full-residency comparison.
+Runtime peak memory `NOT_MEASURED`;
+this is not proof of OOM, nor proof of fit with
+mmap/CPU offload/streaming. Global scale is
+index-listed but its actual BF16 tensor dtype,
+registration/load/consumption and backend dispatch
+remain unverified.
+
+Report `installed_loader_contract=BLOCKED_SOURCE_ONLY_UNQUALIFIED`,
+`single_gb10_tp1=NOT_VERIFIED`, and
+`SOURCE_ONLY_LOADER_UNQUALIFIED`. No model
+download, Docker action or GPU run occurred.
+Existing protected-current-state result remains
+`PASS_CURRENT_ONLY`; historical one-shot
+`FAIL_REVIEW` remains unclassified.
+[Physical output](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
 ## 2026-10-18 — SOURCE_ONLY nominal unified memory screen for lychee888 index
 
 The same standalone pinned metadata/source assessor now
