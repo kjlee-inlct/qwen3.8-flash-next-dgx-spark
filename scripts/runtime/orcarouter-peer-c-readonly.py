@@ -79,6 +79,33 @@ def image_receipt() -> str:
     return "PINNED_MATCH" if exact is not None else "TAG_MATCH_PINNED_REPODIGEST"
 
 
+def image_runtime_receipt() -> str:
+    """Verify OCI entrypoint shape; do not confuse this with CLI/wheel proof."""
+    image = metadata(PINNED, image=True)
+    if image is None:
+        return "PINNED_IMAGE_NOT_INSPECTABLE"
+    config = image.get("Config")
+    if not isinstance(config, dict):
+        return "IMAGE_CONFIG_MISSING"
+    if config.get("Entrypoint") != ["vllm", "serve"]:
+        return "ENTRYPOINT_MISMATCH"
+    if config.get("Cmd") not in (None, []):
+        return "UNEXPECTED_IMAGE_DEFAULT_CMD"
+    if config.get("WorkingDir") != "/vllm-workspace":
+        return "WORKDIR_MISMATCH"
+    values: dict[str, str] = {}
+    for entry in config.get("Env") or []:
+        if isinstance(entry, str) and "=" in entry:
+            key, value = entry.split("=", 1)
+            if key in {"CUDA_VERSION", "VLLM_BUILD_COMMIT", "VLLM_IMAGE_TAG"}:
+                values[key] = value
+    if values.get("CUDA_VERSION") != "13.0.1":
+        return "CUDA_VERSION_MISMATCH"
+    # This precise image has VLLM_BUILD_COMMIT=unknown. The OCI envelope
+    # establishes argv composition only; never certify CLI flags or the wheel.
+    return "ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED"
+
+
 def protected_receipt() -> str:
     seen = []
     for name in PROTECTED:
@@ -124,6 +151,9 @@ def preflight() -> int:
     print("PEER_C_HOST_ARCH=" + ("ARM64" if host_ok else "NOT_ARM64"))
     image = image_receipt()
     print("PEER_C_LOCAL_IMAGE=" + image)
+    runtime = image_runtime_receipt()
+    print("PEER_C_RUNTIME_CONTRACT=" + runtime)
+    print("PEER_C_EMBEDDED_VLLM_COMMIT=NOT_ATTESTED_BY_OCI_METADATA")
     protected = protected_receipt()
     print("PEER_C_PROTECTED_OBJECTS=" + protected)
     service_rc, _ = command("systemctl", "is-active", "--quiet",
@@ -140,6 +170,7 @@ def preflight() -> int:
         print("PEER_C_ADMISSION=BLOCKED_IMAGE_NOT_INSTALLED")
         return 2
     if (not host_ok or image not in ("PINNED_MATCH", "TAG_MATCH_PINNED_REPODIGEST")
+            or runtime != "ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED"
             or protected != "THREE_STOPPED_EXISTING_IDS" or not service_ok):
         print("PEER_C_ADMISSION=BLOCKED_REVIEW")
         return 2
