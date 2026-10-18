@@ -1,3 +1,35 @@
+## 2026-10-18 — ACTUAL DGX v0.29 B trial stopped from memory protection; benchmark had no API
+
+The owner executed the maintained **read-only** OrcaRouter A/B trial
+status, managed-service status and `docker ps`. The preserved
+`v029` trial is `phase=stopped`, `Running=False`,
+`DockerStatus=exited`, `ExitCode=137`,
+`STOP_REASON=memory-protection`, exact Docker ID
+`13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`.
+This is the **current observation of an existing B trial**, **not**
+a newly started 2026-10-18 GPU experiment. Its exact
+`StartedAt`, `FinishedAt`, `OOMKilled`, monitor pressure
+trajectory and strict kernel RM window were not provided.
+Managed service command reported `installed=no enabled=no active=no`;
+`docker ps` showed only unrelated `open-webui` and `portainer`
+running. Neither service status nor an empty model-serving port proves
+checkpoint/manifest or protected historical Docker absence.
+
+The owner's loopback `18888` requests received connection refused.
+Two invocations of the canonical lock-wrapped Python benchmark client
+produced **error-only** JSON (qualification and decode), with
+`/health` connection refused on 2026-10-18 at 08:29:57Z.
+No throughput, TTFT, generation, READY or RM stability measurement was
+obtained. `BENCHMARK_STATUS=NOT_MEASURED` for OrcaRouter remains.
+The source's fail-closed same-variant Docker-name reservation blocks
+reuse of existing `qwen38-ab-v029` without separate evidence-backed
+resource disposition; **do not delete it to bypass admission**.
+No trial restart, benchmark repeat, model-data cleanup or protection
+relaxation is approved. Collect bounded read-only exact B monitor,
+Docker and kernel window evidence next, then review any new candidate
+through a distinct identity and owner-approved Wizard procedure.
+[Exact owner terminal output, scope and STOP rules](../scripts/benchmark/evidence/dgx-orcarouter-v029-b-readonly-status-20261018.md).
+
 ## 2026-10-18 — ACTUAL DGX OrcaRouter full peer config parity 7/7 verified
 
 The DGX operator pasted the output of the existing bounded,
