@@ -1,3 +1,40 @@
+## 2026-10-18 — ACTUAL DGX OrcaRouter Wizard backend screen verified; installed image differs from registry default
+
+The operator physically navigated `./wizard.sh`
+`3 Model management -> 7 Candidate metadata ->
+5 OrcaRouter backend qualification` and returned
+to the parent submenu. The main banner reported
+`Manifest: valid (phase=complete)`,
+`Profile: orcarouter`, **`Image: vllm-skinny-tp1:v1`**,
+**`Runtime: NOT_PROBED`**. The read-only C qualification
+screen returned `WIZARD_MUTATION=NONE` and
+`ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED`.
+All CLI/help, PLE, KV, MTP, GPU runtime and benchmark
+limitations remain. The terminal excerpt did not print
+a Git HEAD or independently inspect active Docker IDs.
+
+**P0 Wizard UX discrepancy discovered:** the C qualification
+screen emphasized source registry
+`vllm-orcarouter-v029:v1`, but the *physical installed
+manifest* actually records `vllm-skinny-tp1:v1`.
+The registry candidate must never be confused with
+the currently installed manifest image or an actually
+running/READY runtime.
+
+**GitHub source correction (NOT YET physically verified):**
+`scripts/wizard/candidate-metadata-menu.sh` now reads
+the existing strict manifest status helper and renders
+`ORCAROUTER_CONFIGURED_IMAGE`, exact
+`ORCAROUTER_CONFIGURED_VARIANT`,
+`ORCAROUTER_MANIFEST_STATE` and
+`ORCAROUTER_LIVE_RUNTIME=NOT_PROBED` separately from
+the v0.29 registry candidate. No `install.env` sourcing,
+GPU, Docker mutation, model download/deletion, or
+service changes. New synthetic tests exercise legacy,
+v0.29, unknown, symlink/invalid and missing manifest cases.
+No new C start authorization.
+
+[Exact operator terminal receipt and follow-up source boundaries](../scripts/benchmark/evidence/dgx-orcarouter-wizard-backend-status-20261018.md).
 ## 2026-10-18 — SOURCE-ONLY P0 Wizard backend admission integrated; legacy menu contract restored
 
 Continuing from physical DGX vLLM C CPU-only help failure
