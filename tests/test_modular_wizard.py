@@ -267,9 +267,9 @@ class ModularWizardTests(unittest.TestCase):
             fake.mkdir()
             stub = fake / "bash"
             stub.write_text(
-                '#!/bin/sh\\n'
-                'printf "%s\\\\n" "$*" >> "$HOME/calls"\\n'
-                'exit 99\\n',
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$HOME/calls"\n'
+                'exit 99\n',
                 encoding="utf-8",
             )
             stub.chmod(0o700)
@@ -278,7 +278,7 @@ class ModularWizardTests(unittest.TestCase):
                    "PATH": str(fake) + os.pathsep + os.environ.get("PATH", "")}
             result = subprocess.run(
                 ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
-                cwd=ROOT, env=env, input="3\\n5\\n0\\n0\\n",
+                cwd=ROOT, env=env, input="3\n5\n0\n0\n",
                 text=True, capture_output=True, timeout=20, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
