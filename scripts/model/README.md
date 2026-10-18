@@ -262,3 +262,17 @@ keeps scale load/CT scheme dispatch/TP=1
 `NOT_QUALIFIED`. Any real image/quant-loader
 changes are outside this diagnostic and require
 independent approval.
+
+### Compressed-tensors group inventory from pinned JSON
+
+`assess_lychee888_loader.py --json` reports
+config-group/target/ignore counts and counts of
+PLE text mentions in the **pinned checkpoint**
+quantization declaration only.
+This is not a regex evaluator, an installed
+vLLM CT `get_scheme_dict` execution, a layer
+class match, or proof of FP8 PLE loader selection.
+Any absent CT group information remains unknown,
+and malformed target/ignore structures STOP.
+No weights are fetched; the original image
+or stopped containers are not modified.
