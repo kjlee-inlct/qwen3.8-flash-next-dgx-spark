@@ -97,6 +97,29 @@ wizard_mazinb_retirement_audit() {
   fi
 }
 
+wizard_mazinb_restore_checkpoint() {
+  local answer
+  wizard_header 'Restore measured mazinb checkpoint / mazinb 검증 모델 복원'
+  wizard_warning 'The measured checkpoint is ~174 GiB; download is large and must be explicitly approved.'
+  wizard_warning 'A temporary CPU-only downloader Docker may run; NO model inference or GPU launch.'
+  wizard_warning 'OrcaRouter manifest, stopped predecessor, original M1 journal and private archives stay unchanged.'
+  if ! bash "$ROOT_DIR/scripts/wizard/mazinb-restore.sh" preflight; then
+    wizard_warning 'Pinned Hub metadata, disk space or managed-host-idle preflight BLOCKED; no weights downloaded.'
+    return 0
+  fi
+  wizard_yes_no 'Approve pinned mazinb large download / 대용량 체크포인트 복원을 승인합니까?' no || return 0
+  wizard_input answer 'Type RESTORE_MAZINB_PINNED to authorize download' ''
+  if [[ "$answer" != RESTORE_MAZINB_PINNED ]]; then
+    wizard_warning 'Exact download authorization missing; mazinb restoration cancelled.'
+    return 0
+  fi
+  if ! QWEN38_MAZINB_RESTORE_APPROVED=1 bash "$ROOT_DIR/scripts/wizard/mazinb-restore.sh" apply; then
+    wizard_warning 'Model restore incomplete/blocked. Preserve files; review and rerun read-only admission.'
+  else
+    wizard_success 'Checkpoint download verified. GPU/start NOT performed. Next use Benchmark M1 reinstall preflight.'
+  fi
+}
+
 wizard_model_menu() {
   local choice
   while true; do
@@ -108,6 +131,8 @@ wizard_model_menu() {
     wizard_menu_option 5 'Retire five mazinb Docker containers (archive first) / mazinb Docker 정리'
     wizard_menu_option 6 'Audit services, proxy, ports and Docker retirement (read-only) / 최종 정리 검증'
     wizard_menu_option 7 'Candidate Hub metadata (read-only) / 후보 모델 파일·용량 조사'
+    wizard_menu_option 8 'mazinb restore preflight (small Hub metadata, no weights) / 재설치 사전 점검'
+    wizard_menu_option 9 'Restore pinned mazinb checkpoint (explicit download approval) / 재설치'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -118,6 +143,9 @@ wizard_model_menu() {
       5) wizard_mazinb_docker_retire ;;
       6) wizard_mazinb_retirement_audit ;;
       7) wizard_candidate_metadata_menu ;;
+      8) bash "$ROOT_DIR/scripts/wizard/mazinb-restore.sh" preflight ||
+           wizard_warning 'mazinb restore admission BLOCKED; no model downloaded.' ;;
+      9) wizard_mazinb_restore_checkpoint ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
