@@ -1,3 +1,55 @@
+## 2026-10-19 — ACTUAL DGX mazinb assets absent; historical retirement menu re-entry blocked
+
+**Owner-supplied physical Wizard transcript**, not a source/CI simulation:
+`./wizard.sh` **3 → 2** showed `mazinb`
+`ACTIVE=no CHECKPOINT=absent CONTAINER=absent IMAGE=present`,
+with expected checkpoint at
+`models/qwen3.8-flash-next-mazinb` and shared image
+`vllm-orcarouter-v029:v1`. OrcaRouter remained configured
+active with `171G` checkpoint `present`, Docker `exited`
+and image `present`; Hybrid H3-H6 checkpoints reported
+`absent`, consistent with prior approved retirement.
+The Wizard banner was
+`Manifest: valid (phase=complete)`, configured
+`orcarouter`, image `vllm-skinny-tp1:v1`,
+`Runtime: NOT_PROBED`. This is an assets listing, **not**
+a proof of a running backend or verified Docker image compatibility.
+
+The operator entered **3 → 3** then supplied `6` at the
+**profile-name** prompt; Wizard correctly rejected
+`Unsupported or not-installable profile`. No switch occurred.
+Next **3 → 5** attempted the *read-only pre-delete plan* for
+historical mazinb Docker cleanup, which returned
+`MAZINB_DOCKER_RETIRE=BLOCKED reason=hybrid dependency missing:
+qwen3.8-hybrid-quant-layout`. This one-time legacy retirement
+precondition expects H3/H6 still present, but they were subsequently
+retired; the error does **not** contradict the verified 2026-10-14
+mazinb Docker archive+deletion. **No Docker cleanup ran**.
+At transcript end the operator had only opened **3 → 7**
+candidate metadata menu, without executing an action.
+**3 → 6** post-retirement audit and **5 → 7** M1 journal status
+are still awaiting *current* physical output. The transcript lacks
+an exact `git rev-parse HEAD` value, so no exact physical source
+SHA is attested.
+
+**Source-only UX/safety correction:** Wizard **3 → 5** now
+detects a historical M1 `retired-docker.json` marker before
+invoking the old one-time five-container plan, fails closed with
+`BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED` and points to
+Wizard **3 → 6**. Marker existence alone is **not** proof of
+a valid archive/retirement; the separate full read-only audit
+remains mandatory. Synthetic Wizard regression checks there is
+no call to the retirement manager when a marker is present.
+The actual DGX has **not yet executed the corrected source**.
+
+**Next gate:** collect physical **3 → 6** read-only retirement
+audit, **5 → 7** M1 status, current Git HEAD and clean-worktree
+proof. Do **not** select historical mazinb deletion actions,
+managed model switching or M1 GPU start to bypass the absence
+of a checkpoint. A new mazinb download and separate GPU
+launch need explicitly scoped approval after source/host preflight;
+archived M1 reports can already be analyzed without reinstallation.
+
 ## 2026-10-19 — ACTUAL DGX catplusplus pinned-source audit redirected and blocked
 
 **Evidence: owner-pasted DGX Wizard transcript**, not GitHub CI or
