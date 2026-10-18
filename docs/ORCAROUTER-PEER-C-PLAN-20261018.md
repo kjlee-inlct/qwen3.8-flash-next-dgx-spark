@@ -229,6 +229,59 @@ These actions do not contact the model API, access GPU/weights, or create/start/
 
 Wizard: `./wizard.sh` -> Advanced / 연구 기록 -> official ARM64 C plan or read-only preflight. The installer-managed A/B wizard remains unchanged.
 
+## 2026-10-18 explicit owner approval: one-shot CPU-only pinned-image CLI probe
+
+**New authorization — not a C model-start authorization:** the owner
+approved exactly one disposable **CPU-only** container with the
+already-pulled pinned official ARM64 C image to obtain distribution
+metadata and actual `vllm serve --help=all`. The owner did **not**
+approve GPU access, checkpoint mounts, model server/API/inference,
+network, Docker pull, old A/B changes, protection changes, broad
+benchmarking, model deletion, service installation, or PR merge.
+
+Maintained script:
+`scripts/runtime/orcarouter-peer-c-cli-probe.py`.
+Use `plan` to inspect without Docker operations and (after a GitHub
+Push/PR-CI-qualified fast-forward checkout) `run --approved-cpu-only`
+for the **one authorized execution**. Wizard Advanced option 6
+offers an extra default-**No** confirmation. A fixed
+`$HOME/orcarouter-bench-evidence/peer-c-cli-approved-once-20261018.json`
+receipt is atomically reserved immediately before Docker starts;
+once consumed, another run refuses without a separate new approval.
+
+**Hard CLI probe isolation:** exact
+`vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`,
+exact installed config image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`,
+`--pull=never --runtime runc --network none --read-only`,
+no mounts, no GPU/device flags or published ports,
+`NVIDIA_VISIBLE_DEVICES=void`, `CUDA_VISIBLE_DEVICES=-1`,
+nonroot `65534:65534`, drop all capabilities, `no-new-privileges`,
+2 CPUs, **4GiB memory and swap combined**, 128 PIDs,
+small writable tmpfs; run `python3 -c` instead of image Entrypoint.
+The temporary NEW uniquely named container is `--rm` on exit;
+all three existing managed/A/B containers remain untouched.
+Source/host safety gates fail closed before Docker changes:
+clean correct Git branch, exact pinned image metadata, exact three
+protected managed/A/B identities/stopped states, host-check
+running containers, port 18891, swap and non-CMA margins.
+On 180s host timeout only the exact newly labeled/config-ID
+probe container may be `docker stop`ed; never historical objects.
+
+**Evidence:** per-run directory under
+`$HOME/orcarouter-bench-evidence/peer-c-cli-<UTC>-<nonce>/`:
+before/after protected IDs, image and command constraints,
+the raw container output, full `vllm serve --help=all` text
+(base64 transported, decoded on host), hashes and marker results.
+The script prints detailed package and flag PRESENCE/ABSENCE
+but does **not** import the vLLM model loader, load weights or
+attest CPU PLE correctness; a missing flag may mean the CLI
+parser differs and must not be patched blindly.
+
+**Status until actual owner DGX output:**
+`CPU_CLI_PROBE=SOURCE_ONLY_NOT_YET_EXECUTED`.
+This script and its seven synthetic offline tests are in draft PR #261.
+Only GitHub CI PASS can justify the next DGX source sync.
 ## Later independent C live design — not implemented or approved
 
 1. **Completed, download-only-approved 2026-10-18:** the operator downloaded the pinned official ARM64 image `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` and verified OS/arch, RepoDigest and image config ID, and preserved A/B IDs. This approval **does not** extend to any C create/start/GPU trial.
