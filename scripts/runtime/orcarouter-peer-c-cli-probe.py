@@ -270,6 +270,26 @@ def run_once() -> int:
 
 
 
+
+def classify_saved_help_error(help_text: str, raw: str) -> str:
+    """Explain a *saved* help failure without claiming GPU/CLI qualification.
+
+    Under the intentionally GPU-less one-shot probe, vLLM constructs
+    DeviceConfig during argparse default generation before printing help.
+    Only an exact traceback signature supports this more specific label.
+    """
+    failed = ("PEER_C_CLI_HELP=FAILED" in raw or
+              "PEER_C_HELP_EXIT_CODE=1" in raw)
+    if not failed:
+        return "NOT_A_RECORDED_HELP_FAILURE"
+    if ("RuntimeError: Failed to infer device type" in help_text and
+            "vllm/config/device.py" in help_text and
+            "default.default_factory()" in help_text):
+        return "DEVICE_INFERENCE_FAILED_IN_GPU_HIDDEN_PROBE"
+    return "HELP_FAILED_CAUSE_UNDETERMINED"
+
+
+
 def saved_report() -> int:
     """Read the already-consumed probe's evidence, NEVER rerun Docker.
 
@@ -325,6 +345,9 @@ def saved_report() -> int:
         print("PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED")
     else:
         print("PEER_C_CLI_FLAGS=REVIEW_SAVED_SUCCESSFUL_HELP")
+    print("PEER_C_SAVED_FAILURE_CLASS=" + classify_saved_help_error(help_text, raw))
+    print("PEER_C_GPU_RUNTIME=NOT_TESTED_BY_CPU_ONLY_PROBE")
+    print("PEER_C_BACKEND_WIZARD_INSTALL_SWITCH=NOT_QUALIFIED")
     before_path = evidence / "before-protected.json"
     after_path = evidence / "after-protected.json"
     if (before_path.is_file() and after_path.is_file() and
