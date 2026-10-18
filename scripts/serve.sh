@@ -151,7 +151,7 @@ if [[ "${TRIAL_CREATE_ONLY}" == 1 ]]; then
        "${PREFIX_CACHE:-}" == 0 && "${SPEC:-}" == mtp &&
        "${AUTOTUNE:-}" == 0 && "${QSA_EXACT_TOPK:-}" == 0 ]] ||
       { echo "FATAL: peer C exact-image create-only isolation constraints not satisfied" >&2; exit 2; }
-    TRIAL_LABELS=(--label qwen38.abtrial=orcarouter-peer-c
+    TRIAL_LABELS=(--label qwen38.abtrial=orcarouter
                   --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
                   --label qwen38.variant=peer-c)
   elif [[ "${TRIAL_VARIANT}" == hybrid-h6-m1 ]]; then
