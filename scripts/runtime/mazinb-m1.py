@@ -182,6 +182,24 @@ def assert_project_units_nonstarting() -> None:
                 "managed unit became active/boot enabled: " + name)
 
 
+def assert_no_live_qwen38_or_project_ports() -> None:
+    """Read-only admission for restored M1, without cross-layer script imports."""
+    running = call("docker", "ps", "--format", "{{.Names}}")
+    require(not any(name.strip().startswith("qwen38-")
+                    for name in running.stdout.splitlines()),
+            "another project Docker is running")
+    listeners = call("ss", "-H", "-ltn")
+    protected_ports = {8888, 8000, 8001, 18888, 18889, 18890, 18891, 18892}
+    for line in listeners.stdout.splitlines():
+        fields = line.split()
+        require(len(fields) >= 4, "malformed socket listener inventory")
+        local = fields[3]
+        tail = local.rsplit(":", 1)[-1]
+        require(tail.isdigit(), "unrecognized listener port: " + local[:80])
+        require(int(tail) not in protected_ports,
+                "project service port already listening: " + tail)
+
+
 def snapshot_old(expected: str) -> dict:
     require(bool(HEX64.fullmatch(expected)), "full old Docker ID required")
     old = inspect(OLD)
@@ -258,12 +276,8 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
                   if SESSION_SLOT == "reinstall" else None)
     source_sha = pinned_clean_source_sha() if SESSION_SLOT == "reinstall" else None
     if SESSION_SLOT == "reinstall":
-        idle = call("python3", "-B",
-                    str(ROOT / "scripts/diagnostics/verify-managed-idle.py"),
-                    check=False)
-        require(idle.returncode == 0 and
-                "MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START" in idle.stdout,
-                "managed host-idle preflight not proven: " + idle.stderr[-160:])
+        assert_project_units_nonstarting()
+        assert_no_live_qwen38_or_project_ports()
     memory_admission(manifest)
     check_trial_history()
     if m1.exists() or m1.is_symlink():
