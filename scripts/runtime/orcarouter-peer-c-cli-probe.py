@@ -78,7 +78,9 @@ print("PEER_C_HELP_SHA256=" + hashlib.sha256(combined.encode()).hexdigest(), flu
 for flag in flags:
     pattern = r"(?<![A-Za-z0-9_-])" + re.escape(flag) + r"(?![A-Za-z0-9_-])"
     print("PEER_C_FLAG_" + flag[2:].upper().replace("-", "_") +
-          "=" + ("PRESENT_IN_HELP" if re.search(pattern, combined) else "NOT_FOUND_IN_HELP"),
+          "=" + ("NOT_EVALUATED_HELP_FAILED" if p.returncode != 0 else
+                 ("PRESENT_IN_HELP" if re.search(pattern, combined)
+                  else "NOT_FOUND_IN_HELP")),
           flush=True)
 # Host decodes this into a separate preserved raw help file; don't flood chat.
 print("PEER_C_HELP_BASE64=" + base64.b64encode(combined.encode()).decode(), flush=True)
@@ -267,9 +269,86 @@ def run_once() -> int:
     return 0 if ok else 2
 
 
+
+def saved_report() -> int:
+    """Read the already-consumed probe's evidence, NEVER rerun Docker.
+
+    The one-use authorization is not reissued by reading diagnostics.
+    Print a bounded excerpt of the saved decoded CLI stdout/stderr.
+    """
+    print("PEER_C_OPERATION=OFFLINE_CLI_REPORT_NO_DOCKER")
+    if (not ONCE.is_file() or ONCE.is_symlink() or
+            not OUTROOT.is_dir() or OUTROOT.is_symlink()):
+        print("PEER_C_SAVED_REPORT=NO_APPROVED_RECEIPT")
+        return 2
+    record = json.loads(ONCE.read_text(encoding="utf-8"))
+    check(isinstance(record, dict), "malformed approval receipt")
+    check(record.get("operation") == "one-time-cpu-cli-probe" and
+          record.get("approved_scope") == "NO_GPU_NO_MODEL_NO_NETWORK",
+          "not an approved CPU-only CLI receipt")
+    name = record.get("name")
+    directory = record.get("evidence")
+    check(isinstance(name, str) and name.startswith("qwen38-peer-c-cpu-cli-") and
+          isinstance(directory, str), "invalid saved probe identifiers")
+    evidence = Path(directory)
+    check(evidence.is_absolute() and evidence.parent == OUTROOT and
+          evidence.name.startswith("peer-c-cli-") and
+          evidence.is_dir() and not evidence.is_symlink() and
+          evidence.resolve() == evidence, "invalid saved evidence path")
+    help_file = evidence / "vllm-serve-help-all.txt"
+    raw_file = evidence / "raw.log"
+    check(help_file.is_file() and not help_file.is_symlink() and
+          raw_file.is_file() and not raw_file.is_symlink(),
+          "saved CLI log/help artifact missing")
+    check(help_file.stat().st_size <= 8 * 1024 * 1024 and
+          raw_file.stat().st_size <= 16 * 1024 * 1024,
+          "unexpectedly large saved CLI evidence; inspect separately")
+    help_text = help_file.read_text(encoding="utf-8", errors="replace")
+    raw = raw_file.read_text(encoding="utf-8", errors="replace")
+    print("PEER_C_REPORT_SOURCE_SHA=" + str(record.get("source_sha", "UNKNOWN")))
+    print("PEER_C_REPORT_PROBE_NAME=" + name)
+    print("PEER_C_REPORT_EVIDENCE_DIR=" + str(evidence))
+    evidence_sha = hashlib.sha256(help_file.read_bytes()).hexdigest()
+    print("PEER_C_REPORT_HELP_FILE_SHA256=" + evidence_sha)
+    markers = (
+        "PEER_C_PACKAGE_", "PEER_C_HELP_EXIT_CODE=",
+        "PEER_C_HELP_SHA256=", "PEER_C_CLI_HELP=",
+        "PEER_C_PROTECTED_AFTER=", "PEER_C_DISPOSABLE_PROBE_REMOVED=",
+        "PEER_C_DOCKER_RUN_EXIT_CODE=",
+    )
+    for line in raw.splitlines():
+        if line.startswith(markers):
+            print(line[:500])
+    help_failed = ("PEER_C_CLI_HELP=FAILED" in raw or
+                   "PEER_C_HELP_EXIT_CODE=1" in raw)
+    if help_failed:
+        print("PEER_C_CLI_FLAGS=NOT_EVALUATED_HELP_FAILED")
+    else:
+        print("PEER_C_CLI_FLAGS=REVIEW_SAVED_SUCCESSFUL_HELP")
+    before_path = evidence / "before-protected.json"
+    after_path = evidence / "after-protected.json"
+    if (before_path.is_file() and after_path.is_file() and
+            not before_path.is_symlink() and not after_path.is_symlink()):
+        before = json.loads(before_path.read_text(encoding="utf-8"))
+        after = json.loads(after_path.read_text(encoding="utf-8"))
+        print("PEER_C_SAVED_PROTECTED=" + ("UNCHANGED" if before == after
+                                         else "DRIFT_IN_SAVED_RECORDS"))
+    else:
+        print("PEER_C_SAVED_PROTECTED=NOT_AVAILABLE")
+    print("PEER_C_SAVED_CLI_ERROR_EXCERPT_BEGIN")
+    # Bound printed output (not the underlying retained files).
+    lines = help_text.splitlines()
+    tail = lines[-70:]
+    for line in tail:
+        print(line[:400])
+    print("PEER_C_SAVED_CLI_ERROR_EXCERPT_END")
+    print("PEER_C_SAVED_REPORT=READ_ONLY_COMPLETE_NO_REPEAT")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("plan", "run"))
+    parser.add_argument("action", choices=("plan", "run", "report"))
     parser.add_argument("--approved-cpu-only", action="store_true")
     args = parser.parse_args()
     if args.action == "plan":
@@ -280,6 +359,13 @@ def main() -> int:
         print("PEER_C_APPROVED_SCOPE=ONCE_CPU_ONLY_NO_GPU_NO_NETWORK_NO_MOUNTS")
         print("PEER_C_SOURCE_ONLY_PLAN=PASS")
         return 0
+    if args.action == "report":
+        try:
+            return saved_report()
+        except (ProbeError, OSError, ValueError, KeyError, TypeError) as exc:
+            print("PEER_C_SAVED_REPORT=BLOCKED_READ_ERROR")
+            print("PEER_C_DIAGNOSTIC=" + str(exc))
+            return 2
     if not args.approved_cpu_only:
         print("PEER_C_CLI_PROBE=BLOCKED_EXPLICIT_APPROVAL_FLAG")
         return 2
