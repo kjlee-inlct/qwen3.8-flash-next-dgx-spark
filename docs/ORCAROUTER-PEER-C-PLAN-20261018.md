@@ -34,6 +34,44 @@ history/Entrypoint/Cmd/Env without container execution), then
 design/CI-qualify a fresh Wizard-owned C protected launcher.
 An approved image pull does **not** approve Docker create/start,
 GPU, a benchmark, service modification, KV24, deletion, or PR merge.
+## Physical OCI Entrypoint & source-provenance evidence (2026-10-18, later observation)
+
+The operator inspected the newly pinned ARM64 image on the **actual DGX**
+without starting it, correcting the initial Go-template error
+`map has no entry for key Cmd` with a safe JSON parser.
+The output identified the same exact image ID/digest as the pull receipt:
+
+```text
+ENTRYPOINT=["vllm", "serve"]
+CMD=NOT_SET
+WORKDIR=/vllm-workspace
+USER=NOT_SET
+OCI_REVISION=unknown
+CUDA_VERSION=13.0.1
+FLASHINFER_VERSION=NOT_SET
+VLLM_BUILD_COMMIT=unknown
+VLLM_IMAGE_TAG=local/vllm-openai:dev
+VLLM_VERSION=NOT_SET
+IMAGE_INSPECTION=READ_ONLY_COMPLETE
+```
+
+The managed `serve.sh` shell syntax appends `/model` followed by
+flags after the Docker image, which **would construct**
+`vllm serve /model ...` for this Entrypoint.
+This verifies argv **composition only**; it does **not** establish
+supported options, package imports, Qwen4Exp loader/PLE, model READY
+or stable host-RM allocations. No runnable C launch path is implemented
+or authorized. `CMD=NOT_SET` is a legitimate absent default property,
+not a Docker error. `FLASHINFER_VERSION=NOT_SET` is runtime-env absence
+rather than evidence a package is missing. Exact embedded vLLM wheel
+version/source cannot be attributed because OCI build and revision
+labels say `unknown`.
+
+The maintained C read-only preflight additionally checks the
+`["vllm", "serve"]` Entrypoint, absent Cmd, working directory and
+CUDA runtime Env. Successful metadata preflight explicitly reports
+`WHEEL_SOURCE_UNATTESTED`; it does not confer GPU launch approval.
+[Operator source metadata receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
 ## What is and is not evidenced
 
 - External community reference https://arca.live/b/alpaca/181506470 *reports* using `vllm/vllm-openai:qwen38-flash-next-arm64-cu130` with one GB10, OrcaRouter NVFP4, CPU PLE offload, MP TP1, MTP k=2, KV24GiB. That is **third-party reported runtime**, not evidence from our DGX.
