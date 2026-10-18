@@ -118,6 +118,8 @@ class PeerCReadOnlyTests(TestCase):
             self.assertEqual(MOD.preflight(), 2)
         self.assertIn("PEER_C_ADMISSION=BLOCKED_IMAGE_NOT_INSTALLED", out.getvalue())
         self.assertIn("PEER_C_BENCHMARK=NOT_MEASURED", out.getvalue())
+        self.assertIn("PEER_C_OPERATION=PREFLIGHT_READ_ONLY_HOST_INSPECTION",
+                      out.getvalue())
 
     def test_pass_still_does_not_authorize_runtime(self):
         with mock.patch.object(MOD, "image_receipt", return_value="PINNED_MATCH"), \
@@ -130,6 +132,31 @@ class PeerCReadOnlyTests(TestCase):
             self.assertEqual(MOD.preflight(), 0)
         self.assertIn("PEER_C_ADMISSION=SOURCE_READ_ONLY_PREFLIGHT_PASS_NOT_LIVE_APPROVAL", out.getvalue())
         self.assertIn("PEER_C_MODEL_START=NOT_IMPLEMENTED_OR_AUTHORIZED", out.getvalue())
+
+    def test_unknown_managed_service_is_not_declared_inactive(self):
+        with mock.patch.object(MOD, "image_receipt", return_value="PINNED_MATCH"), \
+             mock.patch.object(MOD, "image_runtime_receipt",
+                               return_value="ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED"), \
+             mock.patch.object(MOD, "protected_receipt", return_value="THREE_STOPPED_EXISTING_IDS"), \
+             mock.patch.object(MOD, "command", return_value=(4, "")), \
+             mock.patch.object(MOD.platform, "machine", return_value="aarch64"), \
+             redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(MOD.preflight(), 0)
+        self.assertIn("PEER_C_MANAGED_SERVICE=UNKNOWN_NOT_LIVE_APPROVED", out.getvalue())
+        self.assertIn("PEER_C_ADMISSION=SOURCE_READ_ONLY_PREFLIGHT_PASS_NOT_LIVE_APPROVAL",
+                      out.getvalue())
+
+    def test_active_managed_service_blocks_static_preflight(self):
+        with mock.patch.object(MOD, "image_receipt", return_value="PINNED_MATCH"), \
+             mock.patch.object(MOD, "image_runtime_receipt",
+                               return_value="ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED"), \
+             mock.patch.object(MOD, "protected_receipt", return_value="THREE_STOPPED_EXISTING_IDS"), \
+             mock.patch.object(MOD, "command", return_value=(0, "")), \
+             mock.patch.object(MOD.platform, "machine", return_value="aarch64"), \
+             redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(MOD.preflight(), 2)
+        self.assertIn("PEER_C_MANAGED_SERVICE=ACTIVE_OR_UNCLASSIFIED", out.getvalue())
+        self.assertIn("PEER_C_ADMISSION=BLOCKED_REVIEW", out.getvalue())
 
     def test_docker_metadata_uses_inspect_only(self):
         def fake_command(*args):
