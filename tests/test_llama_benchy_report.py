@@ -52,6 +52,37 @@ class LlamaBenchyReportTests(unittest.TestCase):
         self.assertIn("NVIDIA RM", out)
         self.assertIn("b" * 64, out)
 
+    def test_catplusplus_report_support_requires_real_numeric_json_and_exact_model(self) -> None:
+        data = sample()
+        model = "catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed"
+        data["model"] = model
+        report = tool.render(
+            data, profile="catplusplus", expected_model=model,
+            source_sha=HEX, release_sha=HEX, upstream_sha=HEX,
+            raw_sha="b" * 64,
+        )
+        self.assertIn("# catplusplus — llama-benchy measured report", report)
+        self.assertIn(model, report)
+        data["benchmarks"][0]["pp_throughput"] = None
+        data["benchmarks"][0]["tg_throughput"] = None
+        data["benchmarks"][0]["e2e_ttft"] = None
+        with self.assertRaisesRegex(tool.ReportError, "no numeric"):
+            tool.render(
+                data, profile="catplusplus", expected_model=model,
+                source_sha=HEX, release_sha=HEX, upstream_sha=HEX,
+                raw_sha="b" * 64,
+            )
+
+    def test_catplusplus_cannot_launder_wrong_served_model(self) -> None:
+        data = sample()  # Synthetic OrcaRouter payload, NOT catplusplus.
+        with self.assertRaisesRegex(tool.ReportError, "identity"):
+            tool.render(
+                data, profile="catplusplus",
+                expected_model="catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed",
+                source_sha=HEX, release_sha=HEX, upstream_sha=HEX,
+                raw_sha="b" * 64,
+            )
+
     def test_refuses_model_identity_mismatch(self) -> None:
         data = sample()
         data["model"] = "other"
