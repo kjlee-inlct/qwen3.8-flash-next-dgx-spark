@@ -953,3 +953,42 @@ The independent native `Fp8Config` vs
 `BF16_SCALE_LOAD_UNVERIFIED` remain blocked.
 No unapproved installation, image rebuild or
 GPU run is permitted.
+
+## 2026-10-18 — External OrcaRouter community TP1 offload is not lychee888 FP8 admission
+
+The supplied full Arca report and posted `config.json`
+document **third-party claimed** one-DGX-Spark TP=1
+OrcaRouter NVFP4 success with
+`VLLM_PLE_CPU_OFFLOAD=1`, 24 GiB KV,
+MTP=2 and high (~97%) memory usage. The
+image `vllm/vllm-openai:qwen38-flash-next-arm64-cu130`
+differs from our installed pinned skinny image.
+Its posted config has CT `mixed-precision`,
+2 groups with 300 explicit FP8 targets plus one
+NVFP4 expert regex, 753 ignored entries, but
+**no `ple_embedding_dtype` or direct FP8 PLE
+ngram target**. It is not a lychee888 FP8-PLE
+global-BF16-scale load proof, nor independently
+verified long-context/soak evidence.
+
+Newer vLLM PLE pinned-CPU offload shares the
+GB10 128GB unified memory pool: it avoids a
+GPU-resident table but **does not guarantee a
+smaller total physical footprint**.
+Checkpoint file-backed approaches in upstream
+PR #58439 `checkpoint_mapped` and PR #58815
+`host_file_gather` may avoid retaining the
+whole FP8 PLE table, but both are as of this
+date open/unmerged, and are neither installed
+nor certified for lychee888. The project's
+index total `132279699754` bytes and
+installed FP8 dispatch/scale-load blockers
+remain independently unresolved.
+
+[Exact third-party comparison, risk and source
+links](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+Further work is SOURCE_ONLY. Do not translate
+the posted Docker command, privileges,
+external-image tag or checkpoint paths into
+a Wizard install/launch action without
+specific owner approval and isolation.
