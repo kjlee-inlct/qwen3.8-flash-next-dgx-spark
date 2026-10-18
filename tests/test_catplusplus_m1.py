@@ -150,6 +150,29 @@ class CatplusplusM1Tests(unittest.TestCase):
             self.assertIn("CATPLUSPLUS_M1_DOCKER_GPU_MODEL_DOWNLOAD=NOT_PERFORMED",
                           result.stdout)
 
+    def test_transport_diagnostic_exposes_only_source_headers_not_live_admission(self):
+        """New entry is network-mocked and cannot be used as a live runner."""
+        stdout = __import__("io").StringIO()
+        probe = mock.Mock(return_value=0)
+        module = mock.Mock(probe_transport=probe)
+        spec = mock.Mock(loader=mock.Mock())
+        with mock.patch.object(MOD.importlib.util, "spec_from_file_location",
+                               return_value=spec), \
+             mock.patch.object(MOD.importlib.util, "module_from_spec",
+                               return_value=module), \
+             mock.patch("sys.stdout", stdout):
+            result = MOD.source_transport()
+        self.assertEqual(result, 0)
+        probe.assert_called_once_with()
+        output = stdout.getvalue()
+        self.assertIn("CATPLUSPLUS_M1_SOURCE_AUDIT=NOT_PERFORMED", output)
+        self.assertIn("CATPLUSPLUS_M1_LIVE_ADMISSION=BLOCKED", output)
+        self.assertIn("CATPLUSPLUS_M1_DOCKER_GPU_MODEL_DOWNLOAD=NOT_PERFORMED", output)
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('"source-audit", "source-transport"', script)
+        wizard = (ROOT / "scripts/wizard/benchmark-menu.sh").read_text(encoding="utf-8")
+        self.assertIn("8) action=source-transport", wizard)
+
     def test_offline_fixture_must_not_change_live_action_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = subprocess.run(
