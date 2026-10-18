@@ -137,23 +137,6 @@ if [[ "${TRIAL_CREATE_ONLY}" == 1 ]]; then
     TRIAL_LABELS=(--label qwen38.abtrial=mazinb
                   --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
                   --label qwen38.variant=m1)
-  elif [[ "${TRIAL_VARIANT}" == orcarouter-peer-c ]]; then
-    # Source-reviewed C probe: exact immutable registry digest, never a mutable tag.
-    # PLE CPU-offload remains enabled by the OrcaRouter default; no KV24 escalation.
-    PEER_C_IMAGE="vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e"
-    [[ "${NAME}" =~ ^qwen38-orca-peer-c-[0-9]{14}-[a-f0-9]{8}$ &&
-       "${MODEL_PROFILE}" == orcarouter && "${IMAGE}" == "${PEER_C_IMAGE}" &&
-       "${PORT}" == 18891 && "${PUBLISH_HOST:-127.0.0.1}" == 127.0.0.1 &&
-       "${RESTART_POLICY}" == no && "${MONITOR_ENABLED}" == 0 &&
-       "${MONITOR_PROTECT}" == 0 && "${KV_MEM:-}" == 17179869184 &&
-       "${GPU_UTIL:-}" == 0.80 && "${MAXLEN:-}" == 262144 &&
-       "${MAXSEQS:-}" == 3 && "${NSPEC:-}" == 2 &&
-       "${PREFIX_CACHE:-}" == 0 && "${SPEC:-}" == mtp &&
-       "${AUTOTUNE:-}" == 0 && "${QSA_EXACT_TOPK:-}" == 0 ]] ||
-      { echo "FATAL: peer C exact-image create-only isolation constraints not satisfied" >&2; exit 2; }
-    TRIAL_LABELS=(--label qwen38.abtrial=orcarouter
-                  --label "qwen38.predecessor=${TRIAL_PREDECESSOR_ID}"
-                  --label qwen38.variant=peer-c)
   elif [[ "${TRIAL_VARIANT}" == hybrid-h6-m1 ]]; then
     [[ "${NAME}" =~ ^qwen38-hybrid-h6-m1-[0-9]{14}-[a-f0-9]{8}$ &&
        "${MODEL_PROFILE}" == orcarouter-hybrid && "${IMAGE}" == vllm-orcarouter-v029:v1 &&
