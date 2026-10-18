@@ -59,6 +59,7 @@ MAX_SESSION_SECONDS = 5400
 MAX_WATCHDOG_SECONDS = 7200
 STARTUP_SECONDS = 1800
 SOAK_SECONDS = 180
+SESSION_SLOT = "historical"  # Preserved original versus independent reinstall run.
 
 
 class M1Error(Exception):
@@ -85,7 +86,8 @@ def inspect(name: str) -> dict | None:
 def state_paths() -> tuple[Path, Path, Path]:
     root = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen38-spark"
     data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "qwen38-spark"
-    return root, data, root / "mazinb-m1"
+    session_name = "mazinb-m1-reinstall" if SESSION_SLOT == "reinstall" else "mazinb-m1"
+    return root, data, root / session_name
 
 
 def safe_dir(path: Path) -> None:
@@ -116,8 +118,52 @@ def read_manifest(state: Path) -> tuple[dict, str]:
             "expected completed managed OrcaRouter predecessor")
     require(manifest.get("MONITOR_ENABLED") == "1" and manifest.get("MONITOR_PROTECT") == "1",
             "managed memory protection must remain ON")
-    require(manifest.get("SERVICE_ENABLED") == "1", "expected managed systemd installation")
+    if SESSION_SLOT == "reinstall":
+        require(manifest.get("SERVICE_ENABLED") == "0"
+                and manifest.get("SERVICE_OWNED") == "0",
+                "reinstall session requires disabled/unowned managed service")
+    else:
+        require(manifest.get("SERVICE_ENABLED") == "1", "expected managed systemd installation")
     return manifest, digest
+
+
+def historical_retirement_snapshot(state: Path) -> dict[str, str]:
+    """Hash-pin the already archived M1 session; never write original files."""
+    old_root = state / "mazinb-m1"
+    active = old_root / "active.json"
+    marker = old_root / "retired-docker.json"
+    require(old_root.is_dir() and not old_root.is_symlink(),
+            "historical M1 retirement root missing/unsafe")
+    hashes = {}
+    for label, file in (("active_sha256", active), ("marker_sha256", marker)):
+        require(file.is_file() and not file.is_symlink() and
+                file.stat().st_uid == os.getuid() and
+                0 < file.stat().st_size <= 1024 * 1024,
+                "unsafe historical retirement evidence: " + label)
+        hashes[label] = hashlib.sha256(file.read_bytes()).hexdigest()
+    prior = read_json(active)
+    tombstone = read_json(marker)
+    require(prior.get("phase") == "stopped" and
+            tombstone.get("state") == "archived_docker_removed" and
+            tombstone.get("name") == prior.get("name") and
+            tombstone.get("id") == prior.get("id"),
+            "historical M1 retirement identities mismatch")
+    return hashes
+
+
+def assert_project_units_nonstarting() -> None:
+    """Refuse new isolated run if any managed API unit can auto-start."""
+    for name in (SERVICE, "qwen38-openwebui-proxy.socket",
+                 "qwen38-openwebui-proxy.service"):
+        result = call("systemctl", "show", name,
+                      "--property=LoadState,ActiveState,UnitFileState",
+                      "--no-pager", check=False)
+        require(result.returncode == 0, "managed unit inspection failed: " + name)
+        props = dict(line.split("=", 1) for line in result.stdout.splitlines()
+                     if "=" in line)
+        require(props.get("ActiveState") == "inactive" and
+                props.get("UnitFileState") in ("disabled", "masked", "not-found", ""),
+                "managed unit became active/boot enabled: " + name)
 
 
 def snapshot_old(expected: str) -> dict:
@@ -192,6 +238,15 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
     service = call("systemctl", "is-active", SERVICE, check=False).stdout.strip()
     require(service == "inactive", f"managed service is not proven inactive: {service}")
     old = snapshot_old(expected)
+    historical = (historical_retirement_snapshot(state)
+                  if SESSION_SLOT == "reinstall" else None)
+    if SESSION_SLOT == "reinstall":
+        idle = call("python3", "-B",
+                    str(ROOT / "scripts/diagnostics/verify-managed-idle.py"),
+                    check=False)
+        require(idle.returncode == 0 and
+                "MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START" in idle.stdout,
+                "managed host-idle preflight not proven: " + idle.stderr[-160:])
     memory_admission(manifest)
     check_trial_history()
     if m1.exists() or m1.is_symlink():
@@ -227,7 +282,7 @@ def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
     require(current.resolve() == release, "release changed in preflight")
     return {"old": old, "release": str(release), "manifest_sha256": digest,
             "image_id": image_id, "model_path": str(model_path),
-            "monitor": manifest}
+            "monitor": manifest, "historical_snapshot": historical}
 
 
 def read_json(path: Path) -> dict:
@@ -384,6 +439,11 @@ def verify_host(record: dict, snap: dict, state: Path, data: Path) -> None:
     require((data / "current").resolve().as_posix() == snap["release"], "release drift")
     require(call("systemctl", "is-active", SERVICE, check=False).stdout.strip() == "inactive",
             "managed service became active")
+    if SESSION_SLOT == "reinstall":
+        require(snap.get("historical_snapshot") is not None
+                and historical_retirement_snapshot(state) == snap["historical_snapshot"],
+                "archived historical M1 evidence drift")
+        assert_project_units_nonstarting()
     require(not (Path(record["monitor_dir"]) / "runtime-stop.env").exists(),
             "candidate triggered memory-protection stop")
     require(not kernel_rm_since(record["kernel_since"]), "NVIDIA RM memory allocation error")
@@ -635,6 +695,7 @@ def run_session(expected: str) -> None:
                   "old_id": expected, "old_image_id": snap["old"]["Image"],
                   "image_id": snap["image_id"], "release": snap["release"],
                   "manifest_sha256": snap["manifest_sha256"],
+                  "historical_snapshot": snap["historical_snapshot"],
                   "model": MODEL, "port": PORT, "kv_bytes": KV_BYTES,
                   "monitor_dir": str(monitor_dir),
                   "trial_home": str(trial_home), "started_at": now.isoformat(),
@@ -815,7 +876,8 @@ def bench_admission() -> None:
     require(0 <= time.time() - int(heartbeat.read_text().strip()) <= 15,
             "M1 watchdog heartbeat stale")
     snap = {"old": snapshot_old(record["old_id"]), "release": record["release"],
-            "manifest_sha256": record["manifest_sha256"]}
+            "manifest_sha256": record["manifest_sha256"],
+            "historical_snapshot": record.get("historical_snapshot")}
     verify_host(record, snap, state, data)
     require(api_healthy(), "M1 API not ready with exact mazinb model identity")
     print(f"M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY")
@@ -828,10 +890,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Internal Wizard mazinb M1 controller")
     parser.add_argument("action", choices=("plan", "status", "preflight", "run", "bench-admission", "reconcile"))
     parser.add_argument("--expected-old-id", default="")
+    parser.add_argument("--session-slot", choices=("historical", "reinstall"),
+                        default="historical")
     args = parser.parse_args()
+    global SESSION_SLOT
+    SESSION_SLOT = args.session_slot
     try:
         if args.action == "plan":
             print("M1_PLAN=NEW_ISOLATED_MAZINB_16G")
+            print("M1_SESSION_SLOT=" + SESSION_SLOT)
             print("M1_PORT=127.0.0.1:18889")
             print("M1_WATCHDOG=ARM_EXACT_ID_BEFORE_START")
             print("M1_SESSION_MAX_SECONDS=5400")
