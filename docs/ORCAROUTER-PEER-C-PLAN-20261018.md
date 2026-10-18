@@ -282,6 +282,57 @@ parser differs and must not be patched blindly.
 `CPU_CLI_PROBE=SOURCE_ONLY_NOT_YET_EXECUTED`.
 This script and its seven synthetic offline tests are in draft PR #261.
 Only GitHub CI PASS can justify the next DGX source sync.
+## 2026-10-18 actual DGX one-time CPU CLI probe: packages attested, help FAILED
+
+The owner executed the approved ONE CPU-only disposable Docker probe
+on the physical DGX using exact CI-qualified source
+`4873016f1d9fd864e6cce30c18fb96634b412fe3`.
+Host check passed, protected managed/A/B after-match was
+`UNCHANGED`, unique disposable C CPU probe was `REMOVED=YES`,
+and the one-time approval receipt has been consumed.
+
+Observed installed distribution versions:
+`vllm 0.1.dev20073+g8e685d198`,
+`torch 2.13.0+cu130`, `transformers 5.15.1`,
+`flashinfer-python 0.6.17`, `compressed-tensors 0.17.0`.
+However `vllm serve --help=all` returned **exit code 1**,
+container probe exit 13, outer CLI probe exit 2.
+All `PEER_C_FLAG_*=NOT_FOUND_IN_HELP` messages from that
+**failed help output are INVALID option-support conclusions**;
+correct interpretation is **NOT_EVALUATED_HELP_FAILED**.
+The underlying decoded help traceback was saved,
+but the operator has not yet supplied its text.
+
+Saved run:
+`/home/inlc/orcarouter-bench-evidence/peer-c-cli-20261018T115111Z-5e41d75a/`.
+Primary evidence: `vllm-serve-help-all.txt`, `raw.log`,
+pre/post protected JSON and `SHA256SUMS.txt`.
+No retry, resource-policy loosening or GPU start is authorized.
+See [physical results and exact markers](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
+
+**Wizard-first user experience policy:**
+the permanent P0 remains easy interactive **install, switch,
+resume, diagnose and uninstall** in `./install.sh` and
+`./uninstall.sh`. C is a proposed backend/serving image
+for the existing OrcaRouter checkpoint, **not a new model**.
+Do not burden normal operators with ad hoc Docker/CLI steps
+or advertise C as READY while the vLLM CLI fails.
+The Advanced Wizard CPU probe option, whose one-time approval
+has been consumed, now routes only to a read-only **saved error
+report** rather than an executable one-off probe.
+The maintained helper action is
+`python3 -B scripts/runtime/orcarouter-peer-c-cli-probe.py report`.
+That action does not touch Docker or GPU and produces a bounded
+error excerpt from the already saved file.
+
+Future reusable Wizard lifecycle backend selection requires:
+(a) backend-specific compatibility gate with factual reasons
+for disabled choices, (b) confirmed model loader/KV16GiB/PLE/MTP
+and strict host safety, (c) transactional resource ownership
+and rollback without touching preserved A/B, (d) equivalent
+ordinary install/switch and uninstall paths, and (e) separate
+actual GPU approval. New shell/Python diagnostics are supporting
+modules behind this journey, not product milestones by themselves.
 ## Later independent C live design — not implemented or approved
 
 1. **Completed, download-only-approved 2026-10-18:** the operator downloaded the pinned official ARM64 image `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e` and verified OS/arch, RepoDigest and image config ID, and preserved A/B IDs. This approval **does not** extend to any C create/start/GPU trial.
