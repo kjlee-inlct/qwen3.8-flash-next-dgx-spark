@@ -106,7 +106,8 @@ class MzinbPostAuditTests(unittest.TestCase):
                     hashlib.sha256((archive / "SHA256SUMS").read_bytes()).hexdigest()}))
             with mock.patch.object(AUDIT.RETIRE, "evidence") as evidence:
                 self.assertEqual(AUDIT.archive_check(root, root, state), archive)
-                evidence.assert_called_once()
+                evidence.assert_called_once_with(
+                    root, root, state, require_hybrid_stages=False)
                 (archive / (next(iter(AUDIT.RETIRE.EXPECTED.values()))[:16] + ".log")).write_text("TAMPER")
                 with self.assertRaisesRegex(AUDIT.AuditBlocked, "DOCKER_ARCHIVE_FILE_CHANGED"):
                     AUDIT.archive_check(root, root, state)
