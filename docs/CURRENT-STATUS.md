@@ -1,3 +1,72 @@
+## 2026-10-19 — SOURCE mazinb pinned restore and isolated R2 live/bench path
+
+The operator explicitly requested **mazinb reinstall → actually serve →
+protected benchmark first**, before resuming catplusplus. This is a
+new authorization to *prepare* the staged workflow, NOT evidence that
+the DGX has downloaded the model, started a GPU or measured new results.
+
+**Known physical predecessor:** DGX mazinb final read-only retirement
+audit passed on exact SHA `5164042ed5d784fe3469ad0207e4d8ecf8d5869f`;
+mazinb checkpoint absent, historic Docker archived and removed,
+original benchmark JSON/SHA PASS; installed OrcaRouter profile remains
+completed, service/boot disabled. Do **not** reactivate or replace the
+installed service in order to run a benchmark.
+
+**New source-only functionality:** Wizard Models **3 → 11**
+read-only pinned metadata/disk/host-idle restore admission and **3 → 12**
+explicit owner-approved ~174 GiB download, using
+`scripts/wizard/mazinb-restore.sh`. Pinned source
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`, full immutable
+revision `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`.
+Restore retains exclusive lifecycle lock, rechecks idle and leaves
+OrcaRouter/old research artifacts untouched. The download helper
+may briefly create a CPU-only downloader container; it does **not**
+start a model, GPU or installed service. Old retired Hybrid
+menu numbers 8-10 remain unavailable.
+
+Wizard Benchmark **5 → 24** new `reinstall` session slot:
+separate `mazinb-m1-reinstall` journal/benchmark lease, previous
+`mazinb-m1` original audit/tombstone hash-pinned and never overwritten,
+managed boot/service remains disabled and no project port/listener
+or running Qwen Docker is admitted before create.
+Old exact managed Docker immutable ID/image/release are protected.
+Explicit separate GPU approval and Terminal-A foreground watchdog
+are required. Localhost-only 18889, KV 16 GiB,
+create-only→arm→start→READY→180s soak→inference smoke→strict RM safety.
+**No persistent/background systemd service is claimed.**
+
+Terminal B uses `m1-benchmark-lock.sh --session-slot reinstall`
+plus `mazinb-reinstall-bench.sh --run` only after new physical
+`M1_READY_FOR_BENCH`. The benchmark requires the historical
+`llama-benchy 0.4.1.dev1+ge9be34457` version, fixed
+PP512/2048 TG128 C1 warmup1/runs3, separate fresh JSON,
+report and SHA256 and post-run admission. No performance
+metrics until physical execution and independent evidence.
+See [R2 operating guide](MAZINB-REINSTALL-R2-WIZARD.md).
+**Current R2 physical install/download/live/bench: NOT_RUN**.
+Synthetic source CI must pass at the exact final HEAD before DGX
+action; PR #261 stays Draft.
+
+## 2026-10-19 — ACTUAL DGX catplusplus redirect transport diagnosis (HEAD only)
+
+**Operator-provided live DGX Wizard 5 → 23 → 8 output**
+shows both pinned `resolve` text paths returned **HTTP 307**,
+redirect `LOCATION_CLASS=HF_SAME_HOST`,
+`LOCATION_ROUTE=API_RESOLVE_CACHE`; corresponding pinned
+`raw` paths (`config.json`, SGLang launcher) returned
+**HTTP 200** and `LOCATION_CLASS=NONE`. No redirect was
+followed, no HTTP response body was read or parsed; no source
+audit or model/download/GPU live admission occurred.
+The terminal excerpt does not independently print a Git SHA.
+The original `SOURCE_REDIRECT_BLOCKED` was consistent
+with the strict `resolve` GET no-follow policy;
+it is **not** proof that the pinned `raw` GET content
+passes quantization declarations or is consumed by a GB10
+engine. The approved source-level next step, after
+the mazinb priority, is separately verifying bounded pinned
+`raw` GET content with unchanged no-follow/size limits.
+Catplusplus stays **NOT_MEASURED / LIVE_BLOCKED**.
+
 ## 2026-10-19 — catplusplus pinned Hub header-only redirect triage (SOURCE ONLY)
 
 Physical DGX Wizard **5 → 23 → 7** previously returned
