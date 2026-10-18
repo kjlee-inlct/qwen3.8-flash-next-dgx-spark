@@ -496,6 +496,18 @@ wizard_choose_model_profile() {
     fi
   done < <(list_model_candidates)
 
+  # Runtime variants are NOT additional checkpoint profiles. Expose
+  # unqualified official C as a reasoned disabled choice in the primary
+  # install/switch Wizard, not only in developer/Advanced research menus.
+  describe_orcarouter_vllm_variant official-arm64-c || die 'backend registry invalid'
+  [[ "${ORCA_VARIANT_SELECTABLE}" == 0 ]] ||
+    die 'official ARM64 C was unexpectedly marked selectable'
+  if [[ "${UI_LANG}" == ko ]]; then
+    wizard_info "선택 불가: OrcaRouter 공식 ARM64 C 런타임 — ${ORCA_VARIANT_DESCRIPTION}"
+  else
+    wizard_info "Not selectable: OrcaRouter official ARM64 C runtime — ${ORCA_VARIANT_DESCRIPTION}"
+  fi
+
   if [[ "${mode}" == fresh ]]; then
     [[ "${UI_LANG}" == ko ]] &&
       wizard_menu_option L 'OrcaRouter Legacy 런타임 (CPU PLE offload)' ||
@@ -533,6 +545,11 @@ wizard_choose_model_profile() {
             ORCA_RUNTIME_CHOICE=legacy
             return 0
           fi
+          ;;
+        c|C|official-c|official-arm64-c)
+          describe_orcarouter_vllm_variant official-arm64-c || die 'backend registry invalid'
+          wizard_warning "BLOCKED: ${ORCA_VARIANT_DESCRIPTION}"
+          continue
           ;;
         q|Q|cancel|Cancel|취소)
           [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
@@ -583,7 +600,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
-    --orcarouter-runtime) [[ $# -ge 2 ]] || die "--orcarouter-runtime requires v029 or legacy"; case "$2" in v029|legacy) ORCA_RUNTIME_CHOICE="$2" ;; *) die "--orcarouter-runtime must be v029 or legacy" ;; esac; shift ;;
+    --orcarouter-runtime) [[ $# -ge 2 ]] || die "--orcarouter-runtime requires v029 or legacy"; case "$2" in v029|legacy) ORCA_RUNTIME_CHOICE="$2" ;; official-arm64-c|official-c|c) die "OrcaRouter official ARM64 C is not qualified for install/switch (CLI device detection in GPU-hidden probe; no model/PLE/KV verification)" ;; *) die "--orcarouter-runtime must be v029 or legacy" ;; esac; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
     --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; [[ -n "$2" ]] || die "--config-override requires a non-empty PATH"; CONFIG_OVERRIDE_CLI="$2"; CONFIG_OVERRIDE_CLI_SET=1; shift ;;
     --no-config-override) CONFIG_OVERRIDE_CLI=""; CONFIG_OVERRIDE_CLI_SET=1 ;;
