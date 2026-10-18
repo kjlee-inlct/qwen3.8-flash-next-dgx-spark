@@ -759,3 +759,31 @@ owner checkout, temporary source path+SHA, cleanup verified
 by exact ID and original container postcheck match. Failure
 or uncertain cleanup blocks any further repeated attempt.
 [Scope and detailed stop/recovery rules](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md).
+
+## 2026-10-18 — Physical PLE source SHA captured but postcheck FAIL_REVIEW
+
+At exact local SHA `f1bce18ef6ab444ced20f4efed2ba8ec42a250f0`,
+the actual DGX owner executed the approved one-shot,
+no-mount, unstarted temporary Docker image-source probe.
+It captured source
+`/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py`,
+SHA256 `a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`.
+Source AST reported `NATIVE_FP8_CONFIG_ONLY_SOURCE`,
+BF16 global PLE scale registration and scale multiply
+`PRESENT`. This resolves the original
+`SOURCE_FILE_NOT_CAPTURED` blocker at the **static image
+source-snapshot level**. It does **not** demonstrate that
+lychee888's `compressed-tensors` / `mixed-precision`
+checkpoint would instantiate `Fp8Config`, choose the
+FP8 PLE method, or load/use BF16 scale at runtime.
+
+The temporary container was reported removed and missing
+by exact ID. **However protected-container postcheck
+returned `FAIL_REVIEW`**, so the whole physical
+procedure has NOT passed its protected-state gate and no
+new temp trial is approved. The output doesn't identify
+whether a volatile Docker inspect field or a real
+protected-state change caused the mismatch; never assume
+either. Next step is narrowly scoped read-only identity,
+state, topology and inspect-field-drift diagnosis.
+[Full physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
