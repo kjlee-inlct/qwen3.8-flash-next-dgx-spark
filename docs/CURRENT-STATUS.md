@@ -1,3 +1,33 @@
+## 2026-10-18 — ACTUAL DGX corrected OrcaRouter backend Wizard status now physically verified
+
+Owner provided the **second actual DGX Wizard compatibility-screen output**
+after the installed-vs-registry presentation fix. It now reports
+`ORCAROUTER_MANIFEST_STATE=valid`,
+`ORCAROUTER_CONFIGURED_PROFILE=orcarouter`,
+`ORCAROUTER_CONFIGURED_IMAGE=vllm-skinny-tp1:v1`,
+`ORCAROUTER_CONFIGURED_VARIANT=LEGACY_SKINNY_MANIFEST_IMAGE`,
+`ORCAROUTER_LIVE_RUNTIME=NOT_PROBED`,
+`ORCAROUTER_V029_BACKEND=REGISTRY_IMPLEMENTED_NOT_LIVE_ATTESTED_HERE`,
+`ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY`,
+`ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED`
+and `WIZARD_MUTATION=NONE`.
+
+The physical interactive view separately labels
+`vllm-orcarouter-v029:v1` as the **registry default candidate**,
+not as the installed image. It notes the deliberate GPU-hidden
+CLI help failure and outstanding PLE/KV16GiB/MTP/READY qualification.
+Thus the preceding source-only UI correction has now been
+**actually seen and verified on DGX**. No exact
+`git rev-parse HEAD` was provided for this particular screen;
+do not claim the operator has synced to later GitHub commits.
+
+**Not yet established:** any running vLLM/READY health, runtime
+switch apply, model inference or benchmark. The screen is a
+read-only manifest/candidate diagnostic and is not independent
+fresh protected-Docker ID evidence. The permanent product
+priority is still **easy Wizard install, runtime/backend switch,
+inspect and safe uninstall**, not manual Docker probes.
+[Physical second Wizard evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-backend-status-20261018.md).
 ## 2026-10-18 — ACTUAL DGX OrcaRouter Wizard backend screen verified; installed image differs from registry default
 
 The operator physically navigated `./wizard.sh`
