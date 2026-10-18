@@ -378,3 +378,61 @@ reports CT groups, target/ignore counts and
 another Docker-create, pull, service start,
 checkpoint download or GPU benchmark; these
 still require explicit separate approval.
+
+## 2026-10-18 — Physical mount-based config parity: counts proven; canonical section digests pending
+
+The actual DGX owner ran a bounded read-only, exact-protected
+mount-derived config inspector after the previous
+guessed-home-path failure. The command passed
+`PASS_CURRENT_ONLY`, found both original and override
+`config.json` as readable regular files under the
+unchanged RO Docker bind sources, showed both protected
+containers share those sources, and verified the
+override is **exactly** the expected narrow
+`qwen_sparse_attention -> full_attention`
+conversion. Source and override CT shapes:
+**2 groups, 301 targets, 753 ignored**;
+override layers **36 linear / 12 full**, identical
+**counts** to the posted community config.
+[Physical receipt](../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+
+An additional source-only version of the inspector
+stores SHA256 digests computed from the *complete*
+user-uploaded 1304-line peer `config.json`
+(canonical sorted-object-key, Unicode-aware JSON)
+and privately compares the actual mounted override
+against its FULL JSON, quantization config,
+CT groups, ignore list, complete text config,
+**ordered** 48 layer values, and vision config.
+It reveals only `MATCH_REFERENCE_CANONICAL_VALUES`,
+`DIFFERENT_REFERENCE_CANONICAL_VALUES`, or
+`MISSING`; never host paths, values or
+host-derived digests. This is a **reference-parity
+comparison**, not proof of vLLM runtime selection,
+the peer's exact downloaded weights, or
+third-party benchmark reliability.
+
+Further useful flags from the peer command were
+checked against `scripts/serve.sh`:
+`VLLM_TARGET_DEVICE=cuda`,
+`CUTE_DSL_ARCH=sm_121a`,
+`FLASHINFER_DISABLE_VERSION_CHECK=1`,
+`--shm-size=32g`, memlock/stack ulimits,
+`IPC_LOCK`, `SYS_PTRACE`, `--ipc host`,
+FlashInfer/vLLM cache mounts, `--max-num-batched-tokens
+8192`, chunked prefill, tool/reasoning parsers
+and image count limit are **already implemented**.
+Peer `--network host` differs from the project
+published loopback-only `-p` port mapping but
+is not established as a memory/RM stability fix;
+copying it would weaken network isolation.
+Peer `--rm` conflicts with forensic/rollback
+retention. Avoid those changes.
+
+**Highest-value new lead after configuration parity:
+official vLLM `qwen38-flash-next-arm64-cu130`
+image internals**, not blindly increasing KV cache
+or copying launch flags. Actual image not locally
+installed according to the prior owner's image
+inspect. New physical startup/image pull requires
+separate explicit approval.
