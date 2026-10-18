@@ -1,3 +1,21 @@
+## 2026-10-18 — ACTUAL_DGX lychee888 pinned JSON metadata and 132279699754 tensor bytes
+
+[Physical metadata-only loader assessment](dgx-lychee888-ple-path-inconclusive-20261017.md)
+at clean local `b9114544eb35d7275740cf0ca2e9d010134f7cbb`
+with 2/2 CI SUCCESS confirms pinned revision
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`,
+index 223047 keys, 128 FP8 PLE shards/10 files,
+one listed global scale and `compressed-tensors`
+`mixed-precision`. Index tensor bytes
+`132279699754` > nominal unified
+`128000000000` bytes. Model loader
+`BLOCKED_SOURCE_ONLY_UNQUALIFIED` and
+GB10 TP=1 `NOT_VERIFIED`; no weights or
+GPU/Docker work. Installed image SHA / resolver
+classifier appearing in report are **previously
+recorded constants**, not re-inspected during
+this JSON-only command.
+
 ## 2026-10-18 — ACTUAL_DGX mount-order-aware current protected-state PASS; historical unclassified
 
 [Latest actual DGX read-only PLE postcheck](dgx-lychee888-ple-path-inconclusive-20261017.md)
