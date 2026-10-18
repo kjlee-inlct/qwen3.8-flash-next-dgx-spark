@@ -1,3 +1,17 @@
+## 2026-10-18 — Explicit fused-qkvz MXFP8 declaration check
+
+The pinned two-file source audit now distinguishes a fused
+`.linear_attn.in_proj_qkvz` **alias existing** from that alias
+**explicitly declaring `quant_algo=MXFP8`**. All discovered fused
+qkvz aliases must have the expected per-layer algorithm or the
+source-declaration assessment returns `MISSING_EXPECTED_DECLARATIONS`
+(exit 2); the mere presence of an alias can no longer pass it.
+Wizard **5 → 23 → 7** prints total / MXFP8 / non-MXFP8 qkvz counts
+and the declared PLE dtype. Synthetic tests include NVFP4 and missing
+per-layer algorithm as negative cases. Neither successful source
+declarations nor CI prove a real backend consumes MXFP8 scales;
+the live gates and DGX physical source-audit requirement remain unchanged.
+
 ## New pinned-source inspection gate (source-only; no engine proof)
 
 Operator Wizard: **5 Benchmark -> 23 catplusplus M1 -> 7 pinned
