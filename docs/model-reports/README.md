@@ -1,3 +1,15 @@
+## 2026-10-18 — catplusplus source-only M0 plan, not a sixth installable model
+
+See [catplusplus benchmark preparation](catplusplus.md).
+OrcaRouter, NVIDIA and mazinb reports remain distinct.
+catplusplus is **research-only, not registered/installable**; its
+reproducible mazinb M1 parity workload is defined in a read-only
+Wizard 5 -> 22 plan. CLI report converter recognition of
+`--profile catplusplus` merely permits conversion of strictly
+validated **real** upstream measurements after future separate
+approval; it does not imply a live run. All catplusplus metrics
+remain **NOT_MEASURED**.
+
 ## 2026-10-15 — H6 final traceback indexed, 2nd checkpoint pass unqualified
 
 Physical owner archive 7/7 SHA256 PASS.
