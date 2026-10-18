@@ -38,6 +38,19 @@ class ModularWizardTests(unittest.TestCase):
             self.assertIn("Invalid selection", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_orcarouter_backend_status_is_read_only_and_blocks_unqualified_c(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "3\\n8\\n0\\n0\\n".replace("\\n", "\n"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("ORCAROUTER_PROFILE=orcarouter", result.stdout)
+            self.assertIn("ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED",
+                          result.stdout)
+            self.assertIn("ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY",
+                          result.stdout)
+            self.assertIn("WIZARD_MUTATION=NONE", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
     def test_nested_back_is_no_op(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
