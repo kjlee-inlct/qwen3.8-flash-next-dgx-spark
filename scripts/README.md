@@ -420,3 +420,22 @@ reverse or explain** the earlier `FAIL_REVIEW`.
 A mismatch/unknown returns nonzero with STOP.
 [Full evidence](benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
 
+### Postcheck mount-order-insensitive classification
+
+After ACTUAL_DGX reported `qwen38-ab-legacy`
+`NAME_VS_ID_FIELDS=DIFFERENT_Mounts`, the existing
+`inspect_ple_postcheck_readonly.py` now distinguishes
+two same-content mount lists with differing order
+(`NAME_VS_ID_MOUNTS=ORDER_ONLY`) from
+`DESTINATION_MEMBERSHIP_CHANGED`,
+`TYPE_OR_RW_CHANGED`,
+`OTHER_MOUNT_METADATA_CHANGED`, and
+`INVALID_MOUNT_METADATA`. The unchanged exact
+mount-record values, including sensitive Source
+paths, are compared **privately and never printed**;
+only static category labels are exposed.
+`ORDER_ONLY` may yield `PASS_CURRENT_ONLY`,
+but **cannot rewrite or prove** the original
+single-source-probe pre/post `FAIL_REVIEW`.
+All source copies and Docker mutations remain stopped.
+
