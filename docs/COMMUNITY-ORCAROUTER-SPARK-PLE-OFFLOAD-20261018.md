@@ -524,3 +524,32 @@ read-only and source/CI-qualified only until the owner runs it on
 the qualified exact HEAD; image pull/build, Docker create/run, GPU,
 KV 24GiB, guard changes, protected asset cleanup, and PR merge all
 require separate explicit approval.
+
+## 2026-10-18 — Owner's physical canonical JSON parity closes the peer config-value delta
+
+The owner then ran the latest maintained protected-mount
+`inspect_orcarouter_mount_config_readonly.py` on the actual DGX,
+showing `PASS_CURRENT_ONLY`, both exact protected RO model and override
+binds and `EXACT_EXPECTED_LAYER_TYPE_REWRITE`. The new digest
+classifications for **full, quant, groups, ignore, text, ordered
+layers, vision** are **7/7 `MATCH_REFERENCE_CANONICAL_VALUES`**.
+This supersedes the earlier counts-only limitation for the exact
+2026-10-18 *user-pasted third-party config JSON*. The complete
+comparison is keyed by canonical JSON SHA256, with object keys
+sorted and array order preserved. See
+[the dated actual-owner terminal evidence](../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+
+The pasted terminal portion lacks a separately pinned local Git
+HEAD/clean-status receipt, so **HOST_EXECUTION_SHA_NOT_CAPTURED**;
+no remote commit SHA should be inferred for that DGX invocation.
+Config-value equality does not verify weights, image wheel provenance,
+actual runtime config selection, CUDA allocation mechanics or API
+stability. The official ARM64 CUDA13 image's build labels identify its
+vLLM source revision as `unknown`; later public upstream PRs
+[#53896](https://github.com/vllm-project/vllm/pull/53896) and
+[#54371](https://github.com/vllm-project/vllm/pull/54371)
+are source research candidates, **not proof those revisions are in
+that manifest**. Subsequent work must source-attest the wheel against
+the exact immutable digest, then assess the R23–R32 early
+400/800MiB constructor allocation behavior. No pull/run, KV24,
+protected mutation or Draft PR merge approval exists.
