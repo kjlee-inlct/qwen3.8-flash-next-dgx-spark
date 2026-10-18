@@ -257,6 +257,35 @@ wizard_h6_forensics_readonly() {
     wizard_warning 'H6 forensic evidence incomplete/inconsistent; do NOT relaunch.'
 }
 
+wizard_catplusplus_m1_menu() {
+  local selection action
+  while true; do
+    wizard_header 'catplusplus M1 / mazinb-parity benchmark workflow'
+    wizard_warning 'Research-only: loader/offload, 175GiB weights, GPU memory and owner approval BLOCK live start.'
+    wizard_info 'This is a source-only safety workflow, not a working model launcher.'
+    wizard_menu_option 1 'M1 plan (no host access) / 실행 단계 계획'
+    wizard_menu_option 2 'M1 status (read-only journal) / 상태'
+    wizard_menu_option 3 'M1 preflight (fail-closed) / 사전 점검'
+    wizard_menu_option 4 'M1 Terminal-B bench admission (blocked) / 벤치 허용 검사'
+    wizard_menu_option 5 'M1 GPU start gate (disabled) / 실행 차단 사유'
+    wizard_menu_option 6 'M1 journal reconcile (no Docker) / 기록 확인'
+    wizard_menu_option 0 'Back / 이전'
+    wizard_input selection 'Select / 선택' 0
+    case "\${selection}" in
+      1) action=plan ;;
+      2) action=status ;;
+      3) action=preflight ;;
+      4) action=bench-admission ;;
+      5) action=run ;;
+      6) action=reconcile ;;
+      0|q|Q) return 0 ;;
+      *) wizard_warning 'Invalid selection / 잘못된 선택입니다.'; continue ;;
+    esac
+    python3 -B "\${ROOT_DIR}/scripts/runtime/catplusplus-m1.py" "\${action}" ||
+      wizard_warning 'catplusplus M1 admission remains BLOCKED; no Docker/GPU/download action.'
+  done
+}
+
 wizard_benchmark_menu() {
   local choice
   while true; do
@@ -284,6 +313,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 20 'Hybrid H6 isolated 16GiB protected live session / H6 보호 기동'
     wizard_menu_option 21 'Hybrid H6 stopped trial forensic audit (read-only) / 보호 중지 원인 검사'
     wizard_menu_option 22 'catplusplus M0 benchmark plan (NO weights/GPU) / 실측 전 계획'
+    wizard_menu_option 23 'catplusplus M1 mazinb-parity workflow (safe gates) / M1 진행 단계'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -327,6 +357,7 @@ wizard_benchmark_menu() {
             wizard_warning 'catplusplus plan unavailable; no runtime operation attempted.'
           wizard_warning 'Research-only: ~174.86 GiB root weights exceed nominal 128GB unified RAM.'
           wizard_warning 'Actual benchmark BLOCKED until loader/offload/monitor qualification and separate approval.' ;;
+      23) wizard_catplusplus_m1_menu ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
