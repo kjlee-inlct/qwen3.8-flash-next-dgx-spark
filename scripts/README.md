@@ -456,3 +456,17 @@ No model weights, Docker or GPU activity is performed.
 Tests use fully synthetic offline triplets. The profile
 remains non-installable; any real adapter/image change
 needs a separately approved operation.
+
+### lychee888 nominal unified memory size metadata warning
+
+The pinned `assess_lychee888_loader.py` also emits
+`indexed_tensor_bytes`,
+`dgx_spark_nominal_unified_bytes` and
+`full_resident_nominal_memory_screen`.
+Only an index `metadata.total_size` positive
+integer counts; missing/invalid metadata is
+`NOT_VERIFIED`. 128 GB is hardware *nominal
+unified memory*, not current free or usable
+CUDA allocations. Even a below-limit index
+cannot prove runtime fit. This analysis is
+source-only, with no Docker/GPU or weight loads.
