@@ -1,3 +1,54 @@
+## 2026-10-19 — Physical redirect block; HEAD-only transport diagnosis (source only)
+
+The owner actually selected Wizard **5 → 23 → 7** on a DGX Spark.
+It returned `CATPLUSPLUS_M1_BLOCKED=SOURCE_REDIRECT_BLOCKED`.
+The guarded `resolve/<pinned-revision>/...` GET was deliberately not
+allowed to follow an HTTP redirect; **we do not yet know** which
+of the two files, 3xx status/route, or target host caused the
+block. No file source declarations, real engine/loader compatibility
+or GB10 residency was attested.
+
+To safely distinguish HF metadata/cache redirects from
+unauthorized external storage/CDN redirects, Wizard
+**5 → 23 → 8** invokes
+`scripts/runtime/catplusplus-m1.py source-transport`:
+- Exactly four **HEAD** requests only: `resolve` and `raw`
+  for the fixed pinned `config.json` and
+  `extra/inference/inference_qwen38_flash_next_sglang.sh`.
+  No arbitrary path, repo, method, revision or additional host.
+- Explicit redirect handler **never follows** a redirect.
+  Only numerical HTTP status and bounded redirect
+  *categories* are printed: no Location URL, sensitive
+  query string or signed storage token.
+- No HTTP body reads, checkpoint weights, packages,
+  publisher shell execution, subprocesses, Docker,
+  GPU, service, journal or filesystem mutation.
+- Return 0 indicates only the four HEAD requests
+  provided response metadata without network/HTTP errors;
+  **it is NOT a source-audit PASS**. HEAD responses
+  may differ from GET, so the cause of the original GET
+  remains subject to independent confirmation. Regardless
+  of return code: `CATPLUSPLUS_TRANSPORT_LIVE_ADMISSION=BLOCKED`,
+  `CATPLUSPLUS_M1_SOURCE_AUDIT=NOT_PERFORMED`.
+- The existing **5 → 23 → 7** content audit continues
+  to reject *all* redirects. Neither raw URL fallback nor
+  any redirect-following or engine/GPU start is enabled.
+
+The `raw` path is a separately documented Hugging Face
+file endpoint, but that fact alone is not proof these
+specific pinned files will be served directly; use physical
+HEAD evidence and a separately reviewed GET strategy
+before changing the source-audit transport.
+
+The successful **2026-10-19 physical mazinb retirement**
+audit has independently confirmed archived M1
+evidence, the exact archived Docker objects and
+the absence of a live mazinb checkpoint/runtime.
+Its historical vLLM M1 benchmark does not provide
+catplusplus mixed MXFP8/NVFP4+FP8-PLE engine qualification.
+New physical catplusplus transport diagnosis: **NOT_RUN**
+until exact HEAD/CI and Wizard 5 → 23 → 8 are verified.
+
 ## 2026-10-18 — Explicit fused-qkvz MXFP8 declaration check
 
 The pinned two-file source audit now distinguishes a fused
