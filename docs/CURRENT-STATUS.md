@@ -1,3 +1,43 @@
+## 2026-10-18 — ACTUAL DGX saved vLLM traceback: CPU-only CLI died in DeviceConfig before flag help
+
+The operator read the existing, already-consumed CPU-probe output
+`/home/inlc/orcarouter-bench-evidence/peer-c-cli-20261018T115111Z-5e41d75a/vllm-serve-help-all.txt`
+**without starting a new Docker container**. Exactly 34 saved
+lines showed Triton `0 active driver(s)`, torch
+`No CUDA runtime is found`, and Python traceback:
+`vllm/entrypoints/cli/main.py` -> `serve.py` ->
+`openai/cli_args.py` -> `AsyncEngineArgs.add_cli_args` ->
+`EngineArgs.add_cli_args` -> `get_kwargs(VllmConfig)` ->
+`_compute_kwargs` -> `default.default_factory()` ->
+`vllm/config/device.py:56 __post_init__` ->
+`RuntimeError: Failed to infer device type`.
+
+**Confirmed failure point:** the CPU-only help invocation failed
+when creating the CLI parser's device defaults **before printing
+the options**. It is consistent with the explicitly GPU-hidden
+`--runtime runc`, no GPU devices, `CUDA_VISIBLE_DEVICES=-1`,
+`NVIDIA_VISIBLE_DEVICES=void` test environment. It does NOT
+demonstrate unsupported `--kv-cache-memory-bytes`,
+`--speculative-config` or any other CLI option, and does NOT
+prove the image's GPU engine or OrcaRouter checkpoint incompatible.
+
+Actual installed distributions remain
+`vllm=0.1.dev20073+g8e685d198`,
+`torch=2.13.0+cu130`, `transformers=5.15.1`,
+`flashinfer-python=0.6.17`,
+`compressed-tensors=0.17.0`. GPU, weight loading, model READY,
+runtime memory stability and benchmark remain untested.
+
+The saved-report code was extended **source-only** to classify the
+exact device trace as
+`DEVICE_INFERENCE_FAILED_IN_GPU_HIDDEN_PROBE`, while retaining
+`NOT_EVALUATED_HELP_FAILED` for all CLI flags and
+`BACKEND_WIZARD_INSTALL_SWITCH=NOT_QUALIFIED`.
+The one-time CPU approval is consumed and no retry or GPU load
+is authorized. Continue source/read-only diagnosis and the
+**P0 Wizard-centered model install/switch lifecycle**, not
+standalone trial scripts as a product replacement.
+[Exact physical traceback evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
 ## 2026-10-18 — ACTUAL DGX official ARM64 peer C CPU-only CLI probe FAILED; package inventory verified
 
 Owner executed source SHA `4873016f1d9fd864e6cce30c18fb96634b412fe3`
