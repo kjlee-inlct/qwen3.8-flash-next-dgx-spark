@@ -112,6 +112,51 @@ class CatplusplusM1Tests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("journal path is a symlink", result.stderr)
 
+    def test_source_audit_offline_fixture_advances_only_static_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "extra/inference").mkdir(parents=True)
+            (root / "config.json").write_text(json.dumps({
+                "quantization_config": {
+                    "quant_method": "modelopt_mixed",
+                    "quant_algo": "MIXED_PRECISION",
+                    "quantized_layers": {
+                        "model.layers.0.linear_attn.in_proj_qkvz": {
+                            "quant_algo": "MXFP8",
+                        },
+                    },
+                },
+                "text_config": {"ple_embedding_dtype": "float8_e4m3fn"},
+            }), encoding="utf-8")
+            (root / "extra/inference/inference_qwen38_flash_next_sglang.sh").write_text(
+                "python3 -m sglang.launch_server "
+                "--ple-offload-embedding --ple-offload-backend file\n",
+                encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "source-audit",
+                 "--offline-dir", str(root)],
+                cwd=ROOT, capture_output=True, text=True, check=False, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "CATPLUSPLUS_M1_SOURCE_DECLARATIONS=PRESENT_NOT_ENGINE_ATTESTED",
+                result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_FUSED_QKVZ_ALIAS_COUNT=1", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_ENGINE_LOADER=NOT_ATTESTED_BY_SOURCE_TEXT",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_LIVE_ADMISSION=BLOCKED_", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_DOCKER_GPU_MODEL_DOWNLOAD=NOT_PERFORMED",
+                          result.stdout)
+
+    def test_offline_fixture_must_not_change_live_action_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "run",
+                 "--offline-dir", tmp],
+                cwd=ROOT, capture_output=True, text=True, check=False, timeout=10)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("--offline-dir is only permitted for source-audit",
+                          result.stderr)
+
     def test_python_m1_is_never_an_unapproved_live_runner(self):
         script = SCRIPT.read_text(encoding="utf-8")
         for banned in (
