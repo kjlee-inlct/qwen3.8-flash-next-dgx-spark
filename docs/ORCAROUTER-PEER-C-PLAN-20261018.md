@@ -116,6 +116,39 @@ reference to `scripts/model/` as a runtime code dependency. **All nine
 new C unit tests passed**. Source lint has since been corrected to
 exclude Markdown evidence from executable dependency analysis; a fresh
 full CI run must establish PASS before recommending an operator sync.
+## ACTUAL DGX source-only C preflight PASS — 2026-10-18
+
+Operator performed exact 30-commit safe Git fast-forward to
+`ff339c1eb9eb77cb774b50b3fcdc7fa009ecd74d`,
+then ran `scripts/runtime/orcarouter-peer-c-readonly.py preflight`.
+Exit status 0 printed `PINNED_MATCH`,
+`ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED`,
+`THREE_STOPPED_EXISTING_IDS` and
+`SOURCE_READ_ONLY_PREFLIGHT_PASS_NOT_LIVE_APPROVAL`,
+with 417GiB free. This establishes only static admission.
+[Full physical read-only receipt and code-gap audit](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
+
+**Current source blockers to a C start:**
+
+- `serve.sh` create-only allowlist does not permit a `peer-c` variant;
+do not bypass the protected Wizard through an unmanaged container.
+- The non-v0.29 `orcarouter` image path chooses legacy
+`--kv-cache-memory` with 16GiB value; current public vLLM docs
+document `--kv-cache-memory-bytes`. The pinned official image
+does not expose an embedded revision in its OCI metadata, so
+prove the actual parser's accepted flags before any GPU execution.
+- The preflight that passed on DGX prints
+`PEER_C_MANAGED_SERVICE=INACTIVE_OR_UNKNOWN` for systemctl rc 3/4.
+This is **ambiguous**, not an inactive-service proof and
+not a live launch admission. Later source-only fix distinguishes
+`INACTIVE` from `UNKNOWN_NOT_LIVE_APPROVED` and accurately reports
+`PREFLIGHT_READ_ONLY_HOST_INSPECTION`; these changes are
+unexecuted on DGX and require independent CI approval.
+
+**Next source-only milestone:** design/CI-qualify a separate C
+create-only/lock/watchdog-arm-before-start controller with all
+old Docker exact-ID guards and no cleanup of evidence;
+then independently request approval for the live GPU phase.
 ## Source-only implemented C preview
 
 Use the current successful-CI Git SHA **after operator-specified repository synchronization**, not an unverified current branch checkout:
