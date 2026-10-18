@@ -1,3 +1,28 @@
+## 2026-10-18 — Actual DGX mounted OrcaRouter override equals the posted peer JSON (7/7)
+
+Owner-provided terminal output from
+`inspect_orcarouter_mount_config_readonly.py` reports
+`PASS_CURRENT_ONLY` with intact managed/legacy protected RO
+mount identities, readable source/override configs and the exact
+maintained narrow layer-type rewrite. Canonical digest parity with
+the complete **third-party posted** reference is
+**MATCH** in all 7 reported categories: full JSON, quantization,
+CT config groups, ignore list, full text config, **ordered** 48
+layer-type array and vision config. This supersedes the previous
+counts-only uncertainty specifically for that supplied reference.
+[Full owner terminal and interpretation](../../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+
+The pasted transcript omitted local git HEAD/status/exit-code
+attestation; do not infer the exact execution SHA from the remote
+GitHub branch. This is `ACTUAL_DGX_CONFIG_REFERENCE_PARITY_7_OF_7`,
+**not** exact runtime weight/config load identity, READY, inference,
+GPU RM safety or long-term host qualification. No new physical
+GPU, Docker mutation or weight read. Priority moves to source-only
+exact official ARM64 CUDA13 vLLM wheel/provenance comparison with
+legacy/v0.29 images and R23–R32 initial-allocation evidence.
+Default KV stays 16GiB; KV24 is not approved, nor is an image pull,
+Docker trial or PR merge.
+
 ## 2026-10-18 — OrcaRouter original-config missing at guessed path; current protection check PASS
 
 Actual DGX source sync reached
