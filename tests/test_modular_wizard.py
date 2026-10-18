@@ -58,6 +58,27 @@ class ModularWizardTests(unittest.TestCase):
             self.assertNotIn("CATPLUSPLUS_M1_READY_FOR_BENCH=PASS", result.stdout)
             self.assertFalse((home / "xdg").exists())
 
+    def test_restored_mazinb_benchmark_submenu_plan_and_status_are_readonly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(
+                home, ["--lang", "en"],
+                "5\n24\n1\n2\n0\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("M1_SESSION_SLOT=reinstall", result.stdout)
+            self.assertIn("M1_SESSION=ABSENT", result.stdout)
+            self.assertIn("Foreground-localhost experimental API", result.stdout)
+            self.assertNotIn("M1_CANDIDATE_STARTED_UNQUALIFIED", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_pinned_mazinb_restore_menu_source_requires_approval(self):
+        source = (ROOT / "scripts/wizard/model-menu.sh").read_text()
+        self.assertIn("wizard_menu_option 8 'mazinb restore preflight", source)
+        self.assertIn("wizard_menu_option 9 'Restore pinned mazinb", source)
+        self.assertIn("wizard_yes_no 'Approve pinned mazinb large download", source)
+        self.assertIn("RESTORE_MAZINB_PINNED", source)
+        self.assertIn("QWEN38_MAZINB_RESTORE_APPROVED=1", source)
+
     def test_catplusplus_benchmark_plan_in_wizard_never_starts_a_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
