@@ -49,12 +49,67 @@ def temp_absence() -> str:
     return "INCONCLUSIVE_INSPECT_FAILED"
 
 
+def compare_mounts(a: object, b: object) -> str:
+    """Privacy-safe exact-value comparison, with Docker mount array order ignored.
+
+    Docker mount inventory is semantically a collection: dictionary/iteration
+    order is not a stable ownership signal. We still compare ALL mounted
+    record values, including Source paths, privately. Never print those values
+    or even their hashes: only fixed classification labels are returned.
+    """
+    def validated(mounts: object) -> list[dict] | None:
+        if not isinstance(mounts, list):
+            return None
+        result: list[dict] = []
+        seen: set[str] = set()
+        for mount in mounts:
+            if not isinstance(mount, dict):
+                return None
+            dest = mount.get("Destination")
+            if (not isinstance(dest, str) or not dest.startswith("/")
+                    or ".." in dest.split("/") or dest in seen
+                    or not isinstance(mount.get("Type"), str)
+                    or not isinstance(mount.get("RW"), bool)):
+                return None
+            seen.add(dest)
+            result.append(mount)
+        return result
+
+    one, two = validated(a), validated(b)
+    if one is None or two is None:
+        return "INVALID_MOUNT_METADATA"
+    if one == two:
+        return "IDENTICAL_ORDER"
+    # Sort the complete records (including sensitive fields) IN MEMORY.
+    # No contents or derived digests leave this process.
+    serialized_one = [json.dumps(m, sort_keys=True, separators=(",", ":"))
+                      for m in one]
+    serialized_two = [json.dumps(m, sort_keys=True, separators=(",", ":"))
+                      for m in two]
+    if sorted(serialized_one) == sorted(serialized_two):
+        return "ORDER_ONLY"
+    first = {m["Destination"]: m for m in one}
+    second = {m["Destination"]: m for m in two}
+    if first.keys() != second.keys():
+        return "DESTINATION_MEMBERSHIP_CHANGED"
+    if any(
+        (first[d]["Type"], first[d]["RW"]) !=
+        (second[d]["Type"], second[d]["RW"])
+        for d in first
+    ):
+        return "TYPE_OR_RW_CHANGED"
+    return "OTHER_MOUNT_METADATA_CHANGED"
+
+
 def compare_fields(a: dict, b: dict) -> str:
+    mounts = compare_mounts(a.get("Mounts"), b.get("Mounts"))
     changed = [
-        field for field in FIELDS
-        if json.dumps(a.get(field), sort_keys=True, separators=(",", ":"))
+        field for field in FIELDS if field != "Mounts"
+        and json.dumps(a.get(field), sort_keys=True, separators=(",", ":"))
         != json.dumps(b.get(field), sort_keys=True, separators=(",", ":"))
     ]
+    if mounts not in ("IDENTICAL_ORDER", "ORDER_ONLY"):
+        changed.append("Mounts")
     # Field NAMES only: never emit the values of HostConfig, mount sources,
     # labels, environment, checkpoint paths, or State.Error.
     return "MATCH" if not changed else "DIFFERENT_" + "_".join(changed)
@@ -81,6 +136,9 @@ def check_protected(name: str, cid: str) -> dict[str, str]:
         "state": "EXITED",
         "rootfs": "READONLY_FALSE",
         "mount_topology": "MODEL_CONFIG_NESTED_RO_BINDS",
+        "name_vs_id_mounts": compare_mounts(
+            by_name.get("Mounts"), by_id.get("Mounts")
+        ),
         "name_vs_id_fields": compare_fields(by_name, by_id),
     }
 
