@@ -51,6 +51,8 @@ class FakeDocker:
         self.temp_present = False
         self.referred_by_name_diff = False
         self.changed_managed = False
+        self.reorder_legacy_mounts = False
+        self.change_legacy_mount_source = False
 
     def __call__(self, args, limit=mod.probe.MAX_DOCKER_META_BYTES):
         self.calls.append(tuple(args))
@@ -75,7 +77,13 @@ class FakeDocker:
                 item["HostConfig"]["LogConfig"] = {"Type": "json-file"}
             return json.dumps([item]).encode()
         if args[-1] in (mod.audit.LEGACY_CONTAINER, mod.probe.EXPECTED_LEGACY_ID):
-            return json.dumps([self.legacy]).encode()
+            item = copy.deepcopy(self.legacy)
+            if args[-1] == mod.audit.LEGACY_CONTAINER:
+                if self.reorder_legacy_mounts:
+                    item["Mounts"].reverse()
+                if self.change_legacy_mount_source:
+                    item["Mounts"][0]["Source"] = "/private/changed-SECRET"
+            return json.dumps([item]).encode()
         raise AssertionError("Unknown request")
 
 
@@ -117,6 +125,68 @@ class ReadonlyPostcheckTests(unittest.TestCase):
         self.assertEqual(result["managed_name_vs_id_fields"], "DIFFERENT_HostConfig")
         self.assertNotIn("/private", repr(result))
         self.assertNotIn("json-file", repr(result))
+
+    def test_order_only_legacy_mounts_are_accepted_current_only(self):
+        fake = FakeDocker()
+        fake.reorder_legacy_mounts = True
+        with patch.object(mod.probe, "docker", side_effect=fake):
+            result, ok = mod.inspect_now()
+        self.assertTrue(ok)
+        self.assertEqual(result["legacy_name_vs_id_mounts"], "ORDER_ONLY")
+        self.assertEqual(result["legacy_name_vs_id_fields"], "MATCH")
+        self.assertEqual(result["current_static_postcheck"], "PASS_CURRENT_ONLY")
+        self.assertEqual(
+            result["historical_failure_cause"],
+            "UNRECOVERABLE_WITHOUT_PRE_POST_FIELD_SNAPSHOTS",
+        )
+        self.assertNotIn("/private", repr(result))
+
+    def test_legacy_mount_source_value_drift_is_blocked_and_private(self):
+        fake = FakeDocker()
+        fake.change_legacy_mount_source = True
+        with patch.object(mod.probe, "docker", side_effect=fake):
+            result, ok = mod.inspect_now()
+        self.assertFalse(ok)
+        self.assertEqual(
+            result["legacy_name_vs_id_mounts"], "OTHER_MOUNT_METADATA_CHANGED"
+        )
+        self.assertEqual(result["legacy_name_vs_id_fields"], "DIFFERENT_Mounts")
+        self.assertEqual(result["current_static_postcheck"], "STOP_REVIEW_REQUIRED")
+        self.assertNotIn("SECRET", repr(result))
+        self.assertNotIn("/private", repr(result))
+
+    def test_mount_membership_type_rw_and_duplicate_change_fail_closed(self):
+        _, a, _ = objects()
+        base = a["Mounts"]
+        self.assertEqual(mod.compare_mounts(base, list(reversed(base))), "ORDER_ONLY")
+        self.assertEqual(mod.compare_mounts(base, copy.deepcopy(base)), "IDENTICAL_ORDER")
+
+        changed_dest = copy.deepcopy(base)
+        changed_dest[1]["Destination"] = "/unexpected/mount"
+        self.assertEqual(
+            mod.compare_mounts(base, changed_dest), "DESTINATION_MEMBERSHIP_CHANGED"
+        )
+        changed_type = copy.deepcopy(base)
+        changed_type[0]["RW"] = True
+        self.assertEqual(mod.compare_mounts(base, changed_type), "TYPE_OR_RW_CHANGED")
+        changed_source = copy.deepcopy(base)
+        changed_source[0]["Source"] = "/secret/path-shall-not-leak"
+        self.assertEqual(
+            mod.compare_mounts(base, changed_source),
+            "OTHER_MOUNT_METADATA_CHANGED",
+        )
+        duplicate = copy.deepcopy(base)
+        duplicate[1]["Destination"] = duplicate[0]["Destination"]
+        self.assertEqual(mod.compare_mounts(base, duplicate), "INVALID_MOUNT_METADATA")
+        self.assertEqual(mod.compare_mounts(base, "garbled"), "INVALID_MOUNT_METADATA")
+
+    def test_mount_order_change_cannot_hide_hostconfig_drift(self):
+        _, a, _ = objects()
+        b = copy.deepcopy(a)
+        b["Mounts"].reverse()
+        b["HostConfig"]["ReadonlyRootfs"] = True
+        self.assertEqual(mod.compare_mounts(a["Mounts"], b["Mounts"]), "ORDER_ONLY")
+        self.assertEqual(mod.compare_fields(a, b), "DIFFERENT_HostConfig")
 
     def test_changed_protected_state_fails_closed(self):
         fake = FakeDocker()
