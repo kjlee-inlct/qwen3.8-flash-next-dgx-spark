@@ -283,6 +283,7 @@ wizard_benchmark_menu() {
     wizard_menu_option 19 'Hybrid H6 physical preflight (read-only) / H6 실제 사전 점검'
     wizard_menu_option 20 'Hybrid H6 isolated 16GiB protected live session / H6 보호 기동'
     wizard_menu_option 21 'Hybrid H6 stopped trial forensic audit (read-only) / 보호 중지 원인 검사'
+    wizard_menu_option 22 'catplusplus M0 benchmark plan (NO weights/GPU) / 실측 전 계획'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -320,6 +321,12 @@ wizard_benchmark_menu() {
       19) wizard_h6_readonly preflight ;;
       20) wizard_h6_readonly run ;;
       21) wizard_h6_forensics_readonly ;;
+      22) wizard_header 'catplusplus M0 benchmark planning / catplusplus 사전 계획'
+          wizard_info 'No model download, Docker create/start, GPU, API call or service change.'
+          python3 -B "${ROOT_DIR}/scripts/benchmark/catplusplus-plan.py" plan ||
+            wizard_warning 'catplusplus plan unavailable; no runtime operation attempted.'
+          wizard_warning 'Research-only: ~174.86 GiB root weights exceed nominal 128GB unified RAM.'
+          wizard_warning 'Actual benchmark BLOCKED until loader/offload/monitor qualification and separate approval.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
