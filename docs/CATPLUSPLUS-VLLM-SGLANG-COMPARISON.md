@@ -63,6 +63,44 @@ The public vLLM example for stock packages and the publisher's
 **specific** pinned ModelOpt MIXED_PRECISION tensor inventory
 loads with correct output and memory safety.
 
+## Concrete upstream vLLM source review at merged UVA commit
+
+We inspected **the actual public vLLM source files at commit**
+[`a2f82acf1fd671c3152cffd49af16a73ed2bc4e4`](https://github.com/vllm-project/vllm/commit/a2f82acf1fd671c3152cffd49af16a73ed2bc4e4)
+(MERGED #54371), not just model-card descriptions:
+
+- [`vllm/models/qwen4_exp/nvidia/model.py`](https://github.com/vllm-project/vllm/blob/a2f82acf1fd671c3152cffd49af16a73ed2bc4e4/vllm/models/qwen4_exp/nvidia/model.py#L641-L648)
+  contains the actual `packed_modules_mapping`
+  `"in_proj_qkvz": ["in_proj_qkv", "in_proj_z"]`.
+  This proves a fused-name *mapping* exists upstream, **not**
+  that the right MXFP8 per-block scale tensor is allocated,
+  loaded, consumed or numerically correct for catplusplus.
+- [`vllm/models/qwen4_exp/nvidia/ngram_embedding.py`](https://github.com/vllm-project/vllm/blob/a2f82acf1fd671c3152cffd49af16a73ed2bc4e4/vllm/models/qwen4_exp/nvidia/ngram_embedding.py#L161-L210)
+  imports `ModelOptMixedPrecisionConfig`;
+  `Qwen4ExpPLEEmbeddingMethod.from_quant_config` explicitly
+  selects `Qwen4ExpPLEFp8EmbeddingMethod` when
+  `embedding_dtype == "float8_e4m3fn"`, *before*
+  its ModelOpt mixed algorithm branch. This proves there is
+  an upstream FP8 PLE format selection path, not end-to-end
+  correct global PLE weight-scale loading or residency.
+- [`vllm/config/engram.py`](https://github.com/vllm-project/vllm/blob/a2f82acf1fd671c3152cffd49af16a73ed2bc4e4/vllm/config/engram.py#L19-L40)
+  uses `cpu_offload` with pinned CPU memory and accepts
+  legacy `VLLM_PLE_CPU_OFFLOAD`; this is an explicit
+  **UVA/pinned-host strategy, not file-backed mmap**.
+- The [`ple_layer.py`](https://github.com/vllm-project/vllm/blob/a2f82acf1fd671c3152cffd49af16a73ed2bc4e4/vllm/models/qwen4_exp/nvidia/ple_layer.py#L94-L112)
+  constructor instantiates `Qwen4ExpNGramEmbedding` with
+  `quant_config` and model `ple_embedding_dtype`, showing
+  a model → PLE-format wiring path.
+
+**Confidence upgrade:** Qwen4Exp fused mapping + FP8 PLE
+selection + ModelOpt mixed quant config are **present in
+that specific upstream source revision**. This is stronger
+than a release-note claim, but entirely separate from
+proving these specific patches are in our measured v0.29
+Docker image, from proving full catplusplus fused MXFP8
+tensor/scale correctness, or from qualified GB10 residency.
+Actual runtime priority remains undecided.
+
 ## Engine-by-engine stage-gate comparison
 
 | Evidence / gate | Existing vLLM + publisher patch | Publisher SGLang |
