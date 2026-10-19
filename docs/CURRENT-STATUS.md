@@ -1,3 +1,45 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 smoke/180s soak/API READY_FOR_BENCH
+
+**Owner's later protected experiment console: actual physical DGX
+evidence at clean local HEAD
+`4612045c11ce47e52606794d63daede4cb35ac82`.**
+The same separately approved isolated candidate
+`qwen38-mazinb-m1-20261019043708-479dfc86`
+now emitted `M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`,
+`M1_READY_FOR_BENCH=http://127.0.0.1:18889`, exact
+`M1_SERVED_NAME=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`,
+and **unique new Docker ID**
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`.
+Active R2 trial journal:
+`/home/inlc/.local/state/qwen38-spark/mazinb-m1-reinstall/active.json`.
+Terminal A remains in interactive protected foreground and requested
+manual STOP at conclusion.
+
+The exact executing code places READY *after* exact-model API
+health, 180s = 36×5s monitored soak, kernel RM/host/watchdog
+revalidation and actual inference smoke; thus **R2 foreground
+isolated inference readiness passed on physical DGX**. This
+does NOT mean boot-persistent systemd operation, long-term
+host-stability, or an actual throughput benchmark.
+
+Terminal output explicitly said
+`M1_LLAMA_BENCHY=NOT_MEASURED`. Prior Terminal B check
+showed `BENCHY=NOT_INSTALLED` on PATH and
+`BENCH_RESULT_DIR=READY`. Read-only search for an existing
+pinned CLI is the safe next action; **no live package
+installation, source sync or benchmark bypass**. Benchmark
+requires pinned `0.4.1.dev1+ge9be34457` via strict
+reinstall-slot exclusive benchmark lock, while Terminal A
+keeps supervising. If tool absent, finish the live smoke
+experiment with exact candidate STOP before setting up
+benchmark tooling for another explicit session.
+[Physical evidence Stage D](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+Earlier entry `STARTED_UNQUALIFIED` is preserved as a
+chronological intermediate state superseded by this
+**actual ready-for-benchmark result**. Original 2026-10-14
+measured benchmark remains unchanged, and PR #261 is Draft.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 first separately approved GPU trial STARTED_UNQUALIFIED
 
 **Owner-pasted actual DGX console**, after R2 checkpoint restore
