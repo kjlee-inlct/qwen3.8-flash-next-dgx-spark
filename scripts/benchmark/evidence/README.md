@@ -1,3 +1,7 @@
+## 2026-10-19 — ACTUAL DGX first protected R2 candidate started unqualified (no API/benchmark yet)
+
+[Physical evidence Stage C](dgx-mazinb-r2-download-preflight-physical-20261019.md): owner confirmed clean local `4612045c11ce47e52606794d63daede4cb35ac82`, approved Wizard 5→24→4 including exact old Docker ID and `START_RESTORED_MAZINB_16G`; controller printed `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86`. Pending real `M1_READY_FOR_BENCH`, exact ID, 180s soak, smoke and benchmark. `llama-benchy` missing from operator PATH, bench-result directory READY. No repo sync, package install or benchmark without full READY/lease during live session.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 download 108/108 verified and live read-only preflight PASS
 
 [New physical restore/admission receipt](dgx-mazinb-r2-download-preflight-physical-20261019.md): operator-approved pinned `mazinb` download completed 108/108; post-transfer verifier passed every selected file, 4h20m52s fetch progress, retained at dedicated `models/qwen3.8-flash-next-mazinb` path. Subsequent Wizard 5→24→3 reported `M1_PREFLIGHT=PASS_READ_ONLY`, with exact preserved OrcaRouter predecessor, immutable release and image digest. **No new experimental GPU/Docker start, API, 180s soak, llama-benchy or long-term service qualification yet**. Source HEAD was not printed by the physical output and is not inferred from GitHub. Separate independent GPU approval and Terminal A/B evidence required.
