@@ -6,6 +6,23 @@ benchmark result. It restores the 2026-10-14 measured *checkpoint
 revision* without reusing or modifying the retired historical M1
 Docker journal/tombstone or the managed OrcaRouter predecessor.
 
+## 2026-10-19 — actual supervised R2 session STOP (later physical evidence)
+
+**Owner physically entered `STOP` after M1 API READY and smoke PASS**.
+The controller printed
+`M1_STOPPED_EXACT_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`
+and `M1_DOCKER_REMOVED=NO`. This confirms the exact new
+candidate was stopped without deleting its forensic Docker
+object. **No new R2 benchmark was run** (`llama-benchy` missing).
+Source remained `4612045c11ce47e52606794d63daede4cb35ac82`
+during the owner-approved trial. Before subsequent Git sync
+or new tool installation, separately check
+`python3 -B scripts/runtime/mazinb-m1.py status --session-slot reinstall`
+for `M1_SESSION_PHASE=stopped` and `M1_RUNNING=False`.
+Then optional approved isolated benchmark tool setup; never
+run the first stopped trial's benchmark after STOP.
+[Actual Stage G receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 ## 2026-10-19 — actual protected R2 benchmark admission passed; tool absent
 
 Physical Terminal A passed API exact model, 180-second monitored
