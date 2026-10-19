@@ -419,3 +419,76 @@ Keep both stopped M1 Docker objects and historical A/B
 forensics untouched. The previous first-trial functionality
 PASS and new second-trial RM FAIL are **separate physical
 events**; no new PP/TG measurement for either trial.
+
+
+## Stage I: unexpected active third R2 session in operator status; SSH diagnostic exited
+
+**Physical DGX shell output received on 2026-10-20 morning (KST),
+AFTER Stage H**. Operator attempted a read-only forensic script
+for second failure `qwen38-mazinb-m1-20261019065452-e70d6233`
+and its Docker `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`.
+Some pasted terminal commands were corrupted/mixed on the shell.
+Actual resulting source status was:
+
+```text
+git rev-parse HEAD
+f24fa284ba51000ece317227df26ff32e6f24ecd
+M1_SESSION_PHASE=started_unqualified
+M1_SESSION_NAME=qwen38-mazinb-m1-20261019221159-90ee9851
+M1_CONTAINER_ID=bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8
+M1_RUNNING=True
+M1_EXIT_CODE=0
+M1_STATE_DIR=/home/inlc/.local/state/qwen38-spark/mazinb-m1-reinstall
+M1_DOCKER_REMOVED=NO
+WRONG_TRIAL_RECORD
+로그아웃
+Connection to 10.221.50.65 closed.
+```
+
+**Critical: this snapshot identifies a THIRD/new isolated M1
+trial** under exact Docker ID
+`bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+not the second trial being investigated. Its name encodes
+2026-10-19T22:11:59 UTC / 2026-10-20T07:11:59 KST.
+User has **not provided** a third-trial Wizard approval,
+terminal A READY, protected STOP, independent current
+RM checks or new benchmarking results; do not invent
+these states or presume who/what launched the session.
+`M1_EXIT_CODE=0` while the candidate was RUNNING is not
+a meaningful inference/exit-success claim.
+
+`WRONG_TRIAL_RECORD` was caused by the diagnostic script
+requiring its `active.json` ID/name to match the **prior
+second trial** while the rolling `active.json` had
+already been replaced by this third session.
+That shell command was followed by `|| exit 1`;
+the resulting `로그아웃` / SSH disconnect is consistent
+with the *operator SSH shell* exiting on mismatch,
+**not** on its own proof of an actual DGX reboot/crash.
+The Docker RUNNING=True field is only a pre-disconnect
+snapshot; no assertion about its current live state.
+The third trial's background watchdog/foreground
+supervisor needs immediate read-only verification.
+
+**Safety/forensics priority:** reconnect via SSH;
+without `set -e`/`exit` commands, inspect current
+`status --session-slot reinstall`, exact candidate
+`docker inspect` (ID/name/labels/Running),
+`pgrep -af` for watcher/controller, bounded
+`monitor.log`, exact current journal and RM lines.
+If candidate still runs and original Terminal A
+is alive, use supervised `STOP` there. If
+orphaned/unprotected, fail closed and stop **only**
+the exact third Docker ID after matching its
+`qwen38.abtrial=mazinb`,
+`qwen38.variant=m1` and protected
+`qwen38.predecessor` labels. Preserve Docker
+objects/journals/logs, do not broad-prune or restart.
+Do NOT falsely classify the original Stage H
+NVIDIA RM failure from the rolling active journal;
+use the retained per-trial named journal for it.
+
+No actual post-disconnect Docker status or third-trial
+benchmarks supplied at writing time. GitHub changes
+are evidence-only; do not sync local repository while
+the third trial may still be active.
