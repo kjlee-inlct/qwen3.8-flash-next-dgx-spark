@@ -492,3 +492,101 @@ No actual post-disconnect Docker status or third-trial
 benchmarks supplied at writing time. GitHub changes
 are evidence-only; do not sync local repository while
 the third trial may still be active.
+
+
+## Stage J: third R2 now physically failed_stopped, Docker exit 137 (not Docker-OOM), warning-only memory trace
+
+**Owner-pasted physical DGX terminal on 2026-10-20, 07:25+ KST,
+after Stage I's disconnection; current code HEAD was previously
+printed as `f24fa284ba51000ece317227df26ff32e6f24ecd`.**
+Third-trial identity is exact:
+
+```text
+M1_SESSION_PHASE=failed_stopped
+M1_SESSION_NAME=qwen38-mazinb-m1-20261019221159-90ee9851
+M1_CONTAINER_ID=bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8
+M1_RUNNING=False
+M1_EXIT_CODE=137
+M1_DOCKER_REMOVED=NO
+```
+
+The retained exact Docker reported
+`RUNNING=false STATUS=exited OOM=false EXIT=137`;
+`pgrep -af 'mazinb-m1.py|monitor-runtime.sh'` printed
+**no processes** at that point. Exact-ID/labels/manual-stop
+guard correctly refused to issue another stop because
+the candidate was **already stopped**. Its actual
+`ACTUAL` string was complete and matched protected
+predecessor `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+except for the expected `true` versus actual `false`.
+
+**The owner's bounded monitor log tail (07:17:50–07:25:14 KST)
+showed sustained memory pressure but no protective count
+increment in the shared excerpt:**
+- `07:24:37 WARNING ... available=27730MiB
+  noncma_available=27662MiB free=966MiB
+  noncmafree=899MiB ... swapgrowth=3481MiB
+  protect=0/5`.
+- `07:24:58 WARNING ... available=17307MiB
+  noncma_available=17240MiB free=2040MiB
+  noncmafree=1972MiB ... swapgrowth=3477MiB
+  protect=0/5`.
+- Maximum explicitly observed swap growth in this pasted tail:
+  `3482 MiB` at 07:23:12; the observed free memory and
+  available-memory minima occurred at **different**
+  timestamps and must not be conflated.
+- `07:25:14 container is no longer running; monitor exiting`.
+  **No `PROTECT stopping`** in this truncated tail.
+  A full monitor log or stop marker is still needed to
+  rule out earlier watchdog intervention.
+
+**Source semantics:** M1 trial uses a `12 GiB` available
+gate for swap-growth + low-free simultaneous protection.
+In this observed interval non-CMA available remained
+above that gate and `protect=0/5`, despite swap growth
+around 3.4 GiB and non-CMA free below 2 GiB.
+The watchdog's permissive condition did **not** log a
+5-consecutive-samples protect stop in the pasted
+tail. Host-wide kernel RM checks remain independent.
+`Docker OOMKilled=false` does NOT prove there was
+no NVIDIA RM kernel allocation fault; `137` means
+SIGKILL and does NOT independently identify the killer
+or reason. A `docker stop --timeout 30` that escalated
+to SIGKILL is one unverified possibility. **Cause of the
+third `failed_stopped` remains UNKNOWN until per-trial
+journal `detail`, full monitor stop marker, bounded
+Docker load logs and same-period kernel log are read.**
+No third-trial API READY, 180-second soak, smoke or
+benchmark result was supplied.
+
+**Original second-trial forensic journal now validated**
+at immutable named path
+`mazinb-m1-reinstall/qwen38-mazinb-m1-20261019065452-e70d6233.json`:
+
+```text
+name=qwen38-mazinb-m1-20261019065452-e70d6233
+id=68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7
+phase=failed_stopped
+detail=M1Error: NVIDIA RM memory allocation error
+exit_code=137
+kernel_since=2026-10-19 15:54:52
+started_at=2026-10-19T06:54:52.735564+00:00
+updated_at=2026-10-19T07:04:33.845050+00:00
+```
+
+The `kernel_since` uses the machine's local wall-clock
+format, **not a UTC timestamp despite the field name
+of the `kernel_rm_since` Python argument**.
+`started_at`/updated timestamps are ISO UTC and
+consistent with Asia/Seoul +09:00 conversion.
+
+**New final safety state:** third candidate no longer
+running and no controller/watchdog process detected.
+No need for further docker stop, remove, restarts,
+pruning, swap changes, or candidate cleanup.
+Preserve the individually named second/third trial
+journals even if `active.json` changes. Need next:
+read third named `detail`, stop marker presence,
+targeted kernel RM lines for 2nd and 3rd intervals,
+and short Docker log error lines. Provenance and
+failure-cause attribution remain pending.
