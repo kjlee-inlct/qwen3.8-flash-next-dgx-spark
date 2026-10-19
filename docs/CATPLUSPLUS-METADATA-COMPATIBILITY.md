@@ -1,3 +1,18 @@
+## 2026-10-19 — Measured HEAD redirect and pinned raw source-only audit
+
+Actual physical DGX HEAD probe returned **HTTP 307**
+for pinned `resolve` config/launcher with same-host
+`/api/resolve-cache/` Location; both pinned `raw` paths
+returned **HTTP 200** with no redirect. No bodies read.
+The model source audit now uses a strict **two-file pinned
+`raw` GET** allowlist with no redirect and byte caps.
+Physical GET results are still **NOT_RUN**;
+even successful source declarations are not proof of
+a matching GB10 SGLang mixed loader or safe memory footprint.
+See [full install/run/benchmark staged plan](CATPLUSPLUS-SINGLE-GB10-INSTALL-SERVE-BENCH.md).
+mazinb R2 download is currently in progress; do not
+start a competing catplusplus bulk download or GPU task.
+
 ## 2026-10-18 SOURCE-ONLY pinned loader declaration audit introduced
 
 Follow-up to M0 inventory and mazinb M1 lifecycle reuse:
