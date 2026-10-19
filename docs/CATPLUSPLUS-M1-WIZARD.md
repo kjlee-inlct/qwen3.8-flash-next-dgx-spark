@@ -1,3 +1,7 @@
+## 2026-10-19 — vLLM versus SGLang pinned source inventory and GB10 gate
+
+Review [the evidence matrix](CATPLUSPLUS-VLLM-SGLANG-COMPARISON.md). Model card advertises modified vLLM **and** SGLang. Official vLLM Qwen3.8 and UVA PLE support merged, but UVA still consumes GB10 shared DRAM, while disk-backed mmap PLE PR #54129 closed unmerged. No publisher fork's per-function mixed MXFP8 scale code has been inspected at pinned revision. New Wizard **5→23→11** inventories only fixed Hub extra/packages tree metadata with bounded no-redirect pagination and never reads weights, code or engine bundles. **Do not run while mazinb R2 is downloading.** No runtime has been qualified; vLLM-first is source review order, not engine selection.
+
 ## 2026-10-19 — Preparing install/serve/bench alongside mazinb R2 transfer (SOURCE ONLY)
 
 Operator reports mazinb R2 bulk download **STARTED**, not complete.
