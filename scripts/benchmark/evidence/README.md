@@ -1,3 +1,7 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 exact-ID STOP succeeded; Docker retained
+
+[Actual Stage G physical receipt](dgx-mazinb-r2-download-preflight-physical-20261019.md): owner entered STOP after model API/180s soak/smoke passed and missing pinned benchy blocked performance sampling; controller printed exact Docker `M1_STOPPED_EXACT_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424` and `M1_DOCKER_REMOVED=NO`. Original OrcaRouter and older benchmark archive untouched. Independent session status `stopped` / `running=False` not yet pasted. Fresh 2026-10-19 throughput **NOT_MEASURED**.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 API/soak/inference smoke READY; new benchmark pending
 
 [Physical Stage D evidence](dgx-mazinb-r2-download-preflight-physical-20261019.md): the same owner-approved R2 trial reached `M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED` and `M1_READY_FOR_BENCH=http://127.0.0.1:18889` on clean local source `4612045c11ce47e52606794d63daede4cb35ac82`. New exact candidate Docker ID `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`. Executing controller gates READY on exact API, 180-second monitored soak, smoke and RM checks. `M1_LLAMA_BENCHY=NOT_MEASURED` and earlier PATH check `BENCHY=NOT_INSTALLED`; do not claim throughput. Keep Terminal A monitoring until safe STOP; no source sync or package installation during live session.
