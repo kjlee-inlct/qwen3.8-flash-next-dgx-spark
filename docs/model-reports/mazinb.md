@@ -1,5 +1,7 @@
 # mazinb — benchmark report
 
+**2026-10-19 R2 physical update:** owner-approved protected trial at clean local source `4612045c11ce47e52606794d63daede4cb35ac82` printed `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86`. The actual R2 API READY/smoke/180-second soak/benchmark remain **NOT_MEASURED**. Operator PATH did not resolve `llama-benchy`; results parent `READY`. No local source sync/package installation should occur during live session. [Full physical receipt](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 **BENCHMARK_STATUS: MEASURED**
 
 ## New R2 checkpoint and protected preflight — ACTUAL DGX 2026-10-19
