@@ -3,8 +3,8 @@
 
 Never fetch weights, bundles, indexes, wildcards, or arbitrary paths.
 Never invoke publisher-provided shell scripts, Docker, GPU, or subprocesses.
-Only two explicitly approved small text paths on the immutable HF revision,
-or offline test fixtures. A positive source-surface assessment is NOT
+Only two explicitly approved small pinned RAW text paths, with no redirect,
+or offline test fixtures. Actual DGX HEAD 200 alone does not prove GET. A positive source-surface assessment is NOT
 proof an installed SGLang/vLLM wheel implements these features.
 """
 from __future__ import annotations
@@ -130,12 +130,16 @@ def source_bytes(path: str, offline: Path | None) -> bytes:
             raise SourceAuditBlocked("SOURCE_OVERSIZED_" + path)
         data = file.read_bytes()
     else:
-        url = BASE + path
+        # Physical DGX HEAD: resolve -> 307 same-host API cache;
+        # immutable raw -> 200 for both explicitly allowlisted small files.
+        # Never retry/redirect/fallback into another URL or arbitrary path.
+        url = RAW_BASE + path
         opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}), NoRedirect()
         )
         req = urllib.request.Request(
             url, headers={"Accept": "text/plain, application/json"},
+            method="GET",
         )
         try:
             with opener.open(req, timeout=15) as reply:
@@ -240,7 +244,7 @@ def audit(offline: Path | None) -> dict:
     return {
         "scope": "PINNED_SOURCE_TEXT_ONLY",
         "revision": REVISION, "checkpoint": MODEL,
-        "transport": "PINNED_HF_TEXT" if offline is None else "OFFLINE_FIXTURE",
+        "transport": "PINNED_HF_RAW_TEXT_NO_REDIRECT" if offline is None else "OFFLINE_FIXTURE",
         "config_sha256": hashlib.sha256(cfg_raw).hexdigest(),
         "launcher_sha256": hashlib.sha256(shell_raw).hexdigest(),
         "source_declarations": "PRESENT_NOT_ENGINE_ATTESTED"
