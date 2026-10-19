@@ -1,3 +1,58 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 checkpoint RESTORED and independent M1 preflight PASS
+
+**Owner-pasted physical DGX Wizard evidence:** Models **3→12**
+resumable HF download completed **108/108** selected files,
+then post-transfer per-file `verified` printed for all 108
+(48 expert safetensors + 43 BF16 PLE + 4 BF16 model
++ 13 aux/config/tokenizer files). Fixed checkpoint
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`
+at complete revision
+`f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`
+was placed at
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-mazinb`.
+Downloader reported file progress `108/108 [4:20:52]`,
+`hf_xet` available (high-performance), 8 workers,
+temporary `vllm-orcarouter-v029:v1` downloader,
+`done → ... (174G)`,
+`MAZINB_RESTORE_DOWNLOAD=COMPLETE_DOWNLOADER_VERIFIED`
+and `MAZINB_RESTORE_GPU_START=NOT_PERFORMED`.
+It did **not** print whether HF authentication token was
+actually present.
+
+Owner immediately ran reinstalled **Benchmark 5→24→3**,
+re-entered exact protected OrcaRouter Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+authenticated read-only kernel RM inspection and received
+`M1_PREFLIGHT=PASS_READ_ONLY`.
+The immutable installed release was
+`ff67bab3c94d6992f61b9535836df97f03b9c022`;
+candidate experiment image ID
+`sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`.
+Output ended `M1_CANDIDATE_START=NOT_PERFORMED`.
+Original installed OrcaRouter remains `phase=complete`,
+runtime not probed by Wizard banner.
+
+**Evidence classification:** physical **R2 model restore +
+read-only launch admission PASS**; new R2 Docker startup,
+monitor arm, 180-second soak, inference smoke, localhost
+API READY, service operational qualification and
+new benchmark measurements **NOT_YET_RUN**.
+The physical transcript does not show local `git HEAD`
+SHA; controller preflight source requires clean expected
+branch but exact SHA must not be fabricated.
+[Permanent human-curated physical evidence](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+**Next only after explicit fresh owner approval**:
+Wizard **5→24→4**, confirm exact protected Docker ID,
+type `START_RESTORED_MAZINB_16G`, remain in foreground
+Terminal A. Only use separate Terminal B pinned benchmark
+after the live controller prints `M1_READY_FOR_BENCH`.
+Never run previous historical M1 action 5→9.
+Do not fast-forward/modify local checkout during an
+active trial/benchmark; source_sha is pinned across both.
+Do not merge Draft PR #261 as a substitute for physical
+live qualification.
+
 ## 2026-10-19 — catplusplus vLLM-first versus SGLang comparative source study (SOURCE ONLY)
 
 **Owner says proceed** with source comparison while the 173.64-GiB
