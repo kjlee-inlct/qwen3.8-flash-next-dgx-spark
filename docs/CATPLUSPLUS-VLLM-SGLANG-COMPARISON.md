@@ -101,6 +101,42 @@ Docker image, from proving full catplusplus fused MXFP8
 tensor/scale correctness, or from qualified GB10 residency.
 Actual runtime priority remains undecided.
 
+## Concrete upstream SGLang source review: avoid the temporary PLE GPU table
+
+The corresponding public SGLang issue
+[#39841](https://github.com/sgl-project/sglang/issues/39841)
+reported that `--ple-offload-embedding` was initially ineffective
+for low-free-VRAM devices: construction created the *entire
+FP8 PLE table on CUDA* before wrapping it into host/file
+storage, causing an allocation spike/OOM **before**
+offload could begin.
+
+**Verified upstream resolution:** [PR #39928](https://github.com/sgl-project/sglang/pull/39928)
+**MERGED 2026-09-20**, changed
+`python/sglang/srt/models/qwen4_exp.py` to instantiate
+`VocabParallelEmbedding` in a `torch.device("meta")`
+context **when offload is enabled**, then wrap it in
+`Qwen4ExpPinnedHostEmbedding`; added a regression
+checking the peak CUDA allocation stays below half the
+table's size. It preserves a real CUDA `weight_scale`
+buffer and verifies CPU pinned backing in that test.
+This is *real upstream source-level implementation
+evidence*, not a measurement of our particular
+publisher SGLang fork or a full catplusplus run.
+
+**Critical pin check:** The publisher's pinned SGLang
+fork must contain the equivalent *construct on meta,
+offload before materializing CUDA weights* semantics
+(or better). If it predates #39928 or uses the original
+construct-then-offload sequence, marking
+`--ple-offload-embedding` as enabled is **not**
+sufficient to admit GB10 load. Even with #39928,
+the PLE table backed by **pinned host physical RAM**
+still competes with other unified allocations; a
+truly NVMe-file-backed path has different semantics
+and must separately prove page-residency/RM safety.
+No exact publisher image or runtime commit is qualified.
+
 ## Engine-by-engine stage-gate comparison
 
 | Evidence / gate | Existing vLLM + publisher patch | Publisher SGLang |
