@@ -2,6 +2,10 @@
 
 **BENCHMARK_STATUS: MEASURED**
 
+## New R2 checkpoint and protected preflight — ACTUAL DGX 2026-10-19
+
+Checkpoint `mazinb` at pinned revision `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f` was restored to the canonical repo `models/qwen3.8-flash-next-mazinb` directory with 108/108 `verified` files (`COMPLETE_DOWNLOADER_VERIFIED`). Wizard `5→24→3` physical preflight returned `M1_PREFLIGHT=PASS_READ_ONLY`, preserving old managed Docker `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`, installed release `ff67bab3c94d6992f61b9535836df97f03b9c022`, experimental image digest `dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`. **No new R2 GPU start, API READY, soak or actual benchmark yet.** Preserve original 2026-10-14 measurements below as historical. [Physical receipt](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 ## Actual DGX Spark M1 benchmark — 2026-10-14
 
 First successful physical mazinb M1 benchmark.
