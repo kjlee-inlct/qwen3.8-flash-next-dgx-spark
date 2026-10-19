@@ -1,5 +1,7 @@
 # mazinb — benchmark report
 
+**2026-10-19 R2 subsequent physical READY:** the user-approved isolated vLLM candidate passed actual model API, 180-second monitored soak and smoke (`M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`, `M1_READY_FOR_BENCH=http://127.0.0.1:18889`); exact new Docker ID `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`. **New R2 llama-benchy measurement has NOT been performed**, and shell PATH lacks the pinned benchmark CLI. This READY evidence does not establish permanent systemd operation or long-term host stability. [Stage D physical receipt](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 **2026-10-19 R2 physical update:** owner-approved protected trial at clean local source `4612045c11ce47e52606794d63daede4cb35ac82` printed `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86`. The actual R2 API READY/smoke/180-second soak/benchmark remain **NOT_MEASURED**. Operator PATH did not resolve `llama-benchy`; results parent `READY`. No local source sync/package installation should occur during live session. [Full physical receipt](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
 
 **BENCHMARK_STATUS: MEASURED**
