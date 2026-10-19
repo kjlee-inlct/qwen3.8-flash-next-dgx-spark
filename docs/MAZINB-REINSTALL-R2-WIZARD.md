@@ -6,6 +6,94 @@ benchmark result. It restores the 2026-10-14 measured *checkpoint
 revision* without reusing or modifying the retired historical M1
 Docker journal/tombstone or the managed OrcaRouter predecessor.
 
+## 2026-10-19 — actual protected R2 benchmark admission passed; tool absent
+
+Physical Terminal A passed API exact model, 180-second monitored
+soak and `M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`
+and showed `M1_READY_FOR_BENCH=127.0.0.1:18889`
+(the actual API marker contains `http://`).
+New unique Docker ID:
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`.
+Physical Terminal B `m1-benchmark-lock.sh --session-slot reinstall`
+reported pre-admission PASS, safe exclusive lease acquisition,
+`BLOCKED_PINNED_LLAMA_BENCHY_MISSING`, post-admission PASS,
+`BENCH_COMMAND_RC=2`. No PP/TG/TTFT measurement exists yet.
+
+A search under the user's local bin/uv/pipx and llm workspace
+returned no `llama-benchy`. The operator accidentally copied
+an illustrative `/실제로/확인한/경로/llama-benchy` placeholder;
+that is **not** an executable file. `sudo -n` also refused an
+expired read-only kernel audit credential on the first retry;
+`sudo -v` restored pre/post host/RM checks on the next retry.
+Neither error is a model or GPU inference fault.
+
+### After Terminal A STOP/auto-expiry only — install pinned tool
+
+Do **not** change the executing DGX Git HEAD while Terminal A
+is live. End the supervised trial with `STOP` once it is
+accepting input; otherwise record the automatic-stop or
+failure result. Use Wizard **5→24→2** for R2 stopped status.
+Retain the stopped exact Docker, trial journal and original
+2026-10-14 evidence. Never broad-prune.
+
+After the trial **has physically stopped**, source sync to an
+exactly verified successful remote branch HEAD is a separate
+operation; only then can new Wizard **5→24→5** be used.
+It shows a read-only tool plan before an explicit default-NO
+installation approval. The setup script asks for typed
+`INSTALL_PINNED_BENCHY`, refuses if any project lifecycle
+shared/exclusive lock or running project Docker/M1 API port
+is detected, and installs pinned
+[eugr/llama-benchy](https://github.com/eugr/llama-benchy/tree/e9be344578cec17745066b220798b80a0d2686d3)
+at `e9be344578cec17745066b220798b80a0d2686d3`
+to a dedicated user-owned venv **outside** the project
+checkout and managed install root:
+`~/.local/share/qwen38-benchmark-tools/llama-benchy-e9be34457`.
+Expected CLI version is `0.4.1.dev1+ge9be34457`.
+The installer verifies all required flags and records a
+dependency freeze with SHA256; dependency versions are
+not independently hash-locked by the source SHA.
+No sudo, implicit system packages, Docker, GPU or model changes.
+If `venv`/pip/git/dependency fetch fails, it **blocks** and
+retains the partial user-only directory for manual review.
+
+Exact command-line counterpart after STOP, when the verified
+new source is checked out:
+
+```bash
+bash scripts/wizard/llama-benchy-setup.sh --plan
+# Only after checking the plan and with separate explicit owner approval:
+QWEN38_BENCHY_SETUP_APPROVED=1 \
+  bash scripts/wizard/llama-benchy-setup.sh --install
+```
+
+Before a *new* independently approved protected GPU trial:
+```bash
+export PATH="$HOME/.local/share/qwen38-benchmark-tools/llama-benchy-e9be34457/bin:$PATH"
+llama-benchy --version
+llama-benchy --help
+```
+
+Then repeat the R2 physical preflight and separate Wizard
+**5→24→4** GPU start. On a new actual `M1_READY_FOR_BENCH`,
+and only while the foreground watchdog remains alive,
+run the standard **Terminal B** lease+payload under the
+same exact clean Git HEAD. Since RM attestation uses
+`sudo -n` during postcheck, obtain a fresh `sudo -v`
+in Terminal B before beginning; do not weaken RM/monitor
+gates or share credentials in transcripts.
+
+Remember: `llama-benchy` can download its default
+Project Gutenberg prompt corpus on first run and may
+reuse `~/.cache/llama-benchy`. This is an external
+network/corpus provenance dependency distinct from
+the pinned benchmark executable and local tokenizer;
+retain evidence if it changes.
+
+**New bench setup code is SOURCE-ONLY until CI+physical
+validation; its existence does NOT prove the user has
+installed or executed it.**
+
 ## Why a separate R2
 
 The 2026-10-19 actual DGX audit at
