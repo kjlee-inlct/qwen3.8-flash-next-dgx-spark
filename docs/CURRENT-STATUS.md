@@ -1,3 +1,43 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 first separately approved GPU trial STARTED_UNQUALIFIED
+
+**Owner-pasted actual DGX console**, after R2 checkpoint restore
+and read-only preflight: local clean source SHA
+`4612045c11ce47e52606794d63daede4cb35ac82`,
+`BENCHY=NOT_INSTALLED` (CLI absent on operator PATH), and
+`BENCH_RESULT_DIR=READY`. User selected Wizard
+**5→24→4**, explicitly approved GPU start with `y`,
+typed protected exact OrcaRouter predecessor Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+and exact startup phrase `START_RESTORED_MAZINB_16G`.
+The physical controller printed:
+
+```text
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86
+```
+
+**Stage classification: ACTUAL_DGX STARTED_UNQUALIFIED ONLY**.
+The marker is emitted by the controller after protected candidate
+create/start and watchdog arm/initial heartbeat checks; operator
+has not yet provided `M1_READY_FOR_BENCH`, 180s soak,
+exact-model API/smoke or actual throughput output.
+Do not claim full model READY or long-term service qualification.
+The uninstalled/unavailable PATH `llama-benchy` blocks the
+new R2 benchmark regardless of API readiness until the exact
+pinned version and compatible CLI are verified. During live
+Terminal A **do not `git pull`, install packages, rebuild
+Docker images, stop services, delete data, or attempt a
+bench without lease**. Read-only check for an *existing*
+pin-matching benchy executable in a separate terminal is
+safe; otherwise terminate the unique R2 candidate via
+its watched/explicit `STOP` when safe and prepare
+benchmark environment before a separately approved new run.
+
+[Stage C appended to physical evidence receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+Remote Draft PR HEAD is newer than physical DGX source;
+**do not confuse docs commits with runtime source**.
+The original 2026-10-14 measured mazinb benchmark remains
+immutable.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 checkpoint RESTORED and independent M1 preflight PASS
 
 **Owner-pasted physical DGX Wizard evidence:** Models **3→12**
