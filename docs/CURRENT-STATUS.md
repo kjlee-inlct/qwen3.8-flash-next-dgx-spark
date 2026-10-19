@@ -1,3 +1,108 @@
+## 2026-10-20 — ACTUAL DGX third mazinb R2 failed_stopped, exact Docker exited/retained; RM cause pending
+
+**New owner-pasted physical DGX read-only evidence, superseding only
+the older Stage I `M1_RUNNING=True` *point-in-time snapshot*.**
+The third separately identified candidate
+`qwen38-mazinb-m1-20261019221159-90ee9851`,
+exact Docker ID
+`bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+now returned `M1_SESSION_PHASE=failed_stopped`,
+`M1_RUNNING=False`, `M1_EXIT_CODE=137`,
+`M1_DOCKER_REMOVED=NO`. Exact Docker inspect:
+`STATUS=exited RUNNING=false OOM=false EXIT=137`.
+Process inspection (`pgrep -af 'mazinb-m1.py|monitor-runtime.sh'`)
+returned no supervisor/watchdog at that observation.
+The script's identity-bound manual-stop guard appropriately
+printed `STOP_NOT_PERFORMED_IDENTITY_OR_STATE_MISMATCH`
+because the exact labeled candidate had
+`Running=false` already. **No additional stop required.**
+
+**Third trial monitor tail 2026-10-20 07:17:50–07:25:14 KST:**
+recurrent `noncmafree` ~0.9–2.0 GiB, high but decreasing
+`noncma_available` (low 17,240 MiB, 07:24:58),
+cumulative `swapgrowth` up to 3,482 MiB
+(07:23:12) and `swapfree` ≈142,945 MiB.
+Lowest displayed `noncmafree=899MiB` (07:24:37)
+occurred at a **different timestamp** from lowest
+available. Warnings consistently show
+`protect=0/5` and the final line at
+07:25:14 was `container is no longer running;
+monitor exiting`, with no `PROTECT stopping`
+in the **provided 35-line tail**. Source policy
+gates low-free + swap-growth protection on
+`noncma_available<12GiB`; displayed available
+was above that. Do **not** infer from this fragment
+that the watchdog itself sent SIGKILL or that
+no earlier stop event occurred. Docker exit 137
+indicates SIGKILL; `OOMKilled=false` does not
+disprove NVIDIA RM allocation failure or prove a
+particular terminator. Third-trial failure
+`detail`, full monitor record, kernel RM events
+and Docker logs remain **NOT_OBSERVED**.
+
+**Second R2 failed trial retained per-trial journal
+independently read and validated** (do not consult
+the rolling third-trial `active.json` for it):
+`~/.local/state/qwen38-spark/mazinb-m1-reinstall/
+qwen38-mazinb-m1-20261019065452-e70d6233.json`;
+exact Docker ID
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+`phase=failed_stopped`,
+`detail=M1Error: NVIDIA RM memory allocation error`,
+`exit_code=137`,
+`kernel_since=2026-10-19 15:54:52`,
+`started_at=2026-10-19T06:54:52.735564+00:00`,
+`updated_at=2026-10-19T07:04:33.845050+00:00`.
+The `kernel_since` parameter uses local host-wall-clock
+time (KST). The code checks **host-wide**
+`journalctl -k` for `NV_ERR_NO_MEMORY` or
+`_memdescAllocInternal` after the recorded instant;
+the actual kernel lines and attribution have **not
+been provided**. `failed_stopped` is a protected
+failure, not successful benchmark admission.
+
+**Current objective is forensic attribution, not another
+benchmark/reinstall or model change.** Both newer
+failed trial Docker objects and exact per-trial
+journals are preserved. First R2 trial still
+independently proved `M1_READY_FOR_BENCH`,
+180-second soak and inference smoke PASS and
+stopped normally, **but R2 throughput remains
+NOT_MEASURED** across all three trials.
+Pinned `llama-benchy 0.4.1.dev1+ge9be34457`
+has been installed on the actual host, no longer
+a current blocker. Exact latest physically printed
+checkout SHA was
+`f24fa284ba51000ece317227df26ff32e6f24ecd`
+(2026-10-20 first diagnosis), not the newer
+GitHub documentation-only HEAD.
+
+**Next safe order:** only read per-trial named
+`qwen38-mazinb-m1-20261019221159-90ee9851.json`
+to obtain actual third `detail/kernel_since`
+and exact-ID `monitor/runtime-stop.env` if present;
+capture **bounded** matching NVIDIA kernel lines
+for both second and third exact time windows;
+read only relevant tail of each
+`monitor.log` and `docker logs` plus exact
+Docker `FinishedAt/OOMKilled/ExitCode`.
+Correlate timestamps and distinguish NVIDIA RM,
+Linux OOM, watchdog protect, controller stop
+and SSH/session failure **without inventing
+causality**. No changes to watchdog/KV, swap,
+cache, GPU runtime, Docker, systemd, protected
+OrcaRouter or DGX source before forensic
+classification. Never use `set -e`/`exit 1`
+inside SSH read-only diagnostic copy/paste
+where a mismatch would log out the operator.
+Do not restart the model or measure benchmark
+until a separately approved corrective action.
+
+[Physical immutable evidence Stage I and
+newer Stage J](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+The older Stage I running snapshot remains in history
+but is no longer the latest known host state.
+
 ## 2026-10-20 — ACTUAL DGX unexpected active THIRD R2 candidate during RM forensic commands; SSH logout
 
 Owner's DGX console, operating clean local HEAD
