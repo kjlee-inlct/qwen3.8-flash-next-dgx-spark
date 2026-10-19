@@ -1,3 +1,34 @@
+## 2026-10-20 — SOURCE_ONLY mazinb R2 first-READY versus third-trial runtime file parity
+
+GitHub read-only comparison of the physically reported source SHA for the
+first successful R2 API/180-second soak/inference-smoke trial
+(`4612045c11ce47e52606794d63daede4cb35ac82`) and the last
+physically printed DGX checkout SHA during third-trial diagnosis
+(`f24fa284ba51000ece317227df26ff32e6f24ecd`)
+shows identical Git blob contents for:
+
+- `scripts/runtime/mazinb-m1.py` — blob `60b2ebf1105ffcd47b373c16b57df8461ab30a8e`;
+- `scripts/runtime/monitor-runtime.sh` — blob `017451b75b69da00bb10d9aec591a161a56862dc`;
+- `scripts/serve.sh` — blob `b6cd92b1bd58160576624d9c645528fe80af450d`.
+
+`scripts/wizard/benchmark-menu.sh` **did** change between those
+commits (Wizard route/UI changes require separate review). The GitHub
+compare places the third physical checkout 56 commits ahead of the first,
+without changes to the three runtime files named above. This is
+**GitHub SOURCE_ONLY file parity**, not an attestation of the exact
+runtime checkout at second-trial launch, image binary, memory/swap
+trajectory, model cache or driver state. The second trial's physical
+source SHA was not captured. It reduces support for a direct regression
+in those three files but does **not** establish a failure root cause.
+
+The actual Stage J state still stands: third trial `failed_stopped`,
+Docker exited with code 137 and `OOMKilled=false`; second trial's
+host-wide RM classifier matched, but original kernel lines and third
+named-journal `detail` remain **NOT_OBSERVED**. Next step remains
+**read-only**, bounded exact-trial journal, monitor, Docker and kernel
+correlation; no further GPU attempt or runtime/threshold change.
+[Original physical evidence Stage H–J](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 ## 2026-10-20 — ACTUAL DGX third mazinb R2 failed_stopped, exact Docker exited/retained; RM cause pending
 
 **New owner-pasted physical DGX read-only evidence, superseding only
