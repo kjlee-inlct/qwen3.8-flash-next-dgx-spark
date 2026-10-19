@@ -311,6 +311,7 @@ wizard_mazinb_reinstall_m1_menu() {
     wizard_menu_option 2 'Reinstalled M1 status (read-only) / 상태'
     wizard_menu_option 3 'Reinstalled M1 physical preflight (read-only) / 사전 점검'
     wizard_menu_option 4 'Reinstalled M1 protected GPU start (explicit approval) / 보호 기동'
+    wizard_menu_option 5 'Pinned llama-benchy setup (post-STOP ONLY) / 고정 버전 도구 준비'
     wizard_menu_option 0 'Back / 이전'
     wizard_input selection 'Select / 선택' 0
     case "$selection" in
@@ -335,6 +336,13 @@ wizard_mazinb_reinstall_m1_menu() {
          QWEN38_M1_WIZARD_APPROVED=1 python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" \
            run --session-slot reinstall --expected-old-id "$WIZARD_M1_EXPECTED_ID" ||
            wizard_warning 'Reinstalled M1 ended/blocked; inspect preserved new journal; never bypass watchdog.' ;;
+      5)
+         bash "$ROOT_DIR/scripts/wizard/llama-benchy-setup.sh" --plan ||
+           { wizard_warning 'Pinned tool setup plan unavailable.'; continue; }
+         wizard_warning 'Only AFTER Terminal A exact candidate STOP and completion; no active model.'
+         wizard_yes_no 'Install pinned llama-benchy in isolated user venv now? / 격리 도구 설치 승인?' no || continue
+         QWEN38_BENCHY_SETUP_APPROVED=1 bash "$ROOT_DIR/scripts/wizard/llama-benchy-setup.sh" --install ||
+           wizard_warning 'Tool setup blocked or incomplete; no model/GPU/service changed.' ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
     esac
