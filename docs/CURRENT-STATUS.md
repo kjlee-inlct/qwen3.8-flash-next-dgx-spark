@@ -1,3 +1,53 @@
+## 2026-10-19 — catplusplus vLLM-first versus SGLang comparative source study (SOURCE ONLY)
+
+**Owner says proceed** with source comparison while the 173.64-GiB
+mazinb R2 checkpoint download is underway. No DGX commands,
+weight/source-bundle downloads, Docker/GPU builds or model
+runtime changes have been performed by this work.
+
+**Verified external upstream GitHub PRs:**
+`vllm-project/vllm#53896` Qwen3.8 model support **MERGED**
+2026-08-31; `#54371` UVA PLE offload **MERGED**
+2026-09-09; prior `#53899` CPU PLE **CLOSED UNMERGED**;
+`#54129` PLE safetensors read-only mmap **CLOSED UNMERGED**.
+Merged UVA offload uses pinned CPU memory accessible via CUDA
+UVA and **does not remove physical RAM occupancy on the
+single 128-decimal-GB unified-memory GB10**. Disk-backed
+mmap was a separate, unmerged implementation. Neither
+proves catplusplus mixed MXFP8 fused qkvz scale consumption
+or installed `vllm-orcarouter-v029:v1` has the same patches.
+
+**Publisher model card** claims `extra/packages/` includes
+modified **both** vLLM and SGLang source trees and two
+git-history bundles. Their actual per-file implementations,
+bundle identities and GB10 kernel support have NOT been
+inspected at fixed revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`.
+Production SGLang script is described, but this is not
+GB10 proof; vLLM-first is a **review order**, not a runtime
+decision.
+
+**New source-only inspection tier:** Added
+`scripts/model/inspect_catplusplus_engine_sources.py`
+and Wizard **5→23→11** with strict pinned
+`/extra/packages` Hub JSON subtree scope,
+bounded API pagination/response limits/no redirect,
+file/bundle existence counts with an explicit
+`engine_impl=NOT_AUDITED` result. No source
+bundles/files or weights are read, downloaded or
+executed; actual DGX inventory **NOT_RUN** during
+mazinb download. Offline safety/transport tests added.
+A later bounded exact-path source file SHA/function audit
+is required to compare fused QKVZ MXFP8 scales,
+ModelOpt mixed NVFP4 and FP8 PLE by engine.
+
+Authoritative [dual-engine source/GB10 report](CATPLUSPLUS-VLLM-SGLANG-COMPARISON.md).
+**Live, engine, RAM, checkpoint, service and benchmark
+qualification remains BLOCKED; catplusplus NOT_MEASURED.**
+Keep PR #261 Draft and preserve mazinb in-progress
+download; do not `git pull` the actively transferring
+DGX checkout.
+
 ## 2026-10-19 — catplusplus preparation while mazinb R2 download underway (SOURCE ONLY)
 
 Owner reports the previously authorized **mazinb 173.64-GiB R2
