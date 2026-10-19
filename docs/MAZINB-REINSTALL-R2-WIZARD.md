@@ -6,6 +6,36 @@ benchmark result. It restores the 2026-10-14 measured *checkpoint
 revision* without reusing or modifying the retired historical M1
 Docker journal/tombstone or the managed OrcaRouter predecessor.
 
+## 2026-10-19 — second R2 session: actual NVIDIA RM memory failure (LATER)
+
+Following the first successful 180-second API/soak/smoke
+experiment and exact-ID STOP, the owner installed/verified
+`llama-benchy 0.4.1.dev1+ge9be34457` in the
+isolated tool environment and explicitly authorized a
+**second** R2 trial through Wizard 5→24→4. This newer
+candidate `qwen38-mazinb-m1-20261019065452-e70d6233`
+(new exact Docker ID
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`)
+printed `STARTED_UNQUALIFIED`, then
+`M1_STOPPED_EXACT_ID`, `M1_DOCKER_REMOVED=NO`
+and `M1_BLOCKED=NVIDIA RM memory allocation error`.
+**No second-trial READY or benchmark** was produced;
+the post-failure bench admission correctly denied
+`M1 is not admitted for benchmark`.
+
+The classifier reads **host-wide kernel log events**
+containing `NV_ERR_NO_MEMORY` or
+`_memdescAllocInternal` since the individual journal
+`kernel_since`, not per-container GPU diagnostics.
+Root cause and attribution require bounded actual
+`journalctl -k` matching lines, status
+`failed_stopped`, `docker inspect` for exact new ID,
+the trial's `monitor.log` and relevant Docker model
+loading errors. **Do not re-run GPU, lower protective
+thresholds, alter swap/KV or delete stopped Docker**.
+The earlier successful trial remains valid as a
+separate episode. [Latest Stage H physical evidence](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 ## 2026-10-19 — actual supervised R2 session STOP (later physical evidence)
 
 **Owner physically entered `STOP` after M1 API READY and smoke PASS**.
