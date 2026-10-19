@@ -309,3 +309,44 @@ owner-supplied experiment name timestamp ~`20261019T043708Z`
 (13:37:08 KST), so automatic expiry *approximately*
 15:07 KST in the absence of earlier STOP/abort. Only
 physical terminal/journal output can confirm stop.
+
+## Stage G: actual exact-ID STOP with Docker retained (2026-10-19)
+
+**Later physical Wizard Terminal A transcript from owner**, after the
+Stage D ready-for-benchmark result and Stage E/F tool-not-found
+admission refusals:
+
+```text
+M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED
+M1_READY_FOR_BENCH=http://127.0.0.1:18889
+M1_SERVED_NAME=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4
+M1_EXACT_CONTAINER_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_LLAMA_BENCHY=NOT_MEASURED; run pinned benchmark in Terminal B
+Type STOP and Enter in this Wizard terminal to stop exact M1 candidate.
+STOP
+M1_STOPPED_EXACT_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_DOCKER_REMOVED=NO
+```
+
+**ACTUAL DGX exact-ID stop is CONFIRMED** for only the newly
+created R2 trial candidate; the candidate Docker was **NOT removed**,
+as the evidence journal and stopped-object forensics must be
+preserved. This output does NOT independently print journal
+`M1_SESSION_PHASE=stopped` or `M1_RUNNING=False`: run
+the read-only session-status command as a separate confirmation
+before any source fast-forward or package installation.
+Do not infer external systemd/boot-persistent status from the
+isolated foreground trial. Original protected OrcaRouter
+predecessor
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+and prior M1 evidence remain out of scope and untouched
+by the R2 exact-ID stop.
+
+No new benchmark result was generated because the
+pinned `llama-benchy` executable was missing. **Final trial
+classification:** `FUNCTIONAL_API_AND_SMOKE_PASS`,
+`MONITORED_SOAK_PASS`, `PROTECTED_EXACT_ID_STOP_PASS`,
+`BENCHMARK_NOT_MEASURED_TOOL_MISSING`. Further action:
+observe stopped journal, sync Git only after stop/clean
+repo, install strict pinned benchmark tool separately,
+and obtain a new explicit GPU approval for another trial.
