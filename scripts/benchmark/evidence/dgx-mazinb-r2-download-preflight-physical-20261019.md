@@ -155,3 +155,55 @@ path, and prepare a properly pinned benchmark environment
 
 Any earlier **NOT_EXECUTED** statements in this evidence file
 refer to Stage B's earlier checkpoint; this Stage C is later.
+
+
+## Stage D: ACTUAL physical M1 inference/soak READY — 2026-10-19
+
+**Later operator-pasted continuation of the same protected R2 session**, while
+Terminal A remains in the supervised foreground. On the locally executed
+**clean Git HEAD `4612045c11ce47e52606794d63daede4cb35ac82`**, the M1 runtime
+progressed beyond Stage C and printed:
+
+```text
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86
+M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED
+M1_READY_FOR_BENCH=http://127.0.0.1:18889
+M1_SERVED_NAME=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4
+M1_EXACT_CONTAINER_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_TRIAL_RECORD=/home/inlc/.local/state/qwen38-spark/mazinb-m1-reinstall/active.json
+M1_LLAMA_BENCHY=NOT_MEASURED; run pinned benchmark in Terminal B
+Type STOP and Enter in this Wizard terminal to stop exact M1 candidate.
+```
+
+**VERDICT: actual single-DGX R2 isolated vLLM M1 passed controller-qualified
+exact-model localhost API, 180-second protected soak, smoke inference and
+pre-READY monitored safety checks.** Evidence classification is
+`ACTUAL_DGX_READY_FOR_BENCH`, NOT yet a benchmark result or
+boot-persistent managed service. The source controller implements (in
+order) model identity API check, 36 five-second soak iterations,
+watchdog/host and RM verification, inference smoke, journal
+`ready_for_bench` then READY stdout. The transcript is evidence of
+the latter marker, not independent telemetry capture or a long-term
+host-stability result.
+
+Protected old OrcaRouter:
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+New R2 isolated experimental Docker **exact ID** above must never
+be confused with the protected original.
+
+**Benchmark remains blocked by tooling until proven otherwise:**
+earlier independent physical Terminal B probe found
+`BENCHY=NOT_INSTALLED` on shell `PATH`, although
+`BENCH_RESULT_DIR=READY`. Search for an existing,
+unmodified, pinned version (no `pip install`, `git pull`,
+container change or watchdog interference during the live
+session). Even if found, use the strict reinstall-slot
+exclusive benchmark lease/wrapper only while Terminal A
+continues supervising and reporting `ready_for_bench`.
+If no pinned benchy exists, use Terminal A's supported STOP
+and prepare the tool between sessions. New measured JSON,
+sha256, post-bench attestation and safe stop have **not**
+been reported by the owner. Avoid claiming any.
+
+**Earlier Stage B/C 'NOT_YET_READY' statuses are chronologically
+superseded by this Stage D only; no historical records removed.**
