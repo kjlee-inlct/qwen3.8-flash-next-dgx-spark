@@ -350,3 +350,72 @@ classification:** `FUNCTIONAL_API_AND_SMOKE_PASS`,
 observe stopped journal, sync Git only after stop/clean
 repo, install strict pinned benchmark tool separately,
 and obtain a new explicit GPU approval for another trial.
+
+
+## Stage H: second separately approved R2 trial protective NVIDIA RM fail-closed (2026-10-19)
+
+**Actual physical DGX terminal output pasted by owner**, later than
+Stage G's first successful API/soak/smoke + STOP. A new isolated,
+separately owner-approved Wizard **5→24→4** trial was attempted
+after the first Docker had stopped; its selected source HEAD
+was not printed in this second-trial excerpt. New Wizard
+menu included **5 Pinned llama-benchy setup**. Operator's
+new trial output:
+
+```text
+Approve NEW GPU-heavy isolated mazinb live session? / 새 GPU 실행 승인? [y/N]: y
+M1_PROTECTED_PREDECESSOR_ID=f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24
+Type START_RESTORED_MAZINB_16G exactly []: START_RESTORED_MAZINB_16G
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019065452-e70d6233
+M1_STOPPED_EXACT_ID=68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7
+M1_DOCKER_REMOVED=NO
+M1_BLOCKED=NVIDIA RM memory allocation error
+```
+
+**New unique failing candidate:** Docker exact ID
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+**not** the earlier successful/stopped
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`.
+The new container was stopped by exact ID, preserved for
+forensic examination, and **did not reach** API READY,
+smoke or 180-second soak. No second-trial benchmark.
+
+Operator Terminal B independently confirmed exact required
+pinned `llama-benchy 0.4.1.dev1+ge9be34457`
+was now present and runnable after user PATH setup.
+But the protected wrapper rejected the attempt:
+
+```text
+M1_BLOCKED=M1 is not admitted for benchmark
+BENCH_M1=BLOCKED attestation_failed
+```
+
+This is **correct fail-closed admission**, not a missing-tool
+condition. The reporter's `M1_BLOCKED=NVIDIA RM memory
+allocation error` is issued by `verify_host` when
+`sudo -n journalctl -k --since <record.kernel_since>`
+contains `NV_ERR_NO_MEMORY` or
+`_memdescAllocInternal`. This is a **host-wide**
+kernel log time-window scan, not a container-specific
+kernel error attribution. The matching lines/timestamps,
+Docker OOMKilled/exit code, actual unified memory and
+swap pressure, loading-phase Docker/monitor traces, and
+trial journal have **not been furnished** yet. Do not
+state the second Docker caused the RM error solely from
+the classifier label. The stdout does show exact-ID
+stop, but no independent after-stop `M1_RUNNING=False`
+status yet.
+
+**Next: no third GPU attempt.** Obtain read-only evidence
+from the exact stopped new Docker, state
+`~/.local/state/qwen38-spark/mazinb-m1-reinstall/active.json`
+(phase may be `failed_stopped`),
+`qwen38-mazinb-m1-20261019065452-e70d6233/monitor.log`,
+and the **host kernel RM log since journal
+`kernel_since`**. Capture exact matching RM lines with
+timestamps, avoid disabling watchdog or changing
+swap/KV, thresholds, Docker state, image or source.
+Keep both stopped M1 Docker objects and historical A/B
+forensics untouched. The previous first-trial functionality
+PASS and new second-trial RM FAIL are **separate physical
+events**; no new PP/TG measurement for either trial.
