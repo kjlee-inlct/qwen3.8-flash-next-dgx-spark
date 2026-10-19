@@ -6,6 +6,52 @@ benchmark result. It restores the 2026-10-14 measured *checkpoint
 revision* without reusing or modifying the retired historical M1
 Docker journal/tombstone or the managed OrcaRouter predecessor.
 
+## 2026-10-20 — third R2 failure stopped; current operation is forensic-only
+
+**The latest physical DGX observation** concerns the *third*
+candidate `qwen38-mazinb-m1-20261019221159-90ee9851`
+(exact Docker
+`bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`).
+The controller's status returned
+`M1_SESSION_PHASE=failed_stopped`, `M1_RUNNING=False`,
+`M1_EXIT_CODE=137`; Docker inspection separately confirmed
+`RUNNING=false STATUS=exited OOM=false EXIT=137`,
+and no `mazinb-m1.py` or `monitor-runtime.sh` processes were found.
+The retained Docker matched owner/variant/predecessor labels;
+an exact-ID guarded manual-stop command correctly refused to stop
+it a second time. No third-trial READY, smoke, soak or actual
+benchmark was shown.
+
+A supplied truncated watchdog trace from 07:17–07:25 KST showed
+low `noncmafree` (minimum displayed 899 MiB), declining
+`noncma_available` (minimum displayed 17,240 MiB),
+and swap growth up to 3,482 MiB. `protect=0/5` in the
+shown warnings, no `PROTECT stopping` in the tail, and
+`container is no longer running; monitor exiting` at 07:25:14.
+This does **not** establish why the Docker was SIGKILLed (137)
+or that it suffered a Linux Docker OOM kill (`OOM=false`).
+Full watchdog/stop marker, third named journal `detail`,
+time-bounded NVIDIA kernel RM lines and the exact third
+Docker logs remain missing.
+
+The **second** R2 candidate's separately retained file
+`mazinb-m1-reinstall/qwen38-mazinb-m1-20261019065452-e70d6233.json`
+was actually read and showed
+`phase=failed_stopped`, `exit_code=137`,
+`detail=M1Error: NVIDIA RM memory allocation error`,
+and `kernel_since=2026-10-19 15:54:52`
+in local host KST time. This proves the controller's
+host-wide classifier fired, **not** yet that the kernel
+event originated from that particular Docker. Recover
+matching timestamped RM lines before changing any policies.
+
+[Latest per-trial evidence (Stage J)](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md);
+[dated current investigation](CURRENT-STATUS.md).
+**Do not start another GPU experiment or modify
+watchdog/KV/swap/Docker/systemd during forensic collection.**
+Old successes remain separate; all three new R2
+benchmark attempts still have **no measured PP/TG results**.
+
 ## 2026-10-19 — second R2 session: actual NVIDIA RM memory failure (LATER)
 
 Following the first successful 180-second API/soak/smoke
