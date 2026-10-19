@@ -1,3 +1,45 @@
+## 2026-10-19 — ACTUAL DGX R2 benchmark blocker pinned tool absent; sudo cache restored
+
+Owner's actual DGX read-only file search for `llama-benchy`
+under user local bin, uv tools, pipx venvs, and llm workspace
+returned **no executable**. The later attempted
+`BENCHY_PATH=/실제로/확인한/경로/llama-benchy` was
+a copy of the assistant's example placeholder and **not
+a discovered path**, so shell returned file not found.
+First subsequent strict reinstall-slot benchmark wrapper was
+blocked for `sudo -n` password cache expiration
+(`M1_BLOCKED=... sudo: 암호가 필요합니다`). After `sudo -v`,
+the entire exact-ID pre/post admission and kernel RM
+check **PASSED**, but `MAZINB_R2_BENCH=
+BLOCKED_PINNED_LLAMA_BENCHY_MISSING`,
+`BENCH_COMMAND_RC=2`. **NO actual new PP/TG
+measurements or new JSON**. Protected inference READY
+evidence remains valid. Actual Terminal A STOP/expiry
+has not yet been provided.
+
+**GitHub source-only follow-up:** added
+`scripts/wizard/llama-benchy-setup.sh`,
+a default-NO/typed `INSTALL_PINNED_BENCHY`
+user-scoped venv installer at pinned upstream
+`e9be344578cec17745066b220798b80a0d2686d3`
+with expected CLI version `0.4.1.dev1+ge9be34457`.
+Wizard **5→24→5** exposes the plan and explicit
+install after the experiment STOP. It refuses to install
+while the lifecycle shared lock is held, project Docker
+is active, or M1 localhost API port is listening,
+never uses sudo or system package install, writes only
+separate `~/.local/share/qwen38-spark/benchmark-tools/`,
+and records Python dependency freeze. Synthetic-only
+tests added. **NOT EXECUTED on DGX**, final CI
+and exact host compatibility still need confirmation.
+No Git source sync during the live R2 session; later
+clean worktree sync only after confirmed stopped.
+Do not rerun placeholder `BENCHY_PATH` or start a new
+GPU candidate without separate owner authorization.
+
+[Physical Stage F receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+PR #261 remains Draft and unmerged.
+
 ## 2026-10-19 — ACTUAL DGX R2 benchmark admission PASS twice, tool missing, NO throughput
 
 **Physical Terminal B supplied by owner** against same
