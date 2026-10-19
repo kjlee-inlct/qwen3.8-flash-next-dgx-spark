@@ -207,3 +207,55 @@ been reported by the owner. Avoid claiming any.
 
 **Earlier Stage B/C 'NOT_YET_READY' statuses are chronologically
 superseded by this Stage D only; no historical records removed.**
+
+
+## Stage E: ACTUAL R2 Terminal B benchmark admission passed but executable missing
+
+**Later 2026-10-19 operator-pasted terminal B output**, against the
+still-supervised Terminal A `READY_FOR_BENCH` session above:
+
+```text
+MAZINB_R2_BENCH_MODEL=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4
+MAZINB_R2_BENCH_API=http://127.0.0.1:18889/v1
+MAZINB_R2_BENCH_BENCHY_VERSION=0.4.1.dev1+ge9be34457
+MAZINB_R2_BENCH_SHAPE=PP512_2048_TG128_C1_DEPTH0_WARMUP1_RUNS3
+MAZINB_R2_BENCH_READY=REQUIRES_LIVE_TERMINAL_A_M1_READY_FOR_BENCH
+MAZINB_R2_BENCH=PLAN_ONLY_NO_API_OR_HOST_MUTATION
+M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY
+M1_BENCH_CONTAINER_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_BENCH_API=http://127.0.0.1:18889
+M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW
+BENCH_M1=ATTESTED_SHARED_LIFECYCLE_EXCLUSIVE_BENCH
+BENCH_MODEL_START=NOT_PERFORMED_BY_WRAPPER
+BENCH_READY_AND_HOST_SAFETY=EXTERNAL_PREREQUISITES
+MAZINB_R2_BENCH=BLOCKED_PINNED_LLAMA_BENCHY_MISSING
+M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY
+M1_BENCH_CONTAINER_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_BENCH_API=http://127.0.0.1:18889
+M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW
+BENCH_COMMAND_RC=2
+```
+
+**Interpretation:** The strict reinstall-slot benchmark wrapper acquired
+the shared lifecycle + exclusive benchmark locks. Both independent
+**pre-admission and post-admission PASS** attested the exact new Docker,
+local model API and absence of matching RM events in each queried
+window. The payload refused to proceed because `llama-benchy`
+was not found on the operator's `PATH`. `RC=2` is the
+benchmark command's *missing-tool* status and not an inference,
+watchdog, checkpoint or host instability failure.
+
+**No benchmark generation was invoked; no new PP/TG throughput,
+TTFT or raw JSON exists from this attempt.** A later terminal A
+STOP/expiry status was not supplied at this stage. While the
+bounded live session is still active, only a *scoped, read-only*
+search for a previously installed exact-pinned CLI is recommended.
+Do NOT `git pull`, install/up/downgrade packages, update PATH
+globally, restart inference, bypass benchmark lease, or run a
+new model. If no existing CLI is found, finish via watched
+Terminal A `STOP` (unless it already ended), then provision and
+qualify the tool before a *new separately authorized* GPU run.
+
+Earlier stage D API/soak/smoke PASS still stands. This is
+a **tooling-blocked benchmark attempt**, not a failed
+mazinb inference trial.
