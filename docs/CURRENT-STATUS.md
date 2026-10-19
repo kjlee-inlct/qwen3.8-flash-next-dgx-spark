@@ -1,3 +1,44 @@
+## 2026-10-20 — ACTUAL DGX unexpected active THIRD R2 candidate during RM forensic commands; SSH logout
+
+Owner's DGX console, operating clean local HEAD
+`f24fa284ba51000ece317227df26ff32e6f24ecd`,
+attempted read-only postmortem on Stage H second
+failed R2 Docker
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`.
+However the rolling `mazinb-m1-reinstall/active.json`
+now identified a **THIRD** trial:
+`M1_SESSION_PHASE=started_unqualified`,
+`M1_SESSION_NAME=qwen38-mazinb-m1-20261019221159-90ee9851`,
+`M1_CONTAINER_ID=bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+`M1_RUNNING=True` (only at sampled instant).
+The new trial name timestamp is 2026-10-20
+07:11:59 Asia/Seoul. No user report of
+approval/READY/new smoke/RM safety/STOP/benchmark
+for this third trial was included. Do **not** assume
+the controller is still running after SSH logout.
+
+A pasted shell diagnostic matched active journal against
+the **second trial** ID/name; mismatch correctly produced
+`WRONG_TRIAL_RECORD`. Because the user's command ended
+in `|| exit 1`, the subsequent `로그아웃` / SSH
+disconnect may simply be the interactive shell exiting.
+This log is **not** proof of DGX reboot/host crash.
+
+**Immediate next step is safety, NOT a third benchmark or
+new GPU start**: reconnect and inspect exact third
+Docker ID status/labels, M1 current journal,
+controller/watchdog process and monitor log *without
+exit-on-error*, retain per-trial journal of second
+failed R2 run for original kernel RM forensics.
+If still supervised, stop via live Terminal A.
+If orphaned, stop only after matching the third
+Docker full ID/name/variant/predecessor labels.
+Never touch old OrcaRouter or old A/B and M1
+Docker, or run `git pull` while current M1
+possibly active. No latest physical third-trial
+post-SSH state has been supplied.
+[Physical evidence Stage I](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 ## 2026-10-19 — ACTUAL DGX second protected mazinb R2 trial stopped on NVIDIA RM error; benchy now installed
 
 **Actual later physical user transcript** shows a *second*
