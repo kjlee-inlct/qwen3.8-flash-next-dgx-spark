@@ -112,6 +112,14 @@ class DualEngineInventoryTests(unittest.TestCase):
                                    "GET", 30))
         self.assertEqual(used[1], ("read_bound", MOD.MAX_PAGE_BYTES + 1))
 
+    def test_exactly_full_page_without_continuation_is_not_complete(self):
+        rows = [{"path": f"extra/packages/vllm/file-{i}.py",
+                 "type": "file", "size": 1} for i in range(1000)]
+        with mock.patch.object(MOD, "get_page", return_value=(rows, None)):
+            with self.assertRaisesRegex(MOD.EngineMetadataBlocked,
+                                        "TREE_LAST_PAGE_FULL_NO_CONTINUATION"):
+                MOD.tree()
+
     def test_offline_cli_inspects_no_host_and_refuses_engine_admission(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "sample.json"
