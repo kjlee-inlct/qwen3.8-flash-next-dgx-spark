@@ -1,5 +1,24 @@
 # mazinb — benchmark report
 
+**Latest 2026-10-19 R2 second trial:** pinned
+`llama-benchy 0.4.1.dev1+ge9be34457` is now
+physically available, but separately approved second
+candidate `qwen38-mazinb-m1-20261019065452-e70d6233`
+(exact ID `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`)
+hit the host kernel **NVIDIA RM allocation error**
+guard after STARTED_UNQUALIFIED. Controller stopped
+the exact second candidate and retained Docker;
+`M1_READY_FOR_BENCH` was NOT emitted and the
+wrapper correctly rejected the performance trial.
+**R2 performance remains NOT_MEASURED**. This
+host-stability failure does not rewrite the earlier
+first trial API/soak/smoke PASS or original 2026-10-14
+M1 measured results. Await host journal RM line
+timestamps and stopped Docker/monitor forensic evidence.
+[Stage H physical record](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+# mazinb — benchmark report
+
 **2026-10-19 R2 final actual trial status:** protected isolated
 model API + 180-second monitored soak + actual inference smoke
 **PASS**; owner explicitly entered `STOP` and controller
