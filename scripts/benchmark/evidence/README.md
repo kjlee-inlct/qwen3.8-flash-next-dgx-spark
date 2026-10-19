@@ -1,3 +1,7 @@
+## 2026-10-19 — ACTUAL DGX second R2 candidate stopped on host NVIDIA RM allocation guard
+
+[Latest Stage H physical evidence](dgx-mazinb-r2-download-preflight-physical-20261019.md): after first R2 smoke/soak PASS and exact-ID STOP, new user-approved R2 trial `qwen38-mazinb-m1-20261019065452-e70d6233` reported `STARTED_UNQUALIFIED`, exact Docker ID `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7` was `STOPPED`, `M1_DOCKER_REMOVED=NO`, `M1_BLOCKED=NVIDIA RM memory allocation error`. Pinned benchy is now present, but wrapper correctly blocked `M1 is not admitted for benchmark` and no R2 PP/TG result exists. Error classifier searches **host-wide** kernel log since trial start, attribution not yet established without RM messages and per-trial watchdog/Docker logs; **no third GPU attempt** before read-only forensics.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 exact-ID STOP succeeded; Docker retained
 
 [Actual Stage G physical receipt](dgx-mazinb-r2-download-preflight-physical-20261019.md): owner entered STOP after model API/180s soak/smoke passed and missing pinned benchy blocked performance sampling; controller printed exact Docker `M1_STOPPED_EXACT_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424` and `M1_DOCKER_REMOVED=NO`. Original OrcaRouter and older benchmark archive untouched. Independent session status `stopped` / `running=False` not yet pasted. Fresh 2026-10-19 throughput **NOT_MEASURED**.
