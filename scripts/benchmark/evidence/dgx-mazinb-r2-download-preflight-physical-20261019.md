@@ -103,3 +103,55 @@ API health, smoke inference, soak, or benchmark.
 Keep actual source HEAD clean and **unchanged between Terminal A
 start and Terminal B post-admission**. The physical output
 did not include a `git rev-parse HEAD` receipt.
+
+
+## Stage C: ACTUAL physical owner-approved protected trial reached STARTED_UNQUALIFIED
+
+**2026-10-19 operator console, later than the Stage A/B evidence above.**
+The operator ran a read-only prestart check with:
+
+```text
+DGX_SOURCE_SHA=4612045c11ce47e52606794d63daede4cb35ac82
+BENCHY=NOT_INSTALLED
+BENCH_RESULT_DIR=READY
+```
+
+`git status --short` showed **no modified/untracked entries**.
+The local DGX source is intentionally still pinned to this known
+pre-download CI-successful commit, **not** the newer GitHub
+documentation-only HEAD; do not run `git pull` during the trial.
+
+The owner then explicitly selected Wizard **5 → 24 → 4**,
+answered `y` to the default-NO new GPU session approval,
+confirmed the full protected old Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+typed `START_RESTORED_MAZINB_16G`, and the physical program printed:
+
+```text
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86
+```
+
+This is **ACTUAL_DGX STARTED_UNQUALIFIED**, not `M1_READY_FOR_BENCH`
+or a new benchmark. Per the executing controller source the marker
+is printed after exact-ID creation/start and watchdog arm/heartbeat
+admission; the owner's excerpt does not independently include the
+new full container ID, watchdog logs, exact API identity, memory
+telemetry, RM kernel audit, 180-second soak or inference smoke.
+Those remain subject to actual live controller output.
+
+**Benchmark tooling readiness:** `llama-benchy` was **not
+on operator PATH**, while the result parent directory existed.
+The new R2 benchmark script requires exactly
+`0.4.1.dev1+ge9be34457`, must not install a benchmark package
+implicitly, and must not run without exact
+`M1_READY_FOR_BENCH`. A bounded, read-only search for an existing
+isolated benchy environment is permitted from a separate terminal;
+do not install packages or modify Git/live service during
+ongoing protected GPU session. If no pinned benchy exists,
+stop only the new candidate via the foreground controller's
+explicit supported STOP after readiness or its protected failure
+path, and prepare a properly pinned benchmark environment
+**between** sessions. Never bypass the exclusive M1 benchmark lease.
+
+Any earlier **NOT_EXECUTED** statements in this evidence file
+refer to Stage B's earlier checkpoint; this Stage C is later.
