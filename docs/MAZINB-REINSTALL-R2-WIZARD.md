@@ -1,6 +1,6 @@
 # mazinb R2 — pinned checkpoint restore and bounded isolated API benchmark
 
-**Status: SOURCE IMPLEMENTED / physical DGX restore+live+bench NOT EXECUTED.**
+**Status: ACTUAL DGX restore VERIFIED (108/108) + R2 read-only live preflight PASS; physical GPU/API/soak/benchmark NOT YET EXECUTED.**
 This does **not** claim an installed long-running service or a new
 benchmark result. It restores the 2026-10-14 measured *checkpoint
 revision* without reusing or modifying the retired historical M1
@@ -64,8 +64,7 @@ this is **not a GPU/inference model start**. A fallback may
 download via curl. An interruption leaves scoped partial
 files for subsequent vetted resume; no automatic cleanup/purge.
 
-`MAZINB_RESTORE_DOWNLOAD=COMPLETE_DOWNLOADER_VERIFIED` is
-the expected source result, not independently observed on DGX yet.
+**Actual 2026-10-19 DGX result:** `MAZINB_RESTORE_DOWNLOAD=COMPLETE_DOWNLOADER_VERIFIED`, 108/108 files verified individually, `hf_xet` high-performance, 8 workers, saved checkpoint reported as `174G`. New Wizard **5→24→3** returned `M1_PREFLIGHT=PASS_READ_ONLY` with protected OrcaRouter exact Docker identity and installed release pinned. No GPU/API attempt yet. [See physical evidence](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
 
 ## Stage 3 — protected foreground localhost API
 
@@ -133,8 +132,7 @@ retirement, image cleanup, proxy/service switch or profile change.
 
 ## Explicitly not yet proven
 
-- DGX source current HEAD and clean worktree after these new commits
-- R2 restore preflight and disk space, actual ~174 GiB checkpoint bytes
+- Exact local DGX source SHA (not printed in supplied physical output; preflight checks clean expected branch)
 - Real new R2 Docker create/arm/GPU load, API READY, 180 s soak
 - New benchmark version/CLI availability, raw JSON, PP/TG/TTFT numbers
 - 24/7 persistent installed mazinb systemd service or reboot behavior
@@ -142,3 +140,7 @@ retirement, image cleanup, proxy/service switch or profile change.
 Do **not** merge Draft PR #261 based solely on synthetic CI.
 Catplusplus is a later, separately approved track and does not
 inherit mazinb's runtime qualification.
+
+## 2026-10-19 actual execution checkpoint (supersedes former source-only stage status)
+
+Physical restore and R2 read-only launch preflight are now PASS, with **no new M1 GPU start**. The next operator action is Wizard **5→24→4** only with independent default-NO approval, 64-character protected Docker ID acknowledgement, and exact `START_RESTORED_MAZINB_16G`. Before starting a potentially costly 90-minute protected session, check that Terminal B has the pinned `llama-benchy 0.4.1.dev1+ge9be34457` and an existing non-symlinked `~/Workspace/llm/qwen38-m1-bench-results` directory. Do not auto-install tools while the experiment is live. **Do not fast-forward/update the DGX checkout during Terminal A or B**: the controller pins source SHA across both. Original M1 history and old managed resources stay immutable. For exact evidence see [DGX checkpoint+admission receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
