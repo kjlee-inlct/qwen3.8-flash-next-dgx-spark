@@ -1,3 +1,7 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 download 108/108 verified and live read-only preflight PASS
+
+[New physical restore/admission receipt](dgx-mazinb-r2-download-preflight-physical-20261019.md): operator-approved pinned `mazinb` download completed 108/108; post-transfer verifier passed every selected file, 4h20m52s fetch progress, retained at dedicated `models/qwen3.8-flash-next-mazinb` path. Subsequent Wizard 5→24→3 reported `M1_PREFLIGHT=PASS_READ_ONLY`, with exact preserved OrcaRouter predecessor, immutable release and image digest. **No new experimental GPU/Docker start, API, 180s soak, llama-benchy or long-term service qualification yet**. Source HEAD was not printed by the physical output and is not inferred from GitHub. Separate independent GPU approval and Terminal A/B evidence required.
+
 ## 2026-10-18 — ACTUAL_DGX OrcaRouter mounted config exact rewrite and CT counts 2/301/753
 
 [Actual DGX read-only OrcaRouter protected-mount
