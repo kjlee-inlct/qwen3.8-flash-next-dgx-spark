@@ -1,3 +1,46 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 restore admission PASS twice; weights still absent
+
+**Owner-supplied real DGX Wizard console** selected Models **3 → 11**
+twice; both independent outputs ended with:
+`MAZINB_RESTORE_PREFLIGHT=PASS_READ_ONLY_NO_WEIGHT_DOWNLOAD`
+and `MAZINB_RESTORE_DOCKER_GPU_SERVICE_ACTION=NONE`.
+The pinned repository was
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`,
+full revision `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`,
+with Hub metadata + disk admission reporting **173.64 GiB** and
+`Preflight passed` at the dedicated checkout model directory
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-mazinb`.
+The downloader's storage-space policy includes 20 GiB reserve.
+The independent host-idle check on both invocations returned
+`MANAGED_IDLE_SERVICE_ENABLED=0`, `API_ACCESS_MODE=local`,
+three project systemd units `load=not-found active=inactive`,
+`MANAGED_IDLE_MANAGED_PORTS=NO_LISTENERS`,
+`MANAGED_IDLE_DOCKER=NO_RUNNING_QWEN38_CONTAINERS`,
+`MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START`
+and `MANAGED_IDLE_AUDIT_HOST_MUTATION=NONE`.
+Installed manifest remained `phase=complete`, profile
+`orcarouter`, image `vllm-skinny-tp1:v1`,
+with runtime banner `NOT_PROBED`.
+
+**Owner navigated Benchmark 5 → 24**, which displayed the
+four restored-M1 menu actions, but performed **none**.
+No 3→12 download was authorized or run in this transcript,
+no 5→24→3 live preflight result, no GPU start, no fresh
+model API/soak/benchmark. The current console output does
+**not** attest an exact `git rev-parse HEAD`; continue to
+require clean checked-out source before any destructive,
+network-heavy or GPU operation.
+
+**Next physical operation:** from Models **3 → 12** choose
+explicit default-NO authorization and type
+`RESTORE_MAZINB_PINNED` for pinned checkpoint download;
+inspect completion and verify per-file hashes before opening
+Benchmark 5 → 24 → 3. Never use legacy original M1 5→9,
+do not reactivate managed systemd or delete evidence.
+The measured historical mazinb result stays preserved
+independently of R2; model restore does not yet qualify
+a service or benchmark.
+
 ## 2026-10-19 — SOURCE mazinb pinned restore and isolated R2 live/bench path
 
 The operator explicitly requested **mazinb reinstall → actually serve →
