@@ -25,7 +25,7 @@ Read the latest repository copies, selecting additional documents only when rele
 | Host operations, deletion, rollback | [OPERATIONS.md](../OPERATIONS.md), [DGX-STAGED-VALIDATION.md](DGX-STAGED-VALIDATION.md) |
 | Maintained scripts, dependency directions, tests | [scripts/README.md](../scripts/README.md) |
 | Hybrid research/runbook and immutable physical proof | [HYBRID-BENCH-REBUILD-CYCLE.md](HYBRID-BENCH-REBUILD-CYCLE.md), [H6 evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md), [evidence index](../scripts/benchmark/evidence/README.md) |
-| Model-specific evaluations and plans | [model reports](model-reports/README.md), [lychee888 plan](LYCHEE888-WIZARD-INTEGRATION.md) |
+| Model-specific evaluations and plans | [model reports](model-reports/README.md), [lychee888 plan](LYCHEE888-WIZARD-INTEGRATION.md), [mazinb R2 staged restore/bench](MAZINB-REINSTALL-R2-WIZARD.md), [catplusplus GB10 gated install/serve/bench](CATPLUSPLUS-SINGLE-GB10-INSTALL-SERVE-BENCH.md) |
 
 Historical evidence remains historical. Where a newer verified result supersedes
 an older `NOT_CAPTURED` or `NOT_VERIFIED`, preserve both with provenance; do
