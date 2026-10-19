@@ -1,6 +1,6 @@
 # mazinb R2 — pinned checkpoint restore and bounded isolated API benchmark
 
-**Status: ACTUAL DGX restore VERIFIED (108/108) + R2 live preflight PASS + user-approved experimental candidate STARTED_UNQUALIFIED on 2026-10-19; API READY, 180-second soak, smoke and benchmark NOT YET OBSERVED.**
+**Status: ACTUAL DGX restored 108/108 + protected R2 localhost API READY + 180-second monitored soak + inference smoke PASS on 2026-10-19; new llama-benchy measurements still NOT OBSERVED, permanent systemd service NOT QUALIFIED.**
 This does **not** claim an installed long-running service or a new
 benchmark result. It restores the 2026-10-14 measured *checkpoint
 revision* without reusing or modifying the retired historical M1
