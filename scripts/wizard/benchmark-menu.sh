@@ -273,6 +273,7 @@ wizard_catplusplus_m1_menu() {
     wizard_menu_option 8 'Pinned Hub redirect diagnosis (HEAD only) / 응답 헤더·리다이렉트 검사'
     wizard_menu_option 9 'Installation, loader, memory and benchmark gates (plan only) / 설치·실행 계획'
     wizard_menu_option 10 'Install disk and lifecycle-lock check (read-only) / 공간·다운로드 동시성 확인'
+    wizard_menu_option 11 'Pinned vLLM vs SGLang source package tree (metadata only) / 엔진 소스 목록'
     wizard_menu_option 0 'Back / 이전'
     wizard_input selection 'Select / 선택' 0
     case "${selection}" in
@@ -288,6 +289,9 @@ wizard_catplusplus_m1_menu() {
            wizard_warning 'catplusplus staging plan unavailable; no action.'; continue ;;
       10) python3 -B "${ROOT_DIR}/scripts/model/catplusplus_admission_plan.py" disk-check ||
             wizard_warning 'catplusplus disk/lock check BLOCKED; no checkpoint action.'; continue ;;
+      11) wizard_warning 'Metadata only. Do NOT use on DGX until mazinb bulk download completes.' 
+          python3 -B "${ROOT_DIR}/scripts/model/inspect_catplusplus_engine_sources.py" inventory ||
+            wizard_warning 'Dual engine pinned metadata unavailable; both backends remain unqualified.'; continue ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.'; continue ;;
     esac
