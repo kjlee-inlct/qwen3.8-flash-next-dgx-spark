@@ -1,5 +1,26 @@
 # mazinb — benchmark report
 
+**LATEST — 2026-10-20 physical R2 trial #3:** candidate
+`qwen38-mazinb-m1-20261019221159-90ee9851`,
+exact Docker `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+physically confirmed `failed_stopped`, `RUNNING=false`,
+`ExitCode=137`, Docker `OOMKilled=false`, no
+active M1 supervisor/watchdog processes and Docker object
+preserved. Bounded watchdog tail showed low non-CMA free,
+`swapgrowth` up to 3,482 MiB, `protect=0/5`
+and last line `container is no longer running`;
+**termination origin not yet identified**. The earlier
+trial #2's retained named journal independently showed
+`detail=M1Error: NVIDIA RM memory allocation error`
+and `kernel_since=2026-10-19 15:54:52` (host local).
+Exact matching kernel lines, third journal `detail`,
+third Docker logs/full monitor state remain unexamined.
+No fourth GPU launch or benchmark is authorized.
+**All 2026-10-19/20 R2 throughput: NOT_MEASURED.**
+This does not invalidate the original 2026-10-14
+measured results below.
+[Physical Stage J evidence](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
 **Latest 2026-10-19 R2 second trial:** pinned
 `llama-benchy 0.4.1.dev1+ge9be34457` is now
 physically available, but separately approved second
@@ -17,7 +38,7 @@ M1 measured results. Await host journal RM line
 timestamps and stopped Docker/monitor forensic evidence.
 [Stage H physical record](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
 
-# mazinb — benchmark report
+## Earlier R2 evidence — 2026-10-19 first-trial protected STOP
 
 **2026-10-19 R2 final actual trial status:** protected isolated
 model API + 180-second monitored soak + actual inference smoke
@@ -30,13 +51,13 @@ was unavailable. The only mazinb throughput numbers
 below remain the historical 2026-10-14 M1 data.
 [Stage G actual physical evidence](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
 
-# mazinb — benchmark report
+## Earlier R2 evidence — 2026-10-19 first-trial READY
 
 **2026-10-19 R2 subsequent physical READY:** the user-approved isolated vLLM candidate passed actual model API, 180-second monitored soak and smoke (`M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`, `M1_READY_FOR_BENCH=http://127.0.0.1:18889`); exact new Docker ID `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`. **New R2 llama-benchy measurement has NOT been performed**, and shell PATH lacks the pinned benchmark CLI. This READY evidence does not establish permanent systemd operation or long-term host stability. [Stage D physical receipt](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
 
 **2026-10-19 R2 physical update:** owner-approved protected trial at clean local source `4612045c11ce47e52606794d63daede4cb35ac82` printed `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86`. The actual R2 API READY/smoke/180-second soak/benchmark remain **NOT_MEASURED**. Operator PATH did not resolve `llama-benchy`; results parent `READY`. No local source sync/package installation should occur during live session. [Full physical receipt](../../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
 
-**BENCHMARK_STATUS: MEASURED**
+**HISTORICAL 2026-10-14 BENCHMARK_STATUS: MEASURED. R2: NOT_MEASURED.**
 
 ## New R2 checkpoint and protected preflight — ACTUAL DGX 2026-10-19
 
