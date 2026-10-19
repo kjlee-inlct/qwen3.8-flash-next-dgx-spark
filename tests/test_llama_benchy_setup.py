@@ -45,6 +45,13 @@ class PinnedBenchySetupTests(unittest.TestCase):
                           result.stderr)
             self.assertEqual(list(Path(tmp).iterdir()), [])
 
+    def test_wizard_exposes_post_stop_pinned_install_only(self):
+        menu = (ROOT / "scripts/wizard/benchmark-menu.sh").read_text(encoding="utf-8")
+        self.assertIn("wizard_menu_option 5 'Pinned llama-benchy setup (post-STOP ONLY)", menu)
+        self.assertIn("llama-benchy-setup.sh\" --plan", menu)
+        self.assertIn("QWEN38_BENCHY_SETUP_APPROVED=1 bash", menu)
+        self.assertIn("wizard_yes_no 'Install pinned llama-benchy", menu)
+
     def test_script_has_explicit_session_safety_and_pinned_version(self):
         source = SCRIPT.read_text(encoding="utf-8")
         for value in ("flock -n -x", "docker ps", "ss -H -ltn",
