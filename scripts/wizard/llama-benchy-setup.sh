@@ -9,7 +9,7 @@ ACTION="${1:---plan}"
 }
 PIN="e9be344578cec17745066b220798b80a0d2686d3"
 VERSION="0.4.1.dev1+ge9be34457"
-VENV="${HOME}/.local/share/qwen38-spark/benchmark-tools/llama-benchy-${PIN:0:9}"
+VENV="${HOME}/.local/share/qwen38-benchmark-tools/llama-benchy-${PIN:0:9}"
 EXE="${VENV}/bin/llama-benchy"
 echo "BENCHY_SETUP_ACTION=${ACTION}"
 echo "BENCHY_SETUP_PINNED_SOURCE_SHA=${PIN}"
@@ -69,8 +69,8 @@ if [[ -e "$VENV" || -L "$VENV" ]]; then
     echo 'BENCHY_SETUP=BLOCKED_EXISTING_UNVERIFIED_VENV' >&2; exit 2;
   }
 else
-  TOOLS_ROOT="$HOME/.local/share/qwen38-spark/benchmark-tools"
-  for dir in "$HOME/.local" "$HOME/.local/share" "$HOME/.local/share/qwen38-spark" "$TOOLS_ROOT"; do
+  TOOLS_ROOT="$HOME/.local/share/qwen38-benchmark-tools"
+  for dir in "$HOME/.local" "$HOME/.local/share" "$TOOLS_ROOT"; do
     [[ ! -L "$dir" ]] || {
       echo 'BENCHY_SETUP=BLOCKED_SYMLINKED_VENV_PARENT' >&2; exit 2;
     }
