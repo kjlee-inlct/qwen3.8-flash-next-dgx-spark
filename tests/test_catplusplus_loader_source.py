@@ -179,6 +179,71 @@ class LoaderSourceAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(AUDIT.SourceAuditBlocked, "REDIRECT"):
             handler.redirect_request(fake_req, None, 302, "Found", {}, "https://unexpected.invalid")
 
+    def test_physical_head200_leads_only_to_fixed_pinned_raw_get_source(self) -> None:
+        seen = []
+        class Reply:
+            status = 200
+            headers = {"Content-Length": "1024"}
+            def __init__(self, content):
+                self.content = content
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self, n):
+                seen.append(("read_limit", n))
+                return self.content
+        class Opener:
+            def open(self, request, timeout):
+                self_case.assertEqual(request.get_method(), "GET")
+                self_case.assertEqual(timeout, 15)
+                seen.append(("url", request.full_url))
+                if request.full_url == AUDIT.RAW_BASE + AUDIT.CONFIG:
+                    return Reply(json.dumps(config()).encode())
+                if request.full_url == AUDIT.RAW_BASE + AUDIT.LAUNCHER:
+                    return Reply(launcher().encode())
+                raise AssertionError("Unexpected/unsafe URL")
+        self_case = self
+        with mock.patch.object(AUDIT.urllib.request, "build_opener",
+                               return_value=Opener()) as maker:
+            report = AUDIT.audit(None)
+        self.assertEqual(report["transport"], "PINNED_HF_RAW_TEXT_NO_REDIRECT")
+        self.assertEqual(report["source_declarations"], "PRESENT_NOT_ENGINE_ATTESTED")
+        self.assertEqual([v for kind, v in seen if kind == "url"], [
+            AUDIT.RAW_BASE + AUDIT.CONFIG,
+            AUDIT.RAW_BASE + AUDIT.LAUNCHER,
+        ])
+        self.assertEqual([v for kind, v in seen if kind == "read_limit"], [
+            AUDIT.ALLOWED[AUDIT.CONFIG] + 1, AUDIT.ALLOWED[AUDIT.LAUNCHER] + 1])
+        self.assertEqual(maker.call_count, 2)
+        self.assertFalse(report["engine_source_or_wheel_attested"])
+        self.assertFalse(report["gpu_execution"])
+
+    def test_raw_redirect_or_oversized_body_remains_blocked(self) -> None:
+        class RedirectOpener:
+            def open(self, req, timeout):
+                raise AUDIT.SourceAuditBlocked("SOURCE_REDIRECT_BLOCKED")
+        with mock.patch.object(AUDIT.urllib.request, "build_opener",
+                               return_value=RedirectOpener()):
+            with self.assertRaisesRegex(AUDIT.SourceAuditBlocked, "REDIRECT"):
+                AUDIT.source_bytes(AUDIT.CONFIG, None)
+        class OversizedReply:
+            status = 200
+            headers = {}
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self, n):
+                return b"x" * n
+        class OversizedOpener:
+            def open(self, req, timeout):
+                return OversizedReply()
+        with mock.patch.object(AUDIT.urllib.request, "build_opener",
+                               return_value=OversizedOpener()):
+            with self.assertRaisesRegex(AUDIT.SourceAuditBlocked, "OVERSIZED"):
+                AUDIT.source_bytes(AUDIT.CONFIG, None)
+
     def test_transport_probe_is_bounded_head_only_and_redacts_redirect(self) -> None:
         """The Wizard diagnostic never follows redirects or reads response bodies."""
         calls = []
