@@ -28,7 +28,7 @@ install after the experiment STOP. It refuses to install
 while the lifecycle shared lock is held, project Docker
 is active, or M1 localhost API port is listening,
 never uses sudo or system package install, writes only
-separate `~/.local/share/qwen38-spark/benchmark-tools/`,
+separate `~/.local/share/qwen38-benchmark-tools/`,
 and records Python dependency freeze. Synthetic-only
 tests added. **NOT EXECUTED on DGX**, final CI
 and exact host compatibility still need confirmation.
