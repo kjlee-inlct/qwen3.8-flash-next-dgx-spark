@@ -1,3 +1,19 @@
+## 2026-10-19 — catplusplus installation and benchmark gating update
+
+Actual DGX HEAD (no body): both pinned `resolve`
+files produced 307→same-HF-host API cache, while both
+pinned `raw` paths gave 200. The maintained **source-only**
+Wizard 5→23→7 now uses bounded pinned `raw` GET/no
+redirect; physical GET declarations are **NOT_RUN**.
+Wizard **5→23→9** is the static installation/loader/memory/
+benchmark plan and **5→23→10** is lock-aware read-only disk
+screen. The engine, PLE-offload peak, exact-ID protected run,
+model API and actual catplusplus benchmark remain
+**NOT_QUALIFIED / NOT_MEASURED**.
+**mazinb R2 download is active**: no simultaneous catplusplus
+weights/Docker/GPU work permitted. See
+[complete source-only engineering runbook](../CATPLUSPLUS-SINGLE-GB10-INSTALL-SERVE-BENCH.md).
+
 ## Pinned model/source compatibility tool — still NOT a qualified loader
 
 Source-only M1 Wizard **5 -> 23 -> 7** compares the
