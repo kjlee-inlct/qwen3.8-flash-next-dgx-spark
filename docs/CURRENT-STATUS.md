@@ -1,3 +1,49 @@
+## 2026-10-19 — ACTUAL DGX R2 benchmark admission PASS twice, tool missing, NO throughput
+
+**Physical Terminal B supplied by owner** against same
+R2 `M1_READY_FOR_BENCH` isolated mazinb model,
+exact new Docker
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`,
+`http://127.0.0.1:18889`. The
+`--plan` action was no-API/no-host-mutation;
+`scripts/wizard/m1-benchmark-lock.sh --session-slot reinstall`
+acquired both shared lifecycle and exclusive bench lease,
+then emitted:
+
+```text
+M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY
+M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW
+BENCH_M1=ATTESTED_SHARED_LIFECYCLE_EXCLUSIVE_BENCH
+MAZINB_R2_BENCH=BLOCKED_PINNED_LLAMA_BENCHY_MISSING
+M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY
+M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW
+BENCH_COMMAND_RC=2
+```
+
+The benchmark tool is not currently on operator PATH;
+it requires the pinned version `0.4.1.dev1+ge9be34457`.
+This is a **benchmark tooling gate block**, not a vLLM,
+Docker/host-RM or inference failure. Both actual pre/post
+model admission checks PASSED. No fresh throughput or
+TTFT was measured; no result JSON or SHA256 output
+was created by this refused payload.
+
+**Next while Terminal A remains live:** bounded read-only
+search for *existing* pinned `llama-benchy` in
+known user tool/venv paths. Do not sync Git, install
+packages, mutate service/cache or launch a second model.
+If no matching executable exists, complete observed
+model trial by the protected controller's `STOP`
+or automatic expiry, then install/verify the
+pinned benchmark tool **between** separately approved
+GPU sessions. Keep archived 2026-10-14 M1 measured
+numbers and all R2 API/soak/smoke evidence unchanged.
+
+[Permanent physical evidence, Stage E](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+PR #261 remains Draft and unmerged; remote docs
+have newer HEAD than the live clean DGX
+`4612045c11ce47e52606794d63daede4cb35ac82`.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 smoke/180s soak/API READY_FOR_BENCH
 
 **Owner's later protected experiment console: actual physical DGX
