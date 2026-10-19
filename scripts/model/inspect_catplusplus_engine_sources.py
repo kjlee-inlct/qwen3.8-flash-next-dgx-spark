@@ -123,6 +123,10 @@ def tree() -> list[dict]:
         if len(all_items) > MAX_ITEMS:
             raise EngineMetadataBlocked("TREE_ITEM_LIMIT")
         if next_url is None:
+            # A full page with no advertised continuation could be a
+            # truncated inventory. Never label it complete implicitly.
+            if len(batch) == 1000:
+                raise EngineMetadataBlocked("TREE_LAST_PAGE_FULL_NO_CONTINUATION")
             return all_items
         url = next_url
     raise EngineMetadataBlocked("TREE_PAGE_LIMIT_REACHED")
