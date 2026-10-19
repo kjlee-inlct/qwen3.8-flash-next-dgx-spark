@@ -1,3 +1,56 @@
+## 2026-10-19 — catplusplus preparation while mazinb R2 download underway (SOURCE ONLY)
+
+Owner reports the previously authorized **mazinb 173.64-GiB R2
+checkpoint download has STARTED**. This is operator status, not a
+completion receipt; there is NO new actual mazinb API/benchmark
+readiness evidence. Maintain the current pinned checkpoint transfer:
+no simultaneous catplusplus weight download, Docker build, GPU,
+systemd switch, source sync in its active checkout, cleanup,
+swap mutation or eviction.
+
+**Catplusplus work proceeds in GitHub source only** under Draft
+PR #261, without touching DGX:
+- Previous physical DGX Wizard 5→23→8 measured HEAD **307**
+  (`resolve` → same HF host `/api/resolve-cache/`)
+  and HEAD **200** (both fixed pinned `raw` files);
+  new `scripts/model/audit_catplusplus_loader_source.py`
+  uses a *single fixed pinned raw GET/no redirects* per
+  `config.json` (≤256KiB) and
+  `extra/inference/inference_qwen38_flash_next_sglang.sh`
+  (≤128KiB). No arbitrary or package/weight fetch. Source
+  declaration results from actual DGX GET: **NOT_YET_RUN**.
+  Even PASS cannot attest SGLang wheel or GB10 residency.
+- Added `scripts/model/catplusplus_admission_plan.py`
+  (Wizard **5→23→9** pure source-only plan and **5→23→10**
+  lock-aware *read-only* conservative full-repository/disk
+  screen, no lock or directory creation). Current source
+  download/engine/MXFP8/PLE/GPU/bench gates stay BLOCKED.
+- Read-only capacity arithmetic based on actual pinned DGX
+  metadata: root safetensors ≈174.8553 GiB vs 128 decimal
+  GB unified RAM ≈119.2093 GiB. Even subtracting publisher
+  estimated FP8 PLE 47.7 GiB yields ~127.1553 GiB in
+  *stored bytes*, already above RAM before CUDA/KV/RM.
+  This does not prove an actual GB10 residency number,
+  but disallows "PLE offload alone => proven fit" reasoning.
+- Full staged engineering guide:
+  [single-GB10 install/serve/bench preparation](CATPLUSPLUS-SINGLE-GB10-INSTALL-SERVE-BENCH.md).
+  Run original publisher scripts/bundles, drop caches, trust
+  remote code or publish 0.0.0.0: **FORBIDDEN**.
+  Actual SGLang mixed quant fused-qkvz scale, NVFP4 expert,
+  FP8 PLE offload, image pin, peak GPU RM allocation and
+  protected candidate controller are **UNQUALIFIED**.
+  The existing catplusplus M1 preflight/live/bench options
+  remain deliberately fail-closed.
+- Tests added for pinned raw GET 2-file allowlist/size/no
+  redirect and pure staged memory/lock planning.
+  GitHub CI at final source HEAD must be checked separately.
+
+**No catplusplus install, real model launch or benchmark has
+been performed or approved by this source-only work**. Do not
+run DGX code sync until the live mazinb download concludes
+and its hashes are verified; after that do bounded
+source 5→23→7 and design-time 9/10 without weights.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 restore admission PASS twice; weights still absent
 
 **Owner-supplied real DGX Wizard console** selected Models **3 → 11**
