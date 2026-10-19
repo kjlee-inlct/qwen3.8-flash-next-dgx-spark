@@ -1,3 +1,49 @@
+## 2026-10-19 — ACTUAL DGX mazinb R2 protected exact-ID STOP completed, Docker preserved
+
+**Owner's latest physical Wizard Terminal A output:** after a
+successful isolated R2 vLLM API/model exact match, protected
+180-second soak and real inference smoke, and separate
+Terminal B safely refused to benchmark due to absent pinned
+`llama-benchy`, the owner entered `STOP`. Program printed:
+
+```text
+M1_STOPPED_EXACT_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_DOCKER_REMOVED=NO
+```
+
+**Actual exact-ID stop PASS**, candidate intentionally
+retained for forensic evidence, no model/container cleanup.
+Earlier Terminal A reported
+`M1_READY_FOR_BENCH=http://127.0.0.1:18889`,
+`M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`
+and exact served mazinb model; this functional success
+stands. **R2 PP/TG/TTFT new measurements remain
+NOT_MEASURED** because the required CLI was unavailable.
+Old historical measured 2026-10-14 evidence remains
+unchanged. No persistent managed systemd service
+qualified.
+
+Latest actual DGX checkout was clean
+`4612045c11ce47e52606794d63daede4cb35ac82`;
+newer remote GitHub documentation and tool-prep HEADs
+were **not** used in this live trial. Although stdout
+confirms exact stop, it does not display independent
+journal `M1_SESSION_PHASE=stopped` and
+`M1_RUNNING=False`. **Next operator read-only
+verification:** `python3 -B scripts/runtime/mazinb-m1.py
+status --session-slot reinstall`. Only after
+confirmed stopped/no running candidate and clean
+worktree, guarded fast-forward to successful remote
+GitHub HEAD, then optional user-approved isolated
+pinned `llama-benchy` install via Wizard
+**5→24→5**; a *new* protected session must be
+separately approved before actual benchmark.
+Do not delete protected historical/OrcaRouter models,
+Docker or old evidence.
+
+[Latest permanent actual DGX Stage G receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+PR #261 stays Draft/unmerged.
+
 ## 2026-10-19 — ACTUAL DGX R2 benchmark blocker pinned tool absent; sudo cache restored
 
 Owner's actual DGX read-only file search for `llama-benchy`
