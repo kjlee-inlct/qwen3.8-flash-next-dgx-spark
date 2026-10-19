@@ -92,6 +92,10 @@ Any plan requiring a larger swapfile must independently assess
 host and GPU RM safety; swap space is **not** a guarantee
 of allocatable GB10 unified physical memory.
 
+## C. Two-engine comparison first — vLLM and SGLang both blocked
+
+An engine is **not selected**. See the [vLLM vs SGLang verified PR/source comparison](CATPLUSPLUS-VLLM-SGLANG-COMPARISON.md) and pinned source tree Wizard 5→23→11. Upstream vLLM UVA CPU-pinned PLE was merged in PR #54371 (Sep 9), but UVA **retains GB10 shared DRAM**. Separate disk-mmap PLE PR #54129 was closed without merge. Existing mazinb vLLM v0.29 cannot be assumed to include either the latest upstream patch or the publisher's mixed MXFP8 fused QKVZ fixes. The publisher's SGLang production launcher is a concrete reference, not a GB10 qualification.
+
 ## C. SGLang backend compatibility evidence (BLOCKING)
 
 The publisher's model card attributes the fused QKVZ
