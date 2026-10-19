@@ -1,3 +1,44 @@
+## 2026-10-19 — Preparing install/serve/bench alongside mazinb R2 transfer (SOURCE ONLY)
+
+Operator reports mazinb R2 bulk download **STARTED**, not complete.
+No competing catplusplus bulk transfer/Docker/GPU build or checkout
+source sync on the DGX is authorized while this runs.
+
+**Physical transport evidence supersedes the older provisional text below:**
+Wizard 5→23→8 on the physical DGX returned 307 redirect
+for both immutable `resolve` paths, same Hugging Face host
+`/api/resolve-cache/`, and 200/no redirect for the two
+immutable `raw` paths. It did **not** read bodies.
+`scripts/model/audit_catplusplus_loader_source.py`
+now reads only these **two explicit pinned raw text files**,
+via GET/no redirects/strict byte caps (config 256 KiB,
+SGLang launcher 128 KiB); it never follows a redirect or downloads
+weights. Actual pinned raw GET/source declarations on DGX:
+**NOT_RUN** pending exact source sync after mazinb finishes.
+
+Wizard **5→23→9** prints the staged no-host-access
+installation/loader/GB10 peak-memory/benchmark gate plan.
+Wizard **5→23→10** checks only existing lifecycle lock status
+and conservative full-repository disk headroom, **without creating
+locks, writing files or downloading**. If mazinb's exclusive
+lifecycle lock is held, this returns BLOCKED by design.
+
+A pinned 2026-10-16 metadata inventory measured ≈174.8553 GiB
+root safetensors; subtracting the publisher-estimated 47.7 GiB
+FP8 PLE gives ~127.1553 GiB stored bytes, already above
+the 128-decimal-GB Spark RAM (~119.2093 GiB) before
+KV/RM/temporary allocations. **Stored bytes are not residency**:
+this is a constraint on proving fit, not a physical memory result.
+ModelOpt mixed MXFP8 fused qkvz block scales, NVFP4 expert
+loader, offloaded FP8 PLE, an exact immutable GB10 SGLang
+image, and monitored launch are still **NOT_QUALIFIED**.
+M1 3/4/5 live/preflight/bench admission remains deliberately
+BLOCKED, as does source-only M1 GPU start.
+
+See [staged GB10 installation, serving and benchmark qualification](CATPLUSPLUS-SINGLE-GB10-INSTALL-SERVE-BENCH.md).
+This dated section supersedes the 2026-10-19 statement below
+that a pinned raw GET audit was not yet implemented.
+
 ## 2026-10-19 — Physical redirect block; HEAD-only transport diagnosis (source only)
 
 The owner actually selected Wizard **5 → 23 → 7** on a DGX Spark.
