@@ -1,3 +1,70 @@
+## 2026-10-19 — ACTUAL DGX second protected mazinb R2 trial stopped on NVIDIA RM error; benchy now installed
+
+**Actual later physical user transcript** shows a *second*
+separately owner-approved Wizard **5→24→4** isolated
+mazinb M1 trial with candidate
+`qwen38-mazinb-m1-20261019065452-e70d6233`;
+new exact Docker ID
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`.
+The controller emitted
+`M1_CANDIDATE_STARTED_UNQUALIFIED`, then
+`M1_STOPPED_EXACT_ID=68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+`M1_DOCKER_REMOVED=NO`, and
+**`M1_BLOCKED=NVIDIA RM memory allocation error`**.
+No `M1_READY_FOR_BENCH`/new inference smoke/180s
+soak was emitted during this second trial, and no
+model throughput result was generated.
+
+Meanwhile, operator Terminal B **now has** the pinned
+`llama-benchy 0.4.1.dev1+ge9be34457`
+and PATH points to isolated user venv. This eliminates
+the earlier missing-tool blocker, but benchmark wrapper
+correctly **rejected failed trial** with
+`M1_BLOCKED=M1 is not admitted for benchmark` and
+`BENCH_M1=BLOCKED attestation_failed`.
+No safety check was bypassed.
+
+**Critical code-level limitation of error label:**
+`scripts/runtime/mazinb-m1.py` verifies host-wide
+`sudo -n journalctl -k --since <kernel_since>` and
+fails if either `NV_ERR_NO_MEMORY` or
+`_memdescAllocInternal` appears. The stdout proves
+a matching message was detected in that time window,
+but does not by itself link it to this candidate nor
+distinguish VRAM allocation, RAM pressure, Xid or
+a host-wide other-device event. Need actual matching
+kernel timestamps/text + exact Docker state
+`ExitCode`/`OOMKilled` + same trial `monitor.log` +
+bounded model loading stderr + current retained journal.
+**NO THIRD GPU RESTART** until root cause is classified.
+
+The previous *first* R2 trial on the same DGX
+**passed exact API, 180s soak and inference smoke** and
+stopped cleanly (Docker
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`).
+That physical success must not be erased nor treated
+as proof of reliability under the second load:
+two separate episodes with different exact IDs.
+Both stopped candidates intentionally retained;
+original protected OrcaRouter/older M1 archives remain
+untouched. New installed tool does not change these
+classifications.
+
+**Next safe action:** read-only failed session
+`status --session-slot reinstall` (expect
+`failed_stopped`, **not** normal `stopped`);
+read per-trial logs and `journalctl -k` matching
+RM lines since its `kernel_since`. Do not manually
+mutate journal, disable monitor, adjust swap/KV/port,
+delete Docker, upgrade source on DGX before collecting
+forensics, or invoke a third trial.
+
+[Physical Stage H evidence](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+This text was written to GitHub only, NOT on DGX.
+Current local DGX SHA for second run **not printed**
+in its pasted transcript; do not infer it from
+remote HEAD. PR #261 Draft/unmerged.
+
 ## 2026-10-19 — ACTUAL DGX mazinb R2 protected exact-ID STOP completed, Docker preserved
 
 **Owner's latest physical Wizard Terminal A output:** after a
