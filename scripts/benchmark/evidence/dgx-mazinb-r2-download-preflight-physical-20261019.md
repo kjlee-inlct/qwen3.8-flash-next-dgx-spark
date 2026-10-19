@@ -259,3 +259,53 @@ qualify the tool before a *new separately authorized* GPU run.
 Earlier stage D API/soak/smoke PASS still stands. This is
 a **tooling-blocked benchmark attempt**, not a failed
 mazinb inference trial.
+
+
+## Stage F: path search empty; sudo expiry separately repaired, no new measurement
+
+**Additional actual DGX Terminal B output** from the owner after Stage E:
+
+1. Bounded `find` under `~/.local/bin`, uv tools, pipx venvs and
+   `~/Workspace/llm` printed **no existing executable**. It is not
+   proof that no `llama-benchy` executable exists anywhere else.
+2. The user's variable `BENCHY_PATH="/실제로/확인한/경로/llama-benchy"`
+   is an **unreplaced illustrative placeholder**, not an observed
+   path. Execution produced
+   `-bash: /실제로/확인한/경로/llama-benchy: 그런 파일이나 디렉터리가 없습니다`.
+3. A subsequent wrapper invocation was blocked **before**
+   acquiring an admitted benchmark lease:
+   `M1_BLOCKED=command failed: sudo -n; rc=1; sudo: 암호가 필요합니다`
+   and `BENCH_M1=BLOCKED attestation_failed`. This is **expired
+   cached sudo authentication required for read-only kernel
+   evidence**, not a GPU failure.
+4. After the owner separately ran `sudo -v`, another strict
+   wrapper invocation printed **M1_BENCH_ADMISSION=PASS...**
+   both before and after the payload, matching unique R2 Docker
+   `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`;
+   the payload still refused with
+   `MAZINB_R2_BENCH=BLOCKED_PINNED_LLAMA_BENCHY_MISSING`
+   and `BENCH_COMMAND_RC=2`.
+
+**No measured samples**, no R2 result file. Neither the owner nor
+the project has yet provided an actual Terminal A `STOP` or
+auto-expiry receipt.
+
+**Source-only tool provisioning change:** a new
+`scripts/wizard/llama-benchy-setup.sh` installer (Wizard
+`5→24→5`) is written in GitHub and remains **NOT EXECUTED**.
+Its `--plan` is mutation-free; `--install` requires default-NO
+Wizard approval plus typed phrase `INSTALL_PINNED_BENCHY`,
+an exclusive already-existing project lifecycle lock,
+no running `qwen38-` Docker or M1 API port listener,
+and installs the exact pinned Git source commit into an
+owner-only user venv outside the active repository.
+No system packages/GPU/Docker operations, and no checkout
+synchronization while the R2 candidate is live. The script's
+source CI and physical host compatibility must be separately
+qualified before use. **It has not installed anything on DGX.**
+
+Live session duration is bounded at 5400 seconds from startup:
+owner-supplied experiment name timestamp ~`20261019T043708Z`
+(13:37:08 KST), so automatic expiry *approximately*
+15:07 KST in the absence of earlier STOP/abort. Only
+physical terminal/journal output can confirm stop.
