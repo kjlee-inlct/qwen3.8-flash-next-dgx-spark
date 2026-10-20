@@ -747,6 +747,58 @@ def scope_from_args(args: argparse.Namespace) -> dict[str, str]:
     return {k: str(v) for k, v in roots.items()}
 
 
+
+def compare_receipts(saved: dict, current: dict) -> list[dict[str, object]]:
+    """Bounded, value-free explanation of exact-identity plan drift.
+
+    Never print full Docker inspect values, registry contents or model bytes.
+    This function does not alter permissions or relax any preflight.
+    """
+    changes: list[dict[str, object]] = []
+    for key in ("schema", "mode", "scope", "owner_exception"):
+        if saved.get(key) != current.get(key):
+            changes.append({"change": "plan_field_changed", "field": key})
+
+    def indexed(plan: dict) -> dict[tuple[str, str], dict]:
+        entries = {}
+        for target in plan["targets"]:
+            key = target["kind"], target["id"]
+            if key in entries:
+                raise Blocked("duplicate_target_in_comparison")
+            entries[key] = target
+        return entries
+
+    old = indexed(saved)
+    fresh = indexed(current)
+    for kind, ident in sorted(old.keys() | fresh.keys()):
+        key = kind, ident
+        if key not in old:
+            changes.append({"change": "target_appeared", "kind": kind, "id": ident})
+            continue
+        if key not in fresh:
+            changes.append({"change": "target_disappeared", "kind": kind, "id": ident})
+            continue
+        if old[key] == fresh[key]:
+            continue
+        old_target, new_target = old[key], fresh[key]
+        fields = []
+        for field in sorted(set(old_target) | set(new_target)):
+            left, right = old_target.get(field), new_target.get(field)
+            if left == right:
+                continue
+            if isinstance(left, dict) and isinstance(right, dict):
+                fields.extend(field + "." + subfield for subfield in
+                              sorted(set(left) | set(right))
+                              if left.get(subfield) != right.get(subfield))
+            else:
+                fields.append(field)
+        changes.append({"change": "target_identity_changed",
+                        "kind": kind, "id": ident, "fields": fields})
+    if saved.get("sha256") != current.get("sha256") and not changes:
+        changes.append({"change": "receipt_digest_only_changed"})
+    return changes
+
+
 def verify_plan(data: object) -> dict:
     required = {"schema", "mode", "scope", "targets", "sha256"}
     if not isinstance(data, dict) or set(data) not in (required, required | {"owner_exception"}):
@@ -931,7 +983,7 @@ def verify_removed(plan: dict) -> tuple[bool, list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("plan", "apply", "verify"))
+    parser.add_argument("action", choices=("plan", "apply", "verify", "diagnose"))
     parser.add_argument("--plan-file", type=Path, help="plan receipt outside project tree")
     parser.add_argument("--plan-sha", help="full 64-digit SHA256 of confirmed plan")
     parser.add_argument("--confirm", help="exact irreversible approval phrase")
@@ -972,6 +1024,30 @@ def main() -> int:
         if saved["scope"] != scope:
             raise Blocked("scope_differs_from_saved_plan")
         ensure_receipt_outside_scope(args.plan_file, saved)
+        if args.action == "diagnose":
+            if saved.get("owner_exception") != exception:
+                raise Blocked("owner_exception_changed_since_plan")
+            # Open the existing operation lock read-only. Never create/write it.
+            lock_path = Path(scope["state"]) / "operation.lock"
+            require_real_path(lock_path)
+            with lock_path.open("rb") as locked:
+                try:
+                    fcntl.flock(locked.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError as exc:
+                    raise Blocked("concurrent_lifecycle_operation") from exc
+                fresh = scan(scope, exception, baseline)
+            changes = compare_receipts(saved, fresh)
+            print("FULL_UNINSTALL_DIAGNOSIS=" +
+                  ("PLAN_MATCHES_CURRENT_INVENTORY" if not changes else "DRIFT_DETECTED"))
+            print("SAVED_PLAN_SHA256=" + saved["sha256"])
+            print("FRESH_PLAN_SHA256=" + fresh["sha256"])
+            print("CHANGED_TARGET_COUNT=" + str(len(changes)))
+            for item in changes[:40]:
+                print("DRIFT=" + json.dumps(item, sort_keys=True, ensure_ascii=False))
+            if len(changes) > 40:
+                print("ADDITIONAL_DRIFT_COUNT=" + str(len(changes) - 40))
+            print("HOST_DELETION=NOT_PERFORMED")
+            return 3 if changes else 0
         if args.action == "verify":
             clean, residuals = verify_removed(saved)
             if clean:
