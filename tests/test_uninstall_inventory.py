@@ -146,6 +146,95 @@ class UninstallInventoryTests(unittest.TestCase):
         self.assertEqual(self.lookup(result, "image", unrelated_tag)["ownership"],
                          "UNVERIFIED")
 
+    def make_model_provenance_fixture(self, *, status: str = "complete",
+                                      wrong_size: bool = False,
+                                      as_symlink: bool = False) -> dict:
+        import hashlib
+        model = self.models / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        weight = model / "model.safetensors"
+        weight.write_bytes(b"TEST_SHARD")
+        if as_symlink:
+            weight.unlink()
+            target = self.root / "foreign-model-weight"
+            target.write_bytes(b"FOREIGN")
+            weight.symlink_to(target)
+        marker = model / ".qwen38-model-manifest.json"
+        obj = {
+            "schema_version": 1,
+            "status": status,
+            "repository": "orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4",
+            "revision": "a" * 40,
+            "files": [{
+                "path": "model.safetensors",
+                "size": 99 if wrong_size else 10,
+                "sha256": None,
+            }],
+        }
+        marker.write_text(json.dumps(obj), encoding="utf-8")
+        (self.state / "asset-ownership.json").write_text(json.dumps({
+            "schema_version": 1,
+            "assets": [{
+                "kind": "model", "locator": str(model),
+                "root": str(self.models), "owned": False,
+                "state": "ready",
+                "fingerprint": hashlib.sha256(marker.read_bytes()).hexdigest(),
+                "depends_on": [],
+            }],
+        }), encoding="utf-8")
+        return {
+            "scope": {"state": str(self.state), "checkout": str(self.checkout)},
+            "issues": [],
+            "resources": [{
+                "kind": "model", "locator": str(model),
+                "status": "PRESENT", "ownership": "UNVERIFIED",
+            }],
+        }
+
+    def test_model_provenance_reports_consistent_metadata_without_ownership(self) -> None:
+        fixture = self.make_model_provenance_fixture()
+        result = audit.model_provenance_audit(fixture)
+        self.assertEqual(result["result"], "CONSISTENT_METADATA_NOT_OWNERSHIP")
+        self.assertEqual(len(result["models"]), 1)
+        model = result["models"][0]
+        self.assertFalse(model["registry_owned"])
+        self.assertEqual(model["marker_status"], "complete")
+        self.assertTrue(model["recorded_sha256_matches"])
+        self.assertEqual(model["present_regular_files"], 1)
+        self.assertEqual(model["content_sha256_verified"], 0)
+        self.assertEqual(model["issues"], [])
+
+    def test_model_provenance_detects_incomplete_marker_and_bad_weight(self) -> None:
+        cases = (
+            ({"status": "downloading"}, "model_marker_not_complete"),
+            ({"wrong_size": True}, "model_file_size_mismatch"),
+            ({"as_symlink": True}, "symlinked_model_file_or_parent"),
+        )
+        for kwargs, expected in cases:
+            with self.subTest(case=kwargs):
+                fixture = self.make_model_provenance_fixture(**kwargs)
+                result = audit.model_provenance_audit(fixture)
+                self.assertEqual(result["result"], "REVIEW_REQUIRED")
+                self.assertIn(expected, json.dumps(result))
+                model = self.models / "qwen3.8-flash-next-orcarouter"
+                marker = model / ".qwen38-model-manifest.json"
+                marker.unlink()
+                weight = model / "model.safetensors"
+                weight.unlink()
+                model.rmdir()
+
+    def test_model_provenance_detects_marker_registry_drift(self) -> None:
+        fixture = self.make_model_provenance_fixture()
+        model = self.models / "qwen3.8-flash-next-orcarouter"
+        marker = model / ".qwen38-model-manifest.json"
+        doc = json.loads(marker.read_text())
+        doc["revision"] = "b" * 40
+        marker.write_text(json.dumps(doc), encoding="utf-8")
+        result = audit.model_provenance_audit(fixture)
+        self.assertEqual(result["result"], "REVIEW_REQUIRED")
+        self.assertIn("marker_registry_fingerprint_mismatch", json.dumps(result))
+        self.assertFalse(result["models"][0]["recorded_sha256_matches"])
+
     def reference_fixture(self, *, source: str = "", volume: bool = False,
                           same_image: bool = False, alias: bool = False) -> dict:
         """Isolated known project and foreign Docker identity fixture."""
