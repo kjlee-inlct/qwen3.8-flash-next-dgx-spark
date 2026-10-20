@@ -805,6 +805,8 @@ def execute(plan: dict) -> None:
     scope = plan["scope"]
     targets = plan["targets"]
     checkout = Path(scope["checkout"])
+    approved = {(e["kind"], e["locator"]): e["fingerprint"]
+                for e in plan.get("owner_exception", {}).get("entries", [])}
     units = {x["id"] for x in targets if x["kind"] == "systemd"}
     # Use existing ownership-marker guarded systemd helpers.
     if "qwen38-flash-next.service" in units:
@@ -833,6 +835,24 @@ def execute(plan: dict) -> None:
             # This is the only Docker deletion target: the verified full ID.
             run("docker", "rm", "-f", item["id"])
     # Refuse image removal until all foreign references were rechecked.
+    # Exact owner exceptions get an additional full Docker image/volume/alias
+    # pass after project containers have actually been removed.
+    if approved:
+        current = inventory.gather(
+            state=Path(scope["state"]), data=Path(scope["data"]),
+            models=Path(scope["models"]), units=Path(scope["units"]),
+            swap=Path(scope["swap"]), hf=Path(scope["hf"]),
+            fstab=Path(scope["fstab"]), home=Path(scope["home"]),
+            checkout=Path(scope["checkout"]),
+        )
+        if current["issues"]:
+            raise Blocked("owner_exception_midapply_inventory_incomplete")
+        try:
+            extra_audit = inventory.reference_audit(current)
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise Blocked("owner_exception_midapply_reference_incomplete") from exc
+        if extra_audit["result"] != "NO_OBSERVED_CONFLICTS":
+            raise Blocked("owner_exception_midapply_references_changed")
     inspect_image_references(
         [], [x for x in targets if x["kind"] == "image"],
         [x for x in targets if x["kind"] == "volume"],
@@ -845,6 +865,10 @@ def execute(plan: dict) -> None:
                 raise Blocked("volume_identity_changed_during_apply")
             run("docker", "volume", "rm", item["id"])
         if item["kind"] == "image":
+            if (item["kind"], item["id"]) in approved:
+                verify_owner_exception_identity(
+                    "image", item["id"], approved[("image", item["id"])],
+                    image_identity(item["id"]))
             if image_identity(item["id"]) != item["fingerprint"]:
                 raise Blocked("image_identity_changed_during_apply")
             run("docker", "image", "rm", item["id"])
@@ -878,6 +902,9 @@ def execute(plan: dict) -> None:
                 if (st.st_dev, st.st_ino, st.st_mode) != (
                         old["dev"], old["ino"], old["mode"]):
                     raise Blocked("file_identity_changed_during_apply:" + str(path))
+                if (kind, item["id"]) in approved:
+                    verify_owner_exception_identity(
+                        kind, item["id"], approved[(kind, item["id"])])
                 remove_tree(path, kind, scope)
 
 
