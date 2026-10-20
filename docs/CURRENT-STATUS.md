@@ -1,3 +1,59 @@
+## 2026-10-21 — ACTUAL DGX read-only receipt diagnosis: four Docker mount fingerprints only
+
+The operator cleanly fast-forwarded the single DGX Spark checkout from
+`ead3bf450a1c98f2c35f20d19b92a02479cdaaac` to exact
+`a603b0ae3d8c73a5dca773a07c4c3c08a30c774e`
+and physically executed the **read-only**
+`full-project-uninstall.py diagnose` command against the original
+owner-approved delete plan. Actual terminal result:
+
+```text
+FULL_UNINSTALL_DIAGNOSIS=DRIFT_DETECTED
+SAVED_PLAN_SHA256=5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89
+FRESH_PLAN_SHA256=5c167bca7b373ea24b34f1165491d5ccbdcf23cac345385fde5f01c1f39aaa7f
+CHANGED_TARGET_COUNT=4
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56","kind":"container"}
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445","kind":"container"}
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7","kind":"container"}
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8","kind":"container"}
+HOST_DELETION=NOT_PERFORMED
+DIAGNOSIS_RC=3
+DGX_DELETION=NOT_PERFORMED
+```
+
+This establishes that the prior `inventory_or_asset_identity_drift_before_apply`
+is localized to four full-ID **Docker container Mounts** arrays in
+the stored versus current exact reset receipts. No other top-level
+receipt target differences were reported by this comparison, including
+none on the modeled PLE swap target; it does **not** establish whether
+the changed Mounts arrays are reordered, have new/removed mount entries,
+or changed host Source/Mode/RW/Propagation. No destructive
+steps ran. **Do not use old `apply` receipt** or interpret a
+`mounts` drift as automatically safe.
+
+Source-only follow-up on this same feature branch extends the
+existing `diagnose` output with a read-only
+`describe_mount_drift` classifier: `ORDER_ONLY`,
+`CONTENT_CHANGED` with container-internal Destination and changed
+field names (never reveal host Source), or
+`AMBIGUOUS_MOUNT_IDENTITIES`/`UNVERIFIABLE_MOUNT_METADATA`.
+It does **not** change `scan`, `execute`, the exact receipt
+comparison, any Docker deletion eligibility, owner-exception hashes,
+or swap handling. New synthetics verify mount order, host-source
+redaction, RW changes, missing mounts, ambiguous metadata and
+receipt diagnostic integration. Its host output and exact-HEAD CI
+qualification are not yet recorded; only after both can a
+new exact deletion receipt be considered.
+
+The operator's removal intent remains the project-local
+model/images/containers/forensics/state/releases and
+wizard-created **128-GiB `/swap-ple.img` plus project fstab entry**.
+Foreign Docker/Portainer/SearXNG, ordinary `/swap.img`, shared
+HF/FlashInfer roots, unrelated host software and GitHub history
+must remain untouched.
+
+---
+
 ## 2026-10-21 — ACTUAL DGX whole-project apply preflight DRIFT, no deletions (PLE swap included)
 
 The owner explicitly reconfirmed the intent to delete **the complete
