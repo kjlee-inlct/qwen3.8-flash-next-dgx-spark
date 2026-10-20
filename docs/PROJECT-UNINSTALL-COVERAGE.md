@@ -208,6 +208,30 @@ owner provides the local read-only inspection. Even if plan creation
 passes after source update, **destructive M2 remains NOT_QUALIFIED**
 and no immediate menu 5 execution is authorized by this patch.
 
+### Open safety gap found in source review — name prefix is not ownership
+
+**SOURCE REVIEW ONLY; no host resource affected.** The read-only
+inventory currently discovers every Docker image with repository
+starting `vllm-` or `qwen38-`, and models with directory names
+starting `qwen3.8-` or `qwen38-`. The integrated reset engine
+currently accepts some of these `UNVERIFIED` image/model candidates
+into a destructive plan after identity/path and external Docker
+reference checks. For images, being unreferenced does **not** prove
+the image belongs to this project; another application may retain
+an intentionally stopped/unreferenced `vllm-*` image. Similar
+ambiguity exists for model directories carrying a familiar prefix.
+Therefore the engine is **NOT YET OWNER-SAFE for destructive apply**.
+
+**Required before any menu 5 / M2 qualification:** classify all
+candidate images and model directories by positive project ownership
+(pinned manifest or cumulative registry, project-specific known
+release/build provenance, or separately reviewed explicit allowlist
+bound to immutable exact image IDs and model root identifiers).
+Unverified candidates must block apply, or be visibly excluded with
+a non-complete result and separate explicit owner decision. Add
+synthetic tests with unrelated `vllm-*` images and similarly named
+foreign checkpoints. Keep foreign applications/OS/Docker excluded.
+
 ## Qualification and recovery work still missing before host use
 
 1. Exact-ID ownership and dependency records for every new research trial,
