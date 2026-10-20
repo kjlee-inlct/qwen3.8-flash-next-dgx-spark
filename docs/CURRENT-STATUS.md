@@ -40,7 +40,7 @@ results. No protected-project-asset exemption applies in complete mode.
 Read-only inventory now additionally covers HOME/models, checkout/models,
 external benchmark root, retirement archives, repo-local evidence, and
 project-specific HF checkpoint caches. Synthetic exact-ID fixtures include
-the OrcaRouter predecessor plus mazinb R2 second and third containers.
+the OrcaRouter predecessor and all three known mazinb R2 trial Docker IDs.
 These are inventory candidates, not hardcoded deletion IDs. External apps,
 system swap, drivers and remote GitHub history remain outside local reset.
 Complete destructive apply remains NOT_IMPLEMENTED; M2 remains NOT_RUN.
