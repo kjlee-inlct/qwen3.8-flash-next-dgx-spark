@@ -435,7 +435,7 @@ def model_provenance_audit(observed: dict) -> dict:
                 problems.append("model_marker_schema_version")
             if (not isinstance(obj["repository"], str)
                     or not obj["repository"]
-                    or any(ch in obj["repository"] for ch in ("\\0", "\\n", "\\r"))):
+                    or any(ch in obj["repository"] for ch in ("\x00", "\n", "\r"))):
                 problems.append("model_marker_repository_invalid")
             if (not isinstance(obj["revision"], str)
                     or not re.fullmatch(r"[a-f0-9]{40}", obj["revision"])):
@@ -455,7 +455,7 @@ def model_provenance_audit(observed: dict) -> dict:
                 if (not isinstance(name, str) or not name
                         or name.startswith("/")
                         or any(part in ("", ".", "..") for part in name.split("/"))
-                        or "\\0" in name or "\\\\" in name or name in visited):
+                        or "\x00" in name or "\\" in name or name in visited):
                     raise ValueError("model_marker_file_path_invalid")
                 visited.add(name)
                 if type(size) is not int or size < 0:
