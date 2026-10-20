@@ -155,6 +155,24 @@ class FullProjectUninstallTests(unittest.TestCase):
         self.assertEqual((foreign_model / "KEEP").read_text(), "external")
         self.assertTrue(foreign_cache.exists())
 
+    def test_unverified_asset_blocker_lists_candidates_with_bounded_overflow(self) -> None:
+        names = [f"vllm-other-{i:02d}:v1" for i in range(14)]
+        rows = [
+            {"kind": "image", "locator": name,
+             "status": "PRESENT", "ownership": "UNVERIFIED"}
+            for name in names
+        ]
+        with patch.object(full.inventory, "gather",
+                          return_value={"issues": [], "resources": rows}):
+            with self.assertRaises(full.Blocked) as raised:
+                full.scan(self.scope)
+        message = str(raised.exception)
+        self.assertIn("candidate_ownership_not_proven:", message)
+        self.assertIn(names[0], message)
+        self.assertIn(names[11], message)
+        self.assertNotIn(names[12], message)
+        self.assertIn("additional_unverified=2", message)
+
     def test_positive_owned_image_can_enter_exact_identity_bound_plan(self) -> None:
         tag = "vllm-skinny-tp1:v1"
         rows = [
