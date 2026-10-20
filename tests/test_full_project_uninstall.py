@@ -131,12 +131,17 @@ class FullProjectUninstallTests(unittest.TestCase):
         with self.assertRaisesRegex(full.Blocked, "unverified_shared"):
             full.scoped_file(shared, "model-cache", self.scope)
 
-    def test_nested_symlink_blocks_recursive_removal(self) -> None:
+    def test_nested_symlink_is_unlinked_without_following_foreign_target(self) -> None:
         folder = self.model_root / "qwen3.8-flash-next-mazinb"
         folder.mkdir()
-        (folder / "link").symlink_to(self.home / "outside")
-        with self.assertRaisesRegex(full.Blocked, "unsafe_nested"):
-            full.scoped_file(folder, "model", self.scope)
+        external = self.home / "unrelated"
+        external.mkdir()
+        (external / "keep.txt").write_text("KEEP")
+        (folder / "link").symlink_to(external)
+        full.scoped_file(folder, "model", self.scope)
+        full.remove_tree(folder, "model", self.scope)
+        self.assertFalse(folder.exists())
+        self.assertEqual((external / "keep.txt").read_text(), "KEEP")
 
     def test_transaction_markers_fail_closed(self) -> None:
         (self.state / "settings-transition.phase").write_text("pending")
@@ -175,6 +180,38 @@ class FullProjectUninstallTests(unittest.TestCase):
             clean, issues = full.verify_removed({"scope": self.scope})
             self.assertFalse(clean)
             self.assertIn("state-root:" + str(self.state) + ":PRESENT", issues)
+
+    def test_disposable_full_file_teardown_removes_models_evidence_state_data(self) -> None:
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        (model / "config.json").write_text("{}")
+        forensic = self.home / "Workspace/llm/qwen38-m1-bench-results"
+        forensic.mkdir(parents=True)
+        (forensic / "monitor.log").write_text("fake")
+        (self.state / "install.env").write_text("FAKE")
+        (self.data / "current").mkdir()
+        targets = []
+        for kind, path in (
+            ("model", model), ("forensic", forensic),
+            ("data-root", self.data), ("state-root", self.state),
+        ):
+            st = path.lstat()
+            targets.append({"kind": kind, "id": str(path),
+                            "fingerprint": {"dev": st.st_dev, "ino": st.st_ino,
+                                            "mode": st.st_mode}})
+        with patch.object(full, "inspect_image_references", return_value=None):
+            full.execute({"scope": self.scope, "targets": targets})
+        for path in (model, forensic, self.data, self.state):
+            self.assertFalse(path.exists(), str(path))
+        self.assertTrue(self.home.exists())
+        self.assertTrue(self.checkout.exists())
+        self.assertTrue(self.hf.exists())
+
+    def test_unsafe_foreign_mount_boundary_is_fail_closed(self) -> None:
+        foreign = self.home / "unrelated"
+        foreign.mkdir()
+        with self.assertRaisesRegex(full.Blocked, "forensic_outside"):
+            full.scoped_file(foreign, "forensic", self.scope)
 
     def test_mutation_sequence_is_exactly_project_scoped_and_checked(self) -> None:
         # Every deletion command is inspect-bound, never docker prune.
