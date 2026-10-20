@@ -144,6 +144,17 @@ class UninstallInventoryTests(unittest.TestCase):
         self.assertEqual(self.lookup(data, "volume", "qwen38-research")["ownership"],
                          "UNVERIFIED")
 
+    def test_project_runtime_caches_are_separate_from_shared_parent(self) -> None:
+        dedicated = self.root / ".cache/vllm-qwen38-v029"
+        shared = self.root / ".cache/flashinfer"
+        dedicated.mkdir(parents=True)
+        shared.mkdir(parents=True)
+        data = self.gather()
+        self.assertEqual(self.lookup(data, "project-cache", str(dedicated))["status"],
+                         "PRESENT")
+        self.assertEqual(self.lookup(data, "shared-runtime-cache", str(shared))["ownership"],
+                         "EXCLUDED_SHARED")
+
     def test_shared_hf_cache_is_never_an_automatic_purge_candidate(self) -> None:
         data = self.gather()
         self.assertEqual(self.lookup(data, "hf-cache", str(self.hf))["ownership"],
