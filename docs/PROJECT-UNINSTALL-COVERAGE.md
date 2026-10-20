@@ -5,6 +5,102 @@ delete engine are implemented in source; M2 destructive E2E remains NOT
 HOST-QUALIFIED.** Neither source completion, plan receipt nor CI tests
 authorize deletion on the one protected physical DGX.
 
+### 2026-10-20 physical `references` audit: exact-SHA zero observed Docker conflicts
+
+At actual **local source HEAD**
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c`, on the
+correct clean feature branch, the owner executed the maintained
+read-only `uninstall-inventory.py references` command.
+It completed with `NO_OBSERVED_CONFLICTS`: **8** project
+containers, **11** total containers, **3** external containers,
+**7** project candidate image tags, **0** project candidate Docker
+volumes, **0** observed external-reference conflicts, and
+**0** other tags sharing a candidate image ID.
+
+This closes the previous source-only gap for this specific helper
+and is independent of the earlier ad-hoc owner-run Docker reference
+query. It is only a **point-in-time read-only** Docker image-ID,
+bind-path and candidate-volume overlap inspection. Neither probe
+establishes ownership of historical `owned=False` assets,
+non-Docker open-file dependencies, exclusive HF cache use or future
+host state. Project models and images remain unverified; the
+source-only full deletion plan must continue to fail closed.
+
+### Proposed P1 historical asset authority design — NOT APPROVED FOR APPLY
+
+The following is an **implementation/acceptance proposal**, not
+an accepted deletion approval, not a registry schema migration, and
+not permission to run the current destructive engine. The existing
+`INSTALLER_OWNED` semantics must remain unchanged.
+
+1. **Separate authority type.** Introduce an explicit evidence-bound
+   `PROJECT_EXCLUSIVE_REVIEWED` decision for eligible historical
+   model/image/cache candidates, *separate* from
+   `owned=True` / `INSTALLER_OWNED`. No name-prefix
+   promotion, inferred ownership flags or ad-hoc external deletion
+   allowlist; every positive decision binds to one already-discovered
+   exact resource and an independently reviewed provenance record.
+   It must not convert an existing `owned=False` registry record
+   or silently override contrary manifest/registry evidence.
+2. **Identity and evidence.** For each model require exact absolute
+   path under the reviewed project model root, real directory,
+   pinned repository + 40-hex revision, complete marker bytes/hash,
+   one consistent registry record, file inventory and independently
+   attributable project download/restore history. For each image
+   require exact tag and full `sha256:` image ID, build/history
+   evidence, labels when present, project Docker ancestry and
+   explicitly evaluated unlabeled legacy cases. For each
+   project-specific HF cache entry require independently scoped
+   repository/revision-to-cache identity and a no-sharing assessment;
+   the shared HF/cache parent is **never** a whole-tree target.
+   A discovered project volume (none in the present snapshot)
+   would require exact volume name/ID/labels, mount provenance and
+   every consumer checked. Matching labels, file counts,
+   fingerprints, an unused image or `NO_OBSERVED_CONFLICTS`
+   alone are insufficient independent proof.
+3. **Approval separation and completeness.** Build a review report
+   before preparing any deletion-capable receipt, showing evidence
+   sources, authority grounds, exclusions and unresolved cases.
+   A separate explicit owner-reviewed approval must name each
+   qualified exact target; the complete-reset plan must reject any
+   **present unverified resource**, rather than omit it and report
+   success. An external or shared resource must remain protected
+   even if an owner mistakenly includes its name in an approval.
+   Keep current plan/apply/verify and double-consent boundaries.
+4. **Tamper/drift and containment.** At plan **and** apply,
+   revalidate the reviewed evidence, marker bytes, filesystem
+   device/inode/mode and non-symlink ancestry, fixed model/cache
+   root confinement, exact image ID/tag mapping, full Docker
+   inventory/foreign container bind/image/volume references,
+   aliases, nested mounts and lifecycle state. Reject missing
+   evidence, drift, ambiguous symlink/hardlink/shared-mount
+   provenance or incomplete external discovery. Do not consume
+   evidence or credentials located in a tree about to be removed
+   without a separately checked private receipt outside that tree.
+   Any plan/application race or post-removal residual/incomplete
+   check must yield **BLOCKED/PARTIAL**, not complete success.
+5. **Regression and qualification gates.** Add synthetic tests
+   for valid independently attributable legacy candidates *and*
+   negative cases: foreign similarly named model/image/cache,
+   forged `owned=True`, missing or changed project evidence,
+   marker/file metadata drift, tag alias or image-ID change,
+   foreign Docker image/bind/volume use, shared cache parent,
+   unexpected symlink/hardlink/mount, added candidate between
+   plan/apply, partial deletion and postcheck uncertainty.
+   Run a real disposable-host M2 with intentionally placed
+   foreign assets and failure injection before considering a
+   separately approved physical-host procedure. Source CI PASS
+   alone never qualifies the protected single DGX.
+
+**Implementation sequence:** first finish the independent
+historical *image* and *model/cache* provenance evidence matrix.
+Only then review the authority contract, implement an auditable
+separate evidence mechanism, extend the existing lifecycle
+module/tests and Wizard preview, and qualify on a disposable host.
+Until approval and qualification, the existing fail-closed
+`candidate_ownership_not_proven` check is correct and remains
+enabled. No DGX apply or PR Ready/Merge.
+
 ### 2026-10-20 actual DGX model metadata consistent; exclusive deletion ownership still unresolved
 
 The owner has now **physically executed** the newer read-only
