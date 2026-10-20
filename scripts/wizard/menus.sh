@@ -27,14 +27,32 @@ wizard_install_entry() {
 }
 
 wizard_uninstall_entry() {
-  wizard_read_manifest
-  if [[ "${WIZARD_MANIFEST_STATE}" == invalid ]]; then
-    wizard_warning 'Malformed manifest; open Doctor rather than uninstalling.'
-    return 0
-  fi
-  wizard_warning 'Uninstall may remove managed resources. It has additional safety checks.'
-  wizard_yes_no 'Open uninstaller? / 제거 절차를 시작합니까?' no || return 0
-  bash "${ROOT_DIR}/uninstall.sh" --lang "${UI_LANG}"
+  local choice
+  while true; do
+    wizard_header 'Uninstall / 프로젝트 제거'
+    wizard_warning 'Full-project removal is NOT qualified. Existing experiments and evidence may remain.'
+    wizard_menu_option 1 'Full-project resource inventory (READ ONLY) / 전체 잔여 자산 조사'
+    wizard_menu_option 2 'Existing managed uninstaller (confirmation required) / 기존 설치 자산 제거'
+    wizard_menu_option 0 'Back / 이전'
+    wizard_input choice 'Select / 선택' 0
+    case "${choice}" in
+      1) python3 -B "${ROOT_DIR}/scripts/lifecycle/uninstall-inventory.py" plan ||
+           wizard_warning 'Inventory partial/blocked. No resources were changed.' ;;
+      2)
+        wizard_read_manifest
+        if [[ "${WIZARD_MANIFEST_STATE}" != valid ]]; then
+          wizard_warning 'Valid managed manifest required to use existing uninstaller.'
+          continue
+        fi
+        wizard_warning 'This uninstaller does NOT delete all research Docker, cached weights or evidence.'
+        wizard_yes_no 'Open existing managed uninstaller? / 기존 제거 절차를 시작합니까?' no || continue
+        bash "${ROOT_DIR}/uninstall.sh" --lang "${UI_LANG}" ||
+          wizard_warning 'Uninstall blocked/failed; verify live state before another attempt.'
+        ;;
+      0|q|Q) return 0 ;;
+      *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
+    esac
+  done
 }
 
 wizard_advanced_menu() {
