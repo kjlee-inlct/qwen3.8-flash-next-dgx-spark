@@ -1,3 +1,20 @@
+## 2026-10-20 — ACTUAL DGX full-reset plan blocked on legacy checkout/model
+
+Owner selected Uninstall -> 4, entered `y` for read-only SHA
+plan creation; engine returned
+`resource_status_not_safely_present:model:/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/model`.
+The receipt was not created (`PLAN_NOT_FOUND` independently
+observed). No delete operation was invoked. Actual `model` file
+type/target has **not** been physically printed.
+
+GitHub SOURCE_ONLY fix introduces exact `checkout/model` link-only
+plan/application treatment with full target text/inode checks and
+requires a live pointed-at model to also be within the enumerated
+project model set; refuses foreign/untracked linked targets.
+Read-only DGX `ls -ld model; readlink model; stat -c '%F %d %i' model`
+is required to establish this specific host preflight result.
+No DGX mutations, M2 acceptance or protected PR merge.
+
 ## 2026-10-20 — integrated full project uninstall engine, GitHub SOURCE_ONLY
 
 Created `scripts/lifecycle/full-project-uninstall.py` with bounded
