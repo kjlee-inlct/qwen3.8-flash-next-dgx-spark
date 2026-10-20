@@ -104,7 +104,7 @@ class FullProjectUninstallTests(unittest.TestCase):
                 )
 
     def test_plan_scope_rejects_parent_and_model_symlink(self) -> None:
-        with self.assertRaisesRegex(full.Blocked, "not_a_project"):
+        with self.assertRaisesRegex(full.Blocked, "model_outside"):
             full.scoped_file(self.home, "model", self.scope)
         foreign = self.home / "foreign"
         foreign.mkdir()
