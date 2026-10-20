@@ -1,3 +1,60 @@
+## 2026-10-20 — ACTUAL DGX `provenance` metadata and pinned revision check (no deletion authorization)
+
+Owner-pasted **actual physical DGX** command
+`python3 -B scripts/lifecycle/uninstall-inventory.py provenance`
+reported `MODEL_PROVENANCE=READ_ONLY_METADATA_NO_MODEL_CONTENT_HASH`,
+`MODEL_PROVENANCE_RESULT=CONSISTENT_METADATA_NOT_OWNERSHIP` and
+`PROVENANCE_IS_NOT_DELETION_AUTHORIZATION=1`, with **no per-model issues
+printed**. This is the first observed on-host execution of the newer
+`provenance` action; earlier read-only execution on the old checkout
+had correctly rejected the unsupported command (`plan`, `verify`
+only). The owner also reported an unchanged clean worktree on feature
+branch `feature/wizard-modular-phase1-20261014` at old local HEAD
+`b0ef37f9b756a86cc3670691e98a0b0798984d51`, correct origin
+and tracking branch, and read-only remote head
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c` *before*
+the successful `provenance` invocation. **The exact local Git HEAD
+after source synchronization was not printed**, so do not claim an
+actual exact-SHA local update, merely that the newer CLI was executed.
+
+| Physical marker/registry evidence | mazinb | OrcaRouter |
+|---|---|---|
+| model repository | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` |
+| pinned marker revision | `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f` | `c1209bda15a6bbc4c68b585e93d40c0d85f50306` |
+| registry matches / owned / state | `1 / False / ready` | `1 / False / ready` |
+| inventory ownership | `UNVERIFIED` | `UNVERIFIED` |
+| marker status / recorded fingerprint | `complete / matches=True` | `complete / matches=True` |
+| listed files / present regular files | `108 / 108` | `30 / 30` |
+| unknown size entries | `0` | `0` |
+| files with provided SHA256 / content hashes verified | `97 / 0` | `20 / 0` |
+
+The marker file SHA256 values remain the previously measured exact
+registry fingerprints (`996eb79378ab09160e119951b7e089b3ad32f8db718c943f84f7233580ef431c`
+for mazinb and
+`3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`
+for OrcaRouter). Both `repository` strings and `revision` values
+match the source definitions in `scripts/model/model-profiles.sh`,
+but this is **source-to-host metadata alignment**, not a remote Hub
+attestation or complete weight integrity verification. The bounded
+probe checked the existence/type of **138/138** listed files and
+available expected sizes; **0/117** supplied file-content SHA256 values
+were recalculated. There is no evidence of exclusive project ownership
+or foreign-file independence from these metadata checks. Preserve
+both `owned=False` records, shared HF/FlashInfer caches and all
+current assets; no delete `apply`, Wizard 2 -> 5, Docker cleanup,
+service/GPU changes or M2 host trial is authorized. Next gate:
+independent historical asset exclusivity evidence and a reviewed,
+fail-closed exact-identity approval design, including seven unowned
+image candidates and project-specific cache candidates.
+
+**Evidence boundary:** actual DGX `provenance` **READ_ONLY PASS** for
+metadata consistency; full model content hashes **NOT_VERIFIED**;
+exclusive ownership **NOT_PROVEN**; destructive M2 **NOT_RUN**.
+The new GitHub documentation commit is source-only, not additional
+physical DGX validation.
+
+---
+
 ## 2026-10-20 — ACTUAL DGX OrcaRouter and mazinb model marker schema/fingerprint read-only proof
 
 Operator read-only inspection re-confirmed the **physical DGX checkout**
