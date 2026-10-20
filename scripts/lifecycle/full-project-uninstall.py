@@ -271,11 +271,13 @@ def inspect_swap(scope: dict[str, str], rows: list[dict], targets: list[dict]) -
                     "status": row["status"], "fstab": fstab["status"]})
 
 
-def inspect_image_references(containers: list[dict], images: list[dict]) -> None:
+def inspect_image_references(containers: list[dict], images: list[dict],
+                             volumes: list[dict] | None = None) -> None:
     """Refuse an image that any external container references, even when exited."""
     raw = inventory.run_docker("ps", "-a", "--no-trunc", "--format", "{{json .}}")
     actual_ids = {obj.get("ID") for obj in raw}
     planned_ids = {x["id"] for x in containers}
+    volume_names = {x["id"] for x in (volumes or [])}
     if len(raw) != len(actual_ids):
         raise Blocked("duplicate_or_missing_docker_ids")
     for info in raw:
@@ -283,7 +285,7 @@ def inspect_image_references(containers: list[dict], images: list[dict]) -> None
         if not isinstance(cid, str) or not inventory.DOCKER_ID.fullmatch(cid):
             raise Blocked("unverifiable_external_container_id")
         if cid not in planned_ids:
-            external = docker_identity(cid) if False else json_command("docker", "inspect", cid)
+            external = json_command("docker", "inspect", cid)
             if not isinstance(external, list) or len(external) != 1:
                 raise Blocked("external_container_inspect_failed")
             if external[0].get("Id") != cid:
@@ -291,6 +293,10 @@ def inspect_image_references(containers: list[dict], images: list[dict]) -> None
             eid = external[0].get("Image")
             if eid in {x["fingerprint"]["id"] for x in images}:
                 raise Blocked("candidate_image_used_by_external_container")
+            if any(mount.get("Name") in volume_names
+                   for mount in (external[0].get("Mounts") or [])
+                   if isinstance(mount, dict)):
+                raise Blocked("candidate_volume_used_by_external_container")
     if actual_ids & planned_ids != planned_ids:
         raise Blocked("planned_container_disappeared")
 
@@ -345,7 +351,8 @@ def scan(scope: dict[str, str]) -> dict:
     inspect_swap(scope, rows, targets)
     containers = [x for x in targets if x["kind"] == "container"]
     images = [x for x in targets if x["kind"] == "image"]
-    inspect_image_references(containers, images)
+    inspect_image_references(containers, images,
+                             [x for x in targets if x["kind"] == "volume"])
     # Files that are shared/externally mounted or foreign are never targets.
     roots = [x for x in targets if x["kind"] in ("state-root", "data-root")]
     if len(roots) != 2:
@@ -451,7 +458,10 @@ def execute(plan: dict) -> None:
             # This is the only Docker deletion target: the verified full ID.
             run("docker", "rm", "-f", item["id"])
     # Refuse image removal until all foreign references were rechecked.
-    inspect_image_references([], [x for x in targets if x["kind"] == "image"])
+    inspect_image_references(
+        [], [x for x in targets if x["kind"] == "image"],
+        [x for x in targets if x["kind"] == "volume"],
+    )
     for item in targets:
         if item["kind"] == "volume":
             if volume_identity(item["id"]) != item["fingerprint"]:
@@ -477,6 +487,27 @@ def execute(plan: dict) -> None:
                         old["dev"], old["ino"], old["mode"]):
                     raise Blocked("file_identity_changed_during_apply:" + str(path))
                 remove_tree(path, kind, scope)
+
+
+def verify_removed(plan: dict) -> tuple[bool, list[str]]:
+    """Independent read-only postcheck, allowed when state/data roots are gone."""
+    scope = plan["scope"]
+    current = inventory.gather(
+        state=Path(scope["state"]), data=Path(scope["data"]),
+        models=Path(scope["models"]), units=Path(scope["units"]),
+        swap=Path(scope["swap"]), hf=Path(scope["hf"]),
+        fstab=Path(scope["fstab"]), home=Path(scope["home"]),
+        checkout=Path(scope["checkout"]),
+    )
+    issues = list(current["issues"])
+    for item in current["resources"]:
+        if item["kind"] in ("hf-cache", "container-name"):
+            continue
+        if item["status"] != "ABSENT":
+            issues.append(item["kind"] + ":" + item["locator"]
+                          + ":" + item["status"])
+    # This is project-scoped verification; other Docker/OS state excluded.
+    return not issues, issues
 
 
 def main() -> int:
@@ -515,11 +546,13 @@ def main() -> int:
             raise Blocked("scope_differs_from_saved_plan")
         ensure_receipt_outside_scope(args.plan_file, saved)
         if args.action == "verify":
-            current = scan(scope)
-            if not current["targets"]:
+            clean, residuals = verify_removed(saved)
+            if clean:
                 print("FULL_UNINSTALL_POSTCHECK=PROJECT_SCOPED_EMPTY")
                 return 0
-            print("FULL_UNINSTALL_POSTCHECK=RESIDUALS_PRESENT")
+            print("FULL_UNINSTALL_POSTCHECK=RESIDUALS_OR_INCOMPLETE")
+            for problem in residuals[:40]:
+                print("REMAINING=" + problem)
             return 3
         if args.confirm != APPROVAL or args.plan_sha != saved["sha256"]:
             raise Blocked("typed_approval_or_full_digest_not_matched")
@@ -537,8 +570,13 @@ def main() -> int:
                 raise Blocked("inventory_or_asset_identity_drift_before_apply")
             # No host operations before all read-only safety preflights above.
             execute(saved)
-        print("FULL_UNINSTALL_APPLY=FINISHED_RECHECK_REQUIRED")
-        # A no-leftovers claim requires an independent postcheck, not this marker.
+        clean, residuals = verify_removed(saved)
+        if not clean:
+            print("FULL_UNINSTALL_APPLY=PARTIAL_OR_RESIDUAL", file=sys.stderr)
+            for problem in residuals[:40]:
+                print("REMAINING=" + problem, file=sys.stderr)
+            return 3
+        print("FULL_UNINSTALL_APPLY=COMPLETE_PROJECT_SCOPE_VERIFIED")
         return 0
     except (Blocked, OSError, ValueError, KeyError, TypeError) as exc:
         print("FULL_UNINSTALL=BLOCKED_OR_PARTIAL_REVIEW_REQUIRED", file=sys.stderr)
