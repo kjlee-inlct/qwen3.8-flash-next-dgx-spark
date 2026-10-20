@@ -38,6 +38,23 @@ Top-level compatibility paths such as `scripts/qualify-release.sh`,
 thin delegators. Operator-facing transaction recovery/status commands use those stable
 paths; new internal code should target the canonical implementation here.
 
+## SHA256-bound full-project uninstall engine (2026-10-20 SOURCE_ONLY)
+
+`full-project-uninstall.py` is the separate three-stage whole-project
+`plan`/`apply`/`verify` engine exposed from the main Wizard uninstall
+submenu. It delegates read-only discovery to `uninstall-inventory.py`,
+binds exact full-ID Docker + image and mounted-volume proofs and safe
+filesystem root/inode scope to a canonical SHA256 receipt, and refuses
+external image/volume/bind-mount users and active transitions.
+Actual delete requires exact receipt and explicit irreversible phrase,
+holds the Qwen3.8 operation lock and passes its ownership to the
+existing managed service helper. It deletes local research evidence
+(no default archive retention) only after Docker/swap removal and
+reports leftover candidates via an independent postcheck.
+Standalone source/CI fixture tests: `tests/test_full_project_uninstall.py`.
+All real DGX destructive M2 tests remain **NOT_RUN/NOT_QUALIFIED**.
+See `docs/PROJECT-UNINSTALL-COVERAGE.md` for detailed scope/risks.
+
 ## Project uninstall completeness inventory (read-only)
 
 `uninstall-inventory.py` provides an independently testable, non-mutating
