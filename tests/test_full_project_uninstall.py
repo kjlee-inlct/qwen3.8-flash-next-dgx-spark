@@ -173,6 +173,67 @@ class FullProjectUninstallTests(unittest.TestCase):
         with self.assertRaisesRegex(full.Blocked, "inside_deletion_scope"):
             full.load_owner_exception(inside, baseline_path, self.scope)
 
+    def test_read_only_receipt_comparison_reports_only_safe_changed_fields(self) -> None:
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        container_id = "a" * 64
+        body = {"schema": 1, "mode": "EXACT_PROJECT_RESET",
+                "scope": self.scope, "targets": [
+                    {"kind": "container", "id": container_id, "fingerprint": {
+                        "id": container_id, "image_id": "sha256:" + "b" * 64,
+                        "running": False, "status": "exited",
+                        "labels": {"qwen38.profile": "orcarouter"},
+                    }},
+                    {"kind": "model", "id": str(model), "fingerprint": {
+                        "dev": 1, "ino": 2, "mode": 16877,
+                    }},
+                ]}
+        original = {**body, "sha256": full.digest(body)}
+        self.assertEqual(full.compare_receipts(original, original), [])
+        changed = json.loads(json.dumps(original))
+        changed["targets"][0]["fingerprint"]["status"] = "running"
+        changed["targets"][1]["fingerprint"]["ino"] = 3
+        changed["sha256"] = full.digest(
+            {k: v for k, v in changed.items() if k != "sha256"})
+        delta = full.compare_receipts(original, changed)
+        self.assertEqual(len(delta), 2)
+        self.assertEqual(delta[0]["kind"], "container")
+        self.assertEqual(delta[0]["fields"], ["fingerprint.status"])
+        self.assertEqual(delta[1]["kind"], "model")
+        self.assertEqual(delta[1]["fields"], ["fingerprint.ino"])
+        self.assertNotIn("sha256:" + "b" * 64, json.dumps(delta))
+
+    def test_diagnose_does_not_call_mutating_executor(self) -> None:
+        import contextlib
+        import io
+        import sys
+        lock = self.state / "operation.lock"
+        lock.write_text("")
+        body = {"schema": 1, "mode": "EXACT_PROJECT_RESET",
+                "scope": self.scope, "targets": []}
+        plan = {**body, "sha256": full.digest(body)}
+        argv = [
+            str(SOURCE), "diagnose", "--plan-file",
+            str(self.home / "saved-receipt.json"),
+            "--home", str(self.home), "--checkout", str(self.checkout),
+            "--state-home", str(self.home / ".local/state"),
+            "--data-home", str(self.home / ".local/share"),
+            "--model-root", str(self.model_root), "--hf-home", str(self.hf),
+            "--unit-dir", str(self.units), "--fstab", str(self.fstab),
+            "--swap", str(self.swap),
+        ]
+        printed = io.StringIO()
+        with (patch.object(sys, "argv", argv),
+              patch.object(full, "load_plan", return_value=plan),
+              patch.object(full, "scan", return_value=plan),
+              patch.object(full, "execute", side_effect=AssertionError(
+                  "diagnose may not execute any deletion")),
+              contextlib.redirect_stdout(printed)):
+            code = full.main()
+        self.assertEqual(code, 0)
+        self.assertIn("PLAN_MATCHES_CURRENT_INVENTORY", printed.getvalue())
+        self.assertIn("HOST_DELETION=NOT_PERFORMED", printed.getvalue())
+        self.assertTrue(lock.is_file())
+
     def test_receipt_sha_tamper_is_blocked(self) -> None:
         body = {"schema": 1, "mode": "EXACT_PROJECT_RESET",
                 "scope": self.scope, "targets": []}
