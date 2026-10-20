@@ -203,10 +203,20 @@ unlinked as a link. Other symlinked model candidates remain blocked.
 The synthetic tests exercise valid link-only unlink, preservation
 of a foreign target, omitted model coverage and target drift.
 
-The actual DGX link destination remains **NOT_OBSERVED** until the
-owner provides the local read-only inspection. Even if plan creation
-passes after source update, **destructive M2 remains NOT_QUALIFIED**
-and no immediate menu 5 execution is authorized by this patch.
+**Subsequent ACTUAL DGX read-only check (2026-10-20):** owner printed
+`model` as a symbolic link (device `66306`, inode `12097904`)
+with absolute link text pointing to
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-orcarouter`.
+The physically checked-out HEAD was
+`b0ef37f9b756a86cc3670691e98a0b0798984d51`, with a clean
+worktree and the expected feature branch. The later GitHub remote
+source containing the symlink remedy was ahead; no local sync was
+reported. The destination directory's actual existence/type, model
+registry ownership and its fingerprint remain **NOT_OBSERVED**; the
+link's own `stat` cannot establish them. See `CURRENT-STATUS.md`
+for separate remote HEAD and exact-SHA CI evidence. Even if plan
+creation succeeds after a separately reviewed source update,
+**destructive M2 remains NOT_QUALIFIED**, and menu 5 is not authorized.
 
 ### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
