@@ -1,3 +1,83 @@
+## 2026-10-21 — PHYSICAL partial reset postcheck: 475G recovered; Docker/models/PLE absent; eight root targets remain
+
+Operator supplied an actual, read-only post-failure host audit on
+source HEAD `dca3ba8dce0b48ba68b648ad2f926d7461adb325`.
+`full-project-uninstall.py verify --model-root <repo>/models
+--plan-file ~/qwen38-exact-reset-plan-canonical.json`
+returned `FULL_UNINSTALL_POSTCHECK=RESIDUALS_OR_INCOMPLETE` /
+RC=3; independent `uninstall-inventory.py verify
+--baseline ~/qwen38-predelete-inventory.json` returned
+`UNINSTALL_AUDIT_VERIFICATION=RESIDUALS_PRESENT` /
+RC=3. The original canonical SHA remains
+`b38c6693014e0965437b220fe818837e3ca446de781af4356123c89bb0e6428f`.
+
+**PHYSICALLY OBSERVED AS REMOVED:** both 171G OrcaRouter
+and 174G mazinb model directories, the canonical `model`
+symlink, all eight original project Docker containers, all
+seven project Docker image tags, dedicated `/swap-ple.img`
+and the project `# qwen38-ple-swap` fstab entry.
+`docker ps -a` showed **only three preserved foreign
+containers**: exact IDs starting `9219d017` (`open-webui`),
+`12c2de1b` (`spark-searxng`), `360cc353` (`portainer`).
+`swapon --show` showed only ordinary `/swap.img`
+(16G, 0B used); no PLE swap. No `vllm-`/`qwen38-`
+image tags remained. Some now-untagged image layers, if any,
+were not audited, and no claim is made about them.
+`df -h /`: before reset **626G used / 244G available / 73%**,
+now **151G used / 718G available / 18%**, approximately
+**475G lower used** (rounded df readings; not an independently
+measured bytes-reclaimed number).
+
+**Eight exact planned root targets remain, still physically
+identity-MATCH (dev/ino/mode) vs original plan:** 3 dedicated
+project cache trees:
+`~/.cache/flashinfer-v029`, `~/.cache/vllm-qwen38`,
+`~/.cache/vllm-qwen38-v029`; 3 external research evidence
+trees: `<checkout>/docs/model-reports/evidence`,
+`<checkout>/scripts/benchmark/evidence`,
+`~/Workspace/llm/qwen38-m1-bench-results`; project state
+root `~/.local/state/qwen38-spark` and data/release root
+`~/.local/share/qwen38-spark`.
+Nested state `retirement-archives`, `install.env`,
+ownership registry, 48 historical state entries, data
+`releases/qualified/evidence` and pointers `current/previous`
+are inside these roots and likewise remain. The original
+plan's two release-link entries still exist with matching
+symlink inodes; these are unlinked as entries when data-root
+is removed. Shared `~/.cache/huggingface` and
+`~/.cache/flashinfer` remain EXCLUDED_SHARED and must not
+be touched. `container-name:UNKNOWN` is only an inventory
+classification, not a remaining Docker container (independent
+docker ps audit identifies the three foreign survivors).
+
+**CONFIRMED FAILURE CAUSE:** `~/.cache/flashinfer-v029`
+root is `inlc:inlc`, mode 775, exact dev=66306,
+ino=10901508. Inside `0.6.18/121a/generated/
+cutlass_instantiations/120/gemm_grouped/80/`,
+the parent directories and failed
+`cutlass_kernel_file_gemm_grouped_sm80_M128_group1.generated.cu`
+are owned `root:root` with non-writable ordinary-user
+directory permissions 755, file mode 644; unprivileged
+`Path.unlink` failed with Errno 13. The host printed
+no nested mountpoints inside that dedicated cache root.
+Do not broad-chown `~/.cache` or run unscoped `rm -rf`.
+
+**Next safety boundary:** source-only narrow partial-uninstall
+recovery may clean the **eight unchanged and independently
+approved root targets** with exact original receipt SHA,
+scope, kind, pathname, mode/dev/ino, mount/symlink checks,
+using root privilege *only for bounded project roots*.
+No original `apply` rerun: Docker/model/swap targets are
+already absent and cannot satisfy its stale receipt. Re-verify
+`full-project-uninstall.py verify` and
+`uninstall-inventory.py verify` after this stage. Then
+preserve final evidence in GitHub and separately remove the
+local checkout plus three saved owner/receipt JSONs if
+requested. **Project-wide deletion remains INCOMPLETE until
+these residuals are removed and independent postcheck passes.**
+
+---
+
 ## 2026-10-21 — PHYSICAL destructive reset partial failure on dedicated FlashInfer cache
 
 User physically invoked the **destructive** full project reset with
