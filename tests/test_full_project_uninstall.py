@@ -193,6 +193,65 @@ class FullProjectUninstallTests(unittest.TestCase):
         self.assertIn({"kind": "image", "id": tag, "fingerprint": identity},
                       plan["targets"])
 
+    def test_registry_image_id_drift_blocks_plan_even_if_tag_is_owned(self) -> None:
+        tag = "vllm-skinny-tp1:v1"
+        original = "sha256:" + "a" * 64
+        current = "sha256:" + "b" * 64
+        (self.state / "asset-ownership.json").write_text(json.dumps({
+            "schema_version": 1,
+            "assets": [{
+                "kind": "image", "locator": tag, "root": "",
+                "owned": True, "state": "ready",
+                "fingerprint": original, "depends_on": [],
+            }],
+        }))
+        rows = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "image", "locator": tag,
+             "status": "PRESENT", "ownership": "INSTALLER_OWNED"},
+        ]
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full, "image_identity",
+                           return_value={"tag": tag, "id": current}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            with self.assertRaisesRegex(full.Blocked, "registered_image_id_drift"):
+                full.scan(self.scope)
+
+    def test_registered_model_marker_fingerprint_is_checked(self) -> None:
+        import hashlib
+        model = self.model_root / "qwen3.8-flash-next-mazinb"
+        model.mkdir()
+        marker = model / ".qwen38-model-manifest.json"
+        marker.write_text('{"project":"owned"}')
+        original = hashlib.sha256(marker.read_bytes()).hexdigest()
+        record = {"owned": True, "state": "ready", "fingerprint": original}
+        full.check_recorded_asset_provenance("model", str(model), record)
+        marker.write_text('{"project":"foreign"}')
+        with self.assertRaisesRegex(full.Blocked, "registered_model_manifest_drift"):
+            full.check_recorded_asset_provenance("model", str(model), record)
+        marker.unlink()
+        with self.assertRaisesRegex(full.Blocked, "registered_model_manifest_missing"):
+            full.check_recorded_asset_provenance("model", str(model), record)
+
+    def test_registered_unowned_and_incomplete_assets_never_override_provenance(self) -> None:
+        tag = "vllm-skinny-tp1:v1"
+        observed = {"tag": tag, "id": "sha256:" + "b" * 64}
+        with self.assertRaisesRegex(full.Blocked, "registry_manifest_ownership_conflict"):
+            full.check_recorded_asset_provenance(
+                "image", tag,
+                {"owned": False, "state": "ready", "fingerprint": observed["id"]},
+                observed)
+        with self.assertRaisesRegex(full.Blocked, "registered_asset_not_fingerprint_ready"):
+            full.check_recorded_asset_provenance(
+                "image", tag,
+                {"owned": True, "state": "claimed", "fingerprint": ""},
+                observed)
+
     def test_plan_scope_rejects_parent_and_model_symlink(self) -> None:
         with self.assertRaisesRegex(full.Blocked, "model_outside"):
             full.scoped_file(self.home, "model", self.scope)
