@@ -19,6 +19,49 @@ Hugging Face caches and externally installed images are not necessarily in
 cumulative installer asset tracker; the presence of its manifest is not proof
 that the restore was registered as installer-owned.
 
+## Complete removal target contract (owner-confirmed)
+
+**Complete project uninstall means remove, NOT retain, every positively
+identified Qwen3.8 project resource.** The default managed uninstall and
+historical archive-preservation rules are *not* the full-reset policy.
+
+| Target | Complete uninstall |
+|---|---|
+| OrcaRouter managed canonical Docker, checkpoint, runtime image | REMOVE |
+| mazinb R2 trial #1, #2, #3 Docker IDs and downloaded checkpoint | REMOVE |
+| Other project Docker experiments, images, project volumes | REMOVE after exact-ID/reference checks |
+| NVIDIA, Hybrid H3/H4/H5/H6 and all project generated model stages | REMOVE with root/ownership verification |
+| Dedicated PLE swap and its exact /etc/fstab entry | REMOVE (never normal /swap.img) |
+| qwen38 service, proxy socket/service and custom API endpoints | REMOVE |
+| Project state, immutable releases, config, journals and retirement archives | REMOVE |
+| Locally retained benchmark/forensic materials, including project checkout evidence directories | REMOVE, explicitly including both original and copy |
+| Project-specific Hugging Face model cache entries | REMOVE after provider/identity review |
+| Shared whole Hugging Face cache, foreign Docker/apps, OS, NVIDIA drivers, system swap | NEVER mass-delete |
+| GitHub remote branch/commits/PR history | NOT a local-uninstall target |
+
+The physical owner-provided R2 read-only outputs validate at least these
+candidate Docker IDs (do not infer that the set is exhaustive):
+- first previous managed OrcaRouter container:
+  `f6bfee5a421743758974920064d59c1fb7584cb3a96f83b5c3fafff6acd24`
+  (its identity and live status must be independently rechecked);
+- second failed R2:
+  `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`;
+- third failed R2:
+  `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`.
+
+Do not hardcode the historical IDs into a reusable deletion routine.
+Enumerate the actual current project objects and compare **exact** IDs,
+names, image/config fingerprint, stopped/running state, mounts, other-container
+references and ownership before enabling deletion. No foreign Docker may be
+removed to free an image. No name-only match constitutes deletion authority.
+
+The second and third Docker were reported stopped, exit=137 and
+OOMKilled=false; both named journals report
+`M1Error: NVIDIA RM memory allocation error`. Their monitor output contained
+no `PROTECT stopping` and the kernel RM query returned sudo-authentication
+failure. Those facts do not qualify a live uninstall, and no more GPU trial
+is needed for cleanup planning.
+
 ## Operator flow
 
 The main Wizard's 2. Uninstall menu has independent actions:
@@ -33,8 +76,12 @@ bounded project state/release/model directory entries, exact full-ID project
 Docker containers, project-tagged Docker images, project Docker volumes,
 project runtime/service/proxy systemd unit files and LoadState/ActiveState,
 dedicated PLE swap file and the exact # qwen38-ple-swap /etc/fstab marker.
-It reports HF cache as EXCLUDED_SHARED and preserves system Docker/NVIDIA
-components, unrelated swap, external apps and Git checkout.
+It excludes the **shared HF cache root**, but separately inventories
+project-specific HF model-cache entries. It includes local experimental
+journals, external private benchmark archive candidates, and checkout-local
+research evidence (which will require a separate safe checkout cleanup stage).
+System Docker/NVIDIA components, unrelated swap and external apps stay out
+of scope.
 
 A name, tag or label makes a resource a review *candidate*, never grants
 ownership. Invalid state/registry, unreadable directory, Docker/systemd access
@@ -58,8 +105,9 @@ against that exact baseline:
 
     python3 -B scripts/lifecycle/uninstall-inventory.py verify --baseline "$HOME/qwen38-uninstall-baseline.json"
 
-Use --model-root, --swap-file, --state-home, --data-home, --unit-dir, --fstab-path
-and --hf-home to select exact inspection scope. The same inspection scope is
+Use --model-root, --swap-file, --state-home, --data-home, --unit-dir,
+--fstab-path, --hf-home, --home-path and --checkout-path to select exact
+inspection scope. The same inspection scope is
 required for baseline and postcheck; mismatches refuse a PASS.
 
 Results: NOT_PERFORMED (plan only), RESIDUALS_PRESENT, INCOMPLETE,
@@ -73,17 +121,21 @@ residuals observed. The audit cannot be used as a deletion token.
 
 1. Exact-ID ownership and dependency records for every new research trial,
    model restore and image. Do not infer historical ownership retroactively.
-2. Reusable archive-before-retire exact-ID cleanup independent of historical
-   five-container or 17-container one-shot procedures. Verify SHA256 archives
-   and preserve experiment/benchmark evidence out of removal scope.
+2. Reusable exact-ID experimental-Docker removal independent of historical
+   five-container or 17-container one-shot procedures. Existing forensic
+   evidence and prior archives must **also be removed**, not silently retained;
+   an optional externally retained backup requires a separate explicit choice.
 3. Explicit per-category confirmation, final typed owner approval, bounded
    lock and fail-closed mutations, rollback/partial-failure reporting.
-4. A distinct, optional shared-cache cleanup with provenance; never blindly
-   delete HF cache, Docker engine, drivers, foreign volumes/swap or Git data.
+4. Remove project-specific HF cache and repo-local research evidence without
+   wiping the shared cache parent or third-party data; a separately approved
+   local Git checkout removal is required for a literally empty project tree.
+   Never purge remote GitHub history or unrelated local Git projects.
 5. Real install → remove → postcheck E2E with failure injection on a disposable
    DGX-compatible host/VM. M2 destructive acceptance remains NOT RUN.
 6. Only after that testing, separately approve exact physical DGX removal
-   scope, retained evidence, and before/after disk-space receipts.
+   scope, including irreversible local forensic deletion and before/after
+   disk-space receipts. No default retention of R2/OrcaRouter materials.
 
 Current physical DGX cleanup, GPU launch, service changes, model deletions,
 swap changes, Docker cleanup, source sync and PR merge remain unauthorized.
