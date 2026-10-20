@@ -479,6 +479,24 @@ A full purge removes every model/image asset recorded as installer-owned in `ass
 
 The uninstaller continues to refuse deletion of assets that are not recorded as installer-owned, have drifted from their recorded manifest/image fingerprint, or are still required by retained dependents.
 
+## Complete-uninstall coverage audit (read-only; not deletion)
+
+The Wizard's **2. Uninstall → 1. Full-project resource inventory** calls
+`python3 -B scripts/lifecycle/uninstall-inventory.py plan`. It separately
+reports managed vs unverified Docker/model assets, R2 experimental containers,
+project state and releases, systemd service/proxy file and runtime status,
+project-labelled Docker volumes, dedicated PLE swap/fstab marker, and excluded
+shared Hugging Face cache. It makes **no changes**.
+
+For optional post-removal verification, save a `plan --json` baseline outside
+the deletion scope and later call `verify --baseline PATH` at the same paths.
+This verifies only discovered, bounded project scope, not factory-clean OS.
+The existing managed uninstaller is **option 2**, separately confirmed.
+A full research-container/evidence/cache cleanup is NOT implemented and
+physical DGX destructive E2E is NOT QUALIFIED. Do not run destructive
+`--purge-all` on the protected physical DGX as a shortcut.
+See [coverage boundaries and remaining gates](docs/PROJECT-UNINSTALL-COVERAGE.md).
+
 ## Recommended maintenance sequence
 
 Before maintenance:
