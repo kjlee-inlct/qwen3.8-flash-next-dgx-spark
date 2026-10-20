@@ -5,6 +5,75 @@ delete engine are implemented in source; M2 destructive E2E remains NOT
 HOST-QUALIFIED.** Neither source completion, plan receipt nor CI tests
 authorize deletion on the one protected physical DGX.
 
+### 2026-10-21 owner-requested exact-identity reset exception — SOURCE IMPLEMENTATION ONLY
+
+The operator has explicitly requested *total Qwen3.8 project-local
+removal*, including known `owned=False`/`UNVERIFIED` historical
+models and images, **without deleting foreign resources or shared
+cache roots**. A new opt-in source extension of
+`scripts/lifecycle/full-project-uninstall.py` accepts **both**
+`--owner-exception-file` and `--baseline-inventory` for `plan`
+and `apply` only. Legacy/default plan with no exception stays
+fail-closed on `candidate_ownership_not_proven`; old ownership
+records and `install.env` flags are **not** modified or promoted.
+
+The operator has supplied a saved **actual DGX** read-only inventory
+SHA256 `1a5892edff4cccf9ff662467cfda460608e9404bfef5d47bfbadcecdafa1d863`
+(`schema=1`, `mode=READ_ONLY_PROJECT_SCOPE`, zero issues).
+It lists **8** containers, **7** unverified Docker image tags,
+**2** present unverified real model roots, one separate checkout/model
+symlink, **3** dedicated runtime caches, **4** forensic candidates,
+dedicated owned PLE swap, project state/data and releases. No
+`model-cache` candidates are present; one shared `hf-cache` and
+one shared FlashInfer runtime-cache parent remain excluded.
+The review output, not the raw JSON bytes or its filesystem metadata,
+was pasted into chat. The subsequent source changes are **not
+physical-host validation** and the owner has not yet run this engine.
+
+#### Exception contract
+
+Exception JSON must contain **exactly**
+`{"schema":1,"inventory_sha256":"<64 lowercase hex>","entries":[...]}`.
+Every entry is exactly
+`{"kind":"model|image","locator":"<exact path or Docker tag>","fingerprint":"<marker SHA256 hex for model; full sha256: image ID for image>"}`.
+The CLI rejects unknown keys, duplicate records, noncanonical
+fingerprints, model-cache exceptions and more than 64 entries.
+Both input files must be regular files outside deletion subtrees;
+the inventory SHA256 must match its bytes, issue list must be empty,
+and inventory scope (including **the passed `--model-root`**) must
+exactly match the engine's scan. The fresh scan must enumerate
+**exactly the same** resource rows as the baseline; every present
+unverified model/image must have one exact exception entry, with
+no extra exceptions and no new unknown cache candidate.
+
+Before a receipt can be issued, the engine runs fresh
+`model_provenance_audit` and `reference_audit` and requires
+`CONSISTENT_METADATA_NOT_OWNERSHIP` /
+`NO_OBSERVED_CONFLICTS`; independently checks exact image IDs
+and model marker file SHA256; and checks existing
+unowned *ready* registry fingerprints for drift without
+setting `owned=True`. It embeds approval bytes SHA256, entry
+list, baseline SHA256 and resource fingerprints in the canonical
+SHA256 plan receipt. Plan/apply share precisely the same input
+files; apply holds the lifecycle lock, demands the existing
+typed irreversible phrase + full receipt SHA, fully rebuilds
+the plan, and rejects any drift. Extra Docker references/aliases
+are independently rescanned after project Docker removal and
+model marker hashes are revisited before file deletion.
+
+**Important:** the exception enables an owner-requested destruction
+policy; it is not a claim that matching historical project labels
+prove ownership, a promise of data recovery, or permission to
+run a blind `rm -rf`/Docker prune. It never removes shared HF
+or FlashInfer roots, foreign containers or the whole Git
+checkout. The declared goal of eliminating the *checkout itself*
+would require a **separate explicit final step after verifying
+the project-scoped engine results**. Absence of a presently scanned
+cache does not prove absence everywhere else. This new route
+requires passing synthetics, exact HEAD CI, read-only on-host
+plan/receipt review and a separately approved physical
+apply procedure. **Destructive M2 remains NOT_QUALIFIED.**
+
 ### 2026-10-21 historical image build-to-current-ID evidence matrix — SOURCE REVIEW
 
 This is a **repository source and archived operator-evidence review**, not
