@@ -218,6 +218,37 @@ for separate remote HEAD and exact-SHA CI evidence. Even if plan
 creation succeeds after a separately reviewed source update,
 **destructive M2 remains NOT_QUALIFIED**, and menu 5 is not authorized.
 
+### Actual DGX OrcaRouter model association is not deletion ownership (2026-10-20)
+
+Subsequent owner-provided **read-only DGX** evidence confirms the
+`checkout/model` link resolves to an **existing, real**
+`checkout/models/qwen3.8-flash-next-orcarouter` directory (target
+device/inode `66306/12061870`). The manifest names this directory as
+`MODEL_DIR` but has `MODEL_OWNED=0`. Exactly one model registry
+entry matches the directory, and it has `owned=False`,
+`state=ready`, and marker fingerprint
+`3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`.
+The `.qwen38-model-manifest.json` content SHA256 matches this value.
+The manifest also sets `VLLM_IMAGE=vllm-skinny-tp1:v1` and
+`IMAGE_OWNED=0`; its *registry image entry and live Docker image
+ID were not inspected* in this evidence.
+
+This establishes a strongly identified **project-associated but not
+installer-owned** model, not proof of independent exclusive ownership.
+Do not change the manifest flags, forge registry ownership, or delete
+the model solely because the marker hash matches. Under the source-only
+positive-ownership guard, this present `UNVERIFIED` model is expected
+to block the complete plan; an updated physical plan has **not** been
+attempted. The next safe stage is read-only model-marker provenance,
+Docker exact image ID/labels and reference inspection, plus a full
+candidate inventory. Evaluate a distinct, evidence-bound
+project-exclusive full-reset authority path only after the records
+support it, with separate approval, synthetic foreign-data regression
+tests and disposable E2E. The declared complete removal scope must
+not be weakened to `--purge-all` just because old assets carry
+`owned=False`. See `CURRENT-STATUS.md` for the physical source,
+local checkout SHA, and the prior symlink identity details.
+
 ### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
 The inventory continues to discover `vllm-*`/`qwen38-*` image
