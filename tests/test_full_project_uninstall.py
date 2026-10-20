@@ -59,7 +59,7 @@ class FullProjectUninstallTests(unittest.TestCase):
         image_fp = "sha256:" + "c" * 64
         (self.state / "asset-ownership.json").write_text(json.dumps({
             "schema_version": 1, "assets": [
-                {"kind": "model", "locator": str(model), "root": "",
+                {"kind": "model", "locator": str(model), "root": str(self.model_root),
                  "owned": False, "state": "ready",
                  "fingerprint": model_fp, "depends_on": []},
                 {"kind": "image", "locator": tag, "root": "",
