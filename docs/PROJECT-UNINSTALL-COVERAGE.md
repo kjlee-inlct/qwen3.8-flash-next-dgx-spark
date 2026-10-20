@@ -341,6 +341,43 @@ requires separately evidenced immutable historical records, not a
 weaker basename check. No physical DGX source sync or M2 validation
 has been performed.
 
+### Read-only Docker dependency audit: reproducible source helper (SOURCE_ONLY, 2026-10-20)
+
+A separate `references` mode was added to the existing
+`scripts/lifecycle/uninstall-inventory.py`, so repeatable checks
+do not depend on past one-off pasted Python scripts:
+
+    python3 -B scripts/lifecycle/uninstall-inventory.py references
+    python3 -B scripts/lifecycle/uninstall-inventory.py references --json
+
+This is **read only** and does not write a deletion receipt, mutate Docker,
+change state/swap, change the registry or promote ownership. The mode
+independently re-queries the complete Docker container list, inspects
+**exact full-ID external containers**, maps all currently inventoried
+candidate image tags to full image IDs, detects other tags sharing those
+IDs and verifies project candidate Docker-volume references and host
+bind-path overlaps (both lexical and symlink-resolved). Its candidate
+filesystem scope comes from the bounded project resource inventory,
+including explicitly discovered model-root candidates and
+project-only cache/state/data/forensic paths; shared HF/runtime
+cache *parent* paths remain excluded. Unexpected symlinked model
+entries, missing/different Docker IDs, malformed inspect results,
+incomplete inventory, inaccessible Docker and inspection limits
+result in **INCOMPLETE**, never a zero-conflict pass.
+
+Outputs are `NO_OBSERVED_CONFLICTS`, `CONFLICTS` or
+`INCOMPLETE`; shell exit codes are respectively 0, 3 and 2.
+Even `NO_OBSERVED_CONFLICTS` is a **point-in-time external-Docker
+reference report only**, not evidence of exclusive model/image
+ownership, open file descriptors of other host processes, and
+certainly not approval to apply a reset. Synthetic tests check
+shared-cache exclusions, external image-ID matches, project bind
+overlap, Docker volume use, image aliases and discovery drift.
+The physical DGX has **not** executed this newly added mode
+because its last reported local checkout predates the source;
+the owner's manual 11-container check is separately recorded
+in `CURRENT-STATUS.md`.
+
 ### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
 The inventory continues to discover `vllm-*`/`qwen38-*` image
