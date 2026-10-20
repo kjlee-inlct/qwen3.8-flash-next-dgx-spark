@@ -128,6 +128,99 @@ class FullProjectUninstallTests(unittest.TestCase):
         with self.assertRaisesRegex(full.Blocked, "symlink"):
             full.scoped_file(item, "model", self.scope)
 
+    def test_legacy_checkout_model_link_is_planned_and_unlinked_only(self) -> None:
+        target = self.model_root / "qwen3.8-flash-next-orcarouter"
+        target.mkdir()
+        (target / "config.json").write_text("MODEL_DATA")
+        link = self.checkout / "model"
+        link.symlink_to(target)
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(full.inventory.path_status(link), "UNSAFE_SYMLINK")
+        fingerprint = full.legacy_model_link_identity(link, self.scope)
+        self.assertEqual(fingerprint["resolved_target"], str(target))
+        rows = [
+            {"kind": "model", "locator": str(link),
+             "status": "UNSAFE_SYMLINK", "ownership": "UNVERIFIED"},
+            {"kind": "model", "locator": str(target),
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+        ]
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            plan = full.scan(self.scope)
+        link_entry = next(item for item in plan["targets"]
+                          if item["kind"] == "legacy-model-link")
+        self.assertEqual(link_entry["fingerprint"], fingerprint)
+        self.assertIn({"kind": "model", "id": str(target),
+                       "fingerprint": next(x["fingerprint"] for x in plan["targets"]
+                                           if x["kind"] == "model")},
+                      plan["targets"])
+        with patch.object(full, "inspect_image_references", return_value=None):
+            full.execute(plan)
+        self.assertFalse(link.exists())
+        self.assertFalse(link.is_symlink())
+        self.assertFalse(target.exists())
+        self.assertTrue(self.checkout.is_dir())
+        self.assertTrue(self.model_root.is_dir())
+
+    def test_legacy_model_link_to_foreign_live_target_stays_blocked(self) -> None:
+        foreign = self.home / "unrelated-data"
+        foreign.mkdir()
+        (foreign / "important.txt").write_text("KEEP")
+        link = self.checkout / "model"
+        link.symlink_to(foreign)
+        with self.assertRaisesRegex(full.Blocked,
+                                     "legacy_model_link_target_outside"):
+            full.legacy_model_link_identity(link, self.scope)
+        self.assertTrue(link.is_symlink())
+        self.assertEqual((foreign / "important.txt").read_text(), "KEEP")
+
+    def test_legacy_model_link_to_untracked_project_directory_stays_blocked(self) -> None:
+        target = self.model_root / "qwen3.8-flash-next-mazinb"
+        target.mkdir()
+        link = self.checkout / "model"
+        link.symlink_to(target)
+        rows = [
+            {"kind": "model", "locator": str(link),
+             "status": "UNSAFE_SYMLINK", "ownership": "UNVERIFIED"},
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+        ]
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            with self.assertRaisesRegex(full.Blocked,
+                                         "legacy_model_link_target_not_selected"):
+                full.scan(self.scope)
+
+    def test_legacy_link_drift_refuses_unlink_and_preserves_targets(self) -> None:
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        other = self.model_root / "qwen3.8-flash-next-mazinb"
+        other.mkdir()
+        link = self.checkout / "model"
+        link.symlink_to(model)
+        recorded = full.legacy_model_link_identity(link, self.scope)
+        link.unlink()
+        link.symlink_to(other)
+        with patch.object(full, "inspect_image_references", return_value=None):
+            with self.assertRaisesRegex(full.Blocked, "legacy_model_link_drift"):
+                full.execute({"scope": self.scope, "targets": [
+                    {"kind": "legacy-model-link", "id": str(link),
+                     "fingerprint": recorded},
+                ]})
+        self.assertTrue(link.is_symlink())
+        self.assertTrue(model.exists())
+        self.assertTrue(other.exists())
+
     def test_discovery_does_not_make_foreign_model_permitted(self) -> None:
         foreign = self.home / "unrelated-model"
         foreign.mkdir()
