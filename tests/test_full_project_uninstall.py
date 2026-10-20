@@ -315,6 +315,122 @@ class FullProjectUninstallTests(unittest.TestCase):
         with self.assertRaisesRegex(full.Blocked, "full_sha"):
             full.docker_identity("123abc")
 
+    def test_docker_mount_order_is_canonical_and_content_remains_exact(self) -> None:
+        cid = "b" * 64
+        mounts = [
+            {"Type": "bind", "Destination": "/model",
+             "Source": "/home/project/models/model", "RW": False,
+             "Propagation": "rprivate"},
+            {"Type": "bind", "Destination": "/cache",
+             "Source": "/home/project/.cache", "RW": True,
+             "Propagation": "rprivate"},
+            {"Type": "volume", "Destination": "/scratch",
+             "Name": "qwen38-scratch", "Source": "/var/lib/docker/volumes/a",
+             "RW": True},
+        ]
+        obj = {"Id": cid, "Name": "/qwen38-m1-test",
+               "Config": {"Labels": {"qwen38.bench": "mazinb"}},
+               "State": {"Running": False, "Status": "exited"},
+               "Image": "sha256:" + "c" * 64, "Mounts": mounts}
+        with patch.object(full, "json_command", return_value=[obj]):
+            initial = full.docker_identity(cid)
+        with patch.object(full, "json_command",
+                          return_value=[{**obj, "Mounts": mounts[::-1]}]):
+            reversed_identity = full.docker_identity(cid)
+        self.assertEqual(initial, reversed_identity)
+        self.assertEqual(len(initial["mounts"]), 3)
+        self.assertEqual(full.digest(initial), full.digest(reversed_identity))
+
+        shifted = [dict(m) for m in mounts]
+        shifted[0]["Source"] = "/home/foreign/models/model"
+        with patch.object(full, "json_command",
+                          return_value=[{**obj, "Mounts": shifted}]):
+            changed = full.docker_identity(cid)
+        self.assertNotEqual(initial, changed)
+        self.assertNotEqual(full.digest(initial), full.digest(changed))
+
+        flags = [dict(m) for m in mounts]
+        flags[1]["RW"] = False
+        with patch.object(full, "json_command",
+                          return_value=[{**obj, "Mounts": flags}]):
+            changed_flags = full.docker_identity(cid)
+        self.assertNotEqual(initial, changed_flags)
+
+        doubled = mounts + [mounts[0]]
+        with patch.object(full, "json_command",
+                          return_value=[{**obj, "Mounts": doubled}]):
+            duplicate = full.docker_identity(cid)
+        self.assertEqual(len(duplicate["mounts"]), 4)
+        self.assertNotEqual(initial, duplicate)
+
+    def test_plan_digest_stable_across_docker_mount_reorder(self) -> None:
+        cid = "d" * 64
+        mounts = [
+            {"Type": "bind", "Destination": "/model",
+             "Source": "/home/project/model", "RW": False},
+            {"Type": "bind", "Destination": "/cache",
+             "Source": "/home/project/cache", "RW": False},
+        ]
+        obj = {"Id": cid, "Name": "/qwen38-trial",
+               "Config": {"Labels": {"qwen38.test": "yes"}},
+               "State": {"Running": False, "Status": "exited"},
+               "Image": "sha256:" + "e" * 64}
+        rows = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "container", "locator": cid,
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+        ]
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            with patch.object(full, "json_command",
+                              return_value=[{**obj, "Mounts": mounts}]):
+                first = full.scan(self.scope)
+            with patch.object(full, "json_command",
+                              return_value=[{**obj, "Mounts": mounts[::-1]}]):
+                second = full.scan(self.scope)
+        self.assertEqual(first, second)
+        self.assertEqual(first["sha256"], second["sha256"])
+
+    def test_apply_refuses_actual_mount_content_drift_before_docker_rm(self) -> None:
+        cid = "f" * 64
+        original = [{"Type": "bind", "Destination": "/model",
+                     "Source": "/safe/model", "RW": False}]
+        moved = [{"Type": "bind", "Destination": "/model",
+                  "Source": "/foreign/model", "RW": False}]
+        obj = {"Id": cid, "Name": "/qwen38-trial",
+               "Config": {"Labels": {"qwen38.test": "yes"}},
+               "State": {"Running": False, "Status": "exited"},
+               "Image": "sha256:" + "e" * 64}
+        with patch.object(full, "json_command",
+                          return_value=[{**obj, "Mounts": original}]):
+            first = full.docker_identity(cid)
+        with (patch.object(full, "json_command",
+                           return_value=[{**obj, "Mounts": moved}]),
+              patch.object(full, "run", side_effect=AssertionError(
+                  "Docker removal must not be reached"))):
+            with self.assertRaisesRegex(full.Blocked, "container_identity_changed"):
+                full.execute({"scope": self.scope, "targets": [
+                    {"kind": "container", "id": cid, "fingerprint": first},
+                ]})
+
+    def test_invalid_docker_mount_rows_remain_fail_closed(self) -> None:
+        cid = "e" * 64
+        obj = {"Id": cid, "Name": "/qwen38-test",
+               "Config": {"Labels": {"qwen38.test": "yes"}},
+               "State": {"Running": False, "Status": "exited"},
+               "Image": "sha256:" + "a" * 64}
+        for bad in (None, [None], ["not-a-dict"], [{"Destination": "/model"}, 3]):
+            with self.subTest(mounts=repr(bad)):
+                with patch.object(full, "json_command",
+                                  return_value=[{**obj, "Mounts": bad}]):
+                    with self.assertRaisesRegex(full.Blocked, "inspect_incomplete"):
+                        full.docker_identity(cid)
+
     def test_docker_exact_id_must_match_inspect_and_project_label(self) -> None:
         cid = "a" * 64
         baseline = {"Id": cid, "Name": "/qwen38-mazinb-m1-R2",
