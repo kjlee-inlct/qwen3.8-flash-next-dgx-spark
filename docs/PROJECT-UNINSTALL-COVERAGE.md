@@ -28,7 +28,7 @@ full image ID exactly matches the later real-host image ID. This is
 strong historical association, **not** exclusive ownership or
 permission to remove.
 
-| Current tag (all `owned=False` / `UNVERIFIED` in present inventory) | Exact observed image ID (`sha256:` prefix omitted in table) | Evidence type / independent anchor | Source-only assessment |
+| Current tag (all `UNVERIFIED` in inventory; `owned=False` only where a registry record exists) | Exact observed image ID (`sha256:` prefix omitted in table) | Evidence type / independent anchor | Source-only assessment |
 |---|---|---|---|
 | `vllm-skinny-tp1:v1` | `01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4` | [legacy Dockerfile](../scripts/Dockerfile.skinny-gemm), `install.env` `VLLM_IMAGE`/`IMAGE_OWNED=0`, exact unowned registry image ID; canonical and AB-legacy containers mount the identified OrcaRouter checkpoint | **BUILD_ID_ATTESTATION_MISSING**: image lacks project build labels; source recipe + managed use + registry identity are not direct proof that this image was built exclusively for the project |
 | `vllm-orcarouter-v029:v1` | `dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734` | [v0.29 project Dockerfile](../scripts/Dockerfile.v029-orcarouter); [R25b physical build record](../scripts/benchmark/evidence/orcarouter-r25b-init-model-image-preflight-result-20261005.md) lists this **same exact parent ID** and inherited project stability label; R22 and A/B experiments reference it | **HISTORICAL_PARENT_ID_MATCH**, not an independently recovered original build log of this baseline and not proof it has no current external consumer |
