@@ -1,3 +1,69 @@
+## 2026-10-21 — ACTUAL DGX whole-project apply preflight DRIFT, no deletions (PLE swap included)
+
+The owner explicitly reconfirmed the intent to delete **the complete
+project including the dedicated wizard-created PLE swap**
+`/swap-ple.img` and the matching `# qwen38-ple-swap`
+`/etc/fstab` line, while preserving `/swap.img` and
+external Docker/volumes. The physical operator ran the exact
+`ead3bf450a1c98f2c35f20d19b92a02479cdaaac`
+source with the previously generated
+`/home/inlc/qwen38-exact-reset-plan.json` receipt. They printed:
+
+```text
+EXACT_RESET_RECEIPT=PASS
+PLE_SWAP_IN_PLAN=YES
+TOTAL_TARGETS=29
+MEM_AVAILABLE_GIB=118.10
+PLE_SWAP_USED_GIB=1.01
+MEMORY_RESERVE_GIB=16
+PLE_SWAPOFF_MEMORY_PREFLIGHT=PASS
+REFERENCE_AUDIT_RESULT=NO_OBSERVED_CONFLICTS
+PROJECT_CONTAINER_COUNT=8
+TOTAL_DOCKER_CONTAINERS=11
+EXTERNAL_CONTAINER_COUNT=3
+PROJECT_IMAGE_COUNT=7
+CANDIDATE_VOLUME_COUNT=0
+EXTERNAL_REFERENCE_CONFLICTS=0
+OTHER_IMAGE_TAG_ALIASES=0
+FULL_UNINSTALL=BLOCKED_OR_PARTIAL_REVIEW_REQUIRED
+REASON=inventory_or_asset_identity_drift_before_apply
+STOP: deletion failed or is partial
+DO NOT RETRY BLINDLY
+```
+
+There is **no evidence that the full reset executor ran**: the
+reported failure comes from `main()` at exact plan-vs-fresh
+comparison **before** `execute(saved)`, which is the first
+Docker/swap/filesystem mutation entry point. Therefore the logged
+attempt performed **no managed deletion**. No swapoff, image
+removal, container rm or checkpoint wipe is reported. The exact
+changed resource/field is **not yet known**; neither label it
+benign nor bypass the strict gate. One full `read-only plan`
+is SHA `5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89`,
+9 owner exceptions are bound to physical predelete inventory
+SHA `1a5892edff4cccf9ff662467cfda460608e9404bfef5d47bfbadcecdafa1d863`.
+The physical stdout provided 29 targets: eight containers,
+seven images, two model dirs, one legacy model link,
+three dedicated caches, three forensic paths, two release links,
+state/data roots and one PLE swap. The first count of four
+forensic inventory entries includes nested archive under state
+and is not four separately targeted trees.
+
+**Source-only diagnostics under review:** an additional
+`full-project-uninstall.py diagnose` action was implemented on
+the same feature branch. It loads the *existing* receipt and
+owner-exception, holds the existing lifecycle lock read-only,
+rebuilds the same scan, and returns only bounded changed target
+and field names; it never calls `execute`. Separate synthetic
+tests cover changed Docker status/model inode and enforce that
+diagnose cannot invoke mutators. This action must have
+exact-HEAD passing CI and operator-side clean fast-forward before
+its first real DGX use; no `apply` rerun until the output is
+reviewed and any actual change addressed. Physical destructive
+M2 remains NOT_QUALIFIED.
+
+---
+
 ## 2026-10-21 — ACTUAL DGX predelete inventory capture and refreshed Docker reference check
 
 Following the owner's explicit intention to **delete all Qwen3.8
