@@ -5,6 +5,86 @@ delete engine are implemented in source; M2 destructive E2E remains NOT
 HOST-QUALIFIED.** Neither source completion, plan receipt nor CI tests
 authorize deletion on the one protected physical DGX.
 
+### 2026-10-21 historical image build-to-current-ID evidence matrix — SOURCE REVIEW
+
+This is a **repository source and archived operator-evidence review**, not
+a new Docker scan or a deletion approval. The 2026-10-20 actual DGX
+inventory recorded exactly **seven present candidate tags and full
+image IDs**, all `UNVERIFIED` for ownership; the independently run
+`references` mode at physical checkout
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c` reported
+`NO_OBSERVED_CONFLICTS`, with eight project Docker containers,
+three external, zero scoped foreign references/aliases and zero
+project candidate volumes. Do not extrapolate these point-in-time
+checks to other Docker contexts, future changes or non-Docker users.
+
+### Exact current image identities and independent historical anchors
+
+Each historical record below was written from a prior actual DGX
+build/inspection at its own dated checkout; the present identities are
+from `CURRENT-STATUS.md`, **not** re-inspected for this source review.
+`BUILT_IMAGE_MATCH` means the archival physical *build* record's
+full image ID exactly matches the later real-host image ID. This is
+strong historical association, **not** exclusive ownership or
+permission to remove.
+
+| Current tag (all `owned=False` / `UNVERIFIED` in present inventory) | Exact observed image ID (`sha256:` prefix omitted in table) | Evidence type / independent anchor | Source-only assessment |
+|---|---|---|---|
+| `vllm-skinny-tp1:v1` | `01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4` | [legacy Dockerfile](../scripts/Dockerfile.skinny-gemm), `install.env` `VLLM_IMAGE`/`IMAGE_OWNED=0`, exact unowned registry image ID; canonical and AB-legacy containers mount the identified OrcaRouter checkpoint | **BUILD_ID_ATTESTATION_MISSING**: image lacks project build labels; source recipe + managed use + registry identity are not direct proof that this image was built exclusively for the project |
+| `vllm-orcarouter-v029:v1` | `dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734` | [v0.29 project Dockerfile](../scripts/Dockerfile.v029-orcarouter); [R25b physical build record](../scripts/benchmark/evidence/orcarouter-r25b-init-model-image-preflight-result-20261005.md) lists this **same exact parent ID** and inherited project stability label; R22 and A/B experiments reference it | **HISTORICAL_PARENT_ID_MATCH**, not an independently recovered original build log of this baseline and not proof it has no current external consumer |
+| `vllm-orcarouter-v029-h38-decoder-scope:v1` | `412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc` | [H38 Dockerfile](../scripts/Dockerfile.v029-h38-decoder-scope), [managed image chain](../scripts/runtime/prepare-h38-image.sh), [actual DGX H38 installed source-contract check](../scripts/benchmark/evidence/orcarouter-h38-exact-image-source-contract-result-20261008.md) identified same image ID before/after static inspection | **INSTALLED_SOURCE_ID_MATCH**, not a directly cited original image-build log; intermediate H9–H12 source chain must remain distinguished from the seven currently tagged candidates |
+| `vllm-orcarouter-v029-r25-init-marker:v1` | `9abb228a5a4c232d20bf38e33a806f15d4bf62ff61128502349fdf39d70e3a9e` | [R25b actual DGX build and preflight](../scripts/benchmark/evidence/orcarouter-r25b-init-model-image-preflight-result-20261005.md), `Dockerfile.v029-r25-init-model-markers`, exact parent v0.29 ID, `qwen38.r25=init-model-boundary-v1` | **BUILT_IMAGE_MATCH** |
+| `vllm-orcarouter-v029-r26-construction-marker:v1` | `568d0ac6917b324eef6c29e5f06b0a1ba182b5db043052b13296fe7d3c5428aa` | [R26 actual DGX build and preflight](../scripts/benchmark/evidence/orcarouter-r26-construction-image-preflight-result-20261005.md), `Dockerfile.v029-r26-construction-markers`, exact R25 parent ID, `qwen38.r26=construction-boundary-v1` | **BUILT_IMAGE_MATCH** |
+| `vllm-orcarouter-v029-r27-linear-marker:v1` | `e9e92c5cb98d443a8410f21345cb0e07c30c9e7c84516cedcc2a6dc213934119` | [R27 actual DGX build and preflight](../scripts/benchmark/evidence/orcarouter-r27-linear-image-preflight-result-20261005.md), `Dockerfile.v029-r27-linear-boundary-markers`, exact R26 parent ID, `qwen38.r27=w4a16-linear-boundary-v1` | **BUILT_IMAGE_MATCH** |
+| `vllm-orcarouter-v029-r28-unquant-linear-marker:v1` | `54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f` | [R28 actual DGX build and preflight](../scripts/benchmark/evidence/orcarouter-r28-unquant-linear-image-preflight-result-20261005.md), `Dockerfile.v029-r28-unquant-linear-markers`, exact R27 parent ID, `qwen38.r28=unquant-linear-boundary-v1` | **BUILT_IMAGE_MATCH** |
+
+**Dependence versus historical creation:** the project-owned-code R25
+→ R26 → R27 → R28 chain and H38's separate v0.29 → H9 → H10 →
+H11 → H12 → H38 build path establish *source-level* parentage,
+but deleting tags does not imply removal of all shared underlying
+Docker layers or all historical source. v0.29 remains referenced by
+currently preserved project containers (and is a parent of project
+diagnostic images). The unlabeled legacy image is still selected by
+the active managed install manifest; none may be treated as disposable
+simply because one other container's reference is absent.
+
+### P1 authorization gaps and next inspection boundaries
+
+- **Legacy Skinny:** locate independent physical historical build log
+  or source/image identity attestation tied to the exact current
+  `sha256:01bd...`, with trusted provenance outside mutable labels.
+  If unavailable, keep `UNVERIFIED` and require a separately
+  reviewed exceptional legacy-asset disposition; do not fabricate
+  a build record or change `IMAGE_OWNED=0`.
+- **v0.29 and H38:** existing parent-ID / installed-source records
+  provide stronger evidence than names; their original build
+  provenance and current full dependency snapshot remain distinct
+  validation gates. Validate the complete intermediate H38 chain
+  before authorizing removal of project-exclusive data or layers.
+- **R25–R28:** four historical build outputs already support exact
+  project-created-image identity. Preserve dated logs and audit
+  file references; require new live image-ID/tag/labels/reference
+  checks and an independent owner approval at plan/apply time.
+- **All seven:** historical identity does **not** attest exclusive
+  Docker and non-Docker use. Recheck aliases, all external
+  container/image/volume/bind references, cross-project shared
+  image layers, running/stopped consumers and drift at both
+  plan and apply. Never delete a foreign container or prune
+  shared Docker resources as an inference.
+- **Models/HF cache:** `provenance` verified two marker/registry
+  sets and file metadata but no model-content hash or exclusive
+  ownership; cache entry inventory and independently verifiable
+  origin/revision/path remain open. Treat each project-like HF
+  candidate as `UNVERIFIED`; the shared parent stays excluded.
+  The last `references` zero-volume result is **not** a cache
+  inventory result.
+
+This matrix is **not** a hardcoded deletion allowlist and does not
+change the full-reset engine, cumulative ownership registry,
+Wizard menu 5, M2 `NOT_QUALIFIED` or the Draft/Unmerged PR #261.
+No source-only confidence label above represents affirmative
+`PROJECT_EXCLUSIVE_REVIEWED` authorization.
+
 ### 2026-10-20 physical `references` audit: exact-SHA zero observed Docker conflicts
 
 At actual **local source HEAD**
