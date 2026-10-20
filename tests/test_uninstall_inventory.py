@@ -31,16 +31,24 @@ class UninstallInventoryTests(unittest.TestCase):
             path.mkdir(parents=True)
         self.containers = []
         self.images = []
+        self.volumes = []
+        self.fstab = self.root / "fstab"
+        self.fstab.write_text("", encoding="utf-8")
 
     def gather(self, *, error: bool = False) -> dict:
         if error:
             fn = lambda *args: (_ for _ in ()).throw(RuntimeError("daemon_offline"))
         else:
-            fn = lambda *args: self.containers if args[0] == "ps" else self.images
-        with patch.object(audit, "run_docker", side_effect=fn):
+            fn = lambda *args: (self.containers if args[0] == "ps" else
+                                self.images if args[0] == "image" else self.volumes)
+        with (patch.object(audit, "run_docker", side_effect=fn),
+              patch.object(audit, "run_unit_status", return_value={
+                  "LoadState": "not-found", "ActiveState": "inactive",
+                  "UnitFileState": "",
+              })):
             return audit.gather(
                 state=self.state, data=self.data, models=self.models,
-                units=self.units, swap=self.swap, hf=self.hf,
+                units=self.units, swap=self.swap, hf=self.hf, fstab=self.fstab,
             )
 
     @staticmethod
@@ -118,6 +126,20 @@ class UninstallInventoryTests(unittest.TestCase):
         self.assertEqual(self.lookup(data, "systemd",
                                      str(self.units / "qwen38-flash-next.service"))["status"],
                          "UNSAFE_SYMLINK")
+
+    def test_swap_fstab_registration_is_visible_even_if_file_absent(self) -> None:
+        self.fstab.write_text(f"{self.swap} none swap sw,pri=10 0 0 # qwen38-ple-swap\n",
+                              encoding="utf-8")
+        data = self.gather()
+        self.assertEqual(self.lookup(data, "swap-fstab",
+                                     str(self.fstab) + "#qwen38-ple-swap")["status"],
+                         "PRESENT")
+
+    def test_project_docker_volume_is_reported_not_automatically_owned(self) -> None:
+        self.volumes = [{"Name": "qwen38-research", "Labels": "qwen38.variant=test"}]
+        data = self.gather()
+        self.assertEqual(self.lookup(data, "volume", "qwen38-research")["ownership"],
+                         "UNVERIFIED")
 
     def test_shared_hf_cache_is_never_an_automatic_purge_candidate(self) -> None:
         data = self.gather()
