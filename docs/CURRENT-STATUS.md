@@ -1,3 +1,45 @@
+## 2026-10-20 — ACTUAL DGX OrcaRouter model target and non-owned registry fingerprint verified
+
+New owner-pasted **read-only physical DGX** output resolves the target-presence
+unknown from the earlier `checkout/model` symlink receipt. On the
+`feature/wizard-modular-phase1-20261014` physical checkout previously measured
+at `b0ef37f9b756a86cc3670691e98a0b0798984d51` (no subsequent physical
+Git sync reported), `models/qwen3.8-flash-next-orcarouter` is an **existing real
+directory** (`stat -L model`: device `66306`, inode `12061870`); the
+previously confirmed `model` link itself had device `66306`, inode
+`12097904`. The Python inspection also reported
+`TARGET_EXISTS=True`, `TARGET_IS_DIR=True`, and
+`TARGET_IS_SYMLINK=False` **for the resolved target**, not for `model`.
+
+The current managed `install.env` reports
+`MODEL_DIR=/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-orcarouter`,
+`MODEL_OWNED=0`, `VLLM_IMAGE=vllm-skinny-tp1:v1` and
+`IMAGE_OWNED=0`. The cumulative asset-ownership registry has exactly
+**one** matching OrcaRouter **model** entry:
+`owned=False`, `state=ready`, root
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models`,
+fingerprint `3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`.
+The actual
+`.qwen38-model-manifest.json` SHA256 is **identical** to that registered
+fingerprint. This establishes project association and matching recorded
+model-marker identity, **not exclusive ownership or permission to remove**.
+The model weight files, contents of the marker, image registry record/current
+Docker image ID, foreign bind mounts, and overall deletion scope remain
+**NOT_OBSERVED** by these commands.
+
+Source-only full reset HEAD as last reviewed still intentionally blocks
+present models/images marked `UNVERIFIED`: the physical model's
+`owned=False` means a current-source `plan` would be expected to hit
+`candidate_ownership_not_proven:model:...` if no other blocking candidate
+or anomaly is encountered earlier. This is a **prediction from physical
+ownership data and source logic**, not a physically run updated plan.
+Do **not** change `MODEL_OWNED`, `IMAGE_OWNED` or registry `owned`
+to bypass verification. Complete project removal remains the owner's goal,
+but project-exclusive provenance and third-party dependencies must be
+reconciled first. No DGX fetch/pull, Docker command, deletion, receipt
+generation, or M2 qualification was performed by the supplied inspection.
+PR #261 must stay Draft/unmerged, and destructive Wizard menu 5 remains HOLD.
+
 ## 2026-10-20 — ACTUAL DGX checkout/model symlink identity and local checkout SHA
 
 New owner-pasted **read-only physical DGX** command output established:
