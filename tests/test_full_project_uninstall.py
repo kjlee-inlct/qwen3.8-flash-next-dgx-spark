@@ -42,6 +42,137 @@ class FullProjectUninstallTests(unittest.TestCase):
             "swap": str(self.swap),
         }
 
+    def _make_exception_fixture(self):
+        import hashlib
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        (model / "weight.bin").write_bytes(b"abc")
+        marker = model / ".qwen38-model-manifest.json"
+        marker.write_text(json.dumps({
+            "schema_version": 1, "repository": "orcarouter/test",
+            "revision": "a" * 40, "status": "complete",
+            "files": [{"path": "weight.bin", "size": 3,
+                       "sha256": "b" * 64}],
+        }))
+        model_fp = hashlib.sha256(marker.read_bytes()).hexdigest()
+        tag = "vllm-orcarouter-v029:v1"
+        image_fp = "sha256:" + "c" * 64
+        (self.state / "asset-ownership.json").write_text(json.dumps({
+            "schema_version": 1, "assets": [
+                {"kind": "model", "locator": str(model), "root": "",
+                 "owned": False, "state": "ready",
+                 "fingerprint": model_fp, "depends_on": []},
+                {"kind": "image", "locator": tag, "root": "",
+                 "owned": False, "state": "ready",
+                 "fingerprint": image_fp, "depends_on": []},
+            ],
+        }))
+        rows = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "model", "locator": str(model),
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "image", "locator": tag,
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+        ]
+        baseline = {"schema": 1, "mode": "READ_ONLY_PROJECT_SCOPE",
+                    "scope": self.scope, "issues": [], "resources": rows}
+        baseline_file = self.home / "review-inventory.json"
+        baseline_raw = json.dumps(baseline).encode()
+        baseline_file.write_bytes(baseline_raw)
+        exception = {
+            "schema": 1,
+            "inventory_sha256": hashlib.sha256(baseline_raw).hexdigest(),
+            "entries": [
+                {"kind": "model", "locator": str(model), "fingerprint": model_fp},
+                {"kind": "image", "locator": tag, "fingerprint": image_fp},
+            ],
+        }
+        exception_file = self.home / "review-approval.json"
+        exception_file.write_text(json.dumps(exception))
+        return (rows, model, tag, image_fp, exception_file, baseline_file)
+
+    def test_exact_owner_exception_plans_without_promoting_registry(self) -> None:
+        rows, model, tag, image_fp, owner_path, baseline_path = (
+            self._make_exception_fixture())
+        approval, baseline = full.load_owner_exception(
+            owner_path, baseline_path, self.scope)
+        observed = {"scope": self.scope, "resources": rows, "issues": []}
+        with (patch.object(full.inventory, "gather", return_value=observed),
+              patch.object(full.inventory, "reference_audit",
+                           return_value={"result": "NO_OBSERVED_CONFLICTS"}),
+              patch.object(full.inventory, "model_provenance_audit",
+                           return_value={"result": "CONSISTENT_METADATA_NOT_OWNERSHIP"}),
+              patch.object(full, "image_identity",
+                           return_value={"tag": tag, "id": image_fp}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            with self.assertRaisesRegex(full.Blocked, "candidate_ownership_not_proven"):
+                full.scan(self.scope)
+            plan = full.scan(self.scope, approval, baseline)
+        self.assertEqual(full.verify_plan(plan), plan)
+        self.assertEqual(len([x for x in plan["targets"] if x["kind"] == "model"]), 1)
+        self.assertEqual(len([x for x in plan["targets"] if x["kind"] == "image"]), 1)
+        self.assertFalse(full.inventory.load_registry(
+            self.state / "asset-ownership.json")["assets"][0]["owned"])
+        plan["owner_exception"]["entries"][0]["fingerprint"] = "sha256:" + "f" * 64
+        with self.assertRaisesRegex(full.Blocked, "integrity"):
+            full.verify_plan(plan)
+
+    def test_exception_missing_candidate_or_mismatched_inventory_is_blocked(self) -> None:
+        rows, model, tag, image_fp, owner_path, baseline_path = (
+            self._make_exception_fixture())
+        raw = json.loads(owner_path.read_text())
+        raw["entries"] = raw["entries"][:1]
+        owner_path.write_text(json.dumps(raw))
+        approval, baseline = full.load_owner_exception(
+            owner_path, baseline_path, self.scope)
+        observed = {"scope": self.scope, "resources": rows, "issues": []}
+        with (patch.object(full.inventory, "gather", return_value=observed),
+              patch.object(full.inventory, "reference_audit",
+                           return_value={"result": "NO_OBSERVED_CONFLICTS"}),
+              patch.object(full.inventory, "model_provenance_audit",
+                           return_value={"result": "CONSISTENT_METADATA_NOT_OWNERSHIP"})):
+            with self.assertRaisesRegex(full.Blocked, "extra_or_missing"):
+                full.scan(self.scope, approval, baseline)
+        raw["inventory_sha256"] = "f" * 64
+        owner_path.write_text(json.dumps(raw))
+        with self.assertRaisesRegex(full.Blocked, "inventory_sha_mismatch"):
+            full.load_owner_exception(owner_path, baseline_path, self.scope)
+
+    def test_exception_rejects_image_drift_and_foreign_reference(self) -> None:
+        rows, model, tag, image_fp, owner_path, baseline_path = (
+            self._make_exception_fixture())
+        approval, baseline = full.load_owner_exception(
+            owner_path, baseline_path, self.scope)
+        observed = {"scope": self.scope, "resources": rows, "issues": []}
+        with (patch.object(full.inventory, "gather", return_value=observed),
+              patch.object(full.inventory, "reference_audit",
+                           return_value={"result": "CONFLICTS"})):
+            with self.assertRaisesRegex(full.Blocked, "references_not_clear"):
+                full.scan(self.scope, approval, baseline)
+        with (patch.object(full.inventory, "gather", return_value=observed),
+              patch.object(full.inventory, "reference_audit",
+                           return_value={"result": "NO_OBSERVED_CONFLICTS"}),
+              patch.object(full.inventory, "model_provenance_audit",
+                           return_value={"result": "CONSISTENT_METADATA_NOT_OWNERSHIP"}),
+              patch.object(full, "image_identity",
+                           return_value={"tag": tag, "id": "sha256:" + "f" * 64}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            with self.assertRaisesRegex(full.Blocked, "owner_exception_image_identity_changed"):
+                full.scan(self.scope, approval, baseline)
+
+    def test_exception_input_inside_project_root_is_blocked(self) -> None:
+        rows, model, tag, image_fp, owner_path, baseline_path = (
+            self._make_exception_fixture())
+        inside = self.state / "permission.json"
+        inside.write_bytes(owner_path.read_bytes())
+        with self.assertRaisesRegex(full.Blocked, "inside_deletion_scope"):
+            full.load_owner_exception(inside, baseline_path, self.scope)
+
     def test_receipt_sha_tamper_is_blocked(self) -> None:
         body = {"schema": 1, "mode": "EXACT_PROJECT_RESET",
                 "scope": self.scope, "targets": []}
