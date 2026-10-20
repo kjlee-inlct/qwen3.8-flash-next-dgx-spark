@@ -1,3 +1,55 @@
+## 2026-10-21 — PHYSICAL destructive reset partial failure on dedicated FlashInfer cache
+
+User physically invoked the **destructive** full project reset with
+saved canonical SHA256 receipt
+`b38c6693014e0965437b220fe818837e3ca446de781af4356123c89bb0e6428f`
+at source HEAD `dca3ba8dce0b48ba68b648ad2f926d7461adb325`,
+after typing exact irreversible approval. Host preflight:
+`EXACT_PLAN_VALIDATED=PASS`, 29 approved targets including
+`/swap-ple.img` and its `# qwen38-ple-swap` fstab entry;
+`PLAN_MATCHES_CURRENT_INVENTORY` / drift 0;
+available memory 118.06 GiB, used PLE swap 1.00 GiB,
+swapoff memory preflight PASS; external Docker reference audit
+`NO_OBSERVED_CONFLICTS`, eight project and three unrelated
+Docker containers, seven image candidates, no aliases or
+foreign conflicts. Sudo preflight succeeded.
+
+Actual apply aborted with:
+```text
+FULL_UNINSTALL=BLOCKED_OR_PARTIAL_REVIEW_REQUIRED
+REASON=[Errno 13] Permission denied: '/home/inlc/.cache/flashinfer-v029/0.6.18/121a/generated/cutlass_instantiations/120/gemm_grouped/80/cutlass_kernel_file_gemm_grouped_sm80_M128_group1.generated.cu'
+PROJECT_RESET=FAILED_OR_PARTIAL
+STOP: DO NOT RETRY BLINDLY
+```
+This exception arose in the project-specific
+`~/.cache/flashinfer-v029` cleanup. The engine's source
+executes Docker container and image removals, dedicated PLE
+swap removal, legacy model link removal and model directory
+removal **before** project-cache recursive removal; thus this
+is a **partial destructive attempt**, not the earlier read-only
+preflight failure. However no independent physical postcheck
+yet confirms which removals succeeded. The Python cache
+deletion was running unprivileged and failed to unlink a
+generated .cu file in a non-writable directory.
+
+Do not rerun original `apply`, falsely claim success, change
+ownership for all of `~/.cache`, or remove shared
+`~/.cache/flashinfer`. Maintain the exact old plan/approval/
+inventory files as recovery evidence. Next: obtain physical
+READ-ONLY `full-project-uninstall.py verify`,
+`uninstall-inventory.py verify`, exact `swapon --show`,
+project Docker counts, and guarded cache permission/mount
+metadata. Only then plan narrow sudo-scoped deletion of
+verified remaining project assets. The user authorizes complete
+project removal (including project PLE swap), but NOT
+`/swap.img`, external Docker, Portainer/SearXNG volumes,
+shared HF/FlashInfer roots, other host assets or GitHub.
+Checkout and approval receipts are separate final cleanup
+targets. **M2 physical result: PARTIAL_FAILURE;
+full uninstall NOT_VERIFIED.**
+
+---
+
 ## 2026-10-21 — ACTUAL DGX mount drift classified ORDER_ONLY across six containers; deletion still NOT_RUN
 
 The owner physically ran the latest read-only `full-project-uninstall.py
