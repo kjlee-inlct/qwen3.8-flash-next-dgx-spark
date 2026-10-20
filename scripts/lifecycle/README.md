@@ -68,6 +68,19 @@ and M2 host acceptance **NOT QUALIFIED**. See
 [project uninstall coverage](../../docs/PROJECT-UNINSTALL-COVERAGE.md) and
 `tests/test_uninstall_inventory.py`.
 
+### Read-only checkpoint marker provenance (SOURCE_ONLY)
+
+`python3 -B scripts/lifecycle/uninstall-inventory.py provenance`
+uses the bounded live inventory and recorded model marker fingerprints to
+report model repository/revision/status, file-entry counts and safe
+`lstat`/file-size consistency. `--json` is also supported. It
+**does not hash model weights**, label an `owned=False` checkpoint
+installer-owned, or grant any delete authority. Result states are
+`CONSISTENT_METADATA_NOT_OWNERSHIP`, `REVIEW_REQUIRED`,
+`INCOMPLETE` or `NO_MODEL_CANDIDATES`. Synthetic checks are
+in `tests/test_uninstall_inventory.py`. See
+`docs/PROJECT-UNINSTALL-COVERAGE.md` for specific limits.
+
 ### Read-only Docker dependency reconciliation (SOURCE_ONLY)
 
 After a separately reviewed clean fast-forward on the physical host,
