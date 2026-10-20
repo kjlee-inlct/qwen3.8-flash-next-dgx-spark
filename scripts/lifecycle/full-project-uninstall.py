@@ -290,6 +290,38 @@ def docker_identity(cid: str) -> dict:
     }
 
 
+def verify_legacy_canonical_model_mount(container: dict, scope: dict[str, str],
+                                        model_rows: list[dict]) -> None:
+    """The unlabeled managed predecessor requires exact manifest-bound /model.
+
+    A suggestively named foreign path is not enough to authorize deletion
+    of the reserved-name unlabeled Docker container.
+    """
+    if container["name"] != "/qwen38-flash-next":
+        return
+    manifest_path = Path(scope["state"]) / "install.env"
+    require_real_path(manifest_path)
+    try:
+        manifest = inventory.parse_install(manifest_path, "install-uninstall")
+    except (ValueError, OSError) as exc:
+        raise Blocked("canonical_container_manifest_unverifiable") from exc
+    expected = manifest["MODEL_DIR"]
+    if not isinstance(expected, str) or not expected.startswith("/"):
+        raise Blocked("canonical_container_manifest_model_invalid")
+    path = Path(expected)
+    if not any(row["kind"] == "model" and row["locator"] == expected
+               and row["status"] == "PRESENT" for row in model_rows):
+        raise Blocked("canonical_container_model_not_in_inventory")
+    mounts = [m for m in container["mounts"]
+              if isinstance(m, dict) and m.get("Destination") == "/model"]
+    if (len(mounts) != 1
+            or mounts[0].get("Type") != "bind"
+            or mounts[0].get("RW") is not False
+            or mounts[0].get("Source") != expected):
+        raise Blocked("canonical_container_manifest_model_mount_mismatch")
+    require_real_path(path)
+
+
 def image_identity(tag: str) -> dict:
     raw = json_command("docker", "image", "inspect", tag)
     if not isinstance(raw, list) or len(raw) != 1 or not isinstance(raw[0], dict):
@@ -521,8 +553,10 @@ def scan(scope: dict[str, str]) -> dict:
                                 "fingerprint": {"dev": st.st_dev, "ino": st.st_ino,
                                                 "mode": st.st_mode}})
         elif kind == "container":
+            identity = docker_identity(ident)
+            verify_legacy_canonical_model_mount(identity, scope, rows)
             targets.append({"kind": kind, "id": ident,
-                            "fingerprint": docker_identity(ident)})
+                            "fingerprint": identity})
         elif kind == "image":
             # Inventory candidates can be listed without installer ownership.
             # Exact tags and a consistent image ID are mandatory regardless.
