@@ -485,7 +485,18 @@ def execute(plan: dict) -> None:
     units = {x["id"] for x in targets if x["kind"] == "systemd"}
     # Use existing ownership-marker guarded systemd helpers.
     if "qwen38-flash-next.service" in units:
-        run("sudo", str(checkout / "scripts/manage-service.sh"), "remove", "--yes")
+        # The service helper enforces the *same* project operation.lock.
+        # Explicitly inherit this Python process's already-held lock through
+        # the sudo environment, exactly as managed uninstall.sh does.
+        lock_file = str(Path(scope["state"]) / "operation.lock")
+        run(
+            "sudo", "env",
+            "QWEN38_STATE_HOME=" + str(Path(scope["state"]).parent),
+            "QWEN38_OPERATION_LOCK_HELD=1",
+            "QWEN38_OPERATION_LOCK_FILE=" + lock_file,
+            "QWEN38_OPERATION_LOCK_OWNER_PID=" + str(os.getpid()),
+            str(checkout / "scripts/manage-service.sh"), "remove", "--yes",
+        )
     if any(x.startswith("qwen38-openwebui-proxy.") for x in units):
         run("sudo", str(checkout / "scripts/manage-proxy.sh"), "remove", "--yes")
     for item in targets:
