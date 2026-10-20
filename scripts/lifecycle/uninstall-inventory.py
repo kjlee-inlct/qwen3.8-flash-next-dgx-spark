@@ -433,8 +433,11 @@ def reference_audit(observed: dict) -> dict:
         for mount in mounts:
             if not isinstance(mount, dict):
                 raise RuntimeError("reference_external_mount_invalid")
-            if mount.get("Name") in volumes:
-                matched.append("project_docker_volume:" + str(mount["Name"]))
+            volume_name = mount.get("Name")
+            if volume_name is not None and not isinstance(volume_name, str):
+                raise RuntimeError("reference_external_mount_volume_invalid")
+            if isinstance(volume_name, str) and volume_name in volumes:
+                matched.append("project_docker_volume:" + volume_name)
             source = mount.get("Source")
             if source is None:
                 continue
