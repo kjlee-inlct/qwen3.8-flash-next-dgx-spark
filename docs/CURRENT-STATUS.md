@@ -1,3 +1,35 @@
+## 2026-10-20 — SOURCE_ONLY full-project uninstall inventory in Wizard; destructive M2 blocked
+
+After reviewing the actual `uninstall.sh`, managed service/proxy/swap
+helpers, cumulative ownership rules and retained R2 records, a separate
+**read-only** full-project removal coverage module was added at
+`scripts/lifecycle/uninstall-inventory.py`. Main Wizard **2. Uninstall**
+now separates **1. Project asset inventory (read-only)** from **2. Existing
+managed uninstaller (separate confirmation)**. The existing destructive
+uninstall is unchanged; no blanket full-project deletion action was added.
+
+Source scope: strict manifest and cumulative registry parsing; owned versus
+unverified checkpoint/image reporting; project-model and state/release
+enumeration including stopped R2 journals; project-named/labelled exact-ID
+Docker containers and tagged images/volumes; systemd unit files plus
+LoadState/ActiveState; PLE swap file plus exact fstab marker; and explicitly
+excluded shared HF cache/system Docker and non-project resources.
+The module never creates/stops/removes Docker, downloads models, changes
+services/swap, or writes its own files. JSON plan + same-scope baseline
+verification are available; **no observed residual within bounded scope**
+is not a claim of complete OS factory restoration.
+
+Synthetic tests `tests/test_uninstall_inventory.py` cover fail-closed
+registry/manifest anomalies, Docker ID, resource provenance, unit/swap/volume
+inventory, baseline residual detection, limited clean-postcheck and unknown
+data. Documentation: [project uninstall coverage](PROJECT-UNINSTALL-COVERAGE.md).
+Actual protected DGX was **NOT TOUCHED**; no physical pre/post removal
+has been verified. **M2 destructive end-to-end remains NOT RUN**, and
+historical five/17 exact-ID retirement code must never be reused for
+new R2 trials. Complete project cleanup still needs per-asset ownership,
+archive-before-retire, independent approvals and disposable-host acceptance.
+PR #261 remains protected Draft (no Ready/Merge authorization).
+
 ## 2026-10-20 — SOURCE_ONLY mazinb R2 first-READY versus third-trial runtime file parity
 
 GitHub read-only comparison of the physically reported source SHA for the
