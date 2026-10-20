@@ -1,3 +1,30 @@
+## 2026-10-20 — ACTUAL DGX checkout/model symlink identity and local checkout SHA
+
+New owner-pasted **read-only physical DGX** command output established:
+
+- checked-out branch `feature/wizard-modular-phase1-20261014`;
+- `git rev-parse HEAD=b0ef37f9b756a86cc3670691e98a0b0798984d51`;
+- `git status --short` printed no entries (clean worktree at observation);
+- `model` is **actually a symbolic link**, not merely an inferred
+  `UNSAFE_SYMLINK`, with raw absolute link destination
+  `/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-orcarouter`;
+- `stat -c` reported symbolic link, device `66306`, inode `12097904`
+  (link entry only; destination inode/type/presence NOT_OBSERVED).
+
+Live remote GitHub verification showed branch and Draft/Open/unmerged PR #261
+at `97a7db92095ce34b622ee5c7140e6bf46953125b`, initially **18
+commits ahead** of the physical checkout, **0 behind**, with both Push and PR
+CI SUCCESS for that exact remote SHA. This is a GitHub-only comparison, not
+physical code synchronization. The local `b0ef37f9` version predates the
+dedicated `legacy_model_link_identity` source change; latest remote source
+can represent the exact link as `legacy-model-link`, but a live destination
+must also have independently verified model ownership. The target directory's
+presence, managed registry attribution/fingerprint, and full project asset
+inventory are NOT_OBSERVED. No fetch/pull, model deletion, Docker mutation,
+plan receipt creation, GPU run, or M2 execution is evidenced by the new
+read-only commands. A separate scoped sync review and further read-only
+target/registry checks remain necessary; **menu 5 remains prohibited**.
+
 ## 2026-10-20 — ACTUAL DGX uninstall Wizard preflight, phase=complete baseline
 
 Owner-pasted DGX Wizard output (operator session; latest visible local
