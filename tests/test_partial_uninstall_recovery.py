@@ -150,6 +150,42 @@ class RecoveryTests(unittest.TestCase):
                                         "unverified_runtime_cache"):
                 recovery.check_scope(self.plan, self.plan["sha256"])
 
+    def test_remaining_foreign_docker_must_be_visible_and_unrelated(self) -> None:
+        entries = [
+            {"ID": "9219d017e6caca2cfb77fb640388c3f6517bb5e2ccedb649b162eb6f78adbb28"},
+            {"ID": "12c2de1bae669dcb4163ca4588df290581f69b05935488c9d8d06096d1331658"},
+            {"ID": "360cc353a9459cbbc01affea80526272fffa1329ae9609ea42bc0ce1a20c0257"},
+        ]
+        fake = {"scope": self.scope, "resources": [], "issues": []}
+        def docker(*args: str):
+            return entries if args[0] == "ps" else []
+
+        with (patch.object(recovery.full.inventory, "gather", return_value=fake),
+              patch.object(recovery.full.inventory, "run_docker", side_effect=docker),
+              patch.object(recovery.full.inventory, "reference_audit",
+                           return_value={"result": "NO_OBSERVED_CONFLICTS",
+                                         "external_container_count": 3,
+                                         "project_container_count": 0})):
+            recovery.missing_other_assets(self.plan)
+
+        with (patch.object(recovery.full.inventory, "gather", return_value=fake),
+              patch.object(recovery.full.inventory, "run_docker",
+                           side_effect=lambda *args: entries[:2] if args[0] == "ps" else []),
+              patch.object(recovery.full.inventory, "reference_audit",
+                           side_effect=AssertionError("no audit on incomplete Docker set"))):
+            with self.assertRaisesRegex(recovery.RecoveryBlocked,
+                                        "foreign_docker_containers_not_all_visible"):
+                recovery.missing_other_assets(self.plan)
+
+        with (patch.object(recovery.full.inventory, "gather", return_value=fake),
+              patch.object(recovery.full.inventory, "run_docker", side_effect=docker),
+              patch.object(recovery.full.inventory, "reference_audit",
+                           return_value={"result": "CONFLICTS",
+                                         "external_container_count": 3,
+                                         "project_container_count": 0})):
+            with self.assertRaisesRegex(recovery.RecoveryBlocked, "reference_or_count_changed"):
+                recovery.missing_other_assets(self.plan)
+
     def test_docker_reappearance_blocks_recovery(self) -> None:
         fake = {"scope": self.scope, "resources": [], "issues": []}
         with (patch.object(recovery.full.inventory, "gather", return_value=fake),
