@@ -249,6 +249,54 @@ not be weakened to `--purge-all` just because old assets carry
 `owned=False`. See `CURRENT-STATUS.md` for the physical source,
 local checkout SHA, and the prior symlink identity details.
 
+### 2026-10-20 actual DGX full inventory — source-only qualification gaps
+
+The owner ran the **read-only** `uninstall-inventory.py plan` against the
+physical DGX. It finished with no reported `INVENTORY_ISSUE`, enumerating
+**eight** project-associated full-ID Docker container candidates,
+**seven present UNVERIFIED Docker images**, **two present UNVERIFIED
+model directories**, the `checkout/model` symlink, three dedicated
+runtime cache directories, project state/releases/forensic artifacts, and
+the `INSTALLER_OWNED` project-specific PLE swap with fstab marker.
+The owner also observed `current` and `previous` inside the data root
+as `release: UNSAFE_SYMLINK`; these are normal managed release
+pointer candidates, not model paths. Shared HF and FlashInfer root
+caches remain excluded.
+
+The seven image tags are the present `vllm-skinny-tp1:v1`,
+`vllm-orcarouter-v029:v1`, the H38 decoder-scope image and the
+R25/R26/R27/R28 marker images. The OrcaRouter legacy image's
+live exact SHA256 matches the `owned=False`/ready registry entry
+(`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`),
+and two stopped project-named containers reference it
+(`qwen38-ab-legacy` Exited 137 and `qwen38-flash-next` Exited 0).
+This is immutable identity agreement and dependency evidence,
+**not proof of exclusive ownership**. Four separately recorded
+owned/claimed H9–H12 image entries with empty fingerprints are
+not shown as present in the Docker inventory. See `CURRENT-STATUS.md`
+for the exact eight IDs, seven tags, status provenance and limits.
+
+**Second source-only issue and fix:** previously the full-reset scan
+could reject both managed `release: UNSAFE_SYMLINK` entries before
+arriving at the `data-root` owned removal boundary. The engine now
+recognizes **only** `data-root/current` and `data-root/previous`
+as `release-link` receipts. It captures the raw pointer text and
+lstat device/inode/mode, requires lexical destination below the
+project data `releases/` root, rejects external/intermediate symlink
+redirection and refuses apply on pointer identity drift. These links
+are removed only as entries when the separately validated project
+data-root is torn down; the engine does not follow the links.
+Synthetic tests cover accepted in-root current/previous pointers,
+missing historical release targets, non-project pointers and
+concurrent pointer drift. Other unexpected symlinks remain blocked.
+
+This **does not** bypass the missing positive ownership of the two
+model directories or seven image tags, does not prove Docker
+container label/mount provenance, and is **not** destructive M2
+qualification. Do not run menu 5. Before complete deletion can be
+approved, design the explicitly evidence-bound historical ownership
+policy with foreign-data preservation and disposable-host tests.
+
 ### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
 The inventory continues to discover `vllm-*`/`qwen38-*` image
