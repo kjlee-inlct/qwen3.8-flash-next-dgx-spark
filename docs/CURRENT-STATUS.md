@@ -1,3 +1,50 @@
+## 2026-10-20 — ACTUAL DGX unfiltered Docker external-reference check: 11 total, 3 external, no scanned conflicts
+
+New owner-pasted read-only physical DGX command executed the old
+checkout's `uninstall-inventory.py plan --json`, collected the
+**eight** present project-associated exact Docker IDs and **seven**
+present project image tags, resolved the seven live Docker image
+IDs, and enumerated the entire Docker container list via
+`docker ps -a --no-trunc`. It then queried every *nonproject*
+container with `docker inspect` for exact image-ID overlap and
+selected host bind-path ancestor/descendant overlaps. Finally
+`docker image ls --no-trunc` checked for other image tags
+sharing one of the seven target image IDs.
+
+Observed exact printed outcomes:
+
+    PROJECT_CONTAINER_COUNT= 8
+    TOTAL_DOCKER_CONTAINERS= 11
+    EXTERNAL_CONTAINER_COUNT= 3
+    EXTERNAL_REFERENCE_CONFLICTS= 0
+    OTHER_IMAGE_TAG_ALIASES= 0
+    CHECK=READ_ONLY_COMPLETE
+
+No external match was printed by this **particular scoped probe**.
+Its inspected file roots were checkout/models, checkout/model,
+checkout/docs/model-reports/evidence,
+checkout/scripts/benchmark/evidence,
+project state and data roots, three named dedicated vLLM/FlashInfer
+runtime caches, and external project benchmark-results directory.
+It did **not** inspect arbitrary open processes, all possible
+additional model roots (e.g. `$HOME/models`), individual shared HF
+cache candidate entries, every possible Docker named-volume
+dependency, or future changes after the scan. It did **not**
+emit the names/IDs of the three external containers or prove
+exclusive ownership of any `owned=False` image/model.
+`EXTERNAL_REFERENCE_CONFLICTS=0` is therefore a bounded
+**absence-of-observed-conflict** result, not blanket safe-to-delete
+authorization or M2 qualification.
+
+The source-only full-reset `scan()` still blocks all present
+unverified model and image candidates on the positive provenance
+guard before it can reach its own Docker dependency preflight.
+Next: independent model-marker and historical image provenance
+review, using a maintained read-only source inspection route;
+preserve shared caches and the separate physical DGX consent
+boundary. No DGX deletion, Git checkout update, GPU trial,
+service/swap change, or PR merge was part of this check.
+
 ## 2026-10-20 — ACTUAL DGX 8-container exact Docker inspect and seven image identities
 
 Owner-pasted **read-only physical DGX** output from
