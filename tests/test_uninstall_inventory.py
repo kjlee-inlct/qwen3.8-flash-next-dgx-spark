@@ -160,6 +160,39 @@ class UninstallInventoryTests(unittest.TestCase):
         unknown = self.gather(error=True)
         self.assertEqual(audit.verification(before, unknown)[0], "INCOMPLETE")
 
+    def test_postcheck_pass_is_limited_to_deleted_project_scope(self) -> None:
+        before = self.gather()
+        self.state.rmdir()
+        self.data.rmdir()
+        after = self.gather()
+        outcome, leftovers = audit.verification(before, after)
+        self.assertEqual(outcome, "PROJECT_SCOPE_NO_RESIDUALS")
+        self.assertEqual(leftovers, [])
+
+    def test_dangling_ownership_symlink_fails_closed(self) -> None:
+        (self.state / "asset-ownership.json").symlink_to(
+            self.root / "missing-registry.json")
+        data = self.gather()
+        self.assertTrue(any("asset_registry_invalid" in x for x in data["issues"]))
+
+    def test_existing_unit_runtime_is_a_residual_without_a_unit_file(self) -> None:
+        with (patch.object(audit, "run_docker", return_value=[]),
+              patch.object(audit, "run_unit_status", return_value={
+                  "LoadState": "loaded", "ActiveState": "active",
+              })):
+            data = audit.gather(
+                state=self.state, data=self.data, models=self.models,
+                units=self.units, swap=self.swap, hf=self.hf, fstab=self.fstab,
+            )
+        self.assertEqual(self.lookup(data, "unit-runtime",
+                                     "qwen38-flash-next.service")["status"],
+                         "PRESENT")
+
+    def test_unreadable_fstab_reports_incomplete(self) -> None:
+        self.fstab.unlink()
+        data = self.gather()
+        self.assertIn("fstab_unavailable_or_unsafe", data["issues"])
+
     def test_baseline_scope_drift_fails_closed(self) -> None:
         before = self.gather()
         before["scope"]["state"] = "/wrong"
