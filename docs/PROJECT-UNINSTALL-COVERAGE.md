@@ -44,6 +44,8 @@ candidate Docker IDs (do not infer that the set is exhaustive):
 - first previous managed OrcaRouter container:
   `f6bfee5a421743758974920064d59c1fb7584cb3a96f83b5c3fafff6acd24`
   (its identity and live status must be independently rechecked);
+- first R2 successful API/soak/smoke trial, subsequently exact-ID stopped:
+  `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`;
 - second failed R2:
   `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`;
 - third failed R2:
