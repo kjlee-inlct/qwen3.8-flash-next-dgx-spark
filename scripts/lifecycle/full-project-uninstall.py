@@ -748,6 +748,70 @@ def scope_from_args(args: argparse.Namespace) -> dict[str, str]:
 
 
 
+def describe_mount_drift(saved: object, fresh: object) -> dict[str, object]:
+    """Categorize Docker inspect Mounts drift without exposing mount sources.
+
+    Diagnostic only: cannot authorize removal or relax fingerprint equality.
+    """
+    if (not isinstance(saved, list) or not isinstance(fresh, list)
+            or not all(isinstance(m, dict) for m in saved + fresh)):
+        return {"classification": "UNVERIFIABLE_MOUNT_METADATA"}
+
+    result: dict[str, object] = {
+        "saved_count": len(saved), "fresh_count": len(fresh),
+    }
+    def serialized(row: dict) -> str:
+        return json.dumps(row, sort_keys=True, ensure_ascii=False,
+                          separators=(",", ":"))
+
+    if sorted(map(serialized, saved)) == sorted(map(serialized, fresh)):
+        result["classification"] = "ORDER_ONLY"
+        return result
+
+    def keyed(items: list[dict]) -> dict[tuple[str, str], dict] | None:
+        values: dict[tuple[str, str], dict] = {}
+        for item in items:
+            name, typ = item.get("Destination"), item.get("Type")
+            if (not isinstance(name, str) or not name.startswith("/")
+                    or not isinstance(typ, str)):
+                return None
+            key = (typ, name)
+            if key in values:
+                return None
+            values[key] = item
+        return values
+
+    old, new = keyed(saved), keyed(fresh)
+    if old is None or new is None:
+        result["classification"] = "AMBIGUOUS_MOUNT_IDENTITIES"
+        return result
+    changed = []
+    for typ, destination in sorted(old.keys() | new.keys()):
+        key = (typ, destination)
+        if key not in old:
+            status, fields = "ADDED", []
+        elif key not in new:
+            status, fields = "REMOVED", []
+        elif old[key] != new[key]:
+            status = "FIELDS_CHANGED"
+            fields = sorted(
+                field for field in old[key].keys() | new[key].keys()
+                if old[key].get(field) != new[key].get(field))
+        else:
+            continue
+        # Destination is a container-internal mountpoint, never the host source.
+        if len(changed) < 32:
+            changed.append({"type": typ, "destination": destination[:256],
+                            "status": status, "changed_fields": fields})
+    result["classification"] = "CONTENT_CHANGED"
+    result["mount_changes"] = changed
+    result["mount_change_count"] = len([
+        key for key in old.keys() | new.keys()
+        if key not in old or key not in new or old[key] != new[key]
+    ])
+    return result
+
+
 def compare_receipts(saved: dict, current: dict) -> list[dict[str, object]]:
     """Bounded, value-free explanation of exact-identity plan drift.
 
@@ -792,8 +856,16 @@ def compare_receipts(saved: dict, current: dict) -> list[dict[str, object]]:
                               if left.get(subfield) != right.get(subfield))
             else:
                 fields.append(field)
-        changes.append({"change": "target_identity_changed",
-                        "kind": kind, "id": ident, "fields": fields})
+        detail: dict[str, object] = {"change": "target_identity_changed",
+                                     "kind": kind, "id": ident,
+                                     "fields": fields}
+        if (kind == "container" and "fingerprint.mounts" in fields
+                and isinstance(old_target.get("fingerprint"), dict)
+                and isinstance(new_target.get("fingerprint"), dict)):
+            detail["mounts"] = describe_mount_drift(
+                old_target["fingerprint"].get("mounts"),
+                new_target["fingerprint"].get("mounts"))
+        changes.append(detail)
     if saved.get("sha256") != current.get("sha256") and not changes:
         changes.append({"change": "receipt_digest_only_changed"})
     return changes
