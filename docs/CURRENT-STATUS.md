@@ -4,8 +4,9 @@ After reviewing the actual `uninstall.sh`, managed service/proxy/swap
 helpers, cumulative ownership rules and retained R2 records, a separate
 **read-only** full-project removal coverage module was added at
 `scripts/lifecycle/uninstall-inventory.py`. Main Wizard **2. Uninstall**
-now separates **1. Project asset inventory (read-only)** from **2. Existing
-managed uninstaller (separate confirmation)**. The existing destructive
+now separates **1. Project asset inventory (read-only)**,
+**2. Existing managed uninstaller (separate confirmation)** and
+**3. Baseline-bound post-removal verification (read-only)**. The existing destructive
 uninstall is unchanged; no blanket full-project deletion action was added.
 
 Source scope: strict manifest and cumulative registry parsing; owned versus
