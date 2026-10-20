@@ -1,3 +1,43 @@
+## 2026-10-20 — ACTUAL DGX OrcaRouter and mazinb model marker schema/fingerprint read-only proof
+
+Operator read-only inspection re-confirmed the **physical DGX checkout**
+remains `b0ef37f9b756a86cc3670691e98a0b0798984d51`, with
+`git status --short` producing no changes. Both
+`checkout/models/qwen3.8-flash-next-orcarouter` and
+`checkout/models/qwen3.8-flash-next-mazinb` are present real
+directories, **not symlinks**. Each has exactly one
+`asset-ownership.json` model entry with `owned=False`,
+`state=ready`. Each has the real `.qwen38-model-manifest.json`
+marker; the SHA256 of its marker matches the corresponding
+cumulative registry fingerprint **exactly**:
+
+- OrcaRouter marker / registry:
+  `3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`
+- mazinb marker / registry:
+  `996eb79378ab09160e119951b7e089b3ad32f8db718c943f84f7233580ef431c`
+
+Both actual JSON markers have exactly the top-level field keys
+`files`, `repository`, `revision`, `schema_version` and
+`status`. The operator intentionally printed **only the field
+names**, not their values. Therefore repository/revision, marker
+`status=complete`, file entries and actual checkpoint file sizes
+remain **NOT_OBSERVED**. In the source implementation,
+`scripts/download-weights.sh` writes this marker from pinned
+remote metadata, while `scripts/lib/asset_ownership.py` fingerprints
+the **marker file**, not the complete checkpoint weight contents.
+The matched marker is strong identity continuity evidence,
+**not ownership promotion or a complete checkpoint hash check**.
+Do not convert these `owned=False` records to `owned=True`
+without independent provenance and reviewed consent.
+
+**SOURCE_ONLY subsequent work:** the existing read-only
+`uninstall-inventory.py` now has a `provenance` action for
+bounded model marker/registry/file-size review with synthetic
+negative tests. It does not hash model weight contents or grant
+deletion authority. The actual DGX has not executed this action
+and still runs the older checkout. Destructive M2, menu 5, local
+Git synchronization and PR #261 merge remain NOT_RUN/blocked.
+
 ## 2026-10-20 — ACTUAL DGX unfiltered Docker external-reference check: 11 total, 3 external, no scanned conflicts
 
 New owner-pasted read-only physical DGX command executed the old
