@@ -406,7 +406,7 @@ def verify_plan(data: object) -> dict:
         raise Blocked("invalid_saved_plan")
     if data["schema"] != 1 or data["mode"] != "EXACT_PROJECT_RESET":
         raise Blocked("unsupported_plan_schema")
-    if not isinstance(data["scope"], dict) or not isinstance(data["targets"], list]):
+    if not isinstance(data["scope"], dict) or not isinstance(data["targets"], list):
         raise Blocked("invalid_plan_structure")
     actual = digest({k: data[k] for k in ("schema", "mode", "scope", "targets")})
     if actual != data["sha256"] or not DIGEST.fullmatch(actual):
