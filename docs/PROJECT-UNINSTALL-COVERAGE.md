@@ -1,3 +1,52 @@
+### Partial destructive reset recovery after verified project-owned root permission failure (2026-10-21)
+
+A physically attempted exact owner-approved Qwen3.8 reset **partially
+completed**: project Docker (8), project image tags (7),
+both model directories, and the PLE swap/fstab marker were
+independently observed absent; the regular `/swap.img` and
+three unrelated Docker containers survived. `df -h /`
+reported 626G used before vs 151G after (~475G freed,
+rounded). The original `apply` failed deleting the
+project-specific `~/.cache/flashinfer-v029` because root-owned
+nested directories could not be unlinked by `inlc`.
+
+Dedicated helper:
+`scripts/lifecycle/partial-uninstall-recovery.py audit|apply`.
+Its accepted source is the **original validated 29-target,
+9-owner-exception SHA256 receipt**, not an altered partial
+plan and not the original `apply` command. It enumerates only
+3 project-only caches, 3 individually approved research
+forensics paths, the project-only `state-root` and
+`data-root`. State children (`install.env`, asset registry,
+historical evidence, operation lock) and data release links
+are covered by their single root, not independently recursive
+path names. The helper checks exact project home/checkout
+layout; receipt/owner review; exact permitted resource kinds,
+counts and absolute names; original directory dev/ino/mode;
+existing operation lock; independent current inventory for
+unexpected Docker/image/model/systemd/swap reappearance;
+shared roots and mountpoints; directory symlinks and nested
+cross-device mounts. `audit` never mutates. `apply` requires
+root and an additional exact approval
+`DELETE_ONLY_VERIFIED_REMAINING_QWEN38_LOCAL_ROOTS`.
+The remover operates with no-follow, directory-fd-relative
+directory walks and unlinks symlinks *as links only*.
+Do **not** run broad root `chmod`/`chown`, Docker prune,
+`rm -rf ~/.cache`, or the stale 29-target `apply`.
+
+The helper is an exceptional, source/CI-gated partial
+recovery, not a generic Wizard command. **Physical-host
+recovery has not yet run; complete deletion remains unverified.**
+After recovery, read-only full engine `verify`, independent
+inventory `verify`, regular swap, foreign Docker and disk
+checks are required. The Git checkout itself and the three
+saved owner/inventory/receipt JSONs are **not** handled by
+this helper: they are a separate owner-requested final
+cleanup only after GitHub evidence preservation and residual
+postcheck. Repo history and unrelated host resources are
+outside local deletion scope.
+
+
 # Project-wide uninstall coverage and residual audit
 
 **2026-10-20 status: read-only inventory plus an opt-in guarded whole-project
