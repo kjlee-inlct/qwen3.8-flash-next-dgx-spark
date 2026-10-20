@@ -226,8 +226,12 @@ plan rather than being silently removed or omitted. The exact
 `checkout/model` symlink exception remains link-entry-only; a live
 linked model must itself be selected under the same positive ownership
 guard. Unverified assets now fail with
-`candidate_ownership_not_proven:<kind>:<locator>:ownership=UNVERIFIED`
+`candidate_ownership_not_proven:<kind>:<locator>` (up to 12 candidate
+identities, followed by `additional_unverified=N` if there are more)
 *before* Docker image identity inspection or any destructive apply.
+The separate per-candidate ownership check remains a second fail-closed
+line of defense. The Wizard surfaces this read-only blocking reason
+without generating a valid reset receipt.
 
 Synthetic tests cover similarly named unrelated model directories,
 an unused `vllm-*` foreign image, a matching-prefix cache entry,
