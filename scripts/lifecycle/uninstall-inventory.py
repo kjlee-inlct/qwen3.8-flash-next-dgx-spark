@@ -205,6 +205,10 @@ def gather(*, state: Path, data: Path, models: Path,
             if item.name.startswith(("qwen3.8-", "qwen38-")):
                 add("model", str(item), path_status(item), "UNVERIFIED",
                     "all_project_profiles_including_OrcaRouter_NVIDIA_Hybrid_mazinb")
+    legacy = checkout / "model"
+    if path_status(legacy) != "ABSENT":
+        add("model", str(legacy), path_status(legacy), "UNVERIFIED",
+            "legacy_orcarouter_checkpoint_candidate_verify_checkpoint_contents")
     # Forensics are project-scoped deletion targets in a complete reset.
     for relative in PROJECT_EVIDENCE_PATHS:
         path = home / relative
