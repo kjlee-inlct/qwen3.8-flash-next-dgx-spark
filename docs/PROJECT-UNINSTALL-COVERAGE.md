@@ -1,8 +1,9 @@
 # Project-wide uninstall coverage and residual audit
 
-**2026-10-20 status: read-only inventory implemented; complete destructive
-uninstall NOT IMPLEMENTED and NOT HOST-QUALIFIED.** This tool never authorizes
-deleting any currently protected DGX resource.
+**2026-10-20 status: read-only inventory plus an opt-in guarded whole-project
+delete engine are implemented in source; M2 destructive E2E remains NOT
+HOST-QUALIFIED.** Neither source completion, plan receipt nor CI tests
+authorize deletion on the one protected physical DGX.
 
 ## Existing uninstall is not a full project reset
 
@@ -174,7 +175,7 @@ identifiers, not a copy of benchmark/monitor logs, and should itself
 be handled as a private record. Remote GitHub evidence/history is
 outside local uninstall scope. Current source unit tests and CI are
 not destructive M2 host acceptance.
-## Still missing before complete uninstall can be qualified
+## Qualification and recovery work still missing before host use
 
 1. Exact-ID ownership and dependency records for every new research trial,
    model restore and image. Do not infer historical ownership retroactively.
@@ -182,8 +183,10 @@ not destructive M2 host acceptance.
    five-container or 17-container one-shot procedures. Existing forensic
    evidence and prior archives must **also be removed**, not silently retained;
    an optional externally retained backup requires a separate explicit choice.
-3. Explicit per-category confirmation, final typed owner approval, bounded
-   lock and fail-closed mutations, rollback/partial-failure reporting.
+3. The SHA-bound plan, typed owner approval, shared operation lock and
+   fail-closed mutation path exist in source. Still required: per-category
+   review UX, completed cancellation/interruption recovery, independent
+   rollback/partial-failure evidence and disposable-host qualification.
 4. Remove project-specific HF cache and repo-local research evidence without
    wiping the shared cache parent or third-party data; a separately approved
    local Git checkout removal is required for a literally empty project tree.
