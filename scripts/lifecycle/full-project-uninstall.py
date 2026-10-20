@@ -294,12 +294,14 @@ def inspect_swap(scope: dict[str, str], rows: list[dict], targets: list[dict]) -
 
 
 def inspect_image_references(containers: list[dict], images: list[dict],
-                             volumes: list[dict] | None = None) -> None:
+                             volumes: list[dict] | None = None,
+                             files: list[dict] | None = None) -> None:
     """Refuse an image that any external container references, even when exited."""
     raw = inventory.run_docker("ps", "-a", "--no-trunc", "--format", "{{json .}}")
     actual_ids = {obj.get("ID") for obj in raw}
     planned_ids = {x["id"] for x in containers}
     volume_names = {x["id"] for x in (volumes or [])}
+    file_roots = [Path(x["id"]) for x in (files or [])]
     if len(raw) != len(actual_ids):
         raise Blocked("duplicate_or_missing_docker_ids")
     for info in raw:
@@ -315,10 +317,17 @@ def inspect_image_references(containers: list[dict], images: list[dict],
             eid = external[0].get("Image")
             if eid in {x["fingerprint"]["id"] for x in images}:
                 raise Blocked("candidate_image_used_by_external_container")
-            if any(mount.get("Name") in volume_names
-                   for mount in (external[0].get("Mounts") or [])
-                   if isinstance(mount, dict)):
-                raise Blocked("candidate_volume_used_by_external_container")
+            for mount in (external[0].get("Mounts") or []):
+                if not isinstance(mount, dict):
+                    raise Blocked("external_container_mount_invalid")
+                if mount.get("Name") in volume_names:
+                    raise Blocked("candidate_volume_used_by_external_container")
+                source = mount.get("Source")
+                if isinstance(source, str) and source.startswith("/"):
+                    candidate = Path(source)
+                    if any(candidate == root or within(candidate, root)
+                           or within(root, candidate) for root in file_roots):
+                        raise Blocked("project_file_mount_used_by_external_container")
     if actual_ids & planned_ids != planned_ids:
         raise Blocked("planned_container_disappeared")
 
@@ -373,8 +382,11 @@ def scan(scope: dict[str, str]) -> dict:
     inspect_swap(scope, rows, targets)
     containers = [x for x in targets if x["kind"] == "container"]
     images = [x for x in targets if x["kind"] == "image"]
-    inspect_image_references(containers, images,
-                             [x for x in targets if x["kind"] == "volume"])
+    inspect_image_references(
+        containers, images,
+        [x for x in targets if x["kind"] == "volume"],
+        [x for x in targets if x["kind"] in FILE_KINDS],
+    )
     # Files that are shared/externally mounted or foreign are never targets.
     roots = [x for x in targets if x["kind"] in ("state-root", "data-root")]
     if len(roots) != 2:
@@ -487,6 +499,7 @@ def execute(plan: dict) -> None:
     inspect_image_references(
         [], [x for x in targets if x["kind"] == "image"],
         [x for x in targets if x["kind"] == "volume"],
+        [x for x in targets if x["kind"] in FILE_KINDS],
     )
     for item in targets:
         if item["kind"] == "volume":
