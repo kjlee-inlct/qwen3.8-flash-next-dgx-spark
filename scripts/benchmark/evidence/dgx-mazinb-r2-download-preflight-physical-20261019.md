@@ -590,3 +590,96 @@ read third named `detail`, stop marker presence,
 targeted kernel RM lines for 2nd and 3rd intervals,
 and short Docker log error lines. Provenance and
 failure-cause attribution remain pending.
+
+## Stage K: second and third original named R2 journals and bounded Docker/monitor evidence (2026-10-20)
+
+**Source:** owner-pasted physical DGX console output. This is a new observation
+after Stage J, not a retrospective rewrite. The pasted commands were partly
+interleaved/corrupted in the terminal capture; this record reports their
+visible *outputs* only. The assistant did not execute anything on DGX.
+
+### Independent original named journals
+
+| Field | Second R2 | Third R2 |
+|---|---|---|
+| name | qwen38-mazinb-m1-20261019065452-e70d6233 | qwen38-mazinb-m1-20261019221159-90ee9851 |
+| full ID | 68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7 | bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8 |
+| old_id | f6bfee5a421743758974920064d59c1fb7584cb3a96f83b5c3fafff6acd24 | same |
+| source_sha | f24fa284ba51000ece317227df26ff32e6f24ecd | same |
+| phase | failed_stopped | failed_stopped |
+| detail | M1Error: NVIDIA RM memory allocation error | M1Error: NVIDIA RM memory allocation error |
+| exit_code | 137 | 137 |
+| kernel_since (KST) | 2026-10-19 15:54:52 | 2026-10-20 07:11:59 |
+| started_at (UTC) | 2026-10-19T06:54:52.735564+00:00 | 2026-10-19T22:11:59.313061+00:00 |
+| updated_at (UTC) | 2026-10-19T07:04:33.845050+00:00 | 2026-10-19T22:25:14.261811+00:00 |
+
+The two journal paths are individually named under
+~/.local/state/qwen38-spark/mazinb-m1-reinstall/, not the mutable
+active.json. **Third-trial named detail is now OBSERVED and equals the
+second-trial controller classification**, superseding Stage J's
+NOT_OBSERVED only for that particular field.
+
+### Watchdog events
+
+- Second monitor: started 2026-10-19 15:54:53 KST, final
+  16:04:34 'container is no longer running; monitor exiting'.
+  At 16:03:59 noncmafree=601MiB, noncma_available=34422MiB,
+  swapgrowth=3402MiB, protect=0/5.
+- Third monitor: started 2026-10-20 07:12:00 KST, final
+  07:25:14 'container is no longer running; monitor exiting'.
+  At 07:24:37 noncmafree=899MiB, noncma_available=27662MiB,
+  swapgrowth=3481MiB, protect=0/5; at 07:24:58
+  noncma_available=17240MiB and noncmafree=1972MiB, protect=0/5.
+  The free and available minima were measured at distinct timestamps.
+- Both monitor paths reported STOP_MARKER=ABSENT_OR_UNSAFE,
+  not independently proven absent. No PROTECT stopping line in the
+  displayed extracted events; the complete raw monitor file was not
+  provided. These facts do not establish who terminated the processes.
+
+### Exact Docker inspect after label tuple verification
+
+The owner matched each full ID with abtrial=mazinb, variant=m1
+and predecessor=<full OrcaRouter old_id> before Docker inspection.
+
+| R2 | STATUS / RUNNING | OOMKilled | exit | Docker FinishedAt UTC |
+|---|---|---|---|---|
+| Second | exited / false | false | 137 | 2026-10-19T07:04:33.602179591Z |
+| Third | exited / false | false | 137 | 2026-10-19T22:25:14.049743749Z |
+
+### Bounded Docker startup/error-filter excerpts
+
+- Second trial printed a 95/95 safetensors checkpoint progress line.
+  Worker reported 'Loading weights took 489.63 seconds' at
+  2026-10-19T07:03:54.606004568Z. Filtered tail included other
+  progress lines, but no verified API READY/inference/throughput.
+- Third trial printed 95/95 checkpoint loading, worker
+  'Loading weights took 74.77 seconds' at 22:23:13Z,
+  'Model loading took 79.42 GiB memory and 629.932433 seconds'
+  at 22:23:16Z, manual KV reservation of 16.0 GiB, and
+  PIECEWISE CUDA and prefill graphs at 100% completion.
+  At 2026-10-19T22:24:54.208Z engine logged
+  'init engine (profile, create kv cache, warmup model) took
+  97.63 s (compilation: 20.99 s)'. Docker finished ~20 seconds
+  later. **Engine initialization != model API READY or inference PASS.**
+- These were filtered bounded tails (not complete raw Docker logs);
+  no cause may be inferred from omitted or unmatched lines.
+
+### Kernel evidence blocker and cleanup scope
+
+Both time-scoped kernel queries printed 'sudo: 암호가 필요합니다'
+(sudo password required), so **no original timestamped NVRM,
+NV_ERR_NO_MEMORY, _memdescAllocInternal, Xid or Linux OOM-killer
+kernel line was obtained**. The journal detail is a host-wide
+controller RM classifier result, not proof of a particular Docker
+originating a particular kernel event. Docker OOMKilled=false
+and exit 137 likewise do not establish a Linux OOM kill or SIGKILL
+source. No additional GPU trials are necessary for removal planning.
+
+Under the owner's confirmed complete-uninstall target, all three R2
+trial Docker objects, OrcaRouter predecessor, project model weights,
+dedicated PLE swap, services/proxy, local journals and forensic
+archives are eventual removal targets after exact-ID/ownership/
+foreign-dependency checks. They are NOT exempt from complete cleanup
+just because past research paths normally preserved evidence.
+No host deletion or modification occurred while recording this evidence;
+M2 destructive E2E remains NOT_RUN.
