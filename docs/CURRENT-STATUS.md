@@ -1,3 +1,28 @@
+## 2026-10-20 — integrated full project uninstall engine, GitHub SOURCE_ONLY
+
+Created `scripts/lifecycle/full-project-uninstall.py` with bounded
+read-only SHA-bound plan, exact-ID/full-fingerprint `apply`, and
+independent post-removal project-scoped verification. Added Wizard
+uninstall options 4/5/6, dedicated vLLM/FlashInfer v0.29 cache
+inventory, and standalone synthetic safety/teardown fixture cases.
+Model weights, first/second/third mazinb R2 Docker, protected
+OrcaRouter, owned services/proxy, PLE swap, local benchmark and
+forensic files are all part of the eventual full-reset plan,
+**not protected retention exceptions**.
+
+Safeguards include managed unit marker validation, full Docker ID
+and experiment labels, canonical project mount verification, image
+ID identity, foreign image/volume/bind references, strict scoped
+filesystem trees, no symlink following, transition refusal, lock
+inheritance for managed service deletion, exact SHA receipt plus
+typed consent, and no generic prune. Plan generation and fixture
+testing do not mutate the DGX.
+
+**Operational status: SOURCE_ONLY; no actual DGX command run; M2
+destructive host E2E NOT_RUN/NOT_QUALIFIED.** The current physical
+checkout is not assumed to match GitHub. CI outcome must be tied
+to exact HEAD separately. PR #261 must remain Draft/unmerged.
+
 ## 2026-10-20 — ACTUAL DGX R2 Stage K: second/third named RM classification and Docker startup evidence
 
 New operator-pasted physical evidence resolves the previously missing
