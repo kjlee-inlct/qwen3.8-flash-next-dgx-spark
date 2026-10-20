@@ -185,9 +185,19 @@ def docker_identity(cid: str) -> dict:
         if not any(isinstance(k, str) and k.startswith("qwen38.")
                    for k in labels):
             raise Blocked("project_container_missing_ownership_label")
-    elif any(isinstance(k, str) and k.startswith("foreign.")
-             for k in labels):
-        raise Blocked("canonical_container_foreign_label_conflict")
+    else:
+        # Managed legacy containers may predate project labels. In that case
+        # require BOTH the exact reserved name and a /model project bind mount.
+        sources = [
+            mount.get("Source") for mount in mounts
+            if isinstance(mount, dict) and mount.get("Destination") == "/model"
+        ]
+        if not any(isinstance(s, str) and
+                   Path(s).name.startswith(("qwen3.8-", "qwen38-"))
+                   for s in sources):
+            raise Blocked("canonical_container_missing_project_model_mount")
+        if any(isinstance(k, str) and k.startswith("foreign.") for k in labels):
+            raise Blocked("canonical_container_foreign_label_conflict")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
         raise Blocked("container_missing_exact_image_id")
     # Retain all relevant identities for drift detection, not arbitrary Docker output.
