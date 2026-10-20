@@ -175,6 +175,39 @@ identifiers, not a copy of benchmark/monitor logs, and should itself
 be handled as a private record. Remote GitHub evidence/history is
 outside local uninstall scope. Current source unit tests and CI are
 not destructive M2 host acceptance.
+### 2026-10-20 actual DGX read-only plan preflight: legacy checkout/model
+
+The owner selected Wizard 2 -> 4 and approved **plan creation only**.
+The full reset engine refused to build a plan:
+
+    FULL_UNINSTALL=BLOCKED_OR_PARTIAL_REVIEW_REQUIRED
+    REASON=resource_status_not_safely_present:model:/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/model
+
+The Wizard did **not** invoke apply and removed the unsuccessful empty
+receipt; the following standalone read returned `PLAN_NOT_FOUND`.
+The output is consistent with an `UNSAFE_SYMLINK` status for the
+legacy `checkout/model` candidate (though the actual link type and
+target still require a DGX `ls -ld/readlink/stat` receipt). The old
+engine treated all non-`PRESENT` model candidates as unplannable.
+
+Source-only corrective behavior: the engine now permits **only the
+exact `checkout/model` symlink** as a separate
+`legacy-model-link` plan resource. It records the raw readlink
+text, resolved lexical destination, mode/device/inode; it never
+follows the link for deletion. If the destination exists, it must
+be an actual project-named model directory underneath an explicitly
+configured model root and must **also be independently selected
+for deletion as a model target**. External, redirected, untracked
+or changed live targets fail closed. A true dangling symlink may be
+unlinked as a link. Other symlinked model candidates remain blocked.
+The synthetic tests exercise valid link-only unlink, preservation
+of a foreign target, omitted model coverage and target drift.
+
+The actual DGX link destination remains **NOT_OBSERVED** until the
+owner provides the local read-only inspection. Even if plan creation
+passes after source update, **destructive M2 remains NOT_QUALIFIED**
+and no immediate menu 5 execution is authorized by this patch.
+
 ## Qualification and recovery work still missing before host use
 
 1. Exact-ID ownership and dependency records for every new research trial,
