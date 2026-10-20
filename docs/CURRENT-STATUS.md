@@ -1,3 +1,61 @@
+## 2026-10-20 — ACTUAL DGX exact-SHA `references` read-only external Docker audit
+
+The owner executed the maintained
+`python3 -B scripts/lifecycle/uninstall-inventory.py references`
+on the **physical DGX Spark**. Immediately before the audit, the
+operator's guarded shell confirmed branch
+`feature/wizard-modular-phase1-20261014`, exact **local** HEAD
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c`, and an empty
+`git status --porcelain=v1 --untracked-files=all`. This closes the
+prior ambiguity about the on-host source SHA for the newly executed
+read-only `provenance`/`references` CLI **at the time of this audit**;
+it is not a claim that the host has the later docs-only GitHub HEAD.
+
+Exact printed outcome:
+
+```text
+UNINSTALL_REFERENCES=READ_ONLY_NO_DELETION
+REFERENCE_AUDIT_RESULT=NO_OBSERVED_CONFLICTS
+PROJECT_CONTAINER_COUNT=8
+TOTAL_DOCKER_CONTAINERS=11
+EXTERNAL_CONTAINER_COUNT=3
+PROJECT_IMAGE_COUNT=7
+CANDIDATE_VOLUME_COUNT=0
+EXTERNAL_REFERENCE_CONFLICTS=0
+OTHER_IMAGE_TAG_ALIASES=0
+REFERENCE_AUDIT_IS_NOT_OWNERSHIP_AUTHORIZATION=1
+DGX_REFERENCE_AUDIT=COMPLETE
+```
+
+This independent maintained source probe repeated the earlier
+owner-written 11-container external-reference assessment and added
+explicit **zero project-named/labeled candidate volumes**, with the
+same bounded lack of conflicts and aliases. No observed foreign
+Docker container used a candidate image ID, volume or scoped bind
+path under this point-in-time audit. **The three external containers
+were inspected, not removed.**
+
+This is a bounded `NO_OBSERVED_CONFLICTS` result, *not*
+proof of exclusive ownership, absence of arbitrary host-process
+file users, ownership of all Hugging Face cache entries or complete
+absence of foreign data in recursively considered roots. Both
+OrcaRouter and mazinb remain `owned=False`; all seven current
+image tags remain `UNVERIFIED` as assessed by the project inventory.
+`full-project-uninstall.py` must continue to block a complete plan
+until independently evidence-bound historical ownership authorization
+is designed, reviewed, tested and separately approved.
+
+**Evidence classification:** DGX `READ_ONLY` probe completed;
+model `provenance` result remains
+`CONSISTENT_METADATA_NOT_OWNERSHIP`; physical destructive M2
+`NOT_RUN/NOT_QUALIFIED`. There was no DGX deletion, service
+change, model execution, registry ownership promotion, swap change
+or PR Ready/Merge. Historical manual references proof is retained
+as separate, earlier evidence. This documentation update itself
+does not update the operator's local checkout.
+
+---
+
 ## 2026-10-20 — ACTUAL DGX `provenance` metadata and pinned revision check (no deletion authorization)
 
 Owner-pasted **actual physical DGX** command
