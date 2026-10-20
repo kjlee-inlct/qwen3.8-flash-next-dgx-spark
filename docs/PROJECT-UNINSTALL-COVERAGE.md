@@ -378,6 +378,49 @@ because its last reported local checkout predates the source;
 the owner's manual 11-container check is separately recorded
 in `CURRENT-STATUS.md`.
 
+### Model marker identity and lightweight provenance audit — SOURCE_ONLY (2026-10-20)
+
+The owner independently inspected both actual project checkpoint
+directories: OrcaRouter and mazinb are real, present directories and
+each has exactly one `owned=False`, `ready` cumulative registry
+record. Each `.qwen38-model-manifest.json` SHA256 matches its own
+record (OrcaRouter `3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`;
+mazinb `996eb79378ab09160e119951b7e089b3ad32f8db718c943f84f7233580ef431c`).
+Actual marker top-level keys are `files`, `repository`, `revision`,
+`schema_version`, `status`. Their **values were not printed**.
+`scripts/download-weights.sh` generates this schema from pinned
+Hugging Face file metadata; `asset_ownership.py` stores the
+**marker hash**, which does not verify the checkpoint file contents.
+Project association and unchanged marker identity must not be
+misrepresented as installer ownership or full model integrity.
+
+A new `provenance` mode of the existing read-only inventory
+can repeat this assessment **after a separately reviewed clean
+fast-forward to its source**:
+
+    python3 -B scripts/lifecycle/uninstall-inventory.py provenance
+    python3 -B scripts/lifecycle/uninstall-inventory.py provenance --json
+
+It requires a valid bounded inventory and exact model registry records,
+reads model marker JSON with a size limit, compares the marker SHA256
+to its recorded ready fingerprint, validates pinned 40-hex revision,
+schema/status, enumerated file paths and each file's existence,
+non-symlink ancestry and recorded nonzero size. It never reads or
+hashes checkpoint tensor contents, downloads weights, runs a model,
+changes Docker or upgrades `owned=False`. JSON and text explicitly
+report that **zero model-content hashes were verified**.
+`CONSISTENT_METADATA_NOT_OWNERSHIP` means metadata/size consistency,
+`REVIEW_REQUIRED` means an issue was observed, `INCOMPLETE`
+means inventory/registry inspection failed, and
+`NO_MODEL_CANDIDATES` means nothing in this scope was found.
+A zero size in upstream metadata is treated as **unknown expected
+size**, not an integrity match. The source-only synthetic tests cover
+valid metadata with `owned=False`, incomplete download status,
+size drift, file symlinks and marker/registry hash drift.
+None is a destructive uninstall qualification or exact allowlist
+authority. Live DGX `provenance` output has **not been obtained**.
+The positive-ownership fail-closed guard remains unchanged.
+
 ### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
 The inventory continues to discover `vllm-*`/`qwen38-*` image
