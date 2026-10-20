@@ -231,6 +231,18 @@ class UninstallInventoryTests(unittest.TestCase):
             self.assertEqual(self.lookup(result, "container", cid)["status"], "PRESENT")
         self.assertFalse(result["issues"])
 
+    def test_legacy_checkout_model_symlink_is_reported_as_unsafe_not_followed(self) -> None:
+        target = self.models / "qwen3.8-flash-next-orcarouter"
+        target.mkdir()
+        link = self.checkout / "model"
+        link.symlink_to(target)
+        data = self.gather()
+        row = self.lookup(data, "model", str(link))
+        self.assertEqual(row["status"], "UNSAFE_SYMLINK")
+        self.assertEqual(row["ownership"], "UNVERIFIED")
+        self.assertTrue(link.is_symlink())
+        self.assertTrue(target.is_dir())
+
     def test_legacy_orcarouter_checkout_model_is_a_review_candidate(self) -> None:
         legacy = self.checkout / "model"
         legacy.mkdir()
