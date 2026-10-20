@@ -371,6 +371,45 @@ def inspect_image_references(containers: list[dict], images: list[dict],
         raise Blocked("planned_container_disappeared")
 
 
+def check_recorded_asset_provenance(kind: str, ident: str,
+                                    record: dict | None,
+                                    identity: dict | None = None) -> None:
+    """Honor immutable registry fingerprints when an asset is recorded there.
+
+    The active manifest may be the sole provenance for an older installation;
+    never silently override an existing registry entry with weaker evidence.
+    """
+    if record is None:
+        return
+    if not record["owned"]:
+        raise Blocked("registry_manifest_ownership_conflict:" + kind + ":" + ident)
+    if record["state"] != "ready" or not record["fingerprint"]:
+        raise Blocked("registered_asset_not_fingerprint_ready:" + kind + ":" + ident)
+    if kind == "image":
+        if identity is None or identity["id"] != record["fingerprint"]:
+            raise Blocked("registered_image_id_drift:" + ident)
+    elif kind == "model":
+        path = Path(ident)
+        marker = next(
+            (candidate for candidate in (
+                path / ".qwen38-model-manifest.json",
+                path / ".qwen38-hybrid-manifest.json",
+            ) if candidate.is_file() and not candidate.is_symlink()),
+            None,
+        )
+        if marker is None:
+            raise Blocked("registered_model_manifest_missing:" + ident)
+        sha = hashlib.sha256()
+        try:
+            with marker.open("rb") as src:
+                for chunk in iter(lambda: src.read(1024 * 1024), b""):
+                    sha.update(chunk)
+        except OSError as exc:
+            raise Blocked("registered_model_manifest_unreadable:" + ident) from exc
+        if sha.hexdigest() != record["fingerprint"]:
+            raise Blocked("registered_model_manifest_drift:" + ident)
+
+
 def scan(scope: dict[str, str]) -> dict:
     observed = inventory.gather(
         state=Path(scope["state"]), data=Path(scope["data"]),
@@ -382,6 +421,13 @@ def scan(scope: dict[str, str]) -> dict:
     if observed["issues"]:
         raise Blocked("inventory_incomplete:" + ";".join(observed["issues"][:5]))
     ensure_no_live_transitions(scope)
+    try:
+        registry = inventory.load_registry(
+            Path(scope["state"]) / "asset-ownership.json")
+    except (OSError, ValueError, inventory.RegistryError) as exc:
+        raise Blocked("ownership_registry_changed_during_scan") from exc
+    recorded = {(item["kind"], item["locator"]): item
+                for item in registry["assets"]}
     targets: list[dict] = []
     rows = observed["resources"]
     # Report several unresolved candidates at once instead of repeatedly
@@ -429,6 +475,9 @@ def scan(scope: dict[str, str]) -> dict:
                 continue
             if kind in ("model", "model-cache", "project-cache", "forensic", "state-root", "data-root"):
                 scoped_file(path, kind, scope)
+                if kind == "model":
+                    check_recorded_asset_provenance(
+                        kind, ident, recorded.get((kind, ident)))
                 st = path.lstat()
                 targets.append({"kind": kind, "id": ident,
                                 "fingerprint": {"dev": st.st_dev, "ino": st.st_ino,
@@ -439,8 +488,11 @@ def scan(scope: dict[str, str]) -> dict:
         elif kind == "image":
             # Inventory candidates can be listed without installer ownership.
             # Exact tags and a consistent image ID are mandatory regardless.
+            identity = image_identity(ident)
+            check_recorded_asset_provenance(
+                kind, ident, recorded.get((kind, ident)), identity)
             targets.append({"kind": kind, "id": ident,
-                            "fingerprint": image_identity(ident)})
+                            "fingerprint": identity})
         elif kind == "volume":
             targets.append({"kind": kind, "id": ident,
                             "fingerprint": volume_identity(ident)})
