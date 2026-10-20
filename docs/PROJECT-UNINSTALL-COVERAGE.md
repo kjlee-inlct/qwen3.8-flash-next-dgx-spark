@@ -25,6 +25,7 @@ The main Wizard's 2. Uninstall menu has independent actions:
 
 1. Full-project resource inventory (READ ONLY).
 2. Existing managed uninstaller (separate confirmation required).
+3. Post-removal residual verification (READ ONLY; requires a previously saved JSON baseline).
 
 The inventory is implemented in scripts/lifecycle/uninstall-inventory.py.
 It checks the strict installation manifest, cumulative ownership registry,
