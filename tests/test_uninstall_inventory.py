@@ -109,6 +109,43 @@ class UninstallInventoryTests(unittest.TestCase):
         self.assertEqual(self.lookup(data, "model", str(other))["ownership"], "UNVERIFIED")
         self.assertFalse(data["issues"])
 
+    def test_image_and_model_name_prefix_alone_remain_unverified(self) -> None:
+        unrelated = self.models / "qwen3.8-other-application"
+        unrelated.mkdir()
+        self.images = [
+            {"Repository": "vllm-other-application", "Tag": "v1"},
+            {"Repository": "qwen38-unrelated", "Tag": "test"},
+        ]
+        result = self.gather()
+        self.assertEqual(self.lookup(result, "model", str(unrelated))["ownership"],
+                         "UNVERIFIED")
+        for name in ("vllm-other-application:v1", "qwen38-unrelated:test"):
+            self.assertEqual(self.lookup(result, "image", name)["ownership"],
+                             "UNVERIFIED")
+        self.assertEqual(result["issues"], [])
+
+    def test_registry_owned_image_does_not_own_other_similar_tags(self) -> None:
+        owned_tag = "vllm-skinny-tp1:v1"
+        unrelated_tag = "vllm-another-research:v1"
+        (self.state / "asset-ownership.json").write_text(json.dumps({
+            "schema_version": 1,
+            "assets": [{
+                "kind": "image", "locator": owned_tag, "root": "",
+                "owned": True, "state": "ready",
+                "fingerprint": "sha256:" + "b" * 64,
+                "depends_on": [],
+            }],
+        }))
+        self.images = [
+            {"Repository": "vllm-skinny-tp1", "Tag": "v1"},
+            {"Repository": "vllm-another-research", "Tag": "v1"},
+        ]
+        result = self.gather()
+        self.assertEqual(self.lookup(result, "image", owned_tag)["ownership"],
+                         "INSTALLER_OWNED")
+        self.assertEqual(self.lookup(result, "image", unrelated_tag)["ownership"],
+                         "UNVERIFIED")
+
     def test_invalid_registry_fails_closed(self) -> None:
         (self.state / "asset-ownership.json").write_text("{bad")
         data = self.gather()
