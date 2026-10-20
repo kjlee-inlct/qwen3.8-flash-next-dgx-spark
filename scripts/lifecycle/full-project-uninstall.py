@@ -397,6 +397,15 @@ def scan(scope: dict[str, str]) -> dict:
             continue
         if status != "PRESENT":
             raise Blocked("resource_status_not_safely_present:" + kind + ":" + ident + ":" + status)
+        # A matching name or project-like cache prefix is discovery evidence,
+        # never positive ownership proof. Require manifest/registry attribution
+        # before even inspecting an exact ID for a destructive receipt.
+        # A project HF cache has no positive attribution in schema 1 and must
+        # remain blocked until separate provenance support is implemented.
+        if (kind in ("model", "image", "model-cache")
+                and item["ownership"] != "INSTALLER_OWNED"):
+            raise Blocked("candidate_ownership_not_proven:" + kind + ":" + ident
+                          + ":ownership=" + item["ownership"])
         if kind in FILE_KINDS:
             path = Path(ident)
             # Nested state/data entries are removed through their exact roots.
