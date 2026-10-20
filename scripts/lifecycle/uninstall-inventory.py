@@ -16,6 +16,9 @@ import re
 import subprocess
 import sys
 
+# A read-only inventory must not generate __pycache__ in the repository.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/lib"))
 from asset_ownership import RegistryError, load_registry  # noqa: E402
@@ -95,8 +98,26 @@ def run_docker(*cmd: str) -> list[dict]:
     return out
 
 
+def run_unit_status(name: str) -> dict[str, str]:
+    try:
+        proc = subprocess.run(
+            ["systemctl", "show", name, "--property=LoadState,ActiveState,UnitFileState",
+             "--no-pager"],
+            text=True, capture_output=True, timeout=12, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("systemctl_unavailable_or_timeout") from exc
+    if proc.returncode or len(proc.stdout) > 8192:
+        raise RuntimeError("systemctl_query_failed")
+    values = dict(line.split("=", 1) for line in proc.stdout.splitlines()
+                  if "=" in line)
+    if "LoadState" not in values or "ActiveState" not in values:
+        raise RuntimeError("systemctl_result_incomplete")
+    return values
+
+
 def gather(*, state: Path, data: Path, models: Path,
-           units: Path, swap: Path, hf: Path) -> dict:
+           units: Path, swap: Path, hf: Path, fstab: Path = Path("/etc/fstab")) -> dict:
     issues: list[str] = []
     rows: dict[tuple[str, str], dict] = {}
 
@@ -192,6 +213,34 @@ def gather(*, state: Path, data: Path, models: Path,
             except OSError:
                 issues.append("unit_unreadable:" + name)
         add("systemd", str(path), present, owner)
+        try:
+            unit_state = run_unit_status(name)
+            active = unit_state["ActiveState"]
+            loaded = unit_state["LoadState"]
+            state_note = "load=" + loaded + ";active=" + active
+            if active not in ("inactive", "failed") or loaded not in ("not-found", "masked"):
+                add("unit-runtime", name, "PRESENT", "PROJECT_ASSOCIATED", state_note)
+            else:
+                add("unit-runtime", name, "ABSENT", "PROJECT_ASSOCIATED", state_note)
+        except RuntimeError as exc:
+            issues.append("systemd_status_incomplete:" + name + ":" + str(exc))
+            add("unit-runtime", name, "UNKNOWN", "UNVERIFIED")
+
+    fstab_id = str(fstab) + "#qwen38-ple-swap"
+    if path_status(fstab) == "PRESENT" and fstab.is_file():
+        try:
+            if fstab.stat().st_size > 1024 * 1024:
+                raise ValueError("fstab_oversized")
+            lines = fstab.read_text(encoding="utf-8").splitlines()
+            matched = [line for line in lines
+                       if line.startswith(str(swap) + " ")
+                       and "# qwen38-ple-swap" in line]
+            add("swap-fstab", fstab_id, "PRESENT" if matched else "ABSENT",
+                "PROJECT_ASSOCIATED", "dedicated_swap_persistence_marker")
+        except (OSError, ValueError):
+            issues.append("fstab_inspection_failed")
+    else:
+        issues.append("fstab_unavailable_or_unsafe")
 
     add("swap", str(swap), path_status(swap),
         "INSTALLER_OWNED" if manifest.get("SWAP_OWNED") == "1" else "UNVERIFIED",
@@ -230,6 +279,15 @@ def gather(*, state: Path, data: Path, models: Path,
         for name in sorted(known_images - found_images):
             add("image", name, "ABSENT",
                 "INSTALLER_OWNED" if name in owned_images else "UNVERIFIED")
+
+        for item in run_docker("volume", "ls", "--format", "{{json .}}"):
+            name = item.get("Name", "")
+            labels = item.get("Labels", "")
+            if not isinstance(name, str) or not isinstance(labels, str):
+                raise RuntimeError("docker_volume_bad_types")
+            if name.startswith(("qwen38-", "qwen3.8-")) or "qwen38." in labels:
+                add("volume", name, "PRESENT", "UNVERIFIED",
+                    "docker_volume_project_candidate;no_automatic_removal")
     except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
         issues.append("docker_inventory_incomplete:" + str(exc))
         for name in known_images:
@@ -241,7 +299,8 @@ def gather(*, state: Path, data: Path, models: Path,
         "mode": "READ_ONLY_PROJECT_SCOPE",
         "scope": {key: str(value) for key, value in
                   (("state", state), ("data", data), ("models", models),
-                   ("units", units), ("swap", swap), ("hf", hf))},
+                   ("units", units), ("swap", swap), ("hf", hf),
+                   ("fstab", fstab))},
         "resources": sorted(rows.values(), key=lambda v: (v["kind"], v["locator"])),
         "issues": sorted(set(issues)),
         "exclusions": [
@@ -298,6 +357,7 @@ def main() -> int:
                    default=Path(os.environ.get("QWEN38_MODEL_ROOT", str(ROOT / "models"))))
     p.add_argument("--unit-dir", type=Path, default=Path("/etc/systemd/system"))
     p.add_argument("--swap-file", type=Path, default=Path("/swap-ple.img"))
+    p.add_argument("--fstab-path", type=Path, default=Path("/etc/fstab"))
     p.add_argument("--hf-home", type=Path,
                    default=Path(os.environ.get("HF_HOME", str(Path.home() / ".cache/huggingface"))))
     args = p.parse_args()
@@ -307,7 +367,7 @@ def main() -> int:
         state=args.state_home / "qwen38-spark",
         data=args.data_home / "qwen38-spark",
         models=args.model_root, units=args.unit_dir,
-        swap=args.swap_file, hf=args.hf_home,
+        swap=args.swap_file, hf=args.hf_home, fstab=args.fstab_path,
     )
     if args.action == "verify":
         try:
