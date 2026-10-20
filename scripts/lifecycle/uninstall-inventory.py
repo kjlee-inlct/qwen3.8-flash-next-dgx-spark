@@ -361,6 +361,125 @@ def gather(*, state: Path, data: Path, models: Path,
     }
 
 
+def _paths_overlap(left: Path, right: Path) -> bool:
+    return left == right or left in right.parents or right in left.parents
+
+
+def reference_audit(observed: dict) -> dict:
+    """Independently check foreign Docker references; never authorize deletion.
+
+    Unlike the destructive engine's exact-target preflight, this uses read-only
+    discovery candidates, even when their ownership is explicitly UNVERIFIED.
+    Both project bind paths and scoped parent roots are checked. A zero-conflict
+    result does not attest ownership or non-Docker filesystem users.
+    """
+    if observed["issues"]:
+        raise RuntimeError("project_inventory_incomplete")
+    rows = observed["resources"]
+    project = {r["locator"] for r in rows
+               if r["kind"] == "container" and r["status"] == "PRESENT"}
+    images = {r["locator"] for r in rows
+              if r["kind"] == "image" and r["status"] == "PRESENT"}
+    volumes = {r["locator"] for r in rows
+               if r["kind"] == "volume" and r["status"] == "PRESENT"}
+    file_kinds = {"model", "model-cache", "project-cache", "forensic",
+                  "state-root", "data-root"}
+    paths = [Path(r["locator"]) for r in rows
+             if (r["kind"] in file_kinds
+                 and r["status"] in ("PRESENT", "UNSAFE_SYMLINK")
+                 and r["ownership"] != "EXCLUDED_SHARED")]
+    # The exact legacy checkout/model link has a dedicated link-only policy.
+    for row in rows:
+        if (row["kind"] == "model" and row["status"] == "UNSAFE_SYMLINK"
+                and row["locator"] != str(Path(observed["scope"]["checkout"]) / "model")):
+            raise RuntimeError("unexpected_symlinked_model_in_reference_scope")
+    if (len(project) > MAX_ENTRIES or len(images) > MAX_ENTRIES
+            or len(paths) > MAX_ENTRIES or len(volumes) > MAX_ENTRIES):
+        raise RuntimeError("reference_audit_candidate_limit")
+    if not all(DOCKER_ID.fullmatch(i) for i in project):
+        raise RuntimeError("reference_audit_invalid_project_id")
+
+    image_ids: set[str] = set()
+    for tag in sorted(images):
+        reply = run_docker("image", "inspect", tag, "--format", "{{json .}}")
+        if len(reply) != 1 or not isinstance(reply[0].get("Id"), str):
+            raise RuntimeError("reference_image_identity_incomplete")
+        identity = reply[0]["Id"]
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}", identity):
+            raise RuntimeError("reference_image_id_invalid")
+        image_ids.add(identity)
+
+    containers = run_docker("ps", "-a", "--no-trunc", "--format", "{{json .}}")
+    all_ids = [x.get("ID") for x in containers]
+    if (len(all_ids) != len(set(all_ids))
+            or any(not isinstance(x, str) or not DOCKER_ID.fullmatch(x)
+                   for x in all_ids)
+            or not project.issubset(all_ids)):
+        raise RuntimeError("reference_container_inventory_drift")
+    conflicts: list[dict] = []
+    external = 0
+    for cid in sorted(set(all_ids) - project):
+        external += 1
+        reply = run_docker("inspect", cid, "--format", "{{json .}}")
+        if len(reply) != 1 or reply[0].get("Id") != cid:
+            raise RuntimeError("reference_external_identity_changed")
+        obj = reply[0]
+        matched: list[str] = []
+        if obj.get("Image") in image_ids:
+            matched.append("project_image_id")
+        mounts = obj.get("Mounts")
+        if not isinstance(mounts, list):
+            raise RuntimeError("reference_external_mounts_incomplete")
+        for mount in mounts:
+            if not isinstance(mount, dict):
+                raise RuntimeError("reference_external_mount_invalid")
+            if mount.get("Name") in volumes:
+                matched.append("project_docker_volume:" + str(mount["Name"]))
+            source = mount.get("Source")
+            if source is None:
+                continue
+            if not isinstance(source, str):
+                raise RuntimeError("reference_external_mount_source_invalid")
+            if not source.startswith("/"):
+                continue
+            candidate = Path(os.path.abspath(source))
+            # Also compare canonical destinations; a foreign symlink must
+            # never be used to hide a selected project file reference.
+            resolved = candidate.resolve(strict=False)
+            for path in paths:
+                if (_paths_overlap(candidate, path)
+                        or _paths_overlap(resolved, path.resolve(strict=False))):
+                    matched.append("project_file_mount:" + source)
+                    break
+        if matched:
+            conflicts.append({"container_id": cid,
+                              "references": sorted(set(matched))})
+    aliases: list[str] = []
+    for obj in run_docker("image", "ls", "--no-trunc", "--format", "{{json .}}"):
+        image_id = obj.get("ID")
+        repo, tag = obj.get("Repository"), obj.get("Tag")
+        if not all(isinstance(x, str) for x in (image_id, repo, tag)):
+            raise RuntimeError("reference_image_list_invalid")
+        if image_id in image_ids and (repo + ":" + tag) not in images:
+            aliases.append(repo + ":" + tag)
+    return {
+        "result": "CONFLICTS" if conflicts or aliases else "NO_OBSERVED_CONFLICTS",
+        "project_container_count": len(project),
+        "total_docker_containers": len(all_ids),
+        "external_container_count": external,
+        "project_image_count": len(images),
+        "candidate_volume_count": len(volumes),
+        "external_reference_conflicts": conflicts,
+        "other_image_tag_aliases": sorted(set(aliases)),
+        "limitations": [
+            "not_an_ownership_proof",
+            "does_not_detect_nonDocker_file_users",
+            "restricted_to_bounded_inventory_candidate_roots",
+            "point_in_time_not_an_apply_authorization",
+        ],
+    }
+
+
 def verification(baseline: dict, current: dict) -> tuple[str, list[str]]:
     if (baseline.get("schema") != 1
             or baseline.get("mode") != "READ_ONLY_PROJECT_SCOPE"
@@ -394,7 +513,7 @@ def verification(baseline: dict, current: dict) -> tuple[str, list[str]]:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("plan", "verify"))
+    p.add_argument("action", choices=("plan", "verify", "references"))
     p.add_argument("--json", action="store_true", help="emit bounded JSON plan to stdout")
     p.add_argument("--baseline", type=Path, help="saved plan JSON (read only; verify only)")
     p.add_argument("--state-home", type=Path,
@@ -420,6 +539,34 @@ def main() -> int:
         swap=args.swap_file, hf=args.hf_home, fstab=args.fstab_path,
         home=args.home_path, checkout=args.checkout_path,
     )
+    if args.action == "references":
+        try:
+            audit = reference_audit(result)
+        except (OSError, ValueError, RuntimeError) as exc:
+            audit = {"result": "INCOMPLETE", "reason": str(exc)}
+        if args.json:
+            print(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True))
+        else:
+            print("UNINSTALL_REFERENCES=READ_ONLY_NO_DELETION")
+            print("REFERENCE_AUDIT_RESULT=" + audit["result"])
+            if audit["result"] == "INCOMPLETE":
+                print("REFERENCE_AUDIT_ISSUE=" + audit["reason"])
+            else:
+                for field in ("project_container_count", "total_docker_containers",
+                              "external_container_count", "project_image_count",
+                              "candidate_volume_count"):
+                    print(field.upper() + "=" + str(audit[field]))
+                print("EXTERNAL_REFERENCE_CONFLICTS=" +
+                      str(len(audit["external_reference_conflicts"])))
+                for item in audit["external_reference_conflicts"]:
+                    print("EXTERNAL_REFERENCE=" + json.dumps(item, sort_keys=True))
+                print("OTHER_IMAGE_TAG_ALIASES=" +
+                      str(len(audit["other_image_tag_aliases"])))
+                for tag in audit["other_image_tag_aliases"]:
+                    print("OTHER_TAG_SAME_IMAGE_ID=" + tag)
+                print("REFERENCE_AUDIT_IS_NOT_OWNERSHIP_AUTHORIZATION=1")
+        return 2 if audit["result"] == "INCOMPLETE" else (
+            3 if audit["result"] == "CONFLICTS" else 0)
     if args.action == "verify":
         try:
             assert args.baseline is not None
