@@ -1,3 +1,67 @@
+## 2026-10-21 — ACTUAL DGX predelete inventory capture and refreshed Docker reference check
+
+Following the owner's explicit intention to **delete all Qwen3.8
+project-scoped assets, including historically unowned/unverified
+candidates**, the operator executed a read-only predelete capture on
+the actual DGX. The command ran
+`python3 -B scripts/lifecycle/uninstall-inventory.py plan --json`
+and redirected stdout to the **outside-checkout** path
+`/home/inlc/qwen38-predelete-inventory.json`; the path-existence
+guard prevented overwriting an existing file, and the terminal
+printed `PREDELETE_READONLY=COMPLETE`. The operator then reran
+`uninstall-inventory.py references`, reporting exactly:
+
+```text
+UNINSTALL_REFERENCES=READ_ONLY_NO_DELETION
+REFERENCE_AUDIT_RESULT=NO_OBSERVED_CONFLICTS
+PROJECT_CONTAINER_COUNT=8
+TOTAL_DOCKER_CONTAINERS=11
+EXTERNAL_CONTAINER_COUNT=3
+PROJECT_IMAGE_COUNT=7
+CANDIDATE_VOLUME_COUNT=0
+EXTERNAL_REFERENCE_CONFLICTS=0
+OTHER_IMAGE_TAG_ALIASES=0
+REFERENCE_AUDIT_IS_NOT_OWNERSHIP_AUTHORIZATION=1
+PREDELETE_READONLY=COMPLETE
+```
+
+**Limit:** the operator has not pasted or uploaded the contents,
+SHA256 or `issues` field of the saved inventory JSON; successful
+shell execution does not independently prove every target in that
+file was inspected by the assistant. The physical local checkout HEAD
+was not printed in this specific run; the preceding physical
+`references` run had checked HEAD
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c`.
+The new GitHub source/docs commits since then were not shown to be
+synchronized on host. Do not conflate inventory JSON with the
+deletion-capable `full-project-uninstall.py plan` SHA256 receipt.
+
+**Owner intent changes the desired scope, not the technical
+verification outcome:** the owner wants the two historical model
+directories, seven present image tags and all confirmed project
+containers/caches/forensics/services/state removed even though
+their registry/inventory ownership can be `owned=False` or
+`UNVERIFIED`; protect unrelated Docker/app data and shared
+HF/FlashInfer parent caches. No registry flag falsification,
+blanket Docker prune, arbitrary `rm -rf`, or path guard bypass.
+At current source the complete-reset engine still blocks on
+`candidate_ownership_not_proven` and recorded unowned asset
+conflict, and destructive M2 is `NOT_QUALIFIED`. A future
+operator-reviewable, exact-identity scoped owner-exception
+mechanism remains to be implemented/tested. An explicit owner's
+desire to purge is **not** evidence that all similarly named
+files belong to this project.
+
+**Next action:** inspect a bounded summary of the saved JSON
+(`schema`, `mode`, `issues`, all present candidate
+`kind/locator/ownership`, exclusions and document SHA256) from
+the physical DGX, then bind exceptional approval only to the
+separately reviewed exact candidates before any destructive
+procedure. No project deletion occurred in this step; PR #261
+remains Draft/Unmerged and physical M2 is NOT_RUN.
+
+---
+
 ## 2026-10-20 — ACTUAL DGX exact-SHA `references` read-only external Docker audit
 
 The owner executed the maintained
