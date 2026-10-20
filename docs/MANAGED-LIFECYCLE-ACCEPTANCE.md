@@ -227,6 +227,15 @@ systems and risky live model startup remains separately gated.
 | OrcaRouter H38 managed profile | YES (candidate) | Static CI, exact-image source-only and checkpoint index-only gates, guarded migration rollback | `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `FUNCTIONAL=NOT_REACHED`, `HOST_STABILITY=INCONCLUSIVE`; **GPU/MODEL RERUN BLOCKED** |
 | `lychee888` | NO | Visible registry status = planned/non-installable | Not selectable; no production promise |
 
+### Complete project reset target clarification (2026-10-20)
+
+Owner requests local deletion of project OrcaRouter, all mazinb R2 and other
+Docker/model assets, dedicated swap, service/proxy, state/releases, and
+all local forensic/benchmark evidence including repo-local copies.
+Historical preservation is not a full-reset exception. Exclude unrelated
+apps, system swap, drivers, remote GitHub history and the shared HF parent.
+This is acceptance scope, not execution authority. M2 remains NOT_RUN.
+
 ### 2026-10-20 full-uninstall read-only coverage (SOURCE_ONLY)
 
 `scripts/lifecycle/uninstall-inventory.py` was introduced to inventory project
