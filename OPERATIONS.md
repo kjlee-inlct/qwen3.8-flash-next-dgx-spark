@@ -479,6 +479,19 @@ A full purge removes every model/image asset recorded as installer-owned in `ass
 
 The uninstaller continues to refuse deletion of assets that are not recorded as installer-owned, have drifted from their recorded manifest/image fingerprint, or are still required by retained dependents.
 
+### 2026-10-20 complete-removal scope clarification
+
+The owner explicitly requires complete project uninstall to REMOVE the
+OrcaRouter predecessor and checkpoint, all mazinb R2 trial Docker objects
+and checkpoint, all project NVIDIA/Hybrid checkpoints, project Docker
+images/volumes, dedicated swap and fstab entry, service/proxy, project
+state/releases, and local forensic/benchmark journals and archives.
+Former preservation rules do NOT exempt these from approved full reset.
+Foreign apps, shared Hugging Face cache parent, system swap, Docker engine,
+NVIDIA drivers and remote GitHub history remain protected. This is a target
+specification, NOT authorization to execute destructive cleanup.
+See docs/PROJECT-UNINSTALL-COVERAGE.md.
+
 ## Complete-uninstall coverage audit (read-only; not deletion)
 
 The Wizard's **2. Uninstall → 1. Full-project resource inventory** calls
