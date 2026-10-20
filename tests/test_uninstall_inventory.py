@@ -220,6 +220,14 @@ class UninstallInventoryTests(unittest.TestCase):
             self.assertEqual(self.lookup(result, "container", cid)["status"], "PRESENT")
         self.assertFalse(result["issues"])
 
+    def test_legacy_orcarouter_checkout_model_is_a_review_candidate(self) -> None:
+        legacy = self.checkout / "model"
+        legacy.mkdir()
+        result = self.gather()
+        row = self.lookup(result, "model", str(legacy))
+        self.assertEqual(row["status"], "PRESENT")
+        self.assertEqual(row["ownership"], "UNVERIFIED")
+
     def test_local_and_checkout_forensic_evidence_are_full_purge_targets(self) -> None:
         local = self.root / "Workspace/llm/qwen38-m1-bench-results"
         local.mkdir(parents=True)
