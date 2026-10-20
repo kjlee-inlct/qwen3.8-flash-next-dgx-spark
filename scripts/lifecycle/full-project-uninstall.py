@@ -567,6 +567,13 @@ def scan(scope: dict[str, str], owner_exception: dict | None = None,
             raise Blocked("owner_exception_reference_audit_incomplete") from exc
         if audit["result"] != "NO_OBSERVED_CONFLICTS":
             raise Blocked("owner_exception_references_not_clear:" + audit["result"])
+        try:
+            model_audit = inventory.model_provenance_audit(observed)
+        except (OSError, ValueError, RuntimeError, inventory.RegistryError) as exc:
+            raise Blocked("owner_exception_model_provenance_incomplete") from exc
+        if model_audit["result"] != "CONSISTENT_METADATA_NOT_OWNERSHIP":
+            raise Blocked("owner_exception_model_metadata_not_consistent:" +
+                          model_audit["result"])
     ensure_no_live_transitions(scope)
     try:
         registry = inventory.load_registry(
