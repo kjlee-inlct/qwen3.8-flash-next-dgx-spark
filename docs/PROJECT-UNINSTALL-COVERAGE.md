@@ -5,6 +5,42 @@ delete engine are implemented in source; M2 destructive E2E remains NOT
 HOST-QUALIFIED.** Neither source completion, plan receipt nor CI tests
 authorize deletion on the one protected physical DGX.
 
+### 2026-10-20 actual DGX model metadata consistent; exclusive deletion ownership still unresolved
+
+The owner has now **physically executed** the newer read-only
+`uninstall-inventory.py provenance` command. It returned
+`CONSISTENT_METADATA_NOT_OWNERSHIP`, without model-specific issues.
+For the two real `owned=False` model directories, project markers
+have `status=complete`, single ready registry records, matching
+marker SHA256 fingerprints and exact repositories/revisions matching
+`scripts/model/model-profiles.sh`:
+
+- **mazinb:** revision `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`;
+  108/108 listed regular files present; 0 unknown-size entries;
+  97 listed file-content hashes, 0 recalculated.
+- **OrcaRouter:** revision `c1209bda15a6bbc4c68b585e93d40c0d85f50306`;
+  30/30 listed regular files present; 0 unknown-size entries;
+  20 listed file-content hashes, 0 recalculated.
+
+These are **138/138 bounded file-presence/size checks**, not full
+checkpoint integrity or an independently proven download history.
+The Git checkout HEAD after the owner's source update was not printed:
+the successful CLI execution proves the newer `provenance` action
+was available, not that the full checkout matches a specified SHA.
+Details and earlier fingerprints are in `docs/CURRENT-STATUS.md`.
+
+**Next approval gate remains blocked:** model metadata and absence of
+observed external Docker conflicts are *association/consistency*
+evidence, not project-exclusive delete authority. The full-reset
+engine must continue to refuse present unverified model, image and
+model-cache candidates. No registry `owned=True` promotion, ignored
+unverified assets, shared-cache purge or destructive Wizard menu 5.
+A separate reviewed exact-identity authority design requires
+independent historical provenance and foreign-resource/dependency
+checks for each target, including the seven current images, plus
+synthetic foreign-preservation and disposable-host M2 coverage.
+The legacy managed `uninstall.sh --purge-all` remains insufficient.
+
 ## Existing uninstall is not a full project reset
 
 The current uninstall.sh manages the canonical Docker container, installer-owned
