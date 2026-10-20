@@ -218,7 +218,7 @@ def gather(*, state: Path, data: Path, models: Path,
             active = unit_state["ActiveState"]
             loaded = unit_state["LoadState"]
             state_note = "load=" + loaded + ";active=" + active
-            if active not in ("inactive", "failed") or loaded not in ("not-found", "masked"):
+            if active != "inactive" or loaded != "not-found":
                 add("unit-runtime", name, "PRESENT", "PROJECT_ASSOCIATED", state_note)
             else:
                 add("unit-runtime", name, "ABSENT", "PROJECT_ASSOCIATED", state_note)
