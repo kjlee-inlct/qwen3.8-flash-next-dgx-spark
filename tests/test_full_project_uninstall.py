@@ -173,6 +173,74 @@ class FullProjectUninstallTests(unittest.TestCase):
         with self.assertRaisesRegex(full.Blocked, "inside_deletion_scope"):
             full.load_owner_exception(inside, baseline_path, self.scope)
 
+    def test_mount_drift_order_only_does_not_authorize_deletion(self) -> None:
+        left = {"Type": "bind", "Destination": "/model",
+                "Source": "/private/model", "RW": False}
+        right = {"Type": "bind", "Destination": "/cache",
+                 "Source": "/private/cache", "RW": True}
+        result = full.describe_mount_drift([left, right], [right, left])
+        self.assertEqual(result["classification"], "ORDER_ONLY")
+        self.assertEqual(result["saved_count"], 2)
+        self.assertNotIn("/private/", json.dumps(result))
+
+    def test_mount_drift_exposes_only_changed_fields_and_container_destinations(self) -> None:
+        old = [
+            {"Type": "bind", "Destination": "/model", "Source": "/host/original",
+             "RW": False, "Propagation": "rprivate"},
+            {"Type": "bind", "Destination": "/cache", "Source": "/host/cache",
+             "RW": True},
+        ]
+        fresh = [
+            {"Type": "bind", "Destination": "/model", "Source": "/host/different",
+             "RW": False, "Propagation": "rprivate"},
+            {"Type": "bind", "Destination": "/cache", "Source": "/host/cache",
+             "RW": False},
+        ]
+        detail = full.describe_mount_drift(old, fresh)
+        self.assertEqual(detail["classification"], "CONTENT_CHANGED")
+        self.assertEqual(detail["mount_change_count"], 2)
+        entries = {x["destination"]: x for x in detail["mount_changes"]}
+        self.assertEqual(entries["/model"]["changed_fields"], ["Source"])
+        self.assertEqual(entries["/cache"]["changed_fields"], ["RW"])
+        self.assertNotIn("/host/", json.dumps(detail))
+        removed = full.describe_mount_drift(old, [fresh[0]])
+        self.assertEqual(removed["mount_change_count"], 2)
+        self.assertEqual(
+            next(x["status"] for x in removed["mount_changes"]
+                 if x["destination"] == "/cache"), "REMOVED")
+
+    def test_mount_drift_ambiguous_metadata_is_not_misclassified_as_order(self) -> None:
+        entry = {"Type": "bind", "Destination": "/model",
+                 "Source": "/host/model"}
+        detail = full.describe_mount_drift([entry, entry], [entry])
+        self.assertEqual(detail["classification"], "AMBIGUOUS_MOUNT_IDENTITIES")
+        detail = full.describe_mount_drift([{"Source": "/host/model"}], [entry])
+        self.assertEqual(detail["classification"], "AMBIGUOUS_MOUNT_IDENTITIES")
+        detail = full.describe_mount_drift("not-list", [entry])
+        self.assertEqual(detail["classification"], "UNVERIFIABLE_MOUNT_METADATA")
+
+    def test_compare_receipts_reports_mount_detail_without_mutation(self) -> None:
+        cid = "b" * 64
+        old_mount = [{"Type": "bind", "Destination": "/model",
+                      "Source": "/private/a", "RW": False}]
+        new_mount = [{"Type": "bind", "Destination": "/model",
+                      "Source": "/private/b", "RW": False}]
+        def receipt(mounts: list) -> dict:
+            body = {"schema": 1, "mode": "EXACT_PROJECT_RESET",
+                    "scope": self.scope, "targets": [
+                        {"kind": "container", "id": cid, "fingerprint": {
+                            "id": cid, "mounts": mounts,
+                        }},
+                    ]}
+            return {**body, "sha256": full.digest(body)}
+        old, new = receipt(old_mount), receipt(new_mount)
+        result = full.compare_receipts(old, new)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["fields"], ["fingerprint.mounts"])
+        self.assertEqual(result[0]["mounts"]["classification"], "CONTENT_CHANGED")
+        self.assertEqual(result[0]["mounts"]["mount_change_count"], 1)
+        self.assertNotIn("/private/", json.dumps(result))
+
     def test_read_only_receipt_comparison_reports_only_safe_changed_fields(self) -> None:
         model = self.model_root / "qwen3.8-flash-next-orcarouter"
         container_id = "a" * 64
