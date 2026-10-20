@@ -118,6 +118,63 @@ class FullProjectUninstallTests(unittest.TestCase):
                     [], [], [], [{"kind": "model", "id": str(model)}],
                 )
 
+    def test_prefix_only_foreign_assets_fail_closed_before_identity_lookup(self) -> None:
+        # A recognizable name is an inventory hint, not ownership evidence.
+        # Even an unused foreign image is not safe to delete.
+        foreign_model = self.model_root / "qwen3.8-foreign-model"
+        foreign_model.mkdir()
+        (foreign_model / "KEEP").write_text("external")
+        foreign_cache = self.hf / "hub/models--mazinb--Qwen3.8-Flash-Next"
+        foreign_cache.mkdir(parents=True)
+        candidates = [
+            {"kind": "image", "locator": "vllm-foreign-runtime:v1",
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "model", "locator": str(foreign_model),
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "model-cache", "locator": str(foreign_cache),
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+        ]
+        base = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+        ]
+        for candidate in candidates:
+            with self.subTest(kind=candidate["kind"]):
+                with (patch.object(full.inventory, "gather",
+                                   return_value={"issues": [], "resources": base + [candidate]}),
+                      patch.object(full, "image_identity",
+                                   side_effect=AssertionError("no image inspection for foreign asset")),
+                      patch.object(full, "inspect_swap", return_value=None),
+                      patch.object(full, "inspect_image_references", return_value=None)):
+                    with self.assertRaisesRegex(
+                            full.Blocked,
+                            "candidate_ownership_not_proven:" + candidate["kind"]):
+                        full.scan(self.scope)
+        self.assertEqual((foreign_model / "KEEP").read_text(), "external")
+        self.assertTrue(foreign_cache.exists())
+
+    def test_positive_owned_image_can_enter_exact_identity_bound_plan(self) -> None:
+        tag = "vllm-skinny-tp1:v1"
+        rows = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "image", "locator": tag,
+             "status": "PRESENT", "ownership": "INSTALLER_OWNED"},
+        ]
+        identity = {"tag": tag, "id": "sha256:" + "b" * 64}
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full, "image_identity", return_value=identity),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            plan = full.scan(self.scope)
+        self.assertIn({"kind": "image", "id": tag, "fingerprint": identity},
+                      plan["targets"])
+
     def test_plan_scope_rejects_parent_and_model_symlink(self) -> None:
         with self.assertRaisesRegex(full.Blocked, "model_outside"):
             full.scoped_file(self.home, "model", self.scope)
@@ -142,7 +199,7 @@ class FullProjectUninstallTests(unittest.TestCase):
             {"kind": "model", "locator": str(link),
              "status": "UNSAFE_SYMLINK", "ownership": "UNVERIFIED"},
             {"kind": "model", "locator": str(target),
-             "status": "PRESENT", "ownership": "UNVERIFIED"},
+             "status": "PRESENT", "ownership": "INSTALLER_OWNED"},
             {"kind": "state-root", "locator": str(self.state),
              "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
             {"kind": "data-root", "locator": str(self.data),
