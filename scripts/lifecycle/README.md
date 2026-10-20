@@ -68,6 +68,20 @@ and M2 host acceptance **NOT QUALIFIED**. See
 [project uninstall coverage](../../docs/PROJECT-UNINSTALL-COVERAGE.md) and
 `tests/test_uninstall_inventory.py`.
 
+### Read-only Docker dependency reconciliation (SOURCE_ONLY)
+
+After a separately reviewed clean fast-forward on the physical host,
+`python3 -B scripts/lifecycle/uninstall-inventory.py references` checks
+external Docker container image-ID/volume/bind dependencies against
+the bounded project candidate inventory, including discovered
+UNVERIFIED assets. It prints `NO_OBSERVED_CONFLICTS` (exit 0),
+`CONFLICTS` (exit 3) or `INCOMPLETE` (exit 2); `--json` is
+available. No destructive commands or ownership changes occur.
+The inspection is point-in-time and is **not** a deletion authorizer
+or substitute for immutable ownership evidence. Synthetic regressions:
+`tests/test_uninstall_inventory.py`. Exact scope and limitations:
+`docs/PROJECT-UNINSTALL-COVERAGE.md`.
+
 ## Exact-SHA isolated local tests
 
 After an independently reviewed **clean, fast-forward-only Git synchronization**, use
