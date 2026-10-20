@@ -502,8 +502,11 @@ def execute(plan: dict) -> None:
     for item in targets:
         if item["kind"] == "container":
             current = docker_identity(item["id"])
-            if current != item["fingerprint"]:
+            stable = ("id", "name", "labels", "image_id", "mounts")
+            if any(current[key] != item["fingerprint"][key] for key in stable):
                 raise Blocked("container_identity_changed_during_apply")
+            # Runtime status may transition to stopped when managed service
+            # removal succeeds; never treat that alone as ID/provenance drift.
             # This is the only Docker deletion target: the verified full ID.
             run("docker", "rm", "-f", item["id"])
     # Refuse image removal until all foreign references were rechecked.
