@@ -38,6 +38,19 @@ Top-level compatibility paths such as `scripts/qualify-release.sh`,
 thin delegators. Operator-facing transaction recovery/status commands use those stable
 paths; new internal code should target the canonical implementation here.
 
+## Project uninstall completeness inventory (read-only)
+
+`uninstall-inventory.py` provides an independently testable, non-mutating
+full-project candidate inventory and baseline-bound post-removal residual
+check. The Wizard's Uninstall → read-only inventory action delegates here.
+The module reports exact-ID Docker candidates, registry ownership distinctions,
+state/releases, systemd units and status, swap/fstab, model dirs and excluded
+shared caches. It never removes an object, issues a GPU command or grants
+deletion approval. Real destructive full cleanup remains **NOT IMPLEMENTED**
+and M2 host acceptance **NOT QUALIFIED**. See
+[project uninstall coverage](../../docs/PROJECT-UNINSTALL-COVERAGE.md) and
+`tests/test_uninstall_inventory.py`.
+
 ## Exact-SHA isolated local tests
 
 After an independently reviewed **clean, fast-forward-only Git synchronization**, use
