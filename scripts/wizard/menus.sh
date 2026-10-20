@@ -27,13 +27,17 @@ wizard_install_entry() {
 }
 
 wizard_uninstall_entry() {
-  local choice baseline
+  local choice baseline digest phrase receipt
+  receipt="${HOME}/qwen38-full-uninstall-plan.json"
   while true; do
     wizard_header 'Uninstall / 프로젝트 제거'
     wizard_warning 'Full-project removal is NOT qualified. Existing experiments and evidence may remain.'
     wizard_menu_option 1 'Full-project resource inventory (READ ONLY) / 전체 잔여 자산 조사'
     wizard_menu_option 2 'Existing managed uninstaller (confirmation required) / 기존 설치 자산 제거'
     wizard_menu_option 3 'Post-removal residual verification (READ ONLY) / 제거 후 잔여물 검증'
+    wizard_menu_option 4 'Prepare EXACT complete-reset plan (no deletion) / 완전 제거 계획 생성'
+    wizard_menu_option 5 'Apply EXACT full reset (irreversible; double consent) / 전체 삭제 실행'
+    wizard_menu_option 6 'Full reset postcheck (read-only) / 완전 제거 후 검증'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -56,6 +60,41 @@ wizard_uninstall_entry() {
         [[ -n "${baseline}" ]] || { wizard_warning 'No baseline: cancelled.'; continue; }
         python3 -B "${ROOT_DIR}/scripts/lifecycle/uninstall-inventory.py" verify --baseline "${baseline}" ||
           wizard_warning 'Residuals or incomplete audit: never claim a clean host.'
+        ;;
+      4)
+        wizard_warning 'Plan requires complete asset inspection; blocks on unknown ownership/mounts/other Docker dependencies.'
+        if [[ -e "${receipt}" || -L "${receipt}" ]]; then
+          wizard_warning 'A receipt already exists; do not overwrite it. Move it after independent review.'
+          continue
+        fi
+        wizard_yes_no 'Create new SHA-bound complete reset receipt in HOME? / HOME에 계획 파일을 생성합니까?' no || continue
+        if (umask 077; python3 -B "${ROOT_DIR}/scripts/lifecycle/full-project-uninstall.py" plan > "${receipt}"); then
+          wizard_info "Saved full reset receipt: ${receipt}"
+          wizard_warning 'Inspect every identity and target. No deletion occurred.'
+        else
+          rm -f -- "${receipt}"
+          wizard_warning 'Full reset plan BLOCKED. No deletion occurred.'
+        fi
+        ;;
+      5)
+        wizard_warning 'DESTRUCTIVE and not M2-qualified on the protected DGX; do not run as a test.'
+        [[ -f "${receipt}" && ! -L "${receipt}" ]] ||
+          { wizard_warning 'A saved exact plan receipt is required.'; continue; }
+        wizard_yes_no 'Proceed to independent typed approval for all local models, R2, swap and forensic DELETE? / 삭제 확인 단계로 이동합니까?' no || continue
+        wizard_input digest 'Enter entire 64-character plan SHA256 / 계획 SHA256 전체 입력' ''
+        wizard_input phrase 'Type DELETE_ALL_QWEN38_PROJECT_ASSETS_AND_LOCAL_FORENSICS' ''
+        [[ "${phrase}" == DELETE_ALL_QWEN38_PROJECT_ASSETS_AND_LOCAL_FORENSICS ]] ||
+          { wizard_warning 'Consent mismatch; cancelled.'; continue; }
+        python3 -B "${ROOT_DIR}/scripts/lifecycle/full-project-uninstall.py" apply \
+          --plan-file "${receipt}" --plan-sha "${digest}" --confirm "${phrase}" ||
+          wizard_warning 'Full reset BLOCKED/PARTIAL. DO NOT retry without reviewing exact state.'
+        ;;
+      6)
+        [[ -f "${receipt}" && ! -L "${receipt}" ]] ||
+          { wizard_warning 'A saved exact pre-reset receipt is required.'; continue; }
+        python3 -B "${ROOT_DIR}/scripts/lifecycle/full-project-uninstall.py" verify \
+          --plan-file "${receipt}" ||
+          wizard_warning 'Residuals or incomplete audit. Do not claim a clean host.'
         ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
