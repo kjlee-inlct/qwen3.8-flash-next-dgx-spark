@@ -27,12 +27,13 @@ wizard_install_entry() {
 }
 
 wizard_uninstall_entry() {
-  local choice
+  local choice baseline
   while true; do
     wizard_header 'Uninstall / 프로젝트 제거'
     wizard_warning 'Full-project removal is NOT qualified. Existing experiments and evidence may remain.'
     wizard_menu_option 1 'Full-project resource inventory (READ ONLY) / 전체 잔여 자산 조사'
     wizard_menu_option 2 'Existing managed uninstaller (confirmation required) / 기존 설치 자산 제거'
+    wizard_menu_option 3 'Post-removal residual verification (READ ONLY) / 제거 후 잔여물 검증'
     wizard_menu_option 0 'Back / 이전'
     wizard_input choice 'Select / 선택' 0
     case "${choice}" in
@@ -48,6 +49,13 @@ wizard_uninstall_entry() {
         wizard_yes_no 'Open existing managed uninstaller? / 기존 제거 절차를 시작합니까?' no || continue
         bash "${ROOT_DIR}/uninstall.sh" --lang "${UI_LANG}" ||
           wizard_warning 'Uninstall blocked/failed; verify live state before another attempt.'
+        ;;
+      3)
+        wizard_info 'Needs a saved pre-removal JSON baseline outside the project deletion scope.'
+        wizard_input baseline 'Existing baseline JSON path / 기존 조사 JSON 파일 경로' ''
+        [[ -n "${baseline}" ]] || { wizard_warning 'No baseline: cancelled.'; continue; }
+        python3 -B "${ROOT_DIR}/scripts/lifecycle/uninstall-inventory.py" verify --baseline "${baseline}" ||
+          wizard_warning 'Residuals or incomplete audit: never claim a clean host.'
         ;;
       0|q|Q) return 0 ;;
       *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
