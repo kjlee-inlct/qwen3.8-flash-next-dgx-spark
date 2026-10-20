@@ -1,3 +1,17 @@
+## 2026-10-20 — ACTUAL DGX R2 Stage K: both named RM details, startup logs, no kernel access
+
+[Physical Stage K receipt](dgx-mazinb-r2-download-preflight-physical-20261019.md):
+both second and third R2 named journals now explicitly show
+`M1Error: NVIDIA RM memory allocation error`, `failed_stopped` and
+`exit=137`; exact matching Docker IDs both `exited`,
+`OOMKilled=false`. Third loaded 95/95 shards, captured
+CUDA graphs, initialized engine and exited ~20s afterward, without
+API READY or inference evidence. Monitors printed `protect=0/5`
+with no observed `PROTECT stopping`. **Both kernel queries denied by sudo**;
+do not assert specific container RM fault attribution or Linux OOM.
+Owner's complete-uninstall target includes local journal and
+forensic evidence removal; no host deletion has been executed.
+
 ## 2026-10-20 — ACTUAL DGX third R2 failed_stopped; SIGKILL 137, Docker-OOM false, no running watchdog
 
 [Physical Stage J receipt](dgx-mazinb-r2-download-preflight-physical-20261019.md): third candidate `qwen38-mazinb-m1-20261019221159-90ee9851` (Docker `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`) is now `failed_stopped`, Docker `exited/Running=false/OOMKilled=false/ExitCode=137`, no supervisor/watchdog processes. Manual guarded stop was correctly skipped for already-exited container. Tail monitor warnings had `protect=0/5`, max shown swap growth 3,482 MiB, lowest non-CMA free 899 MiB and last `container is no longer running`. **Unknown exit reason; no safe inference that a watchdog or Docker OOM killed it.** Earlier second candidate's named journal verified `NVIDIA RM memory allocation error` and `kernel_since=2026-10-19 15:54:52` (local KST), but actual kernel lines remain missing. Both candidates preserved; benchmark still NOT_MEASURED; do not launch a fourth trial.
