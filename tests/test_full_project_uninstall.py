@@ -262,6 +262,69 @@ class FullProjectUninstallTests(unittest.TestCase):
         with self.assertRaisesRegex(full.Blocked, "symlink"):
             full.scoped_file(item, "model", self.scope)
 
+    def test_managed_release_pointer_links_are_identity_bound_and_not_followed(self) -> None:
+        release = self.data / "releases" / ("a" * 40)
+        release.mkdir(parents=True)
+        (release / "payload").write_text("owned")
+        external = self.home / "foreign"
+        external.mkdir()
+        (external / "KEEP").write_text("foreign")
+        current = self.data / "current"
+        previous = self.data / "previous"
+        current.symlink_to("releases/" + "a" * 40)
+        previous.symlink_to("releases/" + "b" * 40)  # retired release
+        rows = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "release", "locator": str(current),
+             "status": "UNSAFE_SYMLINK", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "release", "locator": str(previous),
+             "status": "UNSAFE_SYMLINK", "ownership": "PROJECT_ASSOCIATED"},
+        ]
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full, "inspect_swap", return_value=None),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            plan = full.scan(self.scope)
+        links = [x for x in plan["targets"] if x["kind"] == "release-link"]
+        self.assertEqual({x["id"] for x in links}, {str(current), str(previous)})
+        for link in links:
+            self.assertEqual(
+                link["fingerprint"],
+                full.managed_release_link_identity(Path(link["id"]), self.scope))
+        with patch.object(full, "inspect_image_references", return_value=None):
+            full.execute(plan)
+        self.assertFalse(current.is_symlink())
+        self.assertFalse(previous.is_symlink())
+        self.assertFalse(self.data.exists())
+        self.assertEqual((external / "KEEP").read_text(), "foreign")
+
+    def test_release_link_outside_project_releases_is_blocked(self) -> None:
+        external = self.home / "unrelated-release"
+        external.mkdir()
+        current = self.data / "current"
+        current.symlink_to(external)
+        with self.assertRaisesRegex(full.Blocked, "release_link_points_outside"):
+            full.managed_release_link_identity(current, self.scope)
+        self.assertTrue(current.is_symlink())
+        self.assertTrue(external.is_dir())
+
+    def test_release_link_identity_drift_blocks_before_file_deletion(self) -> None:
+        current = self.data / "current"
+        current.symlink_to("releases/" + "a" * 40)
+        old = full.managed_release_link_identity(current, self.scope)
+        current.unlink()
+        current.symlink_to("releases/" + "b" * 40)
+        with patch.object(full, "inspect_image_references", return_value=None):
+            with self.assertRaisesRegex(full.Blocked, "release_link_drift_during_apply"):
+                full.execute({"scope": self.scope, "targets": [
+                    {"kind": "release-link", "id": str(current), "fingerprint": old},
+                ]})
+        self.assertTrue(self.data.is_dir())
+        self.assertTrue(current.is_symlink())
+
     def test_legacy_checkout_model_link_is_planned_and_unlinked_only(self) -> None:
         target = self.model_root / "qwen3.8-flash-next-orcarouter"
         target.mkdir()
