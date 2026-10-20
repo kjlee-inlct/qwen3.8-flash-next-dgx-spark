@@ -38,7 +38,7 @@ TRIGGERS = {
     "settings-transition.phase", "runtime-adopt.env",
 }
 FILE_KINDS = {
-    "model", "model-cache", "forensic", "state-root", "data-root",
+    "model", "model-cache", "project-cache", "forensic", "state-root", "data-root",
 }
 EXPECTED_UNIT_MARKERS = {
     "qwen38-flash-next.service": b"Managed qwen38-spark runtime service",
@@ -141,6 +141,14 @@ def scoped_file(path: Path, kind: str, scope: dict[str, str]) -> None:
         )
         if not valid:
             raise Blocked("model_outside_known_scoped_roots:" + str(path))
+    elif kind == "project-cache":
+        dedicated = {
+            home / ".cache/vllm-qwen38",
+            home / ".cache/vllm-qwen38-v029",
+            home / ".cache/flashinfer-v029",
+        }
+        if path not in dedicated:
+            raise Blocked("unverified_runtime_cache:" + str(path))
     elif kind == "model-cache":
         if not (within(path, hf / "hub")
                 and path.name.startswith(inventory.PROJECT_HF_PREFIXES)):
@@ -330,7 +338,7 @@ def scan(scope: dict[str, str]) -> dict:
     rows = observed["resources"]
     for item in rows:
         kind, ident, status = item["kind"], item["locator"], item["status"]
-        if status == "ABSENT" or kind in ("container-name", "hf-cache"):
+        if status == "ABSENT" or kind in ("container-name", "hf-cache", "shared-runtime-cache"):
             continue
         if status != "PRESENT":
             raise Blocked("resource_status_not_safely_present:" + kind + ":" + ident)
@@ -339,7 +347,7 @@ def scan(scope: dict[str, str]) -> dict:
             # Nested state/data entries are removed through their exact roots.
             if kind == "forensic" and within(path, Path(scope["state"])):
                 continue
-            if kind in ("model", "model-cache", "forensic", "state-root", "data-root"):
+            if kind in ("model", "model-cache", "project-cache", "forensic", "state-root", "data-root"):
                 scoped_file(path, kind, scope)
                 st = path.lstat()
                 targets.append({"kind": kind, "id": ident,
@@ -494,7 +502,7 @@ def execute(plan: dict) -> None:
             run("sudo", str(checkout / "scripts/manage-swap.sh"),
                 "remove", "--file", item["id"], "--yes")
     # Delete separate model and research evidence paths before state/data.
-    for kind in ("model", "model-cache", "forensic", "data-root", "state-root"):
+    for kind in ("model", "model-cache", "project-cache", "forensic", "data-root", "state-root"):
         for item in targets:
             if item["kind"] == kind:
                 # The snapshot was already compared under lock. Revalidate inode.
@@ -519,7 +527,7 @@ def verify_removed(plan: dict) -> tuple[bool, list[str]]:
     )
     issues = list(current["issues"])
     for item in current["resources"]:
-        if item["kind"] in ("hf-cache", "container-name"):
+        if item["kind"] in ("hf-cache", "shared-runtime-cache", "container-name"):
             continue
         if item["status"] != "ABSENT":
             issues.append(item["kind"] + ":" + item["locator"]
