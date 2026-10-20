@@ -34,6 +34,19 @@ KNOWN_STATES = (
     "mazinb-m1-reinstall", "mazinb-m1", "orcarouter-ab",
     "hybrid-h6-m1", "runtime-stop.env",
 )
+PROJECT_EVIDENCE_PATHS = (
+    "Workspace/llm/qwen38-m1-bench-results",
+    ".local/state/qwen38-spark/retirement-archives",
+)
+REPO_EVIDENCE_PATHS = (
+    "docs/model-reports/evidence",
+    "scripts/benchmark/evidence",
+)
+PROJECT_HF_PREFIXES = (
+    "models--orcarouter--Qwen3.8-Flash-Next",
+    "models--mazinb--Qwen3.8-Flash-Next",
+    "models--nvidia--Qwen3.8-Flash-Next",
+)
 MAX_ENTRIES = 500
 MAX_CAPTURE = 2 * 1024 * 1024
 
@@ -117,7 +130,10 @@ def run_unit_status(name: str) -> dict[str, str]:
 
 
 def gather(*, state: Path, data: Path, models: Path,
-           units: Path, swap: Path, hf: Path, fstab: Path = Path("/etc/fstab")) -> dict:
+           units: Path, swap: Path, hf: Path, fstab: Path = Path("/etc/fstab"),
+           home: Path | None = None, checkout: Path | None = None) -> dict:
+    home = home if home is not None else Path.home()
+    checkout = checkout if checkout is not None else ROOT
     issues: list[str] = []
     rows: dict[tuple[str, str], dict] = {}
 
@@ -185,10 +201,24 @@ def gather(*, state: Path, data: Path, models: Path,
             if asset["owned"]:
                 owned_images.add(locator)
 
-    for item in bounded_children(models, issues):
-        if item.name.startswith(("qwen3.8-", "qwen38-")):
-            add("model", str(item), path_status(item), "UNVERIFIED",
-                "discovered_not_proof_of_installer_ownership")
+    for model_root in dict.fromkeys((models, home / "models", checkout / "models")):
+        for item in bounded_children(model_root, issues):
+            if item.name.startswith(("qwen3.8-", "qwen38-")):
+                add("model", str(item), path_status(item), "UNVERIFIED",
+                    "all_project_profiles_including_OrcaRouter_NVIDIA_Hybrid_mazinb")
+    # Forensics are project-scoped deletion targets in a complete reset.
+    for relative in PROJECT_EVIDENCE_PATHS:
+        path = home / relative
+        add("forensic", str(path), path_status(path),
+            "PROJECT_ASSOCIATED", "local_experiment_archive_full_purge_target")
+    for relative in REPO_EVIDENCE_PATHS:
+        path = checkout / relative
+        add("forensic", str(path), path_status(path),
+            "PROJECT_ASSOCIATED", "checkout_evidence_requires_explicit_repo_local_cleanup")
+    for item in bounded_children(hf / "hub", issues):
+        if item.name.startswith(PROJECT_HF_PREFIXES):
+            add("model-cache", str(item), path_status(item), "UNVERIFIED",
+                "project_checkpoint_cache_candidate_not_entire_shared_HF_root")
     for item in bounded_children(state, issues):
         add("state", str(item), path_status(item), "PROJECT_ASSOCIATED",
             "includes_experimental_journals_or_retained_evidence")
@@ -246,7 +276,7 @@ def gather(*, state: Path, data: Path, models: Path,
         "INSTALLER_OWNED" if manifest.get("SWAP_OWNED") == "1" else "UNVERIFIED",
         "system_swap_elsewhere_is_excluded;fstab_marker_not_probed")
     add("hf-cache", str(hf), path_status(hf), "EXCLUDED_SHARED",
-        "never_autodelete_HF_cache_without_separate_provenance")
+        "shared_HF_root_excluded_but_project-specific_cache_entries_must_be_resolved")
 
     try:
         docker_containers = run_docker("ps", "-a", "--no-trunc", "--format", "{{json .}}")
@@ -300,14 +330,14 @@ def gather(*, state: Path, data: Path, models: Path,
         "scope": {key: str(value) for key, value in
                   (("state", state), ("data", data), ("models", models),
                    ("units", units), ("swap", swap), ("hf", hf),
-                   ("fstab", fstab))},
+                   ("fstab", fstab), ("home", home), ("checkout", checkout))},
         "resources": sorted(rows.values(), key=lambda v: (v["kind"], v["locator"])),
         "issues": sorted(set(issues)),
         "exclusions": [
             "system_Docker_engine_and_NVIDIA_driver",
             "unrelated_system_swap",
             "unowned_HF_cache_and_other_apps",
-            "external_Git_checkout",
+            "remote_GitHub_history_not_removed_by_local_project_uninstall",
             "unknown_nonproject_images_volumes_or_external_paths",
         ],
     }
@@ -358,6 +388,8 @@ def main() -> int:
     p.add_argument("--unit-dir", type=Path, default=Path("/etc/systemd/system"))
     p.add_argument("--swap-file", type=Path, default=Path("/swap-ple.img"))
     p.add_argument("--fstab-path", type=Path, default=Path("/etc/fstab"))
+    p.add_argument("--home-path", type=Path, default=Path.home())
+    p.add_argument("--checkout-path", type=Path, default=ROOT)
     p.add_argument("--hf-home", type=Path,
                    default=Path(os.environ.get("HF_HOME", str(Path.home() / ".cache/huggingface"))))
     args = p.parse_args()
@@ -368,6 +400,7 @@ def main() -> int:
         data=args.data_home / "qwen38-spark",
         models=args.model_root, units=args.unit_dir,
         swap=args.swap_file, hf=args.hf_home, fstab=args.fstab_path,
+        home=args.home_path, checkout=args.checkout_path,
     )
     if args.action == "verify":
         try:
