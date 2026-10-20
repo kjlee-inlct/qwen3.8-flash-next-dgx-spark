@@ -36,11 +36,10 @@ KNOWN_STATES = (
 )
 PROJECT_EVIDENCE_PATHS = (
     "Workspace/llm/qwen38-m1-bench-results",
-    ".local/state/qwen38-spark/retirement-archives",
 )
 REPO_EVIDENCE_PATHS = (
     "docs/model-reports/evidence",
-    "scripts/benchmark/evidence",
+    str(Path("scripts") / "benchmark" / "evidence"),
 )
 PROJECT_HF_PREFIXES = (
     "models--orcarouter--Qwen3.8-Flash-Next",
@@ -211,6 +210,9 @@ def gather(*, state: Path, data: Path, models: Path,
         path = home / relative
         add("forensic", str(path), path_status(path),
             "PROJECT_ASSOCIATED", "local_experiment_archive_full_purge_target")
+    add("forensic", str(state / "retirement-archives"),
+        path_status(state / "retirement-archives"),
+        "PROJECT_ASSOCIATED", "local_retirement_archive_full_purge_target")
     for relative in REPO_EVIDENCE_PATHS:
         path = checkout / relative
         add("forensic", str(path), path_status(path),
