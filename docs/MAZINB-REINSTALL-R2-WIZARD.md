@@ -1,3 +1,28 @@
+## 2026-10-20 — Stage K physical R2 diagnostics: third named RM detail now verified
+
+The operator's separately retained second and third R2 **named** JSON
+journals both read `detail=M1Error: NVIDIA RM memory allocation error`,
+`phase=failed_stopped` and `exit_code=137`. Both full-ID Docker
+inspections passed the exact owner/variant/predecessor label checks
+and reported `exited`, `OOMKilled=false`, `exit=137`.
+Monitor extracts show `STOP_MARKER=ABSENT_OR_UNSAFE`, `protect=0/5`
+and only `container is no longer running; monitor exiting`; there
+is no observed `PROTECT stopping` line in the extracted events.
+Third trial loaded 95/95 shards, completed CUDA graph capture
+and engine initialization, yet was stopped about 20 seconds later
+without observed API READY. **No new benchmark throughput.**
+
+Both kernel queries failed at `sudo: 암호가 필요합니다`, so actual
+timestamped host-wide NVRM/OOM lines and per-container attribution
+remain **NOT_OBSERVED**. This newer observation supersedes the
+older paragraph below saying the third named `detail` was missing;
+retain the earlier statement as historical investigation state.
+Full receipt: [Stage K](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+The owner now requires eventual **complete** local project uninstall
+to include all R2 Docker, models and local forensic material,
+along with OrcaRouter/swap/service/proxy; current work must remain
+source-only until a safe full-reset lifecycle is qualified.
+
 # mazinb R2 — pinned checkpoint restore and bounded isolated API benchmark
 
 **Status: ACTUAL DGX restored 108/108 + protected R2 localhost API READY + 180-second monitored soak + inference smoke PASS on 2026-10-19; new llama-benchy measurements still NOT OBSERVED, permanent systemd service NOT QUALIFIED.**
