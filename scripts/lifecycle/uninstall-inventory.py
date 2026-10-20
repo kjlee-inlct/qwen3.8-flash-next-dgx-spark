@@ -41,6 +41,11 @@ REPO_EVIDENCE_PATHS = (
     "docs/model-reports/evidence",
     str(Path("scripts") / "benchmark" / "evidence"),
 )
+PROJECT_CACHE_DIRS = (
+    ".cache/vllm-qwen38",
+    ".cache/vllm-qwen38-v029",
+    ".cache/flashinfer-v029",
+)
 PROJECT_HF_PREFIXES = (
     "models--orcarouter--Qwen3.8-Flash-Next",
     "models--mazinb--Qwen3.8-Flash-Next",
@@ -221,6 +226,13 @@ def gather(*, state: Path, data: Path, models: Path,
         path = checkout / relative
         add("forensic", str(path), path_status(path),
             "PROJECT_ASSOCIATED", "checkout_evidence_requires_explicit_repo_local_cleanup")
+    for rel in PROJECT_CACHE_DIRS:
+        location = home / rel
+        add("project-cache", str(location), path_status(location),
+            "PROJECT_ASSOCIATED", "dedicated_project_runtime_cache")
+    add("shared-runtime-cache", str(home / ".cache/flashinfer"),
+        path_status(home / ".cache/flashinfer"), "EXCLUDED_SHARED",
+        "no_automatic_deletion_of_possible_foreign_shared_cache")
     for item in bounded_children(hf / "hub", issues):
         if item.name.startswith(PROJECT_HF_PREFIXES):
             add("model-cache", str(item), path_status(item), "UNVERIFIED",
