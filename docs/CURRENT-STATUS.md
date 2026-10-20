@@ -1,3 +1,68 @@
+## 2026-10-20 — ACTUAL DGX 8-container exact Docker inspect and seven image identities
+
+Owner-pasted **read-only physical DGX** output from
+`uninstall-inventory.py plan --json` plus exact `docker inspect`
+and `docker image inspect` confirmed **8/8 discovered container
+IDs**, all `State.Running=False` and `Status=exited`; four have
+exit code `137` and four have exit code `0`. Names/identities and
+selected bind mounts:
+
+| Exact full container ID | Name | Exit | Image tag / model source |
+|---|---|---:|---|
+| `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1` | qwen38-ab-v029 | 137 | vllm-orcarouter-v029:v1 / OrcaRouter model |
+| `57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56` | qwen38-ab-legacy | 137 | vllm-skinny-tp1:v1 / OrcaRouter model |
+| `5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445` | qwen38-h38-deterministic-v029 | 0 | vllm-orcarouter-v029-h38-decoder-scope:v1 / checkout/model symlink |
+| `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7` | qwen38-mazinb-m1-20261019065452-e70d6233 | 137 | vllm-orcarouter-v029:v1 / mazinb model |
+| `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424` | qwen38-mazinb-m1-20261019043708-479dfc86 | 0 | vllm-orcarouter-v029:v1 / mazinb model |
+| `918974a9e4edd03a8566b5a42527e372cd435a155f74362a1424e5420737f030` | qwen38-orca-v029-r22 | 0 | vllm-orcarouter-v029:v1 / OrcaRouter model |
+| `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8` | qwen38-mazinb-m1-20261019221159-90ee9851 | 137 | vllm-orcarouter-v029:v1 / mazinb model |
+| `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24` | qwen38-flash-next | 0 | vllm-skinny-tp1:v1 / OrcaRouter model |
+
+**All seven experiment containers** have project-specific
+`qwen38.*` labels; the **unlabeled legacy canonical**
+`/qwen38-flash-next` has a read-only `/model` bind to the
+exact active OrcaRouter `MODEL_DIR`, as shown by the earlier
+managed manifest. Its additional `/root/.cache/flashinfer`
+bind is sourced from **shared** `/home/inlc/.cache/flashinfer`,
+not a project-specific cache to remove. AB trial and mazinb M1
+private cache binds are within project state, and H38/R22 use
+dedicated `~/.cache/*-v029` paths. The H38 container's `/model`
+bind uses `checkout/model` (an independently measured symlink to
+the OrcaRouter checkpoint), not an external checkpoint.
+
+The seven current image tag → exact live image-ID relationships are:
+
+- `vllm-skinny-tp1:v1` → `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4` (no project image labels)
+- `vllm-orcarouter-v029:v1` → `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`
+- `vllm-orcarouter-v029-h38-decoder-scope:v1` → `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`
+- `vllm-orcarouter-v029-r25-init-marker:v1` → `sha256:9abb228a5a4c232d20bf38e33a806f15d4bf62ff61128502349fdf39d70e3a9e`
+- `vllm-orcarouter-v029-r26-construction-marker:v1` → `sha256:568d0ac6917b324eef6c29e5f06b0a1ba182b5db043052b13296fe7d3c5428aa`
+- `vllm-orcarouter-v029-r27-linear-marker:v1` → `sha256:e9e92c5cb98d443a8410f21345cb0e07c30c9e7c84516cedcc2a6dc213934119`
+- `vllm-orcarouter-v029-r28-unquant-linear-marker:v1` → `sha256:54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f`
+
+All six v0.29-derived images have `qwen38.*` build labels;
+the legacy skinny image has none. The R25–R28 image tags are
+**present** but are not shown as in use by the eight inspected
+containers. This scan does **not** prove that no other/nonproject
+container uses those image IDs or binds project files; an unfiltered
+full Docker reference check remains necessary. It also does not
+prove image/model exclusive ownership, despite exact tag/ID and
+manifest/registry agreement. The observed `137` codes do not
+resolve prior NVIDIA RM/kill cause, and no service/API READY proof
+is implied. No Docker/container/image/model removal or GPU start
+was performed.
+
+**Additional SOURCE_ONLY hardening:** canonical unlabeled Docker
+candidate `/qwen38-flash-next` now requires its unique read-only
+`/model` bind's exact `Source` to equal the strictly parsed
+active managed manifest `MODEL_DIR`, and that exact model to be
+visible in the bounded inventory. A similarly named foreign model
+directory or writable/mismatching mount is blocked; previous
+project-label checks for experiment containers remain. Added
+synthetic foreign-path preservation tests; host destructive M2
+still NOT_RUN and no consent to apply. GitHub PR #261 remains
+Draft/Open/unmerged.
+
 ## 2026-10-20 — ACTUAL DGX complete-reset read-only inventory: 8 containers, 7 unowned images, 2 models, PLE swap
 
 Owner-pasted **physical DGX**, on the earlier reported clean feature-branch
