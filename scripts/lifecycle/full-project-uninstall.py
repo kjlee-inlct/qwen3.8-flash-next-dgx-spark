@@ -108,8 +108,12 @@ def no_foreign_mounts(path: Path) -> None:
             for name in dirs + files:
                 item = Path(parent) / name
                 info = item.lstat()
-                if stat.S_ISLNK(info.st_mode) or info.st_dev != root_dev:
-                    raise Blocked("unsafe_nested_mount_or_symlink:" + str(item))
+                # HF snapshots legitimately contain symlinks into blobs.
+                # Do not follow them; unlink them as directory entries only.
+                if stat.S_ISLNK(info.st_mode):
+                    continue
+                if info.st_dev != root_dev or item.is_mount():
+                    raise Blocked("unsafe_nested_mount:" + str(item))
     except OSError as exc:
         raise Blocked("unreadable_tree:" + str(path)) from exc
 
@@ -438,12 +442,16 @@ def remove_tree(path: Path, kind: str, scope: dict[str, str]) -> None:
         for parent, dirs, files in os.walk(path, topdown=False, followlinks=False):
             for item in files:
                 child = Path(parent) / item
-                require_real_path(child)
+                if not child.is_symlink():
+                    require_real_path(child)
                 child.unlink()
             for item in dirs:
                 child = Path(parent) / item
-                require_real_path(child)
-                child.rmdir()
+                if child.is_symlink():
+                    child.unlink()  # no traversal outside the subtree
+                else:
+                    require_real_path(child)
+                    child.rmdir()
         path.rmdir()
     else:
         path.unlink()
