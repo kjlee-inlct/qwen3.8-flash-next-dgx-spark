@@ -1,3 +1,34 @@
+## 2026-10-20 — ACTUAL DGX R2 Stage K: second/third named RM classification and Docker startup evidence
+
+New operator-pasted physical evidence resolves the previously missing
+**third named-journal detail**. Both second and third R2 named JSONs show
+`phase=failed_stopped`, `exit_code=137` and
+`detail=M1Error: NVIDIA RM memory allocation error`. The matching
+full Docker IDs were independently label-checked and reported
+`STATUS=exited RUNNING=false OOM=false EXIT=137`.
+Two monitor extracts reported `STOP_MARKER=ABSENT_OR_UNSAFE`,
+warnings consistently `protect=0/5`, and monitor termination only
+after the Docker was no longer running. These outputs do not prove
+how SIGKILL was delivered. Host kernel RM/oom lines remain
+**NOT_OBSERVED**: both sudo journal queries required a password.
+
+Third Docker showed 95/95 checkpoint shards, 79.42 GiB model
+load, 16.0 GiB KV cache, finished CUDA graph capture and engine
+initialization at 2026-10-20 07:24:54 KST; Docker finished
+2026-10-20 07:25:14 KST. This is **not API READY** and no
+third-run inference, smoke, 180s soak or new benchmark was demonstrated.
+First R2 READY/smoke/soak PASS remains separately valid.
+
+These are owner-provided DGX console observations, not assistant
+host execution or proof of container-attributed kernel RM failures.
+[Full exact logs and provenance (Stage K)](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+Owner's complete-uninstall scope now includes OrcaRouter, all R2
+containers/model, swap, service/proxy and *local forensic journals
+and archives*; generic `--purge-all` remains insufficient.
+Do not launch a further GPU trial or destroy assets before the
+exact-ID, shared-dependency and bounded source-only cleanup process
+is implemented and separately approved. M2 remains NOT_RUN.
+
 ## 2026-10-20 — owner complete-reset scope explicitly includes protected OrcaRouter and R2 evidence
 
 The owner confirmed that complete project removal MUST delete OrcaRouter,
