@@ -208,29 +208,44 @@ owner provides the local read-only inspection. Even if plan creation
 passes after source update, **destructive M2 remains NOT_QUALIFIED**
 and no immediate menu 5 execution is authorized by this patch.
 
-### Open safety gap found in source review — name prefix is not ownership
+### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
-**SOURCE REVIEW ONLY; no host resource affected.** The read-only
-inventory currently discovers every Docker image with repository
-starting `vllm-` or `qwen38-`, and models with directory names
-starting `qwen3.8-` or `qwen38-`. The integrated reset engine
-currently accepts some of these `UNVERIFIED` image/model candidates
-into a destructive plan after identity/path and external Docker
-reference checks. For images, being unreferenced does **not** prove
-the image belongs to this project; another application may retain
-an intentionally stopped/unreferenced `vllm-*` image. Similar
-ambiguity exists for model directories carrying a familiar prefix.
-Therefore the engine is **NOT YET OWNER-SAFE for destructive apply**.
+The inventory continues to discover `vllm-*`/`qwen38-*` image
+tags, `qwen3.8-*`/`qwen38-*` model directories and
+project-like Hugging Face hub cache entries as **UNVERIFIED** candidates.
+A matching name, an unused Docker image, or a directory contained in a
+model root is **not** proof of project ownership.
 
-**Required before any menu 5 / M2 qualification:** classify all
-candidate images and model directories by positive project ownership
-(pinned manifest or cumulative registry, project-specific known
-release/build provenance, or separately reviewed explicit allowlist
-bound to immutable exact image IDs and model root identifiers).
-Unverified candidates must block apply, or be visibly excluded with
-a non-complete result and separate explicit owner decision. Add
-synthetic tests with unrelated `vllm-*` images and similarly named
-foreign checkpoints. Keep foreign applications/OS/Docker excluded.
+The full-reset engine now requires `INSTALLER_OWNED` provenance on every
+**present model, image and model-cache candidate** before including it in
+the SHA256 deletion receipt. Currently the manifest's owned flags and
+the cumulative registry's owned entries provide this attribution for
+models and images. A `model-cache` candidate is not yet positively
+attributed by the read-only inventory and therefore blocks the full
+plan rather than being silently removed or omitted. The exact
+`checkout/model` symlink exception remains link-entry-only; a live
+linked model must itself be selected under the same positive ownership
+guard. Unverified assets now fail with
+`candidate_ownership_not_proven:<kind>:<locator>:ownership=UNVERIFIED`
+*before* Docker image identity inspection or any destructive apply.
+
+Synthetic tests cover similarly named unrelated model directories,
+an unused `vllm-*` foreign image, a matching-prefix cache entry,
+and a positively owned image that remains subject to exact-ID
+fingerprinting. These are SOURCE_ONLY regression checks, not evidence
+of DGX ownership or complete removable inventory.
+
+**Still blocked:** research-generated or old assets without positive
+manifest/registry provenance, shared-root model-cache entries and
+historical image tag-to-exact-ID provenance must be individually
+reconciled using read-only evidence. Do not blindly mark candidates
+`owned=true`, relabel images or fabricate ownership records to bypass
+the guard. A future reviewed exact-ID and filesystem-fingerprint
+allowlist mechanism may cover proven historical project assets, but
+requires explicit owner approval, independent source tests, shared
+dependency checks and actual DGX evidence. Until then, failure to
+generate the complete plan is a correct safety result, not a reason
+to skip unknown project assets or execute menu 5.
 
 ## Qualification and recovery work still missing before host use
 
