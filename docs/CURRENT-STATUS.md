@@ -1,3 +1,61 @@
+## 2026-10-21 — ACTUAL DGX mount drift classified ORDER_ONLY across six containers; deletion still NOT_RUN
+
+The owner physically ran the latest read-only `full-project-uninstall.py
+diagnose` after syncing the verified checkout
+`e69375ef47c49340ea06da2c848f329cf11d1d12`.
+The unchanged saved SHA256 reset receipt
+`5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89`
+again differed from the live scan
+`89df1efa3a6e81514cf6aafceba5f086284ef4ad924b59a2363d1b95a84003c0`.
+All **six** observed differences were *only*
+`container.fingerprint.mounts` and were individually
+`classification=ORDER_ONLY`: the same full mount dictionaries
+were present with unchanged count (4,3,3,3,3,4), but Docker
+returned them in a different array order.
+
+Exact affected container IDs:
+`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+`5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445`,
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+`918974a9e4edd03a8566b5a42527e372cd435a155f74362a1424e5420737f030`,
+`bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+
+Physical output included `HOST_DELETION=NOT_PERFORMED`,
+`DIAGNOSIS_RC=3`. The historical container fingerprint's
+unordered Docker `Mounts` list had caused false SHA256 drift;
+there is **no observed host Source, RW, bind target or mount
+content drift** between the compared inspection snapshots.
+This establishes no permission to remove foreign assets and does
+not retroactively validate destructive host M2.
+
+**Source remediation, no physical execution yet:** Docker
+`docker_identity()` now sorts the *full* Mounts dictionaries by
+lossless sorted-key JSON serialization before both `plan` and
+`apply` identity calculation. This canonicalization preserves
+every field, type, duplicate and value, leaving real Source/RW/
+mode/propagation changes detectable; malformed or missing Mounts
+fail closed. Synthetic tests assert invariant receipt SHA on
+permutation and rejection of content changes. The former
+saved receipt is **not valid as the new canonical receipt** and
+must not be patched, reused or supplied to `apply`. After
+CI passes, require a clean fast-forward to the precise GitHub
+HEAD, fresh `plan` to a **new** protected receipt path,
+read-only `diagnose` comparing its identity against a second
+live snapshot, then independent review and explicit approval
+before destructive apply. Existing owner-exception JSON and
+predelete inventory are retained unchanged if corresponding
+fresh inventories/identity checks still pass.
+
+The owner's full-reset scope explicitly includes
+wizard-created dedicated `/swap-ple.img` (128 GiB) and
+project-only `/etc/fstab` persistence line; preserve ordinary
+`/swap.img`, external Docker containers/volumes, shared HF/
+FlashInfer roots and GitHub history. Source-only/CI results do
+not prove the physical DGX is reset. M2 still NOT_RUN.
+
+---
+
 ## 2026-10-21 — ACTUAL DGX read-only receipt diagnosis: four Docker mount fingerprints only
 
 The operator cleanly fast-forwarded the single DGX Spark checkout from
