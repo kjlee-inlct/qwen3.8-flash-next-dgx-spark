@@ -208,6 +208,36 @@ def legacy_model_link_identity(path: Path, scope: dict[str, str]) -> dict:
     }
 
 
+def managed_release_link_identity(path: Path, scope: dict[str, str]) -> dict:
+    """Identify only managed current/previous links, without following them.
+
+    The linked release must be lexically beneath the project's release
+    directory. A missing former release is acceptable; an external or
+    redirected target is not proof of a project-local complete reset.
+    """
+    data = Path(scope["data"])
+    if path not in (data / "current", data / "previous"):
+        raise Blocked("release_link_not_canonical:" + str(path))
+    require_real_path(data)
+    if not path.is_symlink():
+        raise Blocked("release_link_changed_type:" + str(path))
+    try:
+        st = path.lstat()
+        raw = os.readlink(path)
+    except OSError as exc:
+        raise Blocked("release_link_unreadable:" + str(path)) from exc
+    if not raw:
+        raise Blocked("release_link_empty_target:" + str(path))
+    dest = Path(os.path.abspath(os.path.join(str(data), raw)))
+    if not within(dest, data / "releases"):
+        raise Blocked("release_link_points_outside_releases:" + str(path))
+    require_real_path(dest, must_exist=False)
+    return {
+        "dev": st.st_dev, "ino": st.st_ino, "mode": st.st_mode,
+        "target_text": raw, "resolved_target": str(dest),
+    }
+
+
 def docker_identity(cid: str) -> dict:
     if not inventory.DOCKER_ID.fullmatch(cid):
         raise Blocked("docker_id_not_full_sha")
@@ -455,6 +485,14 @@ def scan(scope: dict[str, str]) -> dict:
                 "fingerprint": legacy_model_link_identity(Path(ident), scope),
             })
             continue
+        if kind == "release" and status == "UNSAFE_SYMLINK" and ident in (
+                str(Path(scope["data"]) / "current"),
+                str(Path(scope["data"]) / "previous")):
+            targets.append({
+                "kind": "release-link", "id": ident,
+                "fingerprint": managed_release_link_identity(Path(ident), scope),
+            })
+            continue
         if status == "ABSENT" or kind in ("container-name", "hf-cache", "shared-runtime-cache"):
             continue
         if status != "PRESENT":
@@ -674,6 +712,13 @@ def execute(plan: dict) -> None:
             if legacy_model_link_identity(link, scope) != item["fingerprint"]:
                 raise Blocked("legacy_model_link_drift_during_apply")
             link.unlink()
+    # Release-pointer entries are inside data-root; recursive teardown only
+    # unlinks them, never traverses their destinations. Check exact pointer
+    # identity again before deleting any filesystem root.
+    for item in targets:
+        if item["kind"] == "release-link":
+            if managed_release_link_identity(Path(item["id"]), scope) != item["fingerprint"]:
+                raise Blocked("release_link_drift_during_apply:" + item["id"])
     # Delete separate model and research evidence paths before state/data.
     for kind in ("model", "model-cache", "project-cache", "forensic", "data-root", "state-root"):
         for item in targets:
