@@ -197,18 +197,21 @@ class UninstallInventoryTests(unittest.TestCase):
         data = self.gather()
         self.assertIn("fstab_unavailable_or_unsafe", data["issues"])
 
-    def test_complete_scope_includes_orcarouter_and_both_mazinb_r2_containers(self) -> None:
+    def test_complete_scope_includes_orcarouter_and_all_three_mazinb_r2_containers(self) -> None:
         model = self.models / "qwen3.8-flash-next-orcarouter"
         model.mkdir()
-        ids = ("68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7",
+        ids = ("82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424",
+               "68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7",
                "bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8",
                "f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24")
         self.containers = [
-            {"ID": ids[0], "Names": "qwen38-mazinb-m1-20261019065452-e70d6233",
+            {"ID": ids[0], "Names": "qwen38-mazinb-m1-20261019054700-first",
              "Labels": "qwen38.abtrial=mazinb"},
-            {"ID": ids[1], "Names": "qwen38-mazinb-m1-20261019221159-90ee9851",
+            {"ID": ids[1], "Names": "qwen38-mazinb-m1-20261019065452-e70d6233",
              "Labels": "qwen38.abtrial=mazinb"},
-            {"ID": ids[2], "Names": "qwen38-flash-next",
+            {"ID": ids[2], "Names": "qwen38-mazinb-m1-20261019221159-90ee9851",
+             "Labels": "qwen38.abtrial=mazinb"},
+            {"ID": ids[3], "Names": "qwen38-flash-next",
              "Labels": ""},
         ]
         result = self.gather()
