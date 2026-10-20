@@ -103,6 +103,21 @@ class FullProjectUninstallTests(unittest.TestCase):
                     [], [], [{"kind": "volume", "id": "qwen38-temp"}],
                 )
 
+    def test_foreign_docker_bind_mount_blocks_project_file_deletion(self) -> None:
+        foreign = "e" * 64
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        with (patch.object(full.inventory, "run_docker", return_value=[
+                  {"ID": foreign}]),
+              patch.object(full, "json_command", return_value=[
+                  {"Id": foreign, "Image": "sha256:" + "d" * 64,
+                   "Mounts": [{"Type": "bind", "Source": str(model),
+                               "Destination": "/model"}]}])):
+            with self.assertRaisesRegex(full.Blocked, "file_mount_used"):
+                full.inspect_image_references(
+                    [], [], [], [{"kind": "model", "id": str(model)}],
+                )
+
     def test_plan_scope_rejects_parent_and_model_symlink(self) -> None:
         with self.assertRaisesRegex(full.Blocked, "model_outside"):
             full.scoped_file(self.home, "model", self.scope)
