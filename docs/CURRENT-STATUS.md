@@ -1,3 +1,86 @@
+## 2026-10-20 — ACTUAL DGX complete-reset read-only inventory: 8 containers, 7 unowned images, 2 models, PLE swap
+
+Owner-pasted **physical DGX**, on the earlier reported clean feature-branch
+checkout (`b0ef37f9b756a86cc3670691e98a0b0798984d51`; no newer
+physical HEAD printed), executed
+`python3 -B scripts/lifecycle/uninstall-inventory.py plan`.
+It printed `UNINSTALL_AUDIT=READ_ONLY_NO_DELETION`,
+`UNINSTALL_AUDIT_VERIFICATION=NOT_PERFORMED`, and
+`UNINSTALL_APPLY=NOT_IMPLEMENTED_IN_AUDITOR`, with no
+`INVENTORY_ISSUE` lines. **No plan receipt, Docker mutation, or deletion.**
+The scan's project-related container candidates had these exact 64-hex IDs
+(names/labels are not in this inventory excerpt; independently check before
+any mutation):
+
+- `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`
+- `57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`
+- `5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445`
+- `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`
+- `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`
+- `918974a9e4edd03a8566b5a42527e372cd435a155f74362a1424e5420737f030`
+- `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`
+- `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+
+Exactly **7 present Docker image-tag candidates** were all
+`ownership=UNVERIFIED`: `vllm-skinny-tp1:v1`,
+`vllm-orcarouter-v029:v1`,
+`vllm-orcarouter-v029-h38-decoder-scope:v1`, and the
+`vllm-orcarouter-v029-r25-init-marker:v1`,
+`r26-construction-marker:v1`, `r27-linear-marker:v1`,
+`r28-unquant-linear-marker:v1` variants (each with the full
+`vllm-orcarouter-v029-` prefix).
+**Two present model directories** were `UNVERIFIED`:
+`checkout/models/qwen3.8-flash-next-orcarouter` and
+`checkout/models/qwen3.8-flash-next-mazinb`; the separate
+`checkout/model` link was `UNSAFE_SYMLINK`.
+Project state/data, forensic archives and checkout evidence, three
+dedicated vLLM/FlashInfer caches, and the dedicated `/swap-ple.img`
+(`INSTALLER_OWNED` with matching fstab registration) were present.
+The shared HF root and shared `~/.cache/flashinfer` remained excluded.
+Project data `current` and `previous` release pointers appeared
+as `release: UNSAFE_SYMLINK` inside the **owned data root**.
+
+The registry independently printed four `owned=True`, `state=claimed`,
+empty-fingerprint image *records* (`h9-ct-modelweight`,
+`h10-ct-global-scale`, `h11-ct-packed-modelweight`,
+`h12-ct-postload-preserve`), **not proof of existing images**.
+Three `owned=False`, `state=ready` records include
+`vllm-orcarouter-v029-h38-decoder-scope:v1`
+(ID `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`),
+`vllm-orcarouter-v029:v1`
+(ID `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`),
+and `vllm-skinny-tp1:v1`
+(ID `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`).
+The exact live `docker image inspect vllm-skinny-tp1:v1` ID
+**matches** its unowned registry entry. Generic NVIDIA/vLLM/Ubuntu
+image labels were printed, **not a Qwen project ownership attestation**.
+
+A scoped `docker ps -a --filter ancestor=vllm-skinny-tp1:v1`
+showed `qwen38-ab-legacy` (exact
+`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+`Exited (137)`) and `qwen38-flash-next` (exact
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+`Exited (0)`). Six other candidate names/states and their exact labels/mounts
+remain **NOT_OBSERVED in this output**, as do external-container
+references for other images and model directories.
+
+**Confirmed SOURCE_ONLY gap revealed by physical inventory:** the
+full-reset `scan()` treats `release: UNSAFE_SYMLINK` as unsafe before
+its later state/data-root skip, even though normal managed release
+`current`/`previous` are symlinks. A separate code/test change now
+identity-binds those exact two canonical release pointers without
+following targets; release links outside the project release root
+or changed since the plan remain blocked. This is not DGX validation.
+The pre-existing positive-ownership gate continues to block all
+seven unowned image candidates and two unowned models before apply.
+No assumption that a matching ID implies exclusive project ownership.
+
+Next: read-only full-ID Docker inspect (names, project labels, exact
+images, mounts, running state), model-marker/dependency review and
+project/foreign image reference classification. No ownership flag edits,
+blind `git pull`, `docker prune`, apply/menu 5, M2 claim, or PR merge.
+PR #261 remains protected Draft until independent approval.
+
 ## 2026-10-20 — ACTUAL DGX OrcaRouter model target and non-owned registry fingerprint verified
 
 New owner-pasted **read-only physical DGX** output resolves the target-presence
