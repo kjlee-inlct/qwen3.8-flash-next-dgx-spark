@@ -74,6 +74,72 @@ class FullProjectUninstallTests(unittest.TestCase):
             with self.assertRaisesRegex(full.Blocked, "identity_mismatch"):
                 full.docker_identity(cid)
 
+    def test_legacy_canonical_container_requires_exact_manifest_model_bind(self) -> None:
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        foreign = self.home / "foreign" / model.name
+        foreign.mkdir(parents=True)
+        # A foreign model may have the same recognizable basename.
+        (self.state / "install.env").write_text("FIXTURE")
+        rows = [{"kind": "model", "locator": str(model),
+                 "status": "PRESENT", "ownership": "UNVERIFIED"}]
+        baseline = {"name": "/qwen38-flash-next",
+                    "mounts": [{"Type": "bind", "Source": str(model),
+                                "Destination": "/model", "RW": False}],
+                    "image_id": "sha256:" + "d" * 64}
+        with patch.object(full.inventory, "parse_install",
+                          return_value={"MODEL_DIR": str(model)}):
+            full.verify_legacy_canonical_model_mount(
+                baseline, self.scope, rows)
+            other = {"name": baseline["name"],
+                     "mounts": [{"Type": "bind", "Source": str(foreign),
+                                 "Destination": "/model", "RW": False}]}
+            with self.assertRaisesRegex(
+                    full.Blocked, "canonical_container_manifest_model_mount_mismatch"):
+                full.verify_legacy_canonical_model_mount(other, self.scope, rows)
+            writable = {"name": baseline["name"],
+                        "mounts": [{**baseline["mounts"][0], "RW": True}]}
+            with self.assertRaisesRegex(
+                    full.Blocked, "canonical_container_manifest_model_mount_mismatch"):
+                full.verify_legacy_canonical_model_mount(
+                    writable, self.scope, rows)
+            with self.assertRaisesRegex(
+                    full.Blocked, "canonical_container_model_not_in_inventory"):
+                full.verify_legacy_canonical_model_mount(
+                    baseline, self.scope, [])
+
+    def test_legacy_canonical_container_scan_rejects_similar_foreign_bind(self) -> None:
+        model = self.model_root / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        foreign = self.home / "third-party" / model.name
+        foreign.mkdir(parents=True)
+        (foreign / "KEEP").write_text("foreign")
+        (self.state / "install.env").write_text("FIXTURE")
+        cid = "a" * 64
+        rows = [
+            {"kind": "state-root", "locator": str(self.state),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "data-root", "locator": str(self.data),
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "model", "locator": str(model),
+             "status": "PRESENT", "ownership": "INSTALLER_OWNED"},
+            {"kind": "container", "locator": cid,
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+        ]
+        identity = {"id": cid, "name": "/qwen38-flash-next",
+                    "mounts": [{"Type": "bind", "Source": str(foreign),
+                                "Destination": "/model", "RW": False}],
+                    "image_id": "sha256:" + "d" * 64}
+        with (patch.object(full.inventory, "gather",
+                           return_value={"issues": [], "resources": rows}),
+              patch.object(full.inventory, "parse_install",
+                           return_value={"MODEL_DIR": str(model)}),
+              patch.object(full, "docker_identity", return_value=identity)):
+            with self.assertRaisesRegex(
+                    full.Blocked, "canonical_container_manifest_model_mount_mismatch"):
+                full.scan(self.scope)
+        self.assertEqual((foreign / "KEEP").read_text(), "foreign")
+
     def test_docker_preflight_blocks_foreign_image_dependency(self) -> None:
         foreign = "f" * 64
         managed = "a" * 64
