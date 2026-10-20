@@ -181,6 +181,19 @@ class FullProjectUninstallTests(unittest.TestCase):
             self.assertFalse(clean)
             self.assertIn("state-root:" + str(self.state) + ":PRESENT", issues)
 
+    def test_project_only_runtime_caches_are_removable_but_shared_flashinfer_not(self) -> None:
+        dedicated = self.home / ".cache/vllm-qwen38-v029"
+        dedicated.mkdir(parents=True)
+        (dedicated / "token").write_text("safe fixture")
+        full.scoped_file(dedicated, "project-cache", self.scope)
+        full.remove_tree(dedicated, "project-cache", self.scope)
+        self.assertFalse(dedicated.exists())
+        shared = self.home / ".cache/flashinfer"
+        shared.mkdir(parents=True)
+        with self.assertRaisesRegex(full.Blocked, "unverified_runtime_cache"):
+            full.scoped_file(shared, "project-cache", self.scope)
+        self.assertTrue(shared.exists())
+
     def test_disposable_full_file_teardown_removes_models_evidence_state_data(self) -> None:
         model = self.model_root / "qwen3.8-flash-next-orcarouter"
         model.mkdir()
