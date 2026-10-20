@@ -233,10 +233,20 @@ The separate per-candidate ownership check remains a second fail-closed
 line of defense. The Wizard surfaces this read-only blocking reason
 without generating a valid reset receipt.
 
+Where a cumulative registry record exists, the plan now also refuses
+a recorded image if its *current exact Docker image ID* differs from
+the saved `ready` fingerprint, and refuses a recorded model if the
+managed model-manifest SHA256 has changed, is missing, or the registry
+record is not fingerprint-ready. Explicit registry `owned=false`
+conflicting with an owned manifest flag also blocks. These checks
+reuse the stored immutable provenance; an active manifest without a
+matching cumulative record remains a separate historical case
+requiring review before host qualification.
+
 Synthetic tests cover similarly named unrelated model directories,
-an unused `vllm-*` foreign image, a matching-prefix cache entry,
-and a positively owned image that remains subject to exact-ID
-fingerprinting. These are SOURCE_ONLY regression checks, not evidence
+an unused `vllm-*` foreign image, matching-prefix cache entries,
+positive recorded/manifest attribution, image ID drift and model
+marker drift. These are SOURCE_ONLY regression checks, not evidence
 of DGX ownership or complete removable inventory.
 
 **Still blocked:** research-generated or old assets without positive
