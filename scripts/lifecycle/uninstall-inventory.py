@@ -122,10 +122,14 @@ def gather(*, state: Path, data: Path, models: Path,
     elif path_status(manifest_path) != "ABSENT":
         issues.append("manifest_path_unsafe")
     add("manifest", str(manifest_path), path_status(manifest_path), "PROJECT_ASSOCIATED")
+    add("state-root", str(state), path_status(state), "PROJECT_ASSOCIATED")
+    add("data-root", str(data), path_status(data), "PROJECT_ASSOCIATED")
 
     registry_path = state / "asset-ownership.json"
     registry = {"assets": []}
     try:
+        if registry_path.is_symlink():
+            raise RegistryError("unsafe_symlink_registry")
         registry = load_registry(registry_path)
     except (OSError, ValueError, RegistryError, json.JSONDecodeError) as exc:
         issues.append("asset_registry_invalid:" + type(exc).__name__)
