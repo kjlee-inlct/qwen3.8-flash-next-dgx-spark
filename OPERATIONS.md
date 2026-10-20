@@ -491,7 +491,8 @@ shared Hugging Face cache. It makes **no changes**.
 For optional post-removal verification, save a `plan --json` baseline outside
 the deletion scope and later call `verify --baseline PATH` at the same paths.
 This verifies only discovered, bounded project scope, not factory-clean OS.
-The existing managed uninstaller is **option 2**, separately confirmed.
+The existing managed uninstaller is **option 2**, separately confirmed;
+**option 3** runs baseline-bound read-only post-removal verification.
 A full research-container/evidence/cache cleanup is NOT implemented and
 physical DGX destructive E2E is NOT QUALIFIED. Do not run destructive
 `--purge-all` on the protected physical DGX as a shortcut.
