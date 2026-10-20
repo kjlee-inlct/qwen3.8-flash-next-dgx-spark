@@ -9,11 +9,13 @@ file deletion, checkpoint read, or output file write is performed here.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import stat
 import sys
 
 # A read-only inventory must not generate __pycache__ in the repository.
@@ -361,6 +363,150 @@ def gather(*, state: Path, data: Path, models: Path,
     }
 
 
+def model_provenance_audit(observed: dict) -> dict:
+    """Read only bounded manifest/registry/file-size evidence, not model weights.
+
+    An identical model marker is project association, never ownership proof.
+    File-size checks use lstat and reject symlink traversal; SHA256 of model
+    content is deliberately NOT calculated by this lightweight audit.
+    """
+    if observed["issues"]:
+        raise RuntimeError("project_inventory_incomplete")
+    state = Path(observed["scope"]["state"])
+    registry = load_registry(state / "asset-ownership.json")
+    records: dict[str, list[dict]] = {}
+    for item in registry["assets"]:
+        if item["kind"] == "model":
+            records.setdefault(item["locator"], []).append(item)
+    models = [r for r in observed["resources"]
+              if r["kind"] == "model" and r["status"] == "PRESENT"]
+    if len(models) > MAX_ENTRIES:
+        raise RuntimeError("model_provenance_candidate_limit")
+    summaries = []
+    for candidate in models:
+        path = Path(candidate["locator"])
+        problems: list[str] = []
+        matches = records.get(str(path), [])
+        if len(matches) != 1:
+            problems.append("registry_record_cardinality")
+        record = matches[0] if len(matches) == 1 else None
+        marker = path / ".qwen38-model-manifest.json"
+        summary = {
+            "model_path": str(path),
+            "inventory_ownership": candidate["ownership"],
+            "registry_matches": len(matches),
+            "registry_owned": record["owned"] if record else None,
+            "registry_state": record["state"] if record else None,
+            "marker_sha256": None,
+            "recorded_sha256_matches": False,
+            "marker_repository": None,
+            "marker_revision": None,
+            "marker_status": None,
+            "listed_files": 0,
+            "present_regular_files": 0,
+            "unknown_size_entries": 0,
+            "provided_content_sha256_entries": 0,
+            "content_sha256_verified": 0,
+            "issues": problems,
+        }
+        try:
+            if path.is_symlink() or not path.is_dir():
+                raise ValueError("model_root_not_real_directory")
+            if marker.is_symlink() or not marker.is_file():
+                raise ValueError("model_marker_missing_or_symlink")
+            if marker.stat().st_size > 1024 * 1024:
+                raise ValueError("model_marker_oversized")
+            raw = marker.read_bytes()
+            marker_sha = hashlib.sha256(raw).hexdigest()
+            summary["marker_sha256"] = marker_sha
+            summary["recorded_sha256_matches"] = bool(
+                record and record["fingerprint"] == marker_sha
+                and record["state"] == "ready")
+            if not summary["recorded_sha256_matches"]:
+                problems.append("marker_registry_fingerprint_mismatch")
+            obj = json.loads(raw)
+            if not isinstance(obj, dict) or set(obj) != {
+                    "schema_version", "repository", "revision", "status", "files"}:
+                raise ValueError("model_marker_schema_unexpected")
+            summary["marker_repository"] = obj["repository"]
+            summary["marker_revision"] = obj["revision"]
+            summary["marker_status"] = obj["status"]
+            if obj["schema_version"] != 1:
+                problems.append("model_marker_schema_version")
+            if (not isinstance(obj["repository"], str)
+                    or not obj["repository"]
+                    or any(ch in obj["repository"] for ch in ("\\0", "\\n", "\\r"))):
+                problems.append("model_marker_repository_invalid")
+            if (not isinstance(obj["revision"], str)
+                    or not re.fullmatch(r"[a-f0-9]{40}", obj["revision"])):
+                problems.append("model_marker_revision_not_pinned")
+            if obj["status"] != "complete":
+                problems.append("model_marker_not_complete")
+            files = obj["files"]
+            if not isinstance(files, list) or not files or len(files) > 5000:
+                raise ValueError("model_marker_file_list_invalid")
+            summary["listed_files"] = len(files)
+            visited: set[str] = set()
+            for entry in files:
+                if not isinstance(entry, dict) or set(entry) != {
+                        "path", "size", "sha256"}:
+                    raise ValueError("model_marker_file_entry_invalid")
+                name, size, sha = entry["path"], entry["size"], entry["sha256"]
+                if (not isinstance(name, str) or not name
+                        or name.startswith("/")
+                        or any(part in ("", ".", "..") for part in name.split("/"))
+                        or "\\0" in name or "\\\\" in name or name in visited):
+                    raise ValueError("model_marker_file_path_invalid")
+                visited.add(name)
+                if type(size) is not int or size < 0:
+                    raise ValueError("model_marker_file_size_invalid")
+                if sha is not None:
+                    if not isinstance(sha, str) or not re.fullmatch(
+                            r"[a-f0-9]{64}", sha):
+                        raise ValueError("model_marker_file_hash_invalid")
+                    summary["provided_content_sha256_entries"] += 1
+                target = path
+                try:
+                    for component in name.split("/"):
+                        target = target / component
+                        mode = target.lstat().st_mode
+                        if stat.S_ISLNK(mode):
+                            raise ValueError("symlinked_model_file_or_parent")
+                    if not stat.S_ISREG(mode):
+                        raise ValueError("nonregular_model_file")
+                    actual_size = target.stat().st_size
+                    if size and size != actual_size:
+                        raise ValueError("model_file_size_mismatch")
+                    if not size:
+                        summary["unknown_size_entries"] += 1
+                    summary["present_regular_files"] += 1
+                except (OSError, ValueError) as exc:
+                    if len(problems) < 12:
+                        problems.append(type(exc).__name__ + ":" +
+                                        (str(exc) if isinstance(exc, ValueError)
+                                         else "missing_or_unreadable_model_file"))
+            if record and record["owned"] is False:
+                # Registry ownership is deliberately unchanged.
+                pass
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+            problems.append("model_provenance_unreadable_or_invalid:" +
+                            type(exc).__name__)
+        summaries.append(summary)
+    result = ("NO_MODEL_CANDIDATES" if not summaries else
+              "REVIEW_REQUIRED" if any(item["issues"] for item in summaries)
+              else "CONSISTENT_METADATA_NOT_OWNERSHIP")
+    return {
+        "result": result, "models": summaries,
+        "limitations": [
+            "marker_sha256_only_no_model_content_hashing",
+            "size_zero_is_unknown_expected_size",
+            "owned_false_not_promoted_or_authorized",
+            "file_metadata_is_not_exclusive_ownership_proof",
+            "point_in_time_read_only_probe",
+        ],
+    }
+
+
 def _paths_overlap(left: Path, right: Path) -> bool:
     return left == right or left in right.parents or right in left.parents
 
@@ -516,7 +662,7 @@ def verification(baseline: dict, current: dict) -> tuple[str, list[str]]:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("plan", "verify", "references"))
+    p.add_argument("action", choices=("plan", "verify", "references", "provenance"))
     p.add_argument("--json", action="store_true", help="emit bounded JSON plan to stdout")
     p.add_argument("--baseline", type=Path, help="saved plan JSON (read only; verify only)")
     p.add_argument("--state-home", type=Path,
@@ -542,6 +688,34 @@ def main() -> int:
         swap=args.swap_file, hf=args.hf_home, fstab=args.fstab_path,
         home=args.home_path, checkout=args.checkout_path,
     )
+    if args.action == "provenance":
+        try:
+            audit = model_provenance_audit(result)
+        except (OSError, ValueError, RuntimeError, RegistryError) as exc:
+            audit = {"result": "INCOMPLETE", "reason": str(exc)}
+        if args.json:
+            print(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True))
+        else:
+            print("MODEL_PROVENANCE=READ_ONLY_METADATA_NO_MODEL_CONTENT_HASH")
+            print("MODEL_PROVENANCE_RESULT=" + audit["result"])
+            if audit["result"] == "INCOMPLETE":
+                print("MODEL_PROVENANCE_ISSUE=" + audit["reason"])
+            else:
+                for model in audit["models"]:
+                    print("MODEL=" + model["model_path"])
+                    for key in (
+                            "inventory_ownership", "registry_matches",
+                            "registry_owned", "registry_state", "marker_sha256",
+                            "recorded_sha256_matches", "marker_repository",
+                            "marker_revision", "marker_status", "listed_files",
+                            "present_regular_files", "unknown_size_entries",
+                            "provided_content_sha256_entries",
+                            "content_sha256_verified"):
+                        print(key.upper() + "=" + str(model[key]))
+                    for issue in model["issues"]:
+                        print("MODEL_PROVENANCE_ISSUE=" + issue)
+                print("PROVENANCE_IS_NOT_DELETION_AUTHORIZATION=1")
+        return 2 if audit["result"] in ("INCOMPLETE", "REVIEW_REQUIRED") else 0
     if args.action == "references":
         try:
             audit = reference_audit(result)
