@@ -146,6 +146,91 @@ class UninstallInventoryTests(unittest.TestCase):
         self.assertEqual(self.lookup(result, "image", unrelated_tag)["ownership"],
                          "UNVERIFIED")
 
+    def reference_fixture(self, *, source: str = "", volume: bool = False,
+                          same_image: bool = False, alias: bool = False) -> dict:
+        """Isolated known project and foreign Docker identity fixture."""
+        project_id, external_id = "a" * 64, "b" * 64
+        image_id = "sha256:" + "c" * 64
+        model = self.models / "qwen3.8-flash-next-orcarouter"
+        model.mkdir(exist_ok=True)
+        project_tag = "vllm-orcarouter-v029:v1"
+        rows = [
+            {"kind": "container", "locator": project_id,
+             "status": "PRESENT", "ownership": "PROJECT_ASSOCIATED"},
+            {"kind": "image", "locator": project_tag,
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "model", "locator": str(model),
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "volume", "locator": "qwen38-owned-volume",
+             "status": "PRESENT", "ownership": "UNVERIFIED"},
+            {"kind": "shared-runtime-cache",
+             "locator": str(self.root / ".cache/flashinfer"),
+             "status": "PRESENT", "ownership": "EXCLUDED_SHARED"},
+        ]
+        observed = {"issues": [], "resources": rows,
+                    "scope": {"checkout": str(self.checkout)}}
+        def fake_docker(*args: str) -> list[dict]:
+            if args[:2] == ("image", "inspect"):
+                self.assertEqual(args[2], project_tag)
+                return [{"Id": image_id}]
+            if args[0] == "ps":
+                return [{"ID": project_id}, {"ID": external_id}]
+            if args[0] == "inspect":
+                self.assertEqual(args[1], external_id)
+                return [{"Id": external_id,
+                         "Image": image_id if same_image else "sha256:" + "d" * 64,
+                         "Mounts": [{
+                             "Type": "bind", "Source": source,
+                             "Name": "qwen38-owned-volume" if volume else None
+                         }] if source or volume else []}]
+            if args[:2] == ("image", "ls"):
+                rows = [{"ID": image_id, "Repository": "vllm-orcarouter-v029",
+                         "Tag": "v1"}]
+                if alias:
+                    rows.append({"ID": image_id, "Repository": "other-project",
+                                 "Tag": "shared"})
+                return rows
+            raise AssertionError(args)
+        with patch.object(audit, "run_docker", side_effect=fake_docker):
+            return audit.reference_audit(observed)
+
+    def test_reference_audit_no_external_conflict_does_not_claim_ownership(self) -> None:
+        result = self.reference_fixture(source=str(self.root / ".cache/flashinfer"))
+        self.assertEqual(result["result"], "NO_OBSERVED_CONFLICTS")
+        self.assertEqual(result["project_container_count"], 1)
+        self.assertEqual(result["external_container_count"], 1)
+        self.assertEqual(result["project_image_count"], 1)
+        self.assertIn("not_an_ownership_proof", result["limitations"])
+
+    def test_reference_audit_rejects_external_image_mount_volume_and_alias(self) -> None:
+        model = str(self.models / "qwen3.8-flash-next-orcarouter")
+        cases = (
+            ({"same_image": True}, "project_image_id"),
+            ({"source": model}, "project_file_mount"),
+            ({"volume": True}, "project_docker_volume"),
+            ({"alias": True}, "other-project:shared"),
+        )
+        for kwargs, expected in cases:
+            with self.subTest(case=kwargs):
+                result = self.reference_fixture(**kwargs)
+                self.assertEqual(result["result"], "CONFLICTS")
+                self.assertIn(expected, json.dumps(result))
+
+    def test_reference_audit_fails_closed_when_full_docker_list_drifts(self) -> None:
+        project_id = "a" * 64
+        observed = {"issues": [],
+                    "resources": [{"kind": "container", "locator": project_id,
+                                   "status": "PRESENT",
+                                   "ownership": "PROJECT_ASSOCIATED"}],
+                    "scope": {"checkout": str(self.checkout)}}
+        with patch.object(audit, "run_docker", return_value=[]):
+            with self.assertRaisesRegex(
+                    RuntimeError, "reference_container_inventory_drift"):
+                audit.reference_audit(observed)
+        observed["issues"] = ["docker_inventory_incomplete"]
+        with self.assertRaisesRegex(RuntimeError, "project_inventory_incomplete"):
+            audit.reference_audit(observed)
+
     def test_invalid_registry_fails_closed(self) -> None:
         (self.state / "asset-ownership.json").write_text("{bad")
         data = self.gather()
