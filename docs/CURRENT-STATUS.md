@@ -1,3 +1,26 @@
+## 2026-10-20 — ACTUAL DGX uninstall Wizard preflight, phase=complete baseline
+
+Owner-pasted DGX Wizard output (operator session; latest visible local
+observation before this handoff) shows `Manifest: valid (phase=complete)`,
+`Profile: orcarouter`, `Image: vllm-skinny-tp1:v1`, and
+`Runtime: NOT_PROBED`. Main Wizard displayed uninstall submenu
+1–6, including SHA-bound full reset plan/apply/postcheck.
+The operator selected **Uninstall -> 5** with no prior saved receipt;
+the Wizard refused with `A saved exact plan receipt is required`.
+No apply/mutation occurred.
+
+Then the owner selected **Uninstall -> 4**, answered `y` to
+the read-only receipt-generation prompt, and hit the exact
+`checkout/model` path preflight block documented below.
+The empty/unsuccessful plan receipt was removed by the Wizard;
+subsequent `PLAN_NOT_FOUND` was observed. Owner exited with
+`Ctrl-C`. **No destructive command is shown or inferred.**
+The actual DGX `git rev-parse HEAD`, local
+`checkout/model` file type and symlink destination, the exact
+project asset inventory, and all image/container/runtime live
+states after the prompt are **NOT_OBSERVED** in this output.
+Do not infer host checkout HEAD from the separately verified
+GitHub remote feature branch.
 ## 2026-10-20 — ACTUAL DGX full-reset plan blocked on legacy checkout/model
 
 Owner selected Uninstall -> 4, entered `y` for read-only SHA
