@@ -252,14 +252,25 @@ def docker_identity(cid: str) -> dict:
     cfg = obj.get("Config") or {}
     labels = cfg.get("Labels") or {}
     state = obj.get("State") or {}
-    mounts = obj.get("Mounts") or []
+    mounts = obj.get("Mounts")
     image_id = obj.get("Image")
     if (not isinstance(name, str) or not name.startswith("/")
             or not isinstance(labels, dict)
             or not isinstance(state, dict)
             or not isinstance(mounts, list)
+            or not all(isinstance(item, dict) for item in mounts)
             or not isinstance(image_id, str)):
         raise Blocked("docker_container_inspect_incomplete")
+    # Docker does not guarantee Mounts list order across inspect calls.
+    # Sort by the canonical JSON encoding of *every* original field, so
+    # order-only changes cannot invalidate a receipt, while host Source,
+    # Destination, RW, Mode, Propagation, type, and duplicate mount entries
+    # remain fully represented in its SHA256. Never omit or rewrite fields.
+    mounts = sorted(
+        mounts,
+        key=lambda item: json.dumps(
+            item, sort_keys=True, ensure_ascii=False, separators=(",", ":")),
+    )
     # An experiment needs a project-specific label, not merely a suggestive name.
     if name != "/qwen38-flash-next":
         if not name.startswith(("/qwen38-", "/qwen3.8-")):
