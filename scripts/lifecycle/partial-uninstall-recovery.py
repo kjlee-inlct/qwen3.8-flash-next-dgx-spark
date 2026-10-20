@@ -134,6 +134,24 @@ def missing_other_assets(plan: dict) -> None:
         if x["kind"] == "image"
     }):
         raise RecoveryBlocked("previously_deleted_project_image_reappeared")
+    # These three full IDs were independently observed surviving the failed
+    # 29-target uninstall. Require the same daemon/scope, not an empty or
+    # rootless Docker view, before allowing privileged filesystem deletion.
+    foreign_ids = {
+        "9219d017e6caca2cfb77fb640388c3f6517bb5e2ccedb649b162eb6f78adbb28",
+        "12c2de1bae669dcb4163ca4588df290581f69b05935488c9d8d06096d1331658",
+        "360cc353a9459cbbc01affea80526272fffa1329ae9609ea42bc0ce1a20c0257",
+    }
+    if not foreign_ids.issubset(current_containers):
+        raise RecoveryBlocked("foreign_docker_containers_not_all_visible")
+    try:
+        audit = full.inventory.reference_audit(observed)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise RecoveryBlocked("fresh_external_reference_audit_incomplete") from exc
+    if (audit.get("result") != "NO_OBSERVED_CONFLICTS" or
+            audit.get("external_container_count") != 3 or
+            audit.get("project_container_count") != 0):
+        raise RecoveryBlocked("foreign_docker_reference_or_count_changed")
     if (Path(scope["swap"]).exists() or Path(scope["swap"]).is_symlink()):
         raise RecoveryBlocked("dedicated_ple_swap_reappeared")
     fstab = Path(scope["fstab"])
