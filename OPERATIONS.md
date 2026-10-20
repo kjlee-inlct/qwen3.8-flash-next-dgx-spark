@@ -492,6 +492,23 @@ NVIDIA drivers and remote GitHub history remain protected. This is a target
 specification, NOT authorization to execute destructive cleanup.
 See docs/PROJECT-UNINSTALL-COVERAGE.md.
 
+### Integrated complete reset source implementation (NOT host-qualified)
+
+Wizard 2. Uninstall now includes optional complete-reset plan (4),
+destructive exact application behind a saved SHA256 receipt and two
+explicit confirmations (5), and independent full postcheck (6).
+The canonical Python engine is at
+`scripts/lifecycle/full-project-uninstall.py`. It additionally
+handles project-only vLLM and v0.29 FlashInfer cache paths and
+repo-local forensic evidence. The generic shared `~/.cache/flashinfer`
+and Hugging Face parent cache remain excluded unless separately
+identity-proven. A local home receipt survives reset.
+
+**Do not execute menu 5 on the protected physical DGX for test**.
+Passing code tests or a valid plan does not establish M2 acceptance;
+failure after the first mutation may require manual recovery.
+Consult `docs/PROJECT-UNINSTALL-COVERAGE.md` before any approved trial.
+
 ## Complete-uninstall coverage audit (read-only; not deletion)
 
 The Wizard's **2. Uninstall → 1. Full-project resource inventory** calls
