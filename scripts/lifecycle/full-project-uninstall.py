@@ -169,6 +169,45 @@ def scoped_file(path: Path, kind: str, scope: dict[str, str]) -> None:
     no_foreign_mounts(path)
 
 
+def legacy_model_link_identity(path: Path, scope: dict[str, str]) -> dict:
+    """Only identify the exact checkout/model link; never follow it.
+
+    A live destination must be a separately discoverable project model under
+    one of the configured model roots. An orphan link may be unlinked, but an
+    external live destination must not be misrepresented as fully removed.
+    """
+    checkout = Path(scope["checkout"])
+    if path != checkout / "model":
+        raise Blocked("legacy_model_link_outside_exact_checkout")
+    require_real_path(checkout)
+    if not path.is_symlink():
+        raise Blocked("legacy_model_link_changed_type")
+    try:
+        st = path.lstat()
+        raw = os.readlink(path)
+    except OSError as exc:
+        raise Blocked("legacy_model_link_unreadable") from exc
+    if not raw:
+        raise Blocked("legacy_model_link_empty_target")
+    destination = Path(os.path.abspath(os.path.join(str(checkout), raw)))
+    if destination == path:
+        raise Blocked("legacy_model_link_self_reference")
+    # Reject intermediate symlinks, including a nested redirected model root.
+    require_real_path(destination, must_exist=False)
+    if destination.exists():
+        roots = {Path(scope["models"]), Path(scope["home"]) / "models",
+                 checkout / "models"}
+        if not (destination.is_dir()
+                and destination.name.startswith(("qwen3.8-", "qwen38-"))
+                and any(within(destination, root) for root in roots)):
+            raise Blocked("legacy_model_link_target_outside_project_model_scope:"
+                          + str(destination))
+    return {
+        "dev": st.st_dev, "ino": st.st_ino, "mode": st.st_mode,
+        "target_text": raw, "resolved_target": str(destination),
+    }
+
+
 def docker_identity(cid: str) -> dict:
     if not inventory.DOCKER_ID.fullmatch(cid):
         raise Blocked("docker_id_not_full_sha")
@@ -347,6 +386,13 @@ def scan(scope: dict[str, str]) -> dict:
     rows = observed["resources"]
     for item in rows:
         kind, ident, status = item["kind"], item["locator"], item["status"]
+        if (kind == "model" and ident == str(Path(scope["checkout"]) / "model")
+                and status == "UNSAFE_SYMLINK"):
+            targets.append({
+                "kind": "legacy-model-link", "id": ident,
+                "fingerprint": legacy_model_link_identity(Path(ident), scope),
+            })
+            continue
         if status == "ABSENT" or kind in ("container-name", "hf-cache", "shared-runtime-cache"):
             continue
         if status != "PRESENT":
@@ -378,6 +424,19 @@ def scan(scope: dict[str, str]) -> dict:
             continue  # validated through exact units, swap and project roots
         else:
             raise Blocked("unhandled_project_resource:" + kind)
+    # A live legacy link must lead to a model already included in this exact
+    # plan. Removing only the link while leaving live project weights behind
+    # would make "complete" uninstall a false claim.
+    model_roots = [Path(x["id"]) for x in targets if x["kind"] == "model"]
+    for item in targets:
+        if item["kind"] == "legacy-model-link":
+            destination = Path(item["fingerprint"]["resolved_target"])
+            if destination.exists() and not any(
+                destination == model or within(destination, model)
+                for model in model_roots
+            ):
+                raise Blocked("legacy_model_link_target_not_selected_as_model:"
+                              + str(destination))
     check_units(scope, targets)
     inspect_swap(scope, rows, targets)
     containers = [x for x in targets if x["kind"] == "container"]
@@ -385,7 +444,8 @@ def scan(scope: dict[str, str]) -> dict:
     inspect_image_references(
         containers, images,
         [x for x in targets if x["kind"] == "volume"],
-        [x for x in targets if x["kind"] in FILE_KINDS],
+        [x for x in targets if x["kind"] in FILE_KINDS
+         or x["kind"] == "legacy-model-link"],
     )
     # Files that are shared/externally mounted or foreign are never targets.
     roots = [x for x in targets if x["kind"] in ("state-root", "data-root")]
@@ -513,7 +573,8 @@ def execute(plan: dict) -> None:
     inspect_image_references(
         [], [x for x in targets if x["kind"] == "image"],
         [x for x in targets if x["kind"] == "volume"],
-        [x for x in targets if x["kind"] in FILE_KINDS],
+        [x for x in targets if x["kind"] in FILE_KINDS
+         or x["kind"] == "legacy-model-link"],
     )
     for item in targets:
         if item["kind"] == "volume":
@@ -528,6 +589,14 @@ def execute(plan: dict) -> None:
         if item["kind"] == "swap":
             run("sudo", str(checkout / "scripts/manage-swap.sh"),
                 "remove", "--file", item["id"], "--yes")
+    # Remove the exact legacy symlink *as a link*, before touching model
+    # target directories. No dereference and no recursive deletion on links.
+    for item in targets:
+        if item["kind"] == "legacy-model-link":
+            link = Path(item["id"])
+            if legacy_model_link_identity(link, scope) != item["fingerprint"]:
+                raise Blocked("legacy_model_link_drift_during_apply")
+            link.unlink()
     # Delete separate model and research evidence paths before state/data.
     for kind in ("model", "model-cache", "project-cache", "forensic", "data-root", "state-root"):
         for item in targets:
