@@ -171,6 +171,23 @@ class FullProjectUninstallTests(unittest.TestCase):
         current["targets"] = [{"kind": "container", "id": "a" * 64}]
         self.assertNotEqual(saved, current)
 
+    def test_service_remove_inherits_shared_lifecycle_lock(self) -> None:
+        unit = {"kind": "systemd", "id": "qwen38-flash-next.service"}
+        commands = []
+        def command(*argv: str) -> str:
+            commands.append(argv)
+            return ""
+        with (patch.object(full, "run", side_effect=command),
+              patch.object(full, "inspect_image_references", return_value=None)):
+            full.execute({"scope": self.scope, "targets": [unit]})
+        self.assertEqual(len(commands), 1)
+        call = commands[0]
+        self.assertEqual(call[:2], ("sudo", "env"))
+        self.assertIn("QWEN38_OPERATION_LOCK_HELD=1", call)
+        self.assertIn("QWEN38_OPERATION_LOCK_FILE=" +
+                      str(self.state / "operation.lock"), call)
+        self.assertEqual(call[-2:], ("remove", "--yes"))
+
     def test_nonproject_unit_is_rejected_even_when_named_correctly(self) -> None:
         path = self.units / "qwen38-flash-next.service"
         path.write_text("[Unit]\nDescription=foreign\n")
