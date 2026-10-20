@@ -396,7 +396,7 @@ def scan(scope: dict[str, str]) -> dict:
         if status == "ABSENT" or kind in ("container-name", "hf-cache", "shared-runtime-cache"):
             continue
         if status != "PRESENT":
-            raise Blocked("resource_status_not_safely_present:" + kind + ":" + ident)
+            raise Blocked("resource_status_not_safely_present:" + kind + ":" + ident + ":" + status)
         if kind in FILE_KINDS:
             path = Path(ident)
             # Nested state/data entries are removed through their exact roots.
