@@ -186,6 +186,7 @@ class UninstallInventoryTests(unittest.TestCase):
             data = audit.gather(
                 state=self.state, data=self.data, models=self.models,
                 units=self.units, swap=self.swap, hf=self.hf, fstab=self.fstab,
+                home=self.root, checkout=self.checkout,
             )
         self.assertEqual(self.lookup(data, "unit-runtime",
                                      "qwen38-flash-next.service")["status"],
