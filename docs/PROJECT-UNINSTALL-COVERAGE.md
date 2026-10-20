@@ -297,6 +297,50 @@ qualification. Do not run menu 5. Before complete deletion can be
 approved, design the explicitly evidence-bound historical ownership
 policy with foreign-data preservation and disposable-host tests.
 
+### 2026-10-20 physical exact Docker inspection — project association versus exclusive ownership
+
+The latest operator-pasted DGX output independently inspects every
+**8/8** currently enumerated project Docker ID. All eight are exited
+(four exit 0, four exit 137). Seven project trial/research containers
+have `qwen38.*` labels and a project model bind: two OrcaRouter
+A/B, one H38, three mazinb M1 R2 and one R22 OrcaRouter.
+H38 `/model` binds `checkout/model`, the verified local symlink.
+The eighth, `/qwen38-flash-next`, is the legacy unlabeled managed
+container; its `/model` bind is the exact managed OrcaRouter
+checkpoint path (read-only), and its legacy image is
+`vllm-skinny-tp1:v1`.
+
+Six currently present v0.29-derived image tags have `qwen38.*`
+build labels; the one legacy image is unlabeled. Seven tag→image-ID
+pairs and all eight container ID/name/image/mount sets are now in
+`CURRENT-STATUS.md`, including the R25–R28 image IDs that are not
+referenced by the eight project containers shown. This **does not**
+prove exclusive ownership of any image or lack of references from
+unrelated containers. A complete, unfiltered Docker inventory and
+reference reconciliation is still required.
+
+**Shared cache non-deletion boundary observed physically:**
+`/qwen38-flash-next` bind-mounts the host's
+`/home/inlc/.cache/flashinfer` (shared) at
+`/root/.cache/flashinfer`. Container removal never authorizes
+deleting that host path. AB/mazinb private caches live in project
+state; dedicated H38/R22 caches use project-specific host
+`~/.cache/*-v029` directories. Keep `EXCLUDED_SHARED` in
+postcheck and never replace it with blanket cache purge.
+
+**Source-only additional guard:** an unlabeled reserved-name
+`/qwen38-flash-next` is no longer admitted to the plan using only
+the suggestive basename of its `/model` mount. The engine requires
+the strict managed manifest's exact `MODEL_DIR`, an exact matching
+present model entry in the bounded inventory, and one read-only
+bind mount at `/model` with identical source. A different but
+similarly named foreign model or writable mount fails closed, with
+synthetic tests. This strict active-manifest binding can block
+legitimate old predecessors after profile changes; supporting those
+requires separately evidenced immutable historical records, not a
+weaker basename check. No physical DGX source sync or M2 validation
+has been performed.
+
 ### Name-prefix ownership gap — SOURCE_ONLY fail-closed guard (2026-10-20)
 
 The inventory continues to discover `vllm-*`/`qwen38-*` image
