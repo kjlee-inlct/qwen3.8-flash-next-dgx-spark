@@ -1,3 +1,20 @@
+## 2026-10-20 — owner complete-reset scope explicitly includes protected OrcaRouter and R2 evidence
+
+The owner confirmed that complete project removal MUST delete OrcaRouter,
+all mazinb R2 experiment Docker and model assets, other project
+NVIDIA/Hybrid checkpoints, project swap, service/proxy, state/releases,
+and all locally retained forensic journals, private archives, and benchmark
+results. No protected-project-asset exemption applies in complete mode.
+
+Read-only inventory now additionally covers HOME/models, checkout/models,
+external benchmark root, retirement archives, repo-local evidence, and
+project-specific HF checkpoint caches. Synthetic exact-ID fixtures include
+the OrcaRouter predecessor plus mazinb R2 second and third containers.
+These are inventory candidates, not hardcoded deletion IDs. External apps,
+system swap, drivers and remote GitHub history remain outside local reset.
+Complete destructive apply remains NOT_IMPLEMENTED; M2 remains NOT_RUN.
+No physical DGX change was performed.
+
 ## 2026-10-20 — SOURCE_ONLY full-project uninstall inventory in Wizard; destructive M2 blocked
 
 After reviewing the actual `uninstall.sh`, managed service/proxy/swap
