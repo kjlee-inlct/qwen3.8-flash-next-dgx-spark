@@ -46,6 +46,7 @@ EXPECTED_UNIT_MARKERS = {
     "qwen38-openwebui-proxy.service": b"Managed qwen38-spark OpenWebUI proxy",
 }
 MAX_PLAN = 2 * 1024 * 1024
+MAX_OWNER_EXCEPTION = 32768
 
 
 class Blocked(RuntimeError):
@@ -433,9 +434,82 @@ def inspect_image_references(containers: list[dict], images: list[dict],
         raise Blocked("planned_container_disappeared")
 
 
+def load_owner_exception(path: Path | None, inventory_path: Path | None,
+                         scope: dict[str, str]) -> tuple[dict | None, dict | None]:
+    """A SHA-pinned, opt-in exception; never edits registry or manifest ownership."""
+    if path is None and inventory_path is None:
+        return None, None
+    if path is None or inventory_path is None:
+        raise Blocked("owner_exception_requires_both_files")
+    for item, limit in ((path, MAX_OWNER_EXCEPTION), (inventory_path, MAX_PLAN)):
+        require_real_path(item)
+        if not item.is_file() or item.stat().st_size > limit:
+            raise Blocked("owner_exception_input_invalid")
+        if any(item == Path(scope[k]) or within(item, Path(scope[k]))
+               for k in ("state", "data", "models", "checkout", "hf")):
+            raise Blocked("owner_exception_inside_deletion_scope")
+    try:
+        owner_bytes = path.read_bytes()
+        inventory_bytes = inventory_path.read_bytes()
+        owner = json.loads(owner_bytes)
+        baseline = json.loads(inventory_bytes)
+    except (ValueError, TypeError, OSError) as exc:
+        raise Blocked("owner_exception_file_invalid_json") from exc
+    if (not isinstance(owner, dict)
+            or set(owner) != {"schema", "inventory_sha256", "entries"}
+            or type(owner["schema"]) is not int or owner["schema"] != 1
+            or not isinstance(owner["inventory_sha256"], str)
+            or not DIGEST.fullmatch(owner["inventory_sha256"])
+            or owner["inventory_sha256"] != hashlib.sha256(inventory_bytes).hexdigest()):
+        raise Blocked("owner_exception_inventory_sha_mismatch")
+    if (not isinstance(baseline, dict)
+            or baseline.get("schema") != 1
+            or baseline.get("mode") != "READ_ONLY_PROJECT_SCOPE"
+            or baseline.get("scope") != scope
+            or baseline.get("issues") != []
+            or not isinstance(baseline.get("resources"), list)):
+        raise Blocked("owner_exception_inventory_scope_or_issues")
+    entries = owner["entries"]
+    if not isinstance(entries, list) or not (1 <= len(entries) <= 64):
+        raise Blocked("owner_exception_entries_invalid")
+    seen: set[tuple[str, str]] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"kind", "locator", "fingerprint"}:
+            raise Blocked("owner_exception_entry_invalid")
+        kind, ident, fingerprint = entry["kind"], entry["locator"], entry["fingerprint"]
+        if (kind not in ("model", "image") or not isinstance(ident, str)
+                or not ident or not isinstance(fingerprint, str)
+                or (kind == "model" and not DIGEST.fullmatch(fingerprint))
+                or (kind == "image" and not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint))):
+            raise Blocked("owner_exception_identity_invalid")
+        if (kind, ident) in seen:
+            raise Blocked("owner_exception_duplicate")
+        seen.add((kind, ident))
+    receipt = {
+        "schema": 1, "inventory_sha256": owner["inventory_sha256"],
+        "file_sha256": hashlib.sha256(owner_bytes).hexdigest(),
+        "entries": sorted(entries, key=lambda e: (e["kind"], e["locator"])),
+    }
+    return receipt, baseline
+
+
+def verify_owner_exception_identity(kind: str, ident: str, pinned: str,
+                                    image: dict | None = None) -> None:
+    if kind == "image":
+        if image is None or image["id"] != pinned:
+            raise Blocked("owner_exception_image_identity_changed:" + ident)
+        return
+    marker = Path(ident) / ".qwen38-model-manifest.json"
+    if marker.is_symlink() or not marker.is_file() or marker.stat().st_size > 1024 * 1024:
+        raise Blocked("owner_exception_model_marker_unverifiable:" + ident)
+    if hashlib.sha256(marker.read_bytes()).hexdigest() != pinned:
+        raise Blocked("owner_exception_model_marker_changed:" + ident)
+
+
 def check_recorded_asset_provenance(kind: str, ident: str,
                                     record: dict | None,
-                                    identity: dict | None = None) -> None:
+                                    identity: dict | None = None,
+                                    *, allow_unowned: bool = False) -> None:
     """Honor immutable registry fingerprints when an asset is recorded there.
 
     The active manifest may be the sole provenance for an older installation;
@@ -443,7 +517,7 @@ def check_recorded_asset_provenance(kind: str, ident: str,
     """
     if record is None:
         return
-    if not record["owned"]:
+    if not record["owned"] and not allow_unowned:
         raise Blocked("registry_manifest_ownership_conflict:" + kind + ":" + ident)
     if record["state"] != "ready" or not record["fingerprint"]:
         raise Blocked("registered_asset_not_fingerprint_ready:" + kind + ":" + ident)
@@ -472,7 +546,8 @@ def check_recorded_asset_provenance(kind: str, ident: str,
             raise Blocked("registered_model_manifest_drift:" + ident)
 
 
-def scan(scope: dict[str, str]) -> dict:
+def scan(scope: dict[str, str], owner_exception: dict | None = None,
+         baseline: dict | None = None) -> dict:
     observed = inventory.gather(
         state=Path(scope["state"]), data=Path(scope["data"]),
         models=Path(scope["models"]), units=Path(scope["units"]),
@@ -482,6 +557,16 @@ def scan(scope: dict[str, str]) -> dict:
     )
     if observed["issues"]:
         raise Blocked("inventory_incomplete:" + ";".join(observed["issues"][:5]))
+    if owner_exception is not None:
+        if (baseline is None or observed["scope"] != baseline["scope"]
+                or observed["resources"] != baseline["resources"]):
+            raise Blocked("owner_exception_inventory_drift")
+        try:
+            audit = inventory.reference_audit(observed)
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise Blocked("owner_exception_reference_audit_incomplete") from exc
+        if audit["result"] != "NO_OBSERVED_CONFLICTS":
+            raise Blocked("owner_exception_references_not_clear:" + audit["result"])
     ensure_no_live_transitions(scope)
     try:
         registry = inventory.load_registry(
@@ -502,7 +587,17 @@ def scan(scope: dict[str, str]) -> dict:
             and item["status"] == "PRESENT"
             and item["ownership"] != "INSTALLER_OWNED")
     ]
-    if unverified:
+    approved: dict[tuple[str, str], str] = {}
+    if owner_exception is not None:
+        approved = {(e["kind"], e["locator"]): e["fingerprint"]
+                    for e in owner_exception["entries"]}
+        observed_unowned = {(r["kind"], r["locator"]) for r in rows
+                            if r["kind"] in ("model", "image", "model-cache")
+                            and r["status"] == "PRESENT"
+                            and r["ownership"] != "INSTALLER_OWNED"}
+        if set(approved) != observed_unowned:
+            raise Blocked("owner_exception_extra_or_missing_unverified_target")
+    if unverified and owner_exception is None:
         overflow = len(unverified) - 12
         raise Blocked("candidate_ownership_not_proven:" +
                       ";".join(unverified[:12]) +
@@ -535,7 +630,8 @@ def scan(scope: dict[str, str]) -> dict:
         # A project HF cache has no positive attribution in schema 1 and must
         # remain blocked until separate provenance support is implemented.
         if (kind in ("model", "image", "model-cache")
-                and item["ownership"] != "INSTALLER_OWNED"):
+                and item["ownership"] != "INSTALLER_OWNED"
+                and (kind, ident) not in approved):
             raise Blocked("candidate_ownership_not_proven:" + kind + ":" + ident
                           + ":ownership=" + item["ownership"])
         if kind in FILE_KINDS:
@@ -546,8 +642,12 @@ def scan(scope: dict[str, str]) -> dict:
             if kind in ("model", "model-cache", "project-cache", "forensic", "state-root", "data-root"):
                 scoped_file(path, kind, scope)
                 if kind == "model":
+                    pinned = approved.get((kind, ident))
+                    if pinned is not None:
+                        verify_owner_exception_identity(kind, ident, pinned)
                     check_recorded_asset_provenance(
-                        kind, ident, recorded.get((kind, ident)))
+                        kind, ident, recorded.get((kind, ident)),
+                        allow_unowned=pinned is not None)
                 st = path.lstat()
                 targets.append({"kind": kind, "id": ident,
                                 "fingerprint": {"dev": st.st_dev, "ino": st.st_ino,
@@ -561,8 +661,12 @@ def scan(scope: dict[str, str]) -> dict:
             # Inventory candidates can be listed without installer ownership.
             # Exact tags and a consistent image ID are mandatory regardless.
             identity = image_identity(ident)
+            pinned = approved.get((kind, ident))
+            if pinned is not None:
+                verify_owner_exception_identity(kind, ident, pinned, identity)
             check_recorded_asset_provenance(
-                kind, ident, recorded.get((kind, ident)), identity)
+                kind, ident, recorded.get((kind, ident)), identity,
+                allow_unowned=pinned is not None)
             targets.append({"kind": kind, "id": ident,
                             "fingerprint": identity})
         elif kind == "volume":
@@ -610,6 +714,8 @@ def scan(scope: dict[str, str]) -> dict:
     # Scope and fingerprints jointly commit to precisely what will be changed.
     body = {"schema": 1, "mode": "EXACT_PROJECT_RESET",
             "scope": scope, "targets": targets}
+    if owner_exception is not None:
+        body["owner_exception"] = owner_exception
     return {**body, "sha256": digest(body)}
 
 
@@ -635,13 +741,14 @@ def scope_from_args(args: argparse.Namespace) -> dict[str, str]:
 
 
 def verify_plan(data: object) -> dict:
-    if not isinstance(data, dict) or set(data) != {"schema", "mode", "scope", "targets", "sha256"}:
+    required = {"schema", "mode", "scope", "targets", "sha256"}
+    if not isinstance(data, dict) or set(data) not in (required, required | {"owner_exception"}):
         raise Blocked("invalid_saved_plan")
     if data["schema"] != 1 or data["mode"] != "EXACT_PROJECT_RESET":
         raise Blocked("unsupported_plan_schema")
     if not isinstance(data["scope"], dict) or not isinstance(data["targets"], list):
         raise Blocked("invalid_plan_structure")
-    actual = digest({k: data[k] for k in ("schema", "mode", "scope", "targets")})
+    actual = digest({k: v for k, v in data.items() if k != "sha256"})
     if actual != data["sha256"] or not DIGEST.fullmatch(actual):
         raise Blocked("saved_plan_integrity_failure")
     return data
@@ -794,6 +901,10 @@ def main() -> int:
     parser.add_argument("--plan-file", type=Path, help="plan receipt outside project tree")
     parser.add_argument("--plan-sha", help="full 64-digit SHA256 of confirmed plan")
     parser.add_argument("--confirm", help="exact irreversible approval phrase")
+    parser.add_argument("--owner-exception-file", type=Path,
+                        help="reviewed exact-model/image exception; read-only input")
+    parser.add_argument("--baseline-inventory", type=Path,
+                        help="SHA-pinned saved read-only inventory")
     parser.add_argument("--home", type=Path, default=Path.home())
     parser.add_argument("--checkout", type=Path, default=ROOT)
     parser.add_argument("--state-home", type=Path, default=Path(
@@ -810,10 +921,14 @@ def main() -> int:
     args = parser.parse_args()
     try:
         scope = scope_from_args(args)
+        if args.action == "verify" and (args.owner_exception_file or args.baseline_inventory):
+            raise Blocked("owner_exception_flags_not_valid_for_verify")
+        exception, baseline = load_owner_exception(
+            args.owner_exception_file, args.baseline_inventory, scope)
         if args.action == "plan":
             if args.confirm or args.plan_sha:
                 raise Blocked("approval_flags_not_valid_for_read_only_plan")
-            plan = scan(scope)
+            plan = scan(scope, exception, baseline)
             print(json.dumps(plan, indent=2, ensure_ascii=False, sort_keys=True))
             print("FULL_UNINSTALL_ACTION=READ_ONLY_PLAN", file=sys.stderr)
             return 0
@@ -832,6 +947,8 @@ def main() -> int:
             for problem in residuals[:40]:
                 print("REMAINING=" + problem)
             return 3
+        if saved.get("owner_exception") != exception:
+            raise Blocked("owner_exception_changed_since_plan")
         if args.confirm != APPROVAL or args.plan_sha != saved["sha256"]:
             raise Blocked("typed_approval_or_full_digest_not_matched")
         state = Path(scope["state"])
@@ -843,7 +960,7 @@ def main() -> int:
                 fcntl.flock(locked.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
                 raise Blocked("concurrent_lifecycle_operation") from exc
-            fresh = scan(scope)
+            fresh = scan(scope, exception, baseline)
             if fresh != saved:
                 raise Blocked("inventory_or_asset_identity_drift_before_apply")
             # No host operations before all read-only safety preflights above.
