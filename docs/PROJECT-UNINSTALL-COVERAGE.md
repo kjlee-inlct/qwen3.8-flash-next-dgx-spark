@@ -119,6 +119,61 @@ whole OS has returned to factory condition. Exit 0 is a completed plan or
 project-scoped no-residual verification; 2 means incomplete/invalid; 3 means
 residuals observed. The audit cannot be used as a deletion token.
 
+## Integrated exact reset engine (source-only, NOT M2 host-qualified)
+
+The code under scripts/lifecycle/full-project-uninstall.py is distinct
+from the older uninstall.sh --purge-all. It implements a two-stage
+SHA256-bound plan and an explicit opt-in destructive apply entry point.
+Wizard 2. Uninstall now has entries 4 (full plan receipt in HOME),
+5 (double-consent exact full removal), and 6 (receipt-bound postcheck).
+**The physical DGX has not run any of these new actions.**
+
+PLAN performs bounded read-only inventory of OrcaRouter, mazinb R2,
+project trial containers, project-specific Docker images/volumes,
+project model roots, dedicated PLE swap, owned systemd units and
+local/checkout forensic evidence. It captures exact full Docker IDs,
+labels, image IDs, mount sources, file inode/device and a canonical
+SHA256. It refuses unknown ownership, unsafe paths, nested symlinks,
+nested mounts, incomplete Docker/systemd discovery, stale transitions,
+unowned swap/units and Docker assets referenced by other containers.
+An old canonical qwen38-flash-next Docker without project labels
+must have its exact /model Qwen3.8 project bind-mount.
+
+PLAN must be written to a private file outside all deletion roots.
+The wizard uses $HOME/qwen38-full-uninstall-plan.json and refuses
+to overwrite an existing receipt. Standalone invocation:
+
+    umask 077
+    python3 -B scripts/lifecycle/full-project-uninstall.py plan > "$HOME/qwen38-full-uninstall-plan.json"
+
+Inspect that receipt **before** any destructive action. APPLY requires
+the unchanged receipt, its entire sha256 and an independent exact typed
+acknowledgement. Its ordering is managed units/proxy, exact Docker ID,
+project volumes/images, PLE swap, project model/caches/forensic trees,
+project data and state last. No generic prune, force-removal of a
+foreign container, /swap.img, or shared HF cache-parent is performed.
+
+    python3 -B scripts/lifecycle/full-project-uninstall.py apply --plan-file "$HOME/qwen38-full-uninstall-plan.json" --plan-sha '<64-digit receipt sha256>' --confirm DELETE_ALL_QWEN38_PROJECT_ASSETS_AND_LOCAL_FORENSICS
+
+That command is shown **for interface documentation only**, not a
+recommendation or authorization to execute on the one protected DGX.
+Applying is irrevocable: model weights and local forensic history
+cannot be recovered without external backup. It can leave partial
+cleanup if any later Docker, sudo, swap or filesystem step fails;
+never automatically retry without manual inspection and a fresh plan.
+The module obtains the shared lifecycle operation.lock first,
+revalidates the complete preflight snapshot, and verifies residuals
+after file teardown. The separate verify command checks remaining
+project-scoped resources and refuses false success on probe failure:
+
+    python3 -B scripts/lifecycle/full-project-uninstall.py verify --plan-file "$HOME/qwen38-full-uninstall-plan.json"
+
+The receipt is intentionally outside the deletion roots, allowing
+postcheck after local project state is gone. It contains resource
+identifiers, not a copy of benchmark/monitor logs, and should itself
+be handled as a private record. Remote GitHub evidence/history is
+outside local uninstall scope. Current source unit tests and CI are
+not destructive M2 host acceptance.
 ## Still missing before complete uninstall can be qualified
 
 1. Exact-ID ownership and dependency records for every new research trial,
