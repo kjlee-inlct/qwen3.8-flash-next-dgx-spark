@@ -27,7 +27,9 @@ class UninstallInventoryTests(unittest.TestCase):
         self.units = self.root / "units"
         self.swap = self.root / "swap-ple.img"
         self.hf = self.root / "hf"
-        for path in (self.state, self.data, self.models, self.units, self.hf):
+        self.checkout = self.root / "checkout"
+        for path in (self.state, self.data, self.models, self.units,
+                     self.hf, self.checkout):
             path.mkdir(parents=True)
         self.containers = []
         self.images = []
@@ -49,6 +51,7 @@ class UninstallInventoryTests(unittest.TestCase):
             return audit.gather(
                 state=self.state, data=self.data, models=self.models,
                 units=self.units, swap=self.swap, hf=self.hf, fstab=self.fstab,
+                home=self.root, checkout=self.checkout,
             )
 
     @staticmethod
@@ -192,6 +195,54 @@ class UninstallInventoryTests(unittest.TestCase):
         self.fstab.unlink()
         data = self.gather()
         self.assertIn("fstab_unavailable_or_unsafe", data["issues"])
+
+    def test_complete_scope_includes_orcarouter_and_both_mazinb_r2_containers(self) -> None:
+        model = self.models / "qwen3.8-flash-next-orcarouter"
+        model.mkdir()
+        ids = ("68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7",
+               "bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8",
+               "f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24")
+        self.containers = [
+            {"ID": ids[0], "Names": "qwen38-mazinb-m1-20261019065452-e70d6233",
+             "Labels": "qwen38.abtrial=mazinb"},
+            {"ID": ids[1], "Names": "qwen38-mazinb-m1-20261019221159-90ee9851",
+             "Labels": "qwen38.abtrial=mazinb"},
+            {"ID": ids[2], "Names": "qwen38-flash-next",
+             "Labels": ""},
+        ]
+        result = self.gather()
+        self.assertEqual(self.lookup(result, "model", str(model))["status"], "PRESENT")
+        for cid in ids:
+            self.assertEqual(self.lookup(result, "container", cid)["status"], "PRESENT")
+        self.assertFalse(result["issues"])
+
+    def test_local_and_checkout_forensic_evidence_are_full_purge_targets(self) -> None:
+        local = self.root / "Workspace/llm/qwen38-m1-bench-results"
+        local.mkdir(parents=True)
+        local_archive = self.state / "retirement-archives"
+        local_archive.mkdir()
+        repo_archive = self.checkout / "docs/model-reports/evidence"
+        repo_archive.mkdir(parents=True)
+        result = self.gather()
+        for path in (local, local_archive, repo_archive):
+            row = self.lookup(result, "forensic", str(path))
+            self.assertEqual(row["status"], "PRESENT")
+            self.assertNotEqual(row["ownership"], "EXCLUDED_SHARED")
+        self.assertEqual(audit.verification(result, result)[0], "RESIDUALS_PRESENT")
+
+    def test_only_project_specific_hf_cache_is_in_purge_scope(self) -> None:
+        hub = self.hf / "hub"
+        hub.mkdir()
+        project = hub / "models--mazinb--Qwen3.8-Flash-Next-Uncensored-NVFP4"
+        foreign = hub / "models--elsewhere--unrelated"
+        project.mkdir()
+        foreign.mkdir()
+        result = self.gather()
+        self.assertEqual(self.lookup(result, "model-cache", str(project))["status"], "PRESENT")
+        self.assertFalse(any(row["locator"] == str(foreign)
+                             for row in result["resources"]))
+        self.assertEqual(self.lookup(result, "hf-cache", str(self.hf))["ownership"],
+                         "EXCLUDED_SHARED")
 
     def test_baseline_scope_drift_fails_closed(self) -> None:
         before = self.gather()
