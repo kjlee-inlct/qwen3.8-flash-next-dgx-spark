@@ -384,6 +384,22 @@ def scan(scope: dict[str, str]) -> dict:
     ensure_no_live_transitions(scope)
     targets: list[dict] = []
     rows = observed["resources"]
+    # Report several unresolved candidates at once instead of repeatedly
+    # blocking on only the first similarly named, possibly foreign asset.
+    # This is still a read-only inspection and grants no deletion authority.
+    unverified = [
+        item["kind"] + ":" + item["locator"]
+        for item in rows
+        if (item["kind"] in ("model", "image", "model-cache")
+            and item["status"] == "PRESENT"
+            and item["ownership"] != "INSTALLER_OWNED")
+    ]
+    if unverified:
+        overflow = len(unverified) - 12
+        raise Blocked("candidate_ownership_not_proven:" +
+                      ";".join(unverified[:12]) +
+                      (";additional_unverified=" + str(overflow)
+                       if overflow > 0 else ""))
     for item in rows:
         kind, ident, status = item["kind"], item["locator"], item["status"]
         if (kind == "model" and ident == str(Path(scope["checkout"]) / "model")
