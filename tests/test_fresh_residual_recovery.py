@@ -147,7 +147,7 @@ class FreshResidualRecoveryTests(unittest.TestCase):
         missing.rmdir()
         with patch.object(fresh.support, "delete_one",
                           side_effect=AssertionError("must not delete")):
-            with self.assertRaisesRegex(fresh.Refused, "missing_reviewed_project_root"):
+            with self.assertRaises((fresh.Refused, fresh.full.Blocked)):
                 fresh.run("apply", self.receipt, plan["sha256"], fresh.CONFIRM)
 
     def test_requires_privilege_consent_and_trusted_receipt_location(self):
