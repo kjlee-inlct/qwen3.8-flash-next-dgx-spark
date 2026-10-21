@@ -1,3 +1,52 @@
+### Lost original receipts: separate fresh eight-root reauthorization (2026-10-21)
+
+Physical DGX evidence on 2026-10-21 proves that the formerly validated
+29-target canonical and original plan JSONs are BOTH missing from
+`/home/inlc`. Cause unknown. No legitimate attempt to reconstruct
+one of their historical SHA256s is possible from saved summary counts
+and terminal output. The old `partial-uninstall-recovery.py audit`
+therefore fails closed before deletion. This does **not** reverse
+the operator's intent to remove the last 8 dedicated directories, but
+the prior receipts are no longer valid executable authorization.
+
+The separately maintained exceptional tool
+`scripts/lifecycle/fresh-residual-recovery.py` supports
+`snapshot` (create-only fresh receipt),
+`audit --sha <fresh_sha>` and an independently approved
+`apply --sha <fresh_sha> --confirm
+DELETE_ONLY_EIGHT_FRESHLY_REAUTHORIZED_QWEN38_ROOTS`.
+All actions use precisely
+`/home/inlc/qwen38-residual-recovery-v2.json`;
+the `snapshot` creates it once at 0600 using O_EXCL/O_NOFOLLOW
+outside every deletion root. It checks exact home/checkout,
+three dedicated caches, three evidence roots, project-only
+state and data roots, stable directory dev/ino/mode,
+no unrelated mounts/symlink traversals, absence of installed
+project Docker/model/PLE swap, and all three independently
+observed external Docker container IDs with fresh no-conflict
+reference audit. `audit` repeats every check.
+`apply` accepts **only** the new cryptographically bound
+plan + exact user approval; it cannot invoke Docker,
+model deletion, swapoff or entire Git checkout removal.
+Its recursive cleanup is fd-relative/O_NOFOLLOW under root
+for the previously blocked root-owned generated cache files.
+Any unexpected resource/identity/mount reappearance stops.
+
+The new receipt is NOT a recreation of the old lost receipt.
+Do not send legacy `5248...` or `b38c...` as the
+new plan SHA. Before execution, require current exact Git HEAD,
+clean fast-forward and Push+PR CI PASS; physical snapshot,
+second independent read-only audit and owner authorization
+are still unqualified until operator outputs establish them.
+Postcheck with both legacy full reset and inventory verifiers
+must be adapted because their original receipt inputs are
+also missing; the new helper does a fresh project-scope
+`verify_removed` using its now-approved scope after apply,
+with additional independent inventory plan/read-only
+swap/Docker/shared-cache checks. Remaining checkout and
+external review JSONs require a separately reviewed final step.
+
+
 ### Partial destructive reset recovery after verified project-owned root permission failure (2026-10-21)
 
 A physically attempted exact owner-approved Qwen3.8 reset **partially
