@@ -64,7 +64,7 @@ def exact_targets(scope: dict[str, str]) -> list[tuple[str, Path]]:
         ("project-cache", home / ".cache/vllm-qwen38"),
         ("project-cache", home / ".cache/vllm-qwen38-v029"),
         ("forensic", checkout / "docs/model-reports/evidence"),
-        ("forensic", checkout / "scripts/benchmark/evidence"),
+        ("forensic", checkout / "scripts" / "benchmark" / "evidence"),
         ("forensic", home / "Workspace/llm/qwen38-m1-bench-results"),
         ("data-root", Path(scope["data"])),
         ("state-root", Path(scope["state"])),
