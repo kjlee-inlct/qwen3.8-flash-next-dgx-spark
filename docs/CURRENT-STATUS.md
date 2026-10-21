@@ -1,3 +1,74 @@
+## 2026-10-21 — PHYSICAL recovery BLOCKED: both exact original receipts missing
+
+The single DGX Spark host had already verified that the original
+29-target partial reset removed both Qwen3.8 models, eight project
+Docker containers, seven project image tags and the dedicated
+`/swap-ple.img` plus its fstab marker, while retaining exactly
+three foreign Docker containers, ordinary `/swap.img`, and
+eight original planned directory roots (3 dedicated caches,
+3 research evidence trees, state/data roots). The prior
+`~/.cache/flashinfer-v029` permission failure remains the
+cause of partial deletion.
+
+**New physical operator evidence:** checkout HEAD
+`6f8c17e4cb3097c055ac2241955e6d1dc4a97349`,
+expected feature branch and clean worktree, recovery script
+present. However `sudo ... partial-uninstall-recovery.py
+audit --plan-file ~/qwen38-exact-reset-plan-canonical.json`
+blocked before any deletion:
+`REASON=path_disappeared:/home/inlc/qwen38-exact-reset-plan-canonical.json`.
+The independent shell check confirmed canonical receipt absent.
+A follow-up tested the older
+`~/qwen38-exact-reset-plan.json` SHA
+`5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89`,
+but it too was absent; `find ~ -maxdepth 1 -type f
+-name 'qwen38*plan*.json'` returned no files. **Cause
+of lost receipts is UNKNOWN.** Neither attempted
+recovery command called the deletion executor; the
+previous eight-root physical status was not freshly
+re-verified after the receipt loss. Do not invent,
+reconstruct or reuse a substitute file claiming either
+old SHA256. Retain historical printed hashes as
+historical evidence, not as current live authorization.
+
+Source-only corrective path:
+`scripts/lifecycle/fresh-residual-recovery.py` implements
+an explicit **new authorization** path, not original
+29-target `apply`. On the fixed physical home layout
+`/home/inlc`, root-admin `snapshot` checks the exact
+8 separate known project-only directories (3 caches,
+3 forensic, state and release data roots), each live
+directory dev/ino/mode, project inventory for unexpected
+assets, the three exact preserved foreign Docker container
+IDs, fresh external-reference conflicts and the absent
+PLE swap/fstab marker. All reviewed directory trees
+must exist with no foreign nested mounts. Snapshot writes
+only a new exclusive 0600 receipt outside deletion roots
+(`/home/inlc/qwen38-residual-recovery-v2.json`),
+using a new mode and new SHA256. Separate
+`audit --sha <new>` revalidates every root with the
+unchanged receipt; `apply` is an **independent second
+explicit approval** gated on exact full SHA, root
+privilege, the original 8-directory inventory and
+fresh foreign-reference checks. It uses the already
+tested FD-relative, symlink-no-follow scoped removal
+routine from `partial-uninstall-recovery.py`.
+It contains **no calls to remove Docker images,
+containers, models, swap or Git checkout**. All of
+this is source-only until CI and DGX audit. Do not
+describe it as a recovery of the lost original receipt:
+it is a new operator-authorized residual plan.
+
+Physical full removal remains **PARTIAL_FAILURE /
+NOT_VERIFIED**; after successful separate recovery,
+run independent project-scoped verify and preserved
+system/external asset checks, then record proof in
+GitHub before the final, separately guarded local Git
+checkout and transient-receipt cleanup. Preserve
+PR #261 Draft/Open.
+
+---
+
 ## 2026-10-21 — PHYSICAL partial reset postcheck: 475G recovered; Docker/models/PLE absent; eight root targets remain
 
 Operator supplied an actual, read-only post-failure host audit on
