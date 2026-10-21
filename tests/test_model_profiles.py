@@ -66,7 +66,7 @@ class ModelProfileTests(unittest.TestCase):
             "orcarouter": ("stable", "yes"),
             "nvidia": ("experimental", "yes"),
             "mazinb": ("experimental", "yes"),
-            "orcarouter-hybrid": ("experimental", "yes"),
+            "orcarouter-hybrid": ("retired", "no"),
             "lychee888": ("planned", "no"),
         }
         for profile, (status, installable) in expected_status.items():
@@ -138,6 +138,47 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("profile     : nvidia", result.stdout)
         self.assertIn("DRY-RUN complete", result.stdout)
 
+    def test_official_arm64_c_backend_is_disabled_in_primary_install_wizard(self) -> None:
+        result = self.run_wizard("official-arm64-c\n2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Not selectable: OrcaRouter official ARM64 C runtime", result.stdout)
+        self.assertIn("BLOCKED: Official ARM64 C", result.stdout)
+        self.assertIn("not", result.stdout.lower())
+        self.assertIn("profile     : nvidia", result.stdout)
+        self.assertNotIn("image       : vllm/vllm-openai@", result.stdout)
+        self.assertIn("DRY-RUN complete", result.stdout)
+
+    def test_official_c_cli_alias_does_not_bypass_wizard_qualification(self) -> None:
+        for value in ("c", "official-c", "official-arm64-c"):
+            with self.subTest(value=value):
+                result = subprocess.run(
+                    [str(ROOT / "install.sh"), "--lang", "en",
+                     "--orcarouter-runtime", value, "--no-start", "--dry-run"],
+                    cwd=ROOT, env=os.environ, capture_output=True, text=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("not qualified for install/switch", result.stderr)
+                self.assertNotIn("DRY-RUN complete", result.stdout)
+
+    def test_vllm_variant_registry_separates_model_backend_and_runtime(self) -> None:
+        script = (
+            'source scripts/backend/backends.sh; '
+            'for runtime in v029 legacy official-arm64-c; do '
+            'describe_orcarouter_vllm_variant "$runtime" || exit 2; '
+            'printf "%s|%s|%s\\n" "$runtime" '
+            '"$ORCA_VARIANT_STATUS" "$ORCA_VARIANT_SELECTABLE"; '
+            'done'
+        )
+        result = subprocess.run(
+            ["bash", "-c", script], cwd=ROOT, text=True,
+            capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("v029|implemented|1", result.stdout)
+        self.assertIn("legacy|experimental|1", result.stdout)
+        self.assertIn("official-arm64-c|unqualified|0", result.stdout)
+
     def test_backend_registry_keeps_vllm_stable_and_sglang_planned(self) -> None:
         result = subprocess.run(
             [str(ROOT / "install.sh"), "--list-backends"],
@@ -159,7 +200,6 @@ class ModelProfileTests(unittest.TestCase):
             "1": ("orcarouter", "qwen3.8-flash-next-orcarouter"),
             "2": ("nvidia", "qwen3.8-flash-next-nvidia"),
             "3": ("mazinb", "qwen3.8-flash-next-mazinb"),
-            "4": ("orcarouter-hybrid", "qwen3.8-h6-modelopt-w4a16"),
         }
         for choice, (profile, model_dir) in expected.items():
             with self.subTest(profile=profile):
@@ -178,11 +218,11 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("DRY-RUN complete", result.stdout)
 
     def test_clean_host_model_selection_can_cancel_without_preview(self) -> None:
-        # Fifth menu entry cancels after the four currently installable profiles.
-        result = self.run_wizard("5")
+        # Fourth menu entry cancels after the three currently installable profiles.
+        result = self.run_wizard("4")
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("5) Cancel", result.stdout)
+        self.assertIn("4) Cancel", result.stdout)
         self.assertIn("Cancelled", result.stdout)
         self.assertNotIn("DRY-RUN complete", result.stdout)
         self.assertNotIn("Preparing vLLM image", result.stdout)
@@ -355,7 +395,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn('PROFILE_DISPLAY_NAME="OrcaRouter Uncensored"', profiles)
         self.assertIn('PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6"', profiles)
         self.assertIn(
-            'PROFILE_DESCRIPTION="Generated H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"',
+            'PROFILE_DESCRIPTION="Retired local H6 hybrid (2026-10-16); preserved for historical metadata only"',
             profiles,
         )
         self.assertIn("wizard_step 5 6 'API 및 서비스'", installer)
@@ -399,41 +439,29 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIn("profile     : mazinb", result.stdout)
         self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
 
-    def test_orcarouter_hybrid_profile_is_generated_h6_checkpoint(self) -> None:
+    def test_retired_hybrid_is_not_installable_or_downloadable(self) -> None:
         result = self.run_install("orcarouter-hybrid")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("local/orcarouter-mazinb-h6-w4a16", result.stdout)
-        self.assertIn("h6-modelopt-w4a16-v1", result.stdout)
-        self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
-        self.assertIn("profile     : orcarouter-hybrid", result.stdout)
-        self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
-        self.assertIn("protection  : enabled", result.stdout)
-        self.assertIn("monitor     : enabled", result.stdout)
-        self.assertIn("hybrid base", result.stdout)
-        self.assertIn("hybrid mix", result.stdout)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("retired", result.stderr)
 
-    def test_orcarouter_hybrid_registry_marks_local_build_sources(self) -> None:
+        cmd = subprocess.run(
+            ["bash", "-lc",
+             'source scripts/model-profiles.sh; load_download_profile orcarouter-hybrid'],
+            cwd=ROOT, env=os.environ, text=True, capture_output=True, check=False,
+        )
+        self.assertNotEqual(cmd.returncode, 0)
+        self.assertIn("retired model profile", cmd.stderr)
+
+    def test_retired_hybrid_remains_describable_as_history(self) -> None:
         result = subprocess.run(
-            [
-                "bash",
-                "-lc",
-                'source scripts/model-profiles.sh; load_model_profile orcarouter-hybrid; '
-                'printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$PROFILE_LOCAL_BUILD" '
-                '"$PROFILE_BASE_PROFILE" "$PROFILE_OVERLAY_PROFILE" "$PROFILE_MODEL_DIR" "$PROFILE_IMAGE"',
-            ],
-            cwd=ROOT,
-            env=os.environ,
-            text=True,
-            capture_output=True,
-            check=False,
+            ["bash", "-lc",
+             'source scripts/model-profiles.sh; describe_model_profile orcarouter-hybrid; '
+             'printf "%s\\n%s\\n%s\\n" "$PROFILE_STATUS" "$PROFILE_INSTALLABLE" "$PROFILE_REPO"'],
+            cwd=ROOT, env=os.environ, text=True, capture_output=True, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            result.stdout.splitlines()[:3],
-            ["1", "orcarouter", "mazinb"],
-        )
-        self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
-        self.assertIn("vllm-orcarouter-v029:v1", result.stdout)
+        self.assertIn("retired", result.stdout)
+        self.assertIn("local/orcarouter-mazinb-h6-w4a16", result.stdout)
 
     def test_h3_reuse_requires_pinned_source_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -510,7 +538,7 @@ class ModelProfileTests(unittest.TestCase):
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("generated locally", result.stderr)
+        self.assertIn("retired", result.stderr)
 
     def test_installer_wires_hybrid_build_orchestrator(self) -> None:
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")

@@ -1,4 +1,146 @@
+## 2026-10-18 — catplusplus source-only M0 plan, not a sixth installable model
+
+See [catplusplus benchmark preparation](catplusplus.md).
+OrcaRouter, NVIDIA and mazinb reports remain distinct.
+catplusplus is **research-only, not registered/installable**; its
+reproducible mazinb M1 parity workload is defined in a read-only
+Wizard 5 -> 22 plan. CLI report converter recognition of
+`--profile catplusplus` merely permits conversion of strictly
+validated **real** upstream measurements after future separate
+approval; it does not imply a live run. All catplusplus metrics
+remain **NOT_MEASURED**.
+
+## 2026-10-15 — H6 final traceback indexed, 2nd checkpoint pass unqualified
+
+Physical owner archive 7/7 SHA256 PASS.
+Normalized Docker output: 244 LF, 97 CR,
+336 Python logical lines. First 81/81 shard pass
+took 577.40s; second pass began, logged 0–9/81
+and did not complete. API shutdown row 255 was
+followed by `_interrupt_init` termination traceback
+rows 256–328, ending `KeyboardInterrupt: terminated`.
+Consistent with confirmed watchdog stop, not an
+independent GPU OOM finding. No H6 API READY,
+inference or llama-benchy performance measurement.
+[Detailed physical evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 vLLM initialization interrupted by protected STOP, not measured
+
+Real DGX evidence archive 7/7 SHA256 PASS. vLLM API
+traceback ends in `_interrupt_init`-generated
+`KeyboardInterrupt: terminated`, consistent with
+the independently confirmed memory-protection watchdog
+stop and subsequent graceful shutdown. It does not
+establish a separate model/GPU runtime failure.
+Previous Docker traceback line numbering from shell
+`nl` differs from Python's 336 logical lines when
+carriage-return progress bars appear. No H6 READY,
+inference or performance measurement.
+[Detailed owner evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 second-shard-pass watchdog STOP, still NOT_MEASURED
+
+Real read-only `monitor.log` + `docker.log` evidence:
+a second `0/81` safetensors pass was underway around
+23:28:46 KST with an EXT4/173.59GiB checkpoint
+auto-prefetch **disabled INFO**. Five 2-second
+watchdog protection warnings from 23:28:47–55 were
+followed by vLLM API graceful shutdown messaging at
+23:28:58. Non-CMA Free reached 726MiB; swap growth
+3427MiB, with >28GiB reclaimable Available reported.
+No recorded NVRM/Xid/OOM text in 13 physical kernel events,
+but this cannot certify an allocation would have succeeded
+without protection. No API READY/inference or benchmark;
+no physical relaunch, guard change, cleanup or off-host
+backup qualification.
+[Detailed physical correlation](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 all 13 kernel rows inspected; benchmark NOT_MEASURED
+
+Seven on-host archived evidence files passed SHA256 again. All 13
+physical kernel-window records are Docker bridge/veth bring-up
+(`23:18:03`) and teardown (`23:29:11`) messages; no NVIDIA
+RM/Xid/GPU allocator/OOM text. Teardown appears ~16.5 s after
+the separate H6 memory-protection stop marker at `23:28:55 KST`.
+Neither healthy GPU allocations nor unnecessary protection can
+be proven from an event-only kernel log. H6 remains
+`failed_stopped`, not READY and not benchmarked.
+[Full physical 13-line transcript](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 13-line archived kernel window: no broad fault patterns; benchmark NOT_MEASURED
+
+Real DGX operator reverified seven on-host evidence checksums.
+Full saved kernel window contained 13 messages, timestamps spanning
+watchdog STOP: 23:18:03.922 to 23:29:11.483 KST. Broad RM/GPU/OOM/
+allocator pattern scan matched zero lines. Not proof of a healthy
+GPU allocator or that protection was unnecessary; the unfiltered
+middle 11 lines were not supplied. No H6 model READY,
+inference or llama-benchy measured. The stopped container and
+protected model references remain intact.
+[Evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 protection-stop kernel evidence archived, benchmark still NOT_MEASURED
+
+Owner-captured local kernel window 2026-10-14 23:18:03–23:29:55 KST
+includes H6 protection STOP 23:28:55. New nonempty
+`kernel-window.log` and six earlier files passed on-host SHA256.
+No lines matched selected RM/Xid/OOM expressions; this does NOT
+independently prove fault-free NVIDIA RM or justify a model restart.
+H6 remained `failed_stopped` / NOT_READY / NOT_MEASURED;
+no independent off-host backup.
+[Physical evidence](../../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-14 — Actual H6 first GPU load MEMORY-PROTECTION STOP; benchmark NOT_MEASURED
+
+The operator physically ran approved Wizard **Benchmark 5→20** at
+exact `a30fe34b8c2fd3ad511d79876ac95ad69ac32523`.
+A unique H6 isolated container
+`qwen38-hybrid-h6-m1-20261014141803-69ef3492`, ID
+`e526189f1093e95d81568d82eb10b8beaeb6227adca49029f241634769e6cbc7`,
+reached **DOCKER_STARTED_UNQUALIFIED**, then Wizard emitted
+`H6_EXACT_STOPPED_ID` and `H6_SESSION_BLOCKED=memory_protection_stop_marker`.
+Read-only verification: journal `failed_stopped`, Docker `exited`,
+`Running=false`, `OOMKilled=false`, `ExitCode=1`.
+One 81/81 shard loading pass completed in 577.40 s, **then another
+81-shard loading pass began** (at least 9/81 observed); READY was
+NEVER observed. The post-stop host had 118Gi RAM available and 142Gi
+swap free, but this **does not prove at-stop headroom**.
+Full non-CMA/swap warning samples (especially `protect=5/5`),
+exact monitor marker, and NVIDIA RM kernel events remain TO_BE_AUDITED.
+Do not ascribe failure to the FP4/ModelOpt warnings or API
+`KeyboardInterrupt` termination trace alone.
+**No immediate rerun, benchmark, deletion or loosening watchdog
+thresholds.** Historical H7/H20 model aliases and 16 stopped Docker
+mount references remain protected; full H3–H6 retire blocked.
+
+New **source-only** Wizard **Benchmark 5→21** forensics will display
+bounded critical warnings plus independently pinned journal,
+stop marker and exact stopped Docker ID; it does not mutate host.
+[Permanent selective physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+CI and physical forensic check must pass separately before
+any safe candidate configuration decision.
+
 # Per-model llama-benchy reports — reproducible single-DGX benchmark protocol
+
+## 2026-10-14: actual mazinb benchmark MEASURED
+
+Using a single DGX Spark, vLLM v0.29 experimental runtime and 16-GiB KV:
+[mazinb results](mazinb.md) and
+[original JSON/Markdown/SHA256](evidence/mazinb/20261014T015805Z/).
+TG128: **23.11 ± 1.05 tok/s (PP512)** and
+**22.54 ± 1.68 tok/s (PP2048)**. All other profiles and mazinb
+Legacy comparison remain NOT_MEASURED. Statements below that every
+profile is NOT_MEASURED are historical snapshots predating the M1 result.
+The physical M1 shutdown journal was successfully reconciled to `stopped`
+without Docker mutation. DGX independently SHA256-verified all three archived
+measurement payloads (`smoke.json`, `mazinb.json`, `mazinb-report.md`) against
+this repository on 2026-10-14. The original local absolute-path checksum
+manifest differs from the relative-path GitHub archival manifest (436 vs
+238 bytes), but all three data hashes match. Keep the original 36-KiB output
+folder and the two journal backups. Long-term host stability remains
+**INCONCLUSIVE**. See [M1 guide](../MAZINB-M1-WIZARD.md) and
+[physical evidence](../../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+
 
 ## OrcaRouter A/B trial wizard implementation — SOURCE ONLY (2026-10-13)
 

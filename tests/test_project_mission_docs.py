@@ -25,10 +25,10 @@ class ProjectMissionDocsTests(unittest.TestCase):
         for name in ORIGINAL_REPOS:
             with self.subTest(name=name):
                 self.assertIn(name, mission)
-                self.assertIn(name, handoff)
         self.assertIn("4 original + 1 later-added Hybrid", mission)
         self.assertIn("orcarouter-hybrid", mission)
-        self.assertIn("orcarouter-hybrid", handoff)
+        self.assertIn("PROJECT-MISSION-AND-MODEL-SCOPE.md", handoff)
+        self.assertIn("CURRENT-STATUS.md", handoff)
         self.assertIn("H38", mission)
         self.assertIn("not a sixth wizard model", mission)
 
@@ -40,7 +40,9 @@ class ProjectMissionDocsTests(unittest.TestCase):
         self.assertIn("./install.sh", mission)
         self.assertIn("./uninstall.sh", mission)
         self.assertIn("PROJECT-MISSION-AND-MODEL-SCOPE.md", handoff)
-        self.assertIn("위자드 목표 복구", handoff)
+        self.assertIn("## Authoritative documentation map", handoff)
+        self.assertIn("## What belongs in the conversation-to-conversation prompt", handoff)
+        self.assertIn("must **not** become a chronological log", handoff)
         self.assertIn("lychee888", handoff)
 
     def test_current_registry_shows_three_originals_plus_hybrid(self) -> None:

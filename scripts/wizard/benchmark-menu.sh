@@ -1,0 +1,430 @@
+#!/usr/bin/env bash
+# Wizard-only operator workflow for mazinb evidence and read-only admission.
+# Protected model startup/benchmark remains a separate M1 lifecycle task.
+
+wizard_mazinb_status() {
+  wizard_header 'mazinb historical experiments / 과거 실험'
+  bash "${ROOT_DIR}/scripts/runtime/mazinb-kv-ab.sh" status ||
+    wizard_warning 'Read-only mazinb status unavailable / 상태 조회 실패'
+  wizard_info 'Existing trial containers/evidence are preserved; no cleanup is offered.'
+}
+
+wizard_mazinb_evidence() {
+  local selection trial
+  wizard_header 'Past mazinb A/B evidence / 과거 A/B 실험 증거'
+  wizard_menu_option 1 'Case A — 24 GiB / 실험 A'
+  wizard_menu_option 2 'Case B — 16 GiB / 실험 B'
+  wizard_menu_option 3 'Both A and B / A와 B 모두 확인'
+  wizard_menu_option 0 'Back / 이전'
+  wizard_input selection 'Select evidence / 증거 선택' 0
+  case "${selection}" in
+    1|A|a) selection=A ;;
+    2|B|b) selection=B ;;
+    3|AB|ab|both|BOTH) selection=AB ;;
+    0|q|Q) return 0 ;;
+    *) wizard_warning 'Invalid trial: choose 1=A, 2=B, 3=both or 0=back.'; return 0 ;;
+  esac
+
+  local -a cases=()
+  if [[ "${selection}" == AB ]]; then
+    cases=(A B)
+  else
+    cases=("${selection}")
+  fi
+  for trial in "${cases[@]}"; do
+    printf '\nMAZINB_EVIDENCE_REVIEW=CASE_%s (historical / read-only)\n' "${trial}"
+    if ! bash "${ROOT_DIR}/scripts/runtime/mazinb-kv-ab.sh" evidence "${trial}"; then
+      wizard_warning "Case ${trial} evidence inspection failed; nothing modified."
+    fi
+  done
+  wizard_info 'Docker exit=0 does not prove READY, protected host-stability or benchmark.'
+}
+
+wizard_mazinb_admission() {
+  local predecessor_id acknowledged_id trial_a_id reviewed_a_id="" trial_a_state=""
+  wizard_header 'mazinb isolated B admission / B 실험 사전 검증'
+  wizard_info 'This only verifies permission/readiness to test; it does NOT start mazinb.'
+  wizard_info 'The old managed container, prior A evidence and immutable releases remain untouched.'
+  if ! command -v docker >/dev/null 2>&1; then
+    wizard_warning 'Docker missing. Admission cancelled.'
+    return 0
+  fi
+
+  # The fixed B name belongs to the previous 2026-10-02 experiment on this host.
+  # Do not require a 64-character predecessor acknowledgement before detecting
+  # that fresh-B admission is impossible without a separately named M1 trial.
+  if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-b >/dev/null 2>&1; then
+    wizard_warning 'Historical B container already exists. Preserve its identity, logs, and state.'
+    wizard_warning 'Fresh B admission requires a DIFFERENT M1 candidate name; no deletion is authorized.'
+    wizard_info 'Review menu 4 (status) and 5 -> 2 (B evidence).'
+    return 0
+  fi
+
+  predecessor_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null)" || {
+    wizard_warning 'Managed predecessor not inspectable. Admission cancelled.'
+    return 0
+  }
+  [[ "${predecessor_id}" =~ ^[a-f0-9]{64}$ ]] || {
+    wizard_warning 'Invalid predecessor Docker identity; admission cancelled.'
+    return 0
+  }
+  printf 'Stopped predecessor (verify before continuing): %s\n' "${predecessor_id}"
+  wizard_input acknowledged_id 'Re-enter complete predecessor Docker ID / 기존 Docker ID 확인' ''
+  [[ "${acknowledged_id}" == "${predecessor_id}" ]] || {
+    wizard_warning 'Docker ID mismatch or cancelled; no action taken.'
+    return 0
+  }
+
+  if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-b >/dev/null 2>&1; then
+    wizard_warning 'Prior B exists: preserve/review with menu 4 or 5 before another B run.'
+    return 0
+  fi
+  if docker inspect --format '{{.Id}}' qwen38-mazinb-kv-a >/dev/null 2>&1; then
+    trial_a_state="$(docker inspect --format '{{.Id}}|{{.Name}}|{{.State.Status}}|{{.State.Running}}' qwen38-mazinb-kv-a 2>/dev/null)" || {
+      wizard_warning 'Cannot inspect historical A. Admission cancelled.'
+      return 0
+    }
+    local trial_name trial_status trial_running
+    IFS='|' read -r trial_a_id trial_name trial_status trial_running <<<"${trial_a_state}"
+    printf 'Historical A: id=%s name=%s status=%s running=%s\n' \
+      "${trial_a_id}" "${trial_name}" "${trial_status}" "${trial_running}"
+    [[ "${trial_name}" == /qwen38-mazinb-kv-a &&
+       "${trial_status}" == exited && "${trial_running}" == false ]] || {
+      wizard_warning 'Historical A is not safely stopped. Admission cancelled.'
+      return 0
+    }
+    wizard_yes_no 'Review preserved A evidence before continuing? / A 실험 증거를 확인합니까?' no ||
+      return 0
+    if ! bash "${ROOT_DIR}/scripts/runtime/mazinb-kv-ab.sh" evidence A; then
+      wizard_warning 'Cannot read A evidence. Admission cancelled.'
+      return 0
+    fi
+    wizard_info 'Acknowledgement DOES NOT delete or change historical A.'
+    wizard_input reviewed_a_id 'Re-enter FULL historical A Docker ID to acknowledge review / A ID 재입력' ''
+    [[ "${reviewed_a_id}" == "${trial_a_id}" ]] || {
+      wizard_warning 'Historical A identity not acknowledged. Admission cancelled.'
+      return 0
+    }
+  fi
+  wizard_yes_no 'Run READ-ONLY mazinb admission now? / 읽기 전용 검증을 실행합니까?' no ||
+    return 0
+  if ! sudo -n true >/dev/null 2>&1; then
+    wizard_yes_no 'Acquire sudo credentials for kernel-log read-only preflight? / sudo 인증을 진행합니까?' no ||
+      return 0
+    sudo -v || {
+      wizard_warning 'Sudo credentials unavailable. Admission cancelled.'
+      return 0
+    }
+  fi
+  local -a args=(--expected-old-id "${predecessor_id}")
+  if [[ -n "${reviewed_a_id}" ]]; then
+    args+=(--reviewed-trial-a-id "${reviewed_a_id}")
+  fi
+  if bash "${ROOT_DIR}/scripts/wizard/mazinb-admission.sh" "${args[@]}"; then
+    wizard_success 'READ_ONLY admission passed; model NOT STARTED, no benchmark performed.'
+    wizard_info 'Protected M1 candidate start through Wizard remains NOT IMPLEMENTED.'
+  else
+    wizard_warning 'Admission BLOCKED. Preserve evidence; do not delete assets to bypass it.'
+  fi
+}
+
+wizard_m1_confirm_old_id() {
+  local old_id typed
+  WIZARD_M1_EXPECTED_ID=""
+  command -v docker >/dev/null 2>&1 || {
+    wizard_warning 'Docker unavailable; M1 cancelled.'
+    return 1
+  }
+  old_id="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null)" || {
+    wizard_warning 'Canonical predecessor cannot be inspected; M1 blocked.'
+    return 1
+  }
+  [[ "${old_id}" =~ ^[a-f0-9]{64}$ ]] || {
+    wizard_warning 'Invalid full predecessor Docker ID; M1 blocked.'
+    return 1
+  }
+  printf 'M1_PROTECTED_PREDECESSOR_ID=%s\n' "${old_id}"
+  wizard_input typed 'Re-enter full 64-hex predecessor Docker ID / 기존 Docker ID 재입력' ''
+  [[ "${typed}" == "${old_id}" ]] || {
+    wizard_warning 'Exact predecessor ID mismatch; M1 cancelled.'
+    return 1
+  }
+  WIZARD_M1_EXPECTED_ID="${old_id}"
+}
+
+wizard_m1_authenticate_read_only_kernel() {
+  if ! sudo -n true >/dev/null 2>&1; then
+    wizard_yes_no 'Authenticate sudo for strict kernel RM evidence? / 읽기용 sudo 인증' no || return 1
+    sudo -v || {
+      wizard_warning 'Sudo authentication failed; M1 cancelled.'
+      return 1
+    }
+  fi
+}
+
+wizard_m1_preflight() {
+  wizard_header 'New isolated mazinb M1 / 새 M1 사전 검증'
+  wizard_info 'Historical A/B and managed OrcaRouter are preserved.'
+  wizard_m1_confirm_old_id || return 0
+  wizard_m1_authenticate_read_only_kernel || return 0
+  if ! python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" preflight \
+      --expected-old-id "${WIZARD_M1_EXPECTED_ID}"; then
+    wizard_warning 'M1 fresh admission BLOCKED; no model created or started.'
+  fi
+}
+
+wizard_m1_run() {
+  local consent
+  wizard_header 'EXPERIMENTAL mazinb M1 live session / 실 DGX 모델 실행'
+  wizard_warning 'This starts a NEW GPU-heavy mazinb Docker. Not previously qualified on the CURRENT DGX.'
+  wizard_warning 'Protected managed Docker, old KV-A/B and model assets are NEVER deleted.'
+  wizard_warning 'Terminal A stays open until STOP; Terminal B benchmarks only after M1_READY_FOR_BENCH.'
+  wizard_yes_no 'Do you explicitly approve this NEW physical model load? / 새 모델 기동 승인' no ||
+    return 0
+  wizard_m1_confirm_old_id || return 0
+  wizard_input consent 'Type exactly START_MAZINB_16G to confirm new GPU startup' ''
+  [[ "${consent}" == START_MAZINB_16G ]] || {
+    wizard_warning 'Live start confirmation mismatch; M1 cancelled.'
+    return 0
+  }
+  wizard_m1_authenticate_read_only_kernel || return 0
+  if ! QWEN38_M1_WIZARD_APPROVED=1 python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" run \
+      --expected-old-id "${WIZARD_M1_EXPECTED_ID}"; then
+    wizard_warning 'M1 failed or was stopped; inspect read-only M1 status/evidence and watchdog.'
+  fi
+}
+
+wizard_m1_recover() {
+  wizard_header 'Stopped M1 journal recovery / 종료 기록 복구'
+  wizard_warning 'Exact stopped Docker only; no start, stop, deletion or service changes.'
+  wizard_yes_no 'Verify and reconcile M1 journal? / 기록 복구 진행' no || return 0
+  if ! python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" reconcile; then
+    wizard_warning 'Recovery BLOCKED. Preserve original state and inspect evidence.'
+  fi
+}
+
+wizard_h6_readonly() {
+  local action="$1" predecessor
+  wizard_header 'Hybrid H6 isolated experiment / H6 보호 실험'
+  if [[ "$action" == plan || "$action" == status ]]; then
+    python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-m1.py" "$action" ||
+      wizard_warning 'H6 information unavailable; no host mutation.'
+    return 0
+  fi
+  predecessor="$(docker inspect --format '{{.Id}}' qwen38-flash-next 2>/dev/null)" || {
+    wizard_warning 'Protected predecessor ID unavailable.'
+    return 0
+  }
+  [[ "$predecessor" =~ ^[a-f0-9]{64}$ ]] || {
+    wizard_warning 'Invalid protected predecessor identity.'
+    return 0
+  }
+  printf 'H6_OLD_DOCKER_ID=%s\n' "$predecessor"
+  if [[ "$action" == run ]]; then
+    wizard_warning 'EXPERIMENTAL: physical H6 GPU load; 16GiB KV, localhost :18890, exact-ID watchdog.'
+    wizard_warning 'DO NOT start another model or close Terminal A until exact STOP.'
+    wizard_warning 'No service is installed/enabled, models are never deleted, candidate container is preserved.'
+    wizard_yes_no 'Approve NEW protected H6 GPU experiment? / 새 H6 실험 기동' no || return 0
+    local typed approval
+    wizard_input typed 'Re-enter entire 64-hex protected predecessor Docker ID' ''
+    [[ "$typed" == "$predecessor" ]] || {
+      wizard_warning 'Predecessor ID acknowledgement mismatch.'; return 0;
+    }
+    wizard_input approval 'Type START_HYBRID_H6_16G exactly' ''
+    [[ "$approval" == START_HYBRID_H6_16G ]] || {
+      wizard_warning 'H6 physical start confirmation mismatch.'; return 0;
+    }
+  fi
+  if ! sudo -n true >/dev/null 2>&1; then
+    wizard_yes_no 'Authenticate sudo for strict READ-ONLY kernel RM inspection?' no || return 0
+    sudo -v || { wizard_warning 'RM journal read permission denied.'; return 0; }
+  fi
+  if [[ "$action" == run ]]; then
+    QWEN38_H6_WIZARD_APPROVED=1 python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-m1.py" \
+      run --expected-old-id "$predecessor" ||
+      wizard_warning 'H6 protected session failed/stopped; preserve Docker and forensic evidence.'
+  else
+    python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-m1.py" \
+      preflight --expected-old-id "$predecessor" ||
+      wizard_warning 'H6 protected preflight BLOCKED; no GPU load.'
+  fi
+}
+
+wizard_h6_forensics_readonly() {
+  wizard_header 'Hybrid H6 stopped trial forensics / 보호 중지 분석'
+  wizard_info 'Read-only identity, stop marker, memory warnings and optional kernel log.'
+  python3 -B "$ROOT_DIR/scripts/wizard/hybrid-h6-forensics-readonly.py" --latest ||
+    wizard_warning 'H6 forensic evidence incomplete/inconsistent; do NOT relaunch.'
+}
+
+wizard_catplusplus_m1_menu() {
+  local selection action
+  while true; do
+    wizard_header 'catplusplus M1 / mazinb-parity benchmark workflow'
+    wizard_warning 'Research-only: loader/offload, 175GiB weights, GPU memory and owner approval BLOCK live start.'
+    wizard_info 'This is a source-only safety workflow, not a working model launcher.'
+    wizard_menu_option 1 'M1 plan (no host access) / 실행 단계 계획'
+    wizard_menu_option 2 'M1 status (read-only journal) / 상태'
+    wizard_menu_option 3 'M1 preflight (fail-closed) / 사전 점검'
+    wizard_menu_option 4 'M1 Terminal-B bench admission (blocked) / 벤치 허용 검사'
+    wizard_menu_option 5 'M1 GPU start gate (disabled) / 실행 차단 사유'
+    wizard_menu_option 6 'M1 journal reconcile (no Docker) / 기록 확인'
+    wizard_menu_option 7 'Pinned config and SGLang loader source audit (read-only) / 로더 소스 점검'
+    wizard_menu_option 8 'Pinned Hub redirect diagnosis (HEAD only) / 응답 헤더·리다이렉트 검사'
+    wizard_menu_option 9 'Installation, loader, memory and benchmark gates (plan only) / 설치·실행 계획'
+    wizard_menu_option 10 'Install disk and lifecycle-lock check (read-only) / 공간·다운로드 동시성 확인'
+    wizard_menu_option 11 'Pinned vLLM vs SGLang source package tree (metadata only) / 엔진 소스 목록'
+    wizard_menu_option 0 'Back / 이전'
+    wizard_input selection 'Select / 선택' 0
+    case "${selection}" in
+      1) action=plan ;;
+      2) action=status ;;
+      3) action=preflight ;;
+      4) action=bench-admission ;;
+      5) action=run ;;
+      6) action=reconcile ;;
+      7) action=source-audit ;;
+      8) action=source-transport ;;
+      9) python3 -B "${ROOT_DIR}/scripts/model/catplusplus_admission_plan.py" plan ||
+           wizard_warning 'catplusplus staging plan unavailable; no action.'; continue ;;
+      10) python3 -B "${ROOT_DIR}/scripts/model/catplusplus_admission_plan.py" disk-check ||
+            wizard_warning 'catplusplus disk/lock check BLOCKED; no checkpoint action.'; continue ;;
+      11) wizard_warning 'Metadata only. Do NOT use on DGX until mazinb bulk download completes.' 
+          python3 -B "${ROOT_DIR}/scripts/model/inspect_catplusplus_engine_sources.py" inventory ||
+            wizard_warning 'Dual engine pinned metadata unavailable; both backends remain unqualified.'; continue ;;
+      0|q|Q) return 0 ;;
+      *) wizard_warning 'Invalid selection / 잘못된 선택입니다.'; continue ;;
+    esac
+    python3 -B "${ROOT_DIR}/scripts/runtime/catplusplus-m1.py" "${action}" ||
+      wizard_warning 'catplusplus M1 admission remains BLOCKED; no Docker/GPU/download action.'
+  done
+}
+
+wizard_mazinb_reinstall_m1_menu() {
+  local selection approval
+  while true; do
+    wizard_header 'mazinb reinstalled M1 isolated service / mazinb 재설치 실험 서비스'
+    wizard_warning 'Foreground-localhost experimental API; NOT a boot-persistent systemd service.'
+    wizard_warning 'Requires restored pinned ~174 GiB checkpoint and independent owner GPU approval.'
+    wizard_warning 'Original 2026-10-14 M1 journal/tombstone and OrcaRouter remain immutable.'
+    wizard_menu_option 1 'Reinstalled M1 plan (no start) / 계획'
+    wizard_menu_option 2 'Reinstalled M1 status (read-only) / 상태'
+    wizard_menu_option 3 'Reinstalled M1 physical preflight (read-only) / 사전 점검'
+    wizard_menu_option 4 'Reinstalled M1 protected GPU start (explicit approval) / 보호 기동'
+    wizard_menu_option 5 'Pinned llama-benchy setup (post-STOP ONLY) / 고정 버전 도구 준비'
+    wizard_menu_option 0 'Back / 이전'
+    wizard_input selection 'Select / 선택' 0
+    case "$selection" in
+      1) python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" plan --session-slot reinstall ||
+           wizard_warning 'M1 reinstall plan unavailable.' ;;
+      2) python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" status --session-slot reinstall ||
+           wizard_warning 'M1 reinstall session status unavailable.' ;;
+      3)
+         wizard_m1_confirm_old_id || continue
+         wizard_m1_authenticate_read_only_kernel || continue
+         python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" preflight --session-slot reinstall \
+           --expected-old-id "$WIZARD_M1_EXPECTED_ID" ||
+           wizard_warning 'Reinstalled M1 admission BLOCKED; no Docker/GPU start.' ;;
+      4)
+         wizard_yes_no 'Approve NEW GPU-heavy isolated mazinb live session? / 새 GPU 실행 승인?' no || continue
+         wizard_m1_confirm_old_id || continue
+         wizard_input approval 'Type START_RESTORED_MAZINB_16G exactly' ''
+         [[ "$approval" == START_RESTORED_MAZINB_16G ]] || {
+           wizard_warning 'GPU start not approved exactly; cancelled.'; continue;
+         }
+         wizard_m1_authenticate_read_only_kernel || continue
+         QWEN38_M1_WIZARD_APPROVED=1 python3 -B "$ROOT_DIR/scripts/runtime/mazinb-m1.py" \
+           run --session-slot reinstall --expected-old-id "$WIZARD_M1_EXPECTED_ID" ||
+           wizard_warning 'Reinstalled M1 ended/blocked; inspect preserved new journal; never bypass watchdog.' ;;
+      5)
+         bash "$ROOT_DIR/scripts/wizard/llama-benchy-setup.sh" --plan ||
+           { wizard_warning 'Pinned tool setup plan unavailable.'; continue; }
+         wizard_warning 'Only AFTER Terminal A exact candidate STOP and completion; no active model.'
+         wizard_yes_no 'Install pinned llama-benchy in isolated user venv now? / 격리 도구 설치 승인?' no || continue
+         QWEN38_BENCHY_SETUP_APPROVED=1 bash "$ROOT_DIR/scripts/wizard/llama-benchy-setup.sh" --install ||
+           wizard_warning 'Tool setup blocked or incomplete; no model/GPU/service changed.' ;;
+      0|q|Q) return 0 ;;
+      *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
+    esac
+  done
+}
+
+wizard_benchmark_menu() {
+  local choice
+  while true; do
+    wizard_header 'Benchmark / 벤치마크'
+    wizard_info 'Old A/B are preserved. M1 first physical benchmark is measured; Background supervision is not yet qualified.'
+    wizard_menu_option 1 'mazinb preflight (read-only) / 사전 점검'
+    wizard_menu_option 2 'New mazinb B admission (read-only; blocked if B exists)'
+    wizard_menu_option 3 'Report tools / 보고서 도구'
+    wizard_menu_option 4 'Historical mazinb A/B status / 기존 실험 상태'
+    wizard_menu_option 5 'Historical A/B evidence (1=A, 2=B, 3=both) / 기존 증거'
+    wizard_menu_option 6 'mazinb M1 plan (no start) / 새로운 M1 계획'
+    wizard_menu_option 7 'mazinb M1 status (no mutation) / M1 상태'
+    wizard_menu_option 8 'mazinb M1 physical read-only preflight / 신규 M1 사전 검증'
+    wizard_menu_option 9 'mazinb M1 experimental live start (explicit approval) / 새 모델 기동'
+    wizard_menu_option 10 'Recover stopped M1 journal / 종료 기록 복구'
+    wizard_menu_option 11 'Background supervisor plan (no start) / 백그라운드 설계'
+    wizard_menu_option 12 'Background systemd host probe (read-only) / 호스트 검사'
+    wizard_menu_option 13 'Background user unit status (read-only) / 서비스 상태'
+    wizard_menu_option 14 'Background lifecycle simulation (no host I/O) / 합성 시뮬레이션'
+    wizard_menu_option 15 'Background command admission simulation (no host I/O) / 명령 검증'
+    wizard_menu_option 16 'Background journal crash simulation (no host I/O) / 기록 복구 모형'
+    wizard_menu_option 17 'Hybrid H6 isolated trial plan (read-only) / H6 실행 계획'
+    wizard_menu_option 18 'Hybrid H6 isolated trial status (read-only) / H6 상태'
+    wizard_menu_option 19 'Hybrid H6 physical preflight (read-only) / H6 실제 사전 점검'
+    wizard_menu_option 20 'Hybrid H6 isolated 16GiB protected live session / H6 보호 기동'
+    wizard_menu_option 21 'Hybrid H6 stopped trial forensic audit (read-only) / 보호 중지 원인 검사'
+    wizard_menu_option 22 'catplusplus M0 benchmark plan (NO weights/GPU) / 실측 전 계획'
+    wizard_menu_option 23 'catplusplus M1 mazinb-parity workflow (safe gates) / M1 진행 단계'
+    wizard_menu_option 24 'Restored mazinb M1 isolated serve + bench (protected) / 재설치 M1 실측'
+    wizard_menu_option 0 'Back / 이전'
+    wizard_input choice 'Select / 선택' 0
+    case "${choice}" in
+      1)
+        bash "${ROOT_DIR}/scripts/runtime/mazinb-kv-ab.sh" preflight ||
+          wizard_warning 'Preflight failed; no runtime started by this menu.' ;;
+      2) wizard_mazinb_admission ;;
+      3)
+        printf 'Report index: %s\n' "${ROOT_DIR}/docs/model-reports/README.md"
+        printf 'Converter   : %s\n' "${ROOT_DIR}/scripts/benchmark/llama-benchy-report.py"
+        printf 'Metrics     : NOT_MEASURED without actual DGX evidence.\n' ;;
+      4) wizard_mazinb_status ;;
+      5) wizard_mazinb_evidence ;;
+      6) python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" plan ||
+           wizard_warning 'M1 plan unavailable.' ;;
+      7) python3 "${ROOT_DIR}/scripts/runtime/mazinb-m1.py" status ||
+           wizard_warning 'M1 status invalid; forensic investigation required.' ;;
+      8) wizard_m1_preflight ;;
+      9) wizard_m1_run ;;
+      10) wizard_m1_recover ;;
+      11) python3 -B "${ROOT_DIR}/scripts/runtime/m1-background-probe.py" plan ||
+            wizard_warning 'Background supervisor plan unavailable.' ;;
+      12) python3 -B "${ROOT_DIR}/scripts/runtime/m1-background-probe.py" probe ||
+            wizard_warning 'Background host probe blocked; no user-service or Docker changes.' ;;
+      13) python3 -B "${ROOT_DIR}/scripts/runtime/m1-background-probe.py" unit-status ||
+            wizard_warning 'Background unit query blocked/untrusted; no service or Docker changes.' ;;
+      14) python3 -B "${ROOT_DIR}/scripts/runtime/m1-supervisor-protocol.py" simulate ||
+            wizard_warning 'Synthetic supervisor protocol blocked; no host or Docker changes.' ;;
+      15) python3 -B "${ROOT_DIR}/scripts/runtime/m1-supervisor-command-protocol.py" simulate ||
+            wizard_warning 'Synthetic command admission blocked; no host or Docker changes.' ;;
+      16) python3 -B "${ROOT_DIR}/scripts/runtime/m1-supervisor-journal-protocol.py" simulate ||
+            wizard_warning 'Synthetic journal protocol blocked; no host or Docker changes.' ;;
+      17) wizard_h6_readonly plan ;;
+      18) wizard_h6_readonly status ;;
+      19) wizard_h6_readonly preflight ;;
+      20) wizard_h6_readonly run ;;
+      21) wizard_h6_forensics_readonly ;;
+      22) wizard_header 'catplusplus M0 benchmark planning / catplusplus 사전 계획'
+          wizard_info 'No model download, Docker create/start, GPU, API call or service change.'
+          python3 -B "${ROOT_DIR}/scripts/benchmark/catplusplus-plan.py" plan ||
+            wizard_warning 'catplusplus plan unavailable; no runtime operation attempted.'
+          wizard_warning 'Research-only: ~174.86 GiB root weights exceed nominal 128GB unified RAM.'
+          wizard_warning 'Actual benchmark BLOCKED until loader/offload/monitor qualification and separate approval.' ;;
+      23) wizard_catplusplus_m1_menu ;;
+      24) wizard_mazinb_reinstall_m1_menu ;;
+      0|q|Q) return 0 ;;
+      *) wizard_warning 'Invalid selection / 잘못된 선택입니다.' ;;
+    esac
+  done
+}

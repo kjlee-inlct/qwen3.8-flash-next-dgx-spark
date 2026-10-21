@@ -39,6 +39,19 @@ class WizardMenuValidationTests(unittest.TestCase):
         )
         return root
 
+    def test_new_host_retired_hybrid_is_not_selectable(self) -> None:
+        """Option 4 is now Cancel; H6 cannot enter an installer plan."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_wizard(home, "4\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("4) Cancel", result.stdout)
+            self.assertIn("Cancelled", result.stdout)
+            self.assertNotIn("profile     : orcarouter-hybrid", result.stdout)
+            self.assertNotIn("DRY-RUN complete", result.stdout)
+            self.assertFalse((home / "state").exists())
+            self.assertFalse((home / "models").exists())
+
     def test_language_invalid_then_english(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

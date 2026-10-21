@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""Bounded source-only catplusplus mixed-loader/PLE inspection.
+
+Never fetch weights, bundles, indexes, wildcards, or arbitrary paths.
+Never invoke publisher-provided shell scripts, Docker, GPU, or subprocesses.
+Only two explicitly approved small pinned RAW text paths, with no redirect,
+or offline test fixtures. Actual DGX HEAD 200 alone does not prove GET. A positive source-surface assessment is NOT
+proof an installed SGLang/vLLM wheel implements these features.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+import urllib.error
+import urllib.request
+from urllib.parse import urljoin, urlsplit
+
+MODEL = "catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed"
+REVISION = "3251fd8afbd08f76368a9bfa71132d9aef364813"
+BASE = f"https://huggingface.co/{MODEL}/resolve/{REVISION}/"
+CONFIG = "config.json"
+LAUNCHER = "extra/inference/inference_qwen38_flash_next_sglang.sh"
+RAW_BASE = f"https://huggingface.co/{MODEL}/raw/{REVISION}/"
+ALLOWED = {CONFIG: 256 * 1024, LAUNCHER: 128 * 1024}
+MAX_OFFLINE = 256 * 1024
+
+
+class SourceAuditBlocked(ValueError):
+    pass
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise SourceAuditBlocked("SOURCE_REDIRECT_BLOCKED")
+
+
+class ProbeNoRedirect(urllib.request.HTTPRedirectHandler):
+    """Return redirect headers to the caller; never issue a second request."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def classify_location(request_url: str, location: str | None) -> tuple[str, str]:
+    """Emit only bounded categories, never untrusted URLs or signed query strings."""
+    if not location:
+        return "NONE", "NONE"
+    target = urlsplit(urljoin(request_url, location))
+    source = urlsplit(request_url)
+    if target.scheme != "https":
+        return "NON_HTTPS", "OTHER_ROUTE"
+    if target.netloc != source.netloc:
+        return "EXTERNAL_HOST", "OTHER_ROUTE"
+    if target.path.startswith("/api/resolve-cache/"):
+        return "HF_SAME_HOST", "API_RESOLVE_CACHE"
+    if f"/resolve/{REVISION}/" in target.path:
+        return "HF_SAME_HOST", "PINNED_RESOLVE"
+    if f"/raw/{REVISION}/" in target.path:
+        return "HF_SAME_HOST", "PINNED_RAW"
+    return "HF_SAME_HOST", "OTHER_ROUTE"
+
+
+def probe_transport() -> int:
+    """Probe headers only, for exactly two pinned small paths and two Hub routes.
+
+    This is a diagnostic of network routing, not a source audit. HEAD never
+    reads response bodies, and redirects are categorically not followed.
+    """
+    routes = (("RESOLVE", BASE), ("RAW", RAW_BASE))
+    sources = (("CONFIG", CONFIG), ("LAUNCHER", LAUNCHER))
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), ProbeNoRedirect())
+    print("CATPLUSPLUS_TRANSPORT_PROBE=PINNED_TEXT_HEAD_HEADERS_ONLY", flush=True)
+    failed = False
+    for name, path in sources:
+        for route, base in routes:
+            key = "CATPLUSPLUS_TRANSPORT_" + name + "_" + route
+            url = base + path
+            req = urllib.request.Request(
+                url, headers={"Accept": "text/plain, application/json"},
+                method="HEAD")
+            try:
+                with opener.open(req, timeout=15) as reply:
+                    status = reply.status
+                    location = reply.headers.get("Location")
+            except urllib.error.HTTPError as exc:
+                status = exc.code
+                location = exc.headers.get("Location") if exc.headers else None
+            except (urllib.error.URLError, OSError, ValueError):
+                print(key + "_RESULT=NETWORK_ERROR", flush=True)
+                failed = True
+                continue
+            loc_class, loc_route = classify_location(url, location)
+            print(key + "_HTTP_STATUS=" + str(status), flush=True)
+            print(key + "_LOCATION_CLASS=" + loc_class, flush=True)
+            print(key + "_LOCATION_ROUTE=" + loc_route, flush=True)
+            if not (200 <= status < 400):
+                failed = True
+    print("CATPLUSPLUS_TRANSPORT_REDIRECT_FOLLOWED=NO", flush=True)
+    print("CATPLUSPLUS_TRANSPORT_BODIES_READ=NONE", flush=True)
+    print("CATPLUSPLUS_TRANSPORT_SOURCE_DECLARATIONS=NOT_INSPECTED", flush=True)
+    print("CATPLUSPLUS_TRANSPORT_LIVE_ADMISSION=BLOCKED", flush=True)
+    return 2 if failed else 0
+
+
+def source_bytes(path: str, offline: Path | None) -> bytes:
+    if path not in ALLOWED:
+        raise SourceAuditBlocked("SOURCE_PATH_NOT_ALLOWLISTED")
+    limit = ALLOWED[path]
+    if offline is not None:
+        if offline.is_symlink() or not offline.is_dir():
+            raise SourceAuditBlocked("SOURCE_OFFLINE_DIR_UNTRUSTED")
+        for part in Path(path).parts:
+            if part in ("", ".", ".."):
+                raise SourceAuditBlocked("SOURCE_OFFLINE_PATH_UNTRUSTED")
+        file = offline / path
+        # Refuse symlinks in every part of the fixed path.
+        current = offline
+        for segment in Path(path).parts:
+            current = current / segment
+            if current.is_symlink():
+                raise SourceAuditBlocked("SOURCE_SYMLINK_BLOCKED")
+        if not file.is_file():
+            raise SourceAuditBlocked("SOURCE_FIXTURE_MISSING_" + path)
+        if file.stat().st_size > limit:
+            raise SourceAuditBlocked("SOURCE_OVERSIZED_" + path)
+        data = file.read_bytes()
+    else:
+        # Physical DGX HEAD: resolve -> 307 same-host API cache;
+        # immutable raw -> 200 for both explicitly allowlisted small files.
+        # Never retry/redirect/fallback into another URL or arbitrary path.
+        url = RAW_BASE + path
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), NoRedirect()
+        )
+        req = urllib.request.Request(
+            url, headers={"Accept": "text/plain, application/json"},
+            method="GET",
+        )
+        try:
+            with opener.open(req, timeout=15) as reply:
+                if reply.status != 200:
+                    raise SourceAuditBlocked("SOURCE_HTTP_NOT_200")
+                reported_size = reply.headers.get("Content-Length")
+                if reported_size is not None and int(reported_size) > limit:
+                    raise SourceAuditBlocked("SOURCE_CONTENT_LENGTH_OVERSIZED")
+                data = reply.read(limit + 1)
+        except urllib.error.HTTPError as exc:
+            raise SourceAuditBlocked("SOURCE_HTTP_ERROR_" + str(exc.code)) from exc
+    if not data or len(data) > limit:
+        raise SourceAuditBlocked("SOURCE_EMPTY_OR_OVERSIZED_" + path)
+    return data
+
+
+def scan_config(cfg: dict) -> dict:
+    if not isinstance(cfg, dict):
+        raise SourceAuditBlocked("CONFIG_NOT_OBJECT")
+    quant = cfg.get("quantization_config")
+    if not isinstance(quant, dict):
+        raise SourceAuditBlocked("CONFIG_NO_QUANTIZATION_CONFIG")
+    layers = quant.get("quantized_layers")
+    if not isinstance(layers, dict):
+        raise SourceAuditBlocked("CONFIG_NO_QUANTIZED_LAYER_TABLE")
+    qkvz = sorted(k for k in layers if isinstance(k, str) and
+                  k.endswith(".linear_attn.in_proj_qkvz"))
+    # Distinguish a config-level name from proof that the wheel consumes scales.
+    bad = [k for k in qkvz if not isinstance(layers[k], dict)]
+    if bad:
+        raise SourceAuditBlocked("QKVZ_NONOBJECT_QUANT_LAYER")
+    # Alias presence alone does not establish MXFP8 quantization:
+    # NVFP4 or unspecified qkvz entries must never pass this source gate.
+    mxfp8_qkvz = [k for k in qkvz if layers[k].get("quant_algo") == "MXFP8"]
+    non_mxfp8_qkvz = [k for k in qkvz if k not in mxfp8_qkvz]
+    algo = quant.get("quant_algo")
+    method = quant.get("quant_method")
+    txt = cfg.get("text_config")
+    dtype = txt.get("ple_embedding_dtype") if isinstance(txt, dict) else None
+    return {
+        "quant_method": method,
+        "quant_algo": algo,
+        "quantized_layer_count": len(layers),
+        "fused_qkvz_quantized_alias_count": len(qkvz),
+        "fused_qkvz_mxfp8_alias_count": len(mxfp8_qkvz),
+        "fused_qkvz_non_mxfp8_alias_count": len(non_mxfp8_qkvz),
+        "fused_qkvz_alias_sample": qkvz[:2],
+        "ple_embedding_dtype": dtype,
+        "modelopt_mixed_config": method == "modelopt_mixed" and
+                                 algo == "MIXED_PRECISION",
+        "fused_qkvz_quantization_declared": len(qkvz) > 0 and
+                                            not non_mxfp8_qkvz,
+        "fp8_ple_dtype_declared": dtype == "float8_e4m3fn",
+    }
+
+
+def scan_launcher(source: str) -> dict:
+    # Source is DATA. Do not evaluate shell, follow its imports, or trust claims.
+    flags = (
+        "--ple-offload-embedding", "--ple-offload-backend",
+        "--enable-hierarchical-cache", "--hicache-storage-backend",
+        "--mem-fraction-static", "--speculative-algorithm",
+        "--speculative-num-steps", "--moe-runner-backend",
+    )
+    found = {}
+    for flag in flags:
+        found[flag] = bool(re.search(
+            r"(?<![A-Za-z0-9_-])" + re.escape(flag) + r"(?![A-Za-z0-9_-])",
+            source))
+    high_risk = {
+        "cache_drop_command": bool(re.search(
+            r"(?m)^[^\n#]*\b(drop_caches|/proc/sys/vm/drop_caches)\b", source)),
+        "sudo_command": bool(re.search(r"(?m)^[^\n#]*\bsudo\b", source)),
+        "public_bind": bool(re.search(r"--host\s+[\"']?0\.0\.0\.0", source)),
+    }
+    return {
+        "sglang_entrypoint_claimed": bool(re.search(
+            r"\bsglang\.launch_server\b", source)),
+        "flags_mentioned": found,
+        "script_operational_hazards": high_risk,
+    }
+
+
+def audit(offline: Path | None) -> dict:
+    cfg_raw = source_bytes(CONFIG, offline)
+    shell_raw = source_bytes(LAUNCHER, offline)
+    try:
+        cfg = json.loads(cfg_raw)
+        shell = shell_raw.decode("utf-8")
+    except (ValueError, UnicodeError) as exc:
+        raise SourceAuditBlocked("SOURCE_TEXT_INVALID") from exc
+    model = scan_config(cfg)
+    launcher = scan_launcher(shell)
+    source_declarations = (
+        model["modelopt_mixed_config"] and
+        model["fused_qkvz_quantization_declared"] and
+        model["fp8_ple_dtype_declared"] and
+        launcher["sglang_entrypoint_claimed"] and
+        launcher["flags_mentioned"]["--ple-offload-embedding"] and
+        launcher["flags_mentioned"]["--ple-offload-backend"]
+    )
+    return {
+        "scope": "PINNED_SOURCE_TEXT_ONLY",
+        "revision": REVISION, "checkpoint": MODEL,
+        "transport": "PINNED_HF_RAW_TEXT_NO_REDIRECT" if offline is None else "OFFLINE_FIXTURE",
+        "config_sha256": hashlib.sha256(cfg_raw).hexdigest(),
+        "launcher_sha256": hashlib.sha256(shell_raw).hexdigest(),
+        "source_declarations": "PRESENT_NOT_ENGINE_ATTESTED"
+        if source_declarations else "MISSING_EXPECTED_DECLARATIONS",
+        "config": model, "publisher_launcher": launcher,
+        "engine_source_or_wheel_attested": False,
+        "physical_gb10_memory_attested": False,
+        "weight_download": False,
+        "gpu_execution": False,
+        "live_admission": "BLOCKED_ENGINE_LOADER_AND_MEMORY_NOT_ATTESTED",
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("audit",))
+    parser.add_argument("--offline-dir", type=Path)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    try:
+        report = audit(args.offline_dir)
+    except (SourceAuditBlocked, OSError, ValueError, json.JSONDecodeError) as exc:
+        print("CATPLUSPLUS_SOURCE_AUDIT=BLOCKED_" + str(exc),
+              file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        print("CATPLUSPLUS_SOURCE_SCOPE=" + str(report["scope"]))
+        print("CATPLUSPLUS_SOURCE_REVISION=" + report["revision"])
+        print("CATPLUSPLUS_SOURCE_TRANSPORT=" + report["transport"])
+        print("CATPLUSPLUS_SOURCE_CONFIG_SHA256=" + report["config_sha256"])
+        print("CATPLUSPLUS_SOURCE_LAUNCHER_SHA256=" + report["launcher_sha256"])
+        cfg = report["config"]
+        print("CATPLUSPLUS_SOURCE_QUANT_METHOD=" + str(cfg["quant_method"]))
+        print("CATPLUSPLUS_SOURCE_QUANT_ALGO=" + str(cfg["quant_algo"]))
+        print("CATPLUSPLUS_SOURCE_QKVZ_ALIAS_COUNT=" +
+              str(cfg["fused_qkvz_quantized_alias_count"]))
+        print("CATPLUSPLUS_SOURCE_QKVZ_MXFP8_ALIAS_COUNT=" +
+              str(cfg["fused_qkvz_mxfp8_alias_count"]))
+        print("CATPLUSPLUS_SOURCE_QKVZ_NON_MXFP8_ALIAS_COUNT=" +
+              str(cfg["fused_qkvz_non_mxfp8_alias_count"]))
+        print("CATPLUSPLUS_SOURCE_PLE_DTYPE=" + str(cfg["ple_embedding_dtype"]))
+        print("CATPLUSPLUS_SOURCE_DECLARATIONS=" + report["source_declarations"])
+        for flag, present in report["publisher_launcher"]["flags_mentioned"].items():
+            print("CATPLUSPLUS_LAUNCHER_FLAG_" + flag[2:].upper().replace("-", "_") +
+                  "=" + ("DECLARED_NOT_VERIFIED" if present else "NOT_FOUND"))
+        for name, present in report["publisher_launcher"]["script_operational_hazards"].items():
+            print("CATPLUSPLUS_LAUNCHER_HAZARD_" + name.upper() +
+                  "=" + ("PRESENT_DO_NOT_EXECUTE" if present else "NOT_DETECTED"))
+        print("CATPLUSPLUS_ENGINE_LOADER=NOT_ATTESTED")
+        print("CATPLUSPLUS_GB10_GPU=NOT_TESTED")
+        print("CATPLUSPLUS_LIVE_ADMISSION=" + report["live_admission"])
+        print("CATPLUSPLUS_DOCKER_WEIGHTS_HOST_MUTATION=NONE")
+    return 0 if report["source_declarations"] == "PRESENT_NOT_ENGINE_ATTESTED" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

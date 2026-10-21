@@ -48,11 +48,11 @@ plan
 
 prune
   Safe cleanup:
-    - stopped qwen38-* experiment containers except the canonical qwen38-flash-next container
+    - stopped experiment containers are REPORT-ONLY (no automatic removal)
     - dangling Docker images
     - Docker builder cache older than N days (default 7)
     - immutable releases other than current/previous
-    - local benchmark result files older than N days (default 30)
+    - benchmark result files are ALWAYS PRESERVED (N days is inventory-only)
 
 --experiments
   Additionally remove known disposable experiment image tags.
@@ -320,14 +320,14 @@ print_plan() {
   local found=0 id path name image
   printf 'Qwen3.8 storage prune plan\n'
   printf '  build cache age : > %s day(s)\n' "${BUILD_CACHE_DAYS}"
-  printf '  benchmark age   : > %s day(s)\n' "${BENCHMARK_DAYS}"
+  printf '  benchmark review age (report only) : > %s day(s)\n' "${BENCHMARK_DAYS}"
   printf '  experiments     : %s\n' "$([[ "${PRUNE_EXPERIMENTS}" == 1 ]] && printf remove-known-tags || printf keep)"
   printf '  volumes         : %s\n\n' "$([[ "${PRUNE_VOLUMES}" == 1 ]] && printf remove-unused-anonymous || printf keep)"
 
-  printf '[Stopped experiment containers]\n'
+  printf '[Stopped experiment containers: PRESERVED for logs/evidence]\n'
   while IFS= read -r name; do
     [[ -n "${name}" ]] || continue
-    found=1; printf '  remove %s\n' "${name}"
+    found=1; printf '  preserve %s\n' "${name}"
   done < <(stopped_experiment_containers)
   [[ "${found}" == 1 ]] || printf '  none\n'
 
@@ -342,10 +342,10 @@ print_plan() {
   [[ "${found}" == 1 ]] || printf '  none\n'
 
   found=0
-  printf '\n[Old benchmark result files]\n'
+  printf '\n[Old benchmark result files: PROTECTED; no delete]\n'
   while IFS= read -r path; do
     [[ -n "${path}" ]] || continue
-    found=1; printf '  remove %s (%s)\n' "${path}" "$(human_du "${path}")"
+    found=1; printf '  preserve %s (%s)\n' "${path}" "$(human_du "${path}")"
   done < <(benchmark_candidates)
   [[ "${found}" == 1 ]] || printf '  none\n'
 
@@ -390,6 +390,7 @@ print_plan() {
   printf '  previous release : %s\n' "${previous_release:-none}"
   printf '  PLE swap and Hugging Face cache are report-only.\n'
   printf '  Docker image sizes are logical sizes; shared layers mean actual reclaimed bytes may be smaller.\n'
+  printf '  Benchmark result files are preserved; automatic age-based deletion is forbidden.\n'
 }
 
 run_or_echo() {
@@ -423,24 +424,18 @@ prune_storage() {
 
   printf '\nApplying storage cleanup\n'
 
-  while IFS= read -r name; do
-    [[ -n "${name}" ]] || continue
-    run_or_echo docker rm "${name}"
-  done < <(stopped_experiment_containers)
+  # Individual experiment containers may hold irreplaceable logs, labels
+  # and validation evidence. Never remove them through blanket storage prune.
+  printf 'EXPERIMENT_CONTAINER_PURGE=DISABLED_REQUIRES_EXACT_ID_ARCHIVE_AND_OWNER_APPROVAL\n'
 
   while IFS= read -r id; do
     [[ -n "${id}" ]] || continue
     run_or_echo bash "${RELEASE_MANAGER}" discard "${id}"
   done < <(inactive_releases)
 
-  while IFS= read -r path; do
-    [[ -n "${path}" ]] || continue
-    if [[ "${DRY_RUN}" == 1 ]]; then
-      printf 'DRY-RUN: rm -f -- %q\n' "${path}"
-    else
-      rm -f -- "${path}"
-    fi
-  done < <(benchmark_candidates)
+  # Benchmark artifacts MUST remain intact until independent verified archive
+  # and per-target owner approval. Age is an inventory hint, NEVER a purge gate.
+  printf 'BENCHMARK_ARTIFACT_PURGE=DISABLED_ALWAYS_PRESERVE\n'
 
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     run_or_echo docker image prune -f
@@ -471,7 +466,7 @@ prune_storage() {
     fi
   fi
 
-  printf '\nStorage cleanup complete. Managed checkpoints, active runtime image, current/previous releases, named Docker volumes, PLE swap, and HF cache were preserved.\n'
+  printf '\nStorage cleanup complete. Benchmark artifacts, managed checkpoints, active runtime image, current/previous releases, named Docker volumes, PLE swap, and HF cache were preserved.\n'
 }
 
 case "${ACTION}" in

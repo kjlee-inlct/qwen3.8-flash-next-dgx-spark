@@ -20,6 +20,16 @@ WIZARD_UI="${ROOT_DIR}/scripts/lib/wizard-ui.sh"
 [[ -r "${WIZARD_UI}" ]] || { printf 'ERROR: wizard UI helper missing: %s\n' "${WIZARD_UI}" >&2; exit 1; }
 # shellcheck source=scripts/lib/wizard-ui.sh
 source "${WIZARD_UI}"
+# Installer owns its own 6/6 plan and completed-install compatibility helpers.
+# Shared wizard-ui.sh must never implicitly import installer management code.
+INSTALL_PLAN_HELPER="${ROOT_DIR}/scripts/lib/install-plan.sh"
+INSTALL_COMPLETED_MANAGER_HELPER="${ROOT_DIR}/scripts/lib/install-completed-manager.sh"
+[[ -r "${INSTALL_PLAN_HELPER}" ]] || { printf 'ERROR: installer plan helper missing: %s\n' "${INSTALL_PLAN_HELPER}" >&2; exit 1; }
+[[ -r "${INSTALL_COMPLETED_MANAGER_HELPER}" ]] || { printf 'ERROR: completed-install manager helper missing: %s\n' "${INSTALL_COMPLETED_MANAGER_HELPER}" >&2; exit 1; }
+# shellcheck source=scripts/lib/install-plan.sh
+source "${INSTALL_PLAN_HELPER}"
+# shellcheck source=scripts/lib/install-completed-manager.sh
+source "${INSTALL_COMPLETED_MANAGER_HELPER}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/qwen38-spark"
 STATE_FILE="${STATE_DIR}/install.env"
 STATE_PARSER="${ROOT_DIR}/scripts/lib/state_file.py"
@@ -62,6 +72,8 @@ API_LAN_PORT="${API_LAN_PORT:-8001}"
 API_ACCESS_CLI=""; API_DOCKER_PORT_CLI=""; API_LAN_ADDRESS_CLI=""; API_LAN_PORT_CLI=""
 SERVICE_ENABLED="${SERVICE_ENABLED:-1}"; SERVICE_OWNED=0; SERVICE_CLI=""
 CLI_LANG=""; UI_LANG="${UI_LANG:-}"
+MANAGE_SETTINGS=0  # Completed install only: direct settings editor, never a fresh install.
+SHUTDOWN_ACCESS=0 # With --manage-settings: managed API + boot service teardown, no model deletion.
 MODEL_ROOT_CLI=""
 MODEL_ROOT_ENV="${QWEN38_MODEL_ROOT:-}"
 MODEL_ROOT=""
@@ -484,6 +496,18 @@ wizard_choose_model_profile() {
     fi
   done < <(list_model_candidates)
 
+  # Runtime variants are NOT additional checkpoint profiles. Expose
+  # unqualified official C as a reasoned disabled choice in the primary
+  # install/switch Wizard, not only in developer/Advanced research menus.
+  describe_orcarouter_vllm_variant official-arm64-c || die 'backend registry invalid'
+  [[ "${ORCA_VARIANT_SELECTABLE}" == 0 ]] ||
+    die 'official ARM64 C was unexpectedly marked selectable'
+  if [[ "${UI_LANG}" == ko ]]; then
+    wizard_info "선택 불가: OrcaRouter 공식 ARM64 C 런타임 — ${ORCA_VARIANT_DESCRIPTION}"
+  else
+    wizard_info "Not selectable: OrcaRouter official ARM64 C runtime — ${ORCA_VARIANT_DESCRIPTION}"
+  fi
+
   if [[ "${mode}" == fresh ]]; then
     [[ "${UI_LANG}" == ko ]] &&
       wizard_menu_option L 'OrcaRouter Legacy 런타임 (CPU PLE offload)' ||
@@ -521,6 +545,11 @@ wizard_choose_model_profile() {
             ORCA_RUNTIME_CHOICE=legacy
             return 0
           fi
+          ;;
+        c|C|official-c|official-arm64-c)
+          describe_orcarouter_vllm_variant official-arm64-c || die 'backend registry invalid'
+          wizard_warning "BLOCKED: ${ORCA_VARIANT_DESCRIPTION}"
+          continue
           ;;
         q|Q|cancel|Cancel|취소)
           [[ "${UI_LANG}" == ko ]] && wizard_info '취소됨' || wizard_info 'Cancelled'
@@ -571,7 +600,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --lang) [[ $# -ge 2 ]] || die "--lang requires en or ko"; CLI_LANG="$2"; shift ;;
     --model) [[ $# -ge 2 ]] || die "--model requires an installable profile"; MODEL_CLI="$2"; shift ;;
-    --orcarouter-runtime) [[ $# -ge 2 ]] || die "--orcarouter-runtime requires v029 or legacy"; case "$2" in v029|legacy) ORCA_RUNTIME_CHOICE="$2" ;; *) die "--orcarouter-runtime must be v029 or legacy" ;; esac; shift ;;
+    --orcarouter-runtime) [[ $# -ge 2 ]] || die "--orcarouter-runtime requires v029 or legacy"; case "$2" in v029|legacy) ORCA_RUNTIME_CHOICE="$2" ;; official-arm64-c|official-c|c) die "OrcaRouter official ARM64 C is not qualified for install/switch (CLI device detection in GPU-hidden probe; no model/PLE/KV verification)" ;; *) die "--orcarouter-runtime must be v029 or legacy" ;; esac; shift ;;
     --model-root) [[ $# -ge 2 ]] || die "--model-root requires PATH"; MODEL_ROOT_CLI="$2"; shift ;;
     --config-override) [[ $# -ge 2 ]] || die "--config-override requires PATH"; [[ -n "$2" ]] || die "--config-override requires a non-empty PATH"; CONFIG_OVERRIDE_CLI="$2"; CONFIG_OVERRIDE_CLI_SET=1; shift ;;
     --no-config-override) CONFIG_OVERRIDE_CLI=""; CONFIG_OVERRIDE_CLI_SET=1 ;;
@@ -590,6 +619,8 @@ while [[ $# -gt 0 ]]; do
     --api-docker-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_DOCKER_PORT_CLI="$2"; shift ;;
     --api-lan-address) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_ADDRESS_CLI="$2"; shift ;;
     --api-lan-port) [[ $# -ge 2 ]] || die "$1 requires a value"; API_LAN_PORT_CLI="$2"; shift ;;
+    --manage-settings) MANAGE_SETTINGS=1 ;;
+    --shutdown-access) SHUTDOWN_ACCESS=1 ;;
     --migrate-manifest) MIGRATE_MANIFEST=1 ;;
     --refresh-profile-defaults) REFRESH_PROFILE_DEFAULTS=1 ;;
     --yes) YES=1 ;; --no-start) START=0 ;; --service) SERVICE_CLI=1 ;; --no-service) SERVICE_CLI=0 ;;
@@ -619,6 +650,25 @@ if [[ "${LIST_MODELS}" == 1 || "${LIST_BACKENDS}" == 1 ]]; then
   exit 0
 fi
 
+if [[ "${SHUTDOWN_ACCESS}" == 1 && "${MANAGE_SETTINGS}" != 1 ]]; then
+  die '--shutdown-access requires --manage-settings'
+fi
+if [[ "${MANAGE_SETTINGS}" == 1 ]]; then
+  [[ -f "${STATE_FILE}" && ! -L "${STATE_FILE}" ]] ||
+    die '--manage-settings requires an existing managed installation'
+  [[ "${YES}" != 1 && -z "${MODEL_CLI}" && -z "${MODEL_ROOT_CLI}" &&
+     -z "${ORCA_RUNTIME_CHOICE}" && "${MIGRATE_MANIFEST}" != 1 &&
+     "${REFRESH_PROFILE_DEFAULTS}" != 1 &&
+     "${CONFIG_OVERRIDE_CLI_SET}" == 0 && -z "${SERVICE_CLI}" &&
+     -z "${MONITOR_ENABLED_CLI}" && -z "${MONITOR_PROTECT_CLI}" &&
+     -z "${API_ACCESS_CLI}" && -z "${API_DOCKER_PORT_CLI}" &&
+     -z "${API_LAN_ADDRESS_CLI}" && -z "${API_LAN_PORT_CLI}" &&
+     -z "${MONITOR_MIN_AVAILABLE_CLI}" && -z "${MONITOR_MIN_FREE_CLI}" &&
+     -z "${MONITOR_FREE_GATE_CLI}" && -z "${MONITOR_MIN_SWAP_FREE_CLI}" &&
+     -z "${MONITOR_CONSECUTIVE_CLI}" && -z "${MONITOR_HEARTBEAT_CLI}" ]] ||
+    die '--manage-settings is interactive; cannot combine with model changes, settings CLI overrides or --yes'
+fi
+
 if [[ "${DRY_RUN}" != 1 ]]; then
   ensure_operation_lock
 fi
@@ -632,6 +682,12 @@ if [[ -r "${STATE_FILE}" ]]; then
   [[ -r "${STATE_PARSER}" ]] || die "strict state parser is unavailable: ${STATE_PARSER}"
   manifest_profile="$(read_manifest_profile)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
   manifest_phase="$(read_manifest_phase)" || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
+  if [[ "${MANAGE_SETTINGS}" == 1 ]]; then
+    [[ "${manifest_phase}" == complete ]] ||
+      die '--manage-settings requires PHASE=complete; fresh install/resume is not allowed'
+    INSTALL_COMPLETED_FORCE_SETTINGS=1
+    INSTALL_COMPLETED_SHUTDOWN_ACCESS="${SHUTDOWN_ACCESS}"
+  fi
   if [[ "${manifest_phase}" == complete && "${YES}" != 1 && "${MIGRATE_MANIFEST}" != 1 && -z "${MODEL_CLI}" ]]; then
     parse_install_manifest || die "installation manifest failed strict maintenance parsing: ${STATE_FILE}"
     [[ -z "${CLI_LANG}" ]] || UI_LANG="${CLI_LANG}"

@@ -247,3 +247,101 @@ After a successful move, the physical data lives under `./models`.
 manifests or older scripts that still contain `$HOME/models/...` continue to resolve.
 The historical repository `./model` symlink is refreshed to the relocated OrcaRouter
 checkpoint. The command is idempotent and should always be previewed with `--dry-run`.
+
+### lychee888 physical PLE SHA plus source-only dispatch contract
+
+The reusable `assess_lychee888_loader.py` checks
+pinned HF metadata only. It carries the validated
+image ID + physically obtained PLE source SHA and
+AST route `NATIVE_FP8_CONFIG_ONLY_SOURCE`
+as fixed **evidence receipts**, not as available
+full source bytes or a runnable image test.
+It classifies `compressed-tensors` declarations
+separately from the NVIDIA ModelOpt adapter and
+keeps scale load/CT scheme dispatch/TP=1
+`NOT_QUALIFIED`. Any real image/quant-loader
+changes are outside this diagnostic and require
+independent approval.
+
+### Compressed-tensors group inventory from pinned JSON
+
+`assess_lychee888_loader.py --json` reports
+config-group/target/ignore counts and counts of
+PLE text mentions in the **pinned checkpoint**
+quantization declaration only.
+This is not a regex evaluator, an installed
+vLLM CT `get_scheme_dict` execution, a layer
+class match, or proof of FP8 PLE loader selection.
+Any absent CT group information remains unknown,
+and malformed target/ignore structures STOP.
+No weights are fetched; the original image
+or stopped containers are not modified.
+
+### Community OrcaRouter offload evidence is an external comparison, not loader acceptance
+
+The Oct-18 community TP=1 OrcaRouter post (see
+`docs/COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md`)
+documents a different image and checkpoint with
+`VLLM_PLE_CPU_OFFLOAD=1`, high (~97%) unified
+memory use and a short reported benchmark.
+Its CT groups do not explicitly identify a
+lychee888-style FP8 PLE ngram table.
+It does **not** change the pinned metadata
+`SOURCE_ONLY_LOADER_UNQUALIFIED` verdict;
+future source work should compare file-backed
+PLE alternatives #58439 / #58815 with isolated
+synthetic proofs, not host mutations.
+
+### OrcaRouter mounted config source-only preflight after guessed path failure
+
+Use `python3 -B scripts/model/inspect_orcarouter_mount_config_readonly.py`
+**only on a clean, qualified source checkout**
+to inspect the *existing* stopped managed and
+legacy protected Docker objects. An earlier
+operator command stopped at missing
+`$HOME/models/...` guessed config; this is
+not evidence of data deletion.
+
+The tool reuses the exact-ID protection snapshot,
+reads `/model` and nested `/model/config.json`
+**Docker RO bind host sources** internally,
+checks both references, then reads at most the
+two original/override **small JSON** files,
+never weights, tensor headers or directory walks.
+It emits only classification labels and
+small shape counts without host paths or model
+config bodies. The recognized override
+comparison uses existing
+`prepare_config.convert_layer_types` and
+reports whether it exactly matches the
+original-to-vLLM `qwen_sparse_attention`
+rewrite. Source differences, missing configs,
+bad source bind identity, invalid CT groups and
+symlinks fail closed; PASS only means
+`PASS_SOURCE_CONFIG_ONLY_NOT_RUNTIME`.
+This is an independent developer diagnostic,
+not an extra Wizard menu item.
+Host execution, official-image install/boot
+and OrcaRouter stability are still
+`NOT_QUALIFIED`.
+
+### Third-party OrcaRouter full configuration parity digests
+
+A user-provided 1304-line community OrcaRouter
+Docker recipe and complete `config.json` were
+canonicalized (JSON object keys sorted; list order
+preserved) into 64-char SHA256 reference digests:
+full config, quantization config, CT groups/ignore,
+text config, exact ordered attention layers, vision.
+`inspect_orcarouter_mount_config_readonly.py`
+compares these *external-only* references to the
+existing protected mounted override **in memory**,
+reporting only named `MATCH/DIFFERENT/MISSING`
+classifications. It prints no source host path,
+host-derived file digest, model content or raw
+Docker object. This extends the earlier ACTUAL_DGX
+counts-only 2/301/753 and 36/12 match; do not
+conflate reference parity with actual model load,
+runtime stability or original weight hash.
+No physical replay was performed by this
+source-only change.

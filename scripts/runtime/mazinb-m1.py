@@ -1,0 +1,970 @@
+#!/usr/bin/env python3
+"""Wizard-owned, foreground supervised mazinb M1 session.
+
+A new unique Docker object is CREATEd first; an exact-ID, detached,
+bounded, fail-closed memory watchdog is armed BEFORE Docker START.
+This controller never deletes containers/experiments or mutates the
+installed OrcaRouter predecessor. The interactive session owns a shared
+lifecycle lock continuously; a separate benchmark may acquire a shared
+lock, but lifecycle writers require an exclusive lock.
+
+This is source implementation: passing source CI is not a DGX live gate.
+"""
+from __future__ import annotations
+
+import argparse
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import shlex
+import stat
+import select
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise M1Error("benchmark API redirect forbidden")
+
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts" / "lib"))
+from state_file import parse_install  # noqa: E402
+
+OLD = "qwen38-flash-next"
+SERVICE = "qwen38-flash-next.service"
+IMAGE = "vllm-orcarouter-v029:v1"
+PROFILE = "mazinb"
+MODEL = "mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"
+KV_BYTES = "17179869184"
+PORT = 18889
+HEX64 = re.compile(r"[a-f0-9]{64}\Z")
+HEX40 = re.compile(r"[a-f0-9]{40}\Z")
+NAME_RE = re.compile(r"qwen38-mazinb-m1-[0-9]{14}-[a-f0-9]{8}\Z")
+MARKERS = (
+    "runtime-transition.env", "update-transition.env", "profile-switch-transition.env",
+    "release-profile-refresh-transition.env", "settings-transition.phase",
+    "runtime-adopt.env",
+)
+MAX_SESSION_SECONDS = 5400
+MAX_WATCHDOG_SECONDS = 7200
+STARTUP_SECONDS = 1800
+SOAK_SECONDS = 180
+SESSION_SLOT = "historical"  # Preserved original versus independent reinstall run.
+
+
+class M1Error(Exception):
+    pass
+
+
+def require(ok: bool, message: str) -> None:
+    if not ok:
+        raise M1Error(message)
+
+
+def call(*args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(args, check=False, text=True, capture_output=True, env=env)
+    if check and result.returncode:
+        raise M1Error(f"command failed: {args[0]} {args[1] if len(args) > 1 else ''}; rc={result.returncode}; {result.stderr[-300:]}")
+    return result
+
+
+def inspect(name: str) -> dict | None:
+    p = call("docker", "inspect", "--format", "{{json .}}", name, check=False)
+    return json.loads(p.stdout) if p.returncode == 0 else None
+
+
+def state_paths() -> tuple[Path, Path, Path]:
+    root = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "qwen38-spark"
+    data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "qwen38-spark"
+    session_name = "mazinb-m1-reinstall" if SESSION_SLOT == "reinstall" else "mazinb-m1"
+    return root, data, root / session_name
+
+
+def safe_dir(path: Path) -> None:
+    require(path.is_dir() and not path.is_symlink() and path.stat().st_uid == os.getuid(),
+            f"unsafe or wrongly-owned directory: {path}")
+
+
+@contextmanager
+def operation_lock(state: Path):
+    safe_dir(state)
+    lock = state / "operation.lock"
+    require(lock.is_file() and not lock.is_symlink() and lock.stat().st_uid == os.getuid(),
+            "existing owner-controlled operation lock required")
+    with lock.open("rb") as fd:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError as err:
+            raise M1Error("lifecycle transaction currently holds operation lock") from err
+        yield
+
+
+def read_manifest(state: Path) -> tuple[dict, str]:
+    path = state / "install.env"
+    require(path.is_file() and not path.is_symlink(), "unsafe install manifest")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest = parse_install(path, "install-maintenance")
+    require(manifest.get("PHASE") == "complete" and manifest.get("MODEL_PROFILE") == "orcarouter",
+            "expected completed managed OrcaRouter predecessor")
+    require(manifest.get("MONITOR_ENABLED") == "1" and manifest.get("MONITOR_PROTECT") == "1",
+            "managed memory protection must remain ON")
+    if SESSION_SLOT == "reinstall":
+        require(manifest.get("SERVICE_ENABLED") == "0"
+                and manifest.get("SERVICE_OWNED") == "0",
+                "reinstall session requires disabled/unowned managed service")
+    else:
+        require(manifest.get("SERVICE_ENABLED") == "1", "expected managed systemd installation")
+    return manifest, digest
+
+
+def pinned_clean_source_sha() -> str:
+    """A live reinstall and its Terminal B must run the identical clean HEAD."""
+    git_dir = call("git", "-C", str(ROOT), "rev-parse", "--show-toplevel")
+    require(git_dir.stdout.strip() == str(ROOT.resolve()),
+            "unexpected repository worktree root")
+    branch = call("git", "-C", str(ROOT), "branch", "--show-current")
+    require(branch.stdout.strip() == "feature/wizard-modular-phase1-20261014",
+            "unexpected project source branch")
+    dirty = call("git", "-C", str(ROOT), "status", "--porcelain=v1")
+    require(not dirty.stdout.strip(), "project source worktree not clean")
+    sha = call("git", "-C", str(ROOT), "rev-parse", "HEAD").stdout.strip()
+    require(bool(HEX40.fullmatch(sha)), "project source SHA not 40-hex")
+    return sha
+
+
+def historical_retirement_snapshot(state: Path) -> dict[str, str]:
+    """Hash-pin the already archived M1 session; never write original files."""
+    old_root = state / "mazinb-m1"
+    active = old_root / "active.json"
+    marker = old_root / "retired-docker.json"
+    require(old_root.is_dir() and not old_root.is_symlink(),
+            "historical M1 retirement root missing/unsafe")
+    hashes = {}
+    for label, file in (("active_sha256", active), ("marker_sha256", marker)):
+        require(file.is_file() and not file.is_symlink() and
+                file.stat().st_uid == os.getuid() and
+                0 < file.stat().st_size <= 1024 * 1024,
+                "unsafe historical retirement evidence: " + label)
+        hashes[label] = hashlib.sha256(file.read_bytes()).hexdigest()
+    prior = read_json(active)
+    tombstone = read_json(marker)
+    require(prior.get("phase") == "stopped" and
+            tombstone.get("state") == "archived_docker_removed" and
+            tombstone.get("name") == prior.get("name") and
+            tombstone.get("id") == prior.get("id"),
+            "historical M1 retirement identities mismatch")
+    return hashes
+
+
+def assert_project_units_nonstarting() -> None:
+    """Refuse new isolated run if any managed API unit can auto-start."""
+    for name in (SERVICE, "qwen38-openwebui-proxy.socket",
+                 "qwen38-openwebui-proxy.service"):
+        result = call("systemctl", "show", name,
+                      "--property=LoadState,ActiveState,UnitFileState",
+                      "--no-pager", check=False)
+        require(result.returncode == 0, "managed unit inspection failed: " + name)
+        props = dict(line.split("=", 1) for line in result.stdout.splitlines()
+                     if "=" in line)
+        require(props.get("ActiveState") == "inactive" and
+                props.get("UnitFileState") in ("disabled", "masked", "not-found", ""),
+                "managed unit became active/boot enabled: " + name)
+
+
+def assert_no_live_qwen38_or_project_ports() -> None:
+    """Read-only admission for restored M1, without cross-layer script imports."""
+    running = call("docker", "ps", "--format", "{{.Names}}")
+    require(not any(name.strip().startswith("qwen38-")
+                    for name in running.stdout.splitlines()),
+            "another project Docker is running")
+    listeners = call("ss", "-H", "-ltn")
+    protected_ports = {8888, 8000, 8001, 18888, 18889, 18890, 18891, 18892}
+    for line in listeners.stdout.splitlines():
+        fields = line.split()
+        require(len(fields) >= 4, "malformed socket listener inventory")
+        local = fields[3]
+        tail = local.rsplit(":", 1)[-1]
+        require(tail.isdigit(), "unrecognized listener port: " + local[:80])
+        require(int(tail) not in protected_ports,
+                "project service port already listening: " + tail)
+
+
+def snapshot_old(expected: str) -> dict:
+    require(bool(HEX64.fullmatch(expected)), "full old Docker ID required")
+    old = inspect(OLD)
+    require(old is not None and old.get("Id") == expected, "protected predecessor exact Docker ID mismatch")
+    s = old["State"]
+    require(s["Status"] == "exited" and not s["Running"] and not s["OOMKilled"],
+            "managed predecessor must be stopped, not Docker-OOM-killed")
+    require(str(old.get("Image", "")).startswith("sha256:"), "old Docker immutable image ID missing")
+    return old
+
+
+def old_unchanged(previous: dict) -> None:
+    now = inspect(OLD)
+    require(now is not None, "protected predecessor missing")
+    for path in (("Id",), ("Image",), ("State", "Status"), ("State", "Running"), ("State", "OOMKilled")):
+        def get(item: dict) -> object:
+            for key in path:
+                item = item[key]
+            return item
+        require(get(now) == get(previous), f"predecessor drift: {path}")
+
+
+def check_trial_history() -> None:
+    for name in ("qwen38-mazinb-kv-a", "qwen38-mazinb-kv-b"):
+        obj = inspect(name)
+        if obj:
+            require(obj["State"]["Status"] == "exited" and not obj["State"]["Running"],
+                    f"historical case must be stopped: {name}")
+    # Fail if any OTHER M1 instance is running; no new session while one is active.
+    p = call("docker", "ps", "-aq", "--filter", "label=qwen38.abtrial=mazinb", check=True)
+    for candidate_id in p.stdout.splitlines():
+        c = inspect(candidate_id)
+        if c and NAME_RE.fullmatch(str(c.get("Name", "")).lstrip("/")):
+            require(not c["State"]["Running"], "prior M1 trial is still running")
+
+
+def memory_admission(manifest: dict) -> None:
+    """Fail closed on host/swap headroom before any GPU workload is created."""
+    values: dict[str, int] = {}
+    for row in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+        if ":" in row:
+            key, _, value = row.partition(":")
+            fields = value.split()
+            if fields:
+                values[key] = int(fields[0])
+    for name in ("MemAvailable", "MemFree", "SwapFree"):
+        require(name in values, f"missing /proc/meminfo field {name}")
+    cma = values.get("CmaFree", 0)
+    require(max(0, values["MemAvailable"] - cma) >= 6 * 1048576,
+            "non-CMA available memory below 6 GiB")
+    require(max(0, values["MemFree"] - cma) >= 2 * 1048576,
+            "non-CMA free memory below 2 GiB")
+    require(values["SwapFree"] >= 8 * 1048576, "SwapFree below 8 GiB")
+    swaps = call("swapon", "--show=NAME", "--noheadings").stdout.split()
+    require(manifest.get("SWAP_FILE") == "/swap-ple.img" and "/swap-ple.img" in swaps,
+            "expected active managed PLE swap missing")
+
+
+def preflight(expected: str, state: Path, data: Path, m1: Path) -> dict:
+    safe_dir(state)
+    safe_dir(data)
+    for marker in MARKERS:
+        require(not (state / marker).exists() and not (state / marker).is_symlink(),
+                f"unfinished lifecycle marker: {marker}")
+    manifest, digest = read_manifest(state)
+    current = data / "current"
+    require(current.is_symlink() and current.resolve().is_dir(), "current release missing")
+    release = current.resolve()
+    require(release.parent == data / "releases", "immutable release root mismatch")
+    service = call("systemctl", "is-active", SERVICE, check=False).stdout.strip()
+    require(service == "inactive", f"managed service is not proven inactive: {service}")
+    old = snapshot_old(expected)
+    historical = (historical_retirement_snapshot(state)
+                  if SESSION_SLOT == "reinstall" else None)
+    source_sha = pinned_clean_source_sha() if SESSION_SLOT == "reinstall" else None
+    if SESSION_SLOT == "reinstall":
+        assert_project_units_nonstarting()
+        assert_no_live_qwen38_or_project_ports()
+    memory_admission(manifest)
+    check_trial_history()
+    if m1.exists() or m1.is_symlink():
+        safe_dir(m1)
+        active = m1 / "active.json"
+        if active.exists() or active.is_symlink():
+            record = read_json(active)
+            require(record.get("phase") in ("stopped", "failed_stopped"),
+                    "unfinished M1 session exists: recovery required; no overwrite")
+            prior = inspect(record["name"])
+            if prior is None:
+                require(retired_docker_marker(record, m1) is not None,
+                        "prior session identity requires recovery")
+            else:
+                require(prior["Id"] == record["id"] and
+                        not prior["State"]["Running"],
+                        "prior session identity requires recovery")
+    model_path = Path(manifest["MODEL_DIR"]).resolve().parent / "qwen3.8-flash-next-mazinb"
+    require(model_path.is_dir() and (model_path / "config.json").is_file()
+            and (model_path / "model.safetensors.index.json").is_file(),
+            "mazinb checkpoint files unavailable")
+    image_id = call("docker", "image", "inspect", "--format", "{{.Id}}", IMAGE).stdout.strip()
+    require(image_id.startswith("sha256:") and bool(HEX64.fullmatch(image_id[7:])),
+            "pinned mazinb image digest missing")
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", PORT))
+    # Existing preflight checks dependency versions, managed state, lifecycle
+    # idle, swap and sudo read-only evidence access. It never starts Docker.
+    call("bash", str(ROOT / "scripts/runtime/mazinb-kv-ab.sh"), "preflight")
+    old_unchanged(old)
+    require(hashlib.sha256((state / "install.env").read_bytes()).hexdigest() == digest,
+            "install manifest changed in preflight")
+    require(current.resolve() == release, "release changed in preflight")
+    return {"old": old, "release": str(release), "manifest_sha256": digest,
+            "image_id": image_id, "model_path": str(model_path),
+            "monitor": manifest, "historical_snapshot": historical,
+            "source_sha": source_sha}
+
+
+def read_json(path: Path) -> dict:
+    require(path.is_file() and not path.is_symlink(), f"unsafe JSON record: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    require(isinstance(data, dict), "invalid JSON record")
+    return data
+
+
+def save_json(path: Path, record: dict) -> None:
+    safe_dir(path.parent)
+    require(not path.is_symlink(), f"symlink record: {path}")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    require(not tmp.exists() and not tmp.is_symlink(), f"pending state transaction: {tmp}")
+    with tmp.open("x", encoding="utf-8") as f:
+        os.chmod(tmp, 0o600)
+        json.dump(record, f, indent=2, sort_keys=True)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def journal(m1: Path, record: dict, phase: str, detail: str = "") -> None:
+    record["phase"] = phase
+    record["updated_at"] = datetime.now(timezone.utc).isoformat()
+    record["detail"] = detail
+    save_json(m1 / "active.json", record)
+    save_json(m1 / (record["name"] + ".json"), record)
+
+
+def pinned_candidate(record: dict) -> dict:
+    name, candidate_id = record["name"], record["id"]
+    require(bool(NAME_RE.fullmatch(name)) and bool(HEX64.fullmatch(candidate_id)),
+            "invalid M1 trial identity")
+    d = inspect(name)
+    require(d is not None and d.get("Id") == candidate_id, "candidate exact Docker ID drift")
+    labels = d["Config"].get("Labels") or {}
+    require(labels.get("qwen38.abtrial") == "mazinb"
+            and labels.get("qwen38.variant") == "m1"
+            and labels.get("qwen38.predecessor") == record["old_id"],
+            "candidate provenance labels differ")
+    require(d.get("Image") == record["image_id"], "candidate immutable image changed")
+    require(d.get("HostConfig", {}).get("RestartPolicy", {}).get("Name") == "no",
+            "candidate restart policy must be no")
+    return d
+
+
+def retired_docker_marker(record: dict, m1: Path) -> dict | None:
+    """Recognize separately SHA-pinned, evidence-archived Docker retirement.
+
+    Original active/per-trial journals are never edited. An absent Docker
+    container without this marker is still a hard identity failure.
+    """
+    marker_path = m1 / "retired-docker.json"
+    if not marker_path.exists() and not marker_path.is_symlink():
+        return None
+    marker = read_json(marker_path)
+    require(marker.get("schema_version") == 1
+            and marker.get("state") == "archived_docker_removed"
+            and marker.get("id") == record["id"]
+            and marker.get("name") == record["name"],
+            "M1 Docker tombstone differs from original journal identity")
+    archive = Path(marker.get("archive_path", ""))
+    expected_root = m1.parent / "retirement-archives"
+    require(archive.is_absolute() and archive.parent == expected_root and
+            archive.name.startswith("mazinb-docker-"), "M1 archive path outside protected state")
+    require(archive.is_dir() and not archive.is_symlink(), "M1 Docker archive missing/unsafe")
+    sha_file = archive / "SHA256SUMS"
+    require(sha_file.is_file() and not sha_file.is_symlink(), "M1 Docker archive hash manifest missing")
+    sha = hashlib.sha256(sha_file.read_bytes()).hexdigest()
+    require(sha == marker.get("archive_sha256_manifest"), "M1 Docker archive hash manifest changed")
+    entries = sha_file.read_text(encoding="utf-8").splitlines()
+    require(len(entries) == 10, "M1 Docker retirement archive does not contain five log/metadata pairs")
+    seen = set()
+    for entry in entries:
+        match = re.fullmatch(r"([0-9a-f]{64})  ([0-9a-f]{16}\.(?:log|json))", entry)
+        require(match is not None, "invalid M1 retirement manifest entry")
+        _, name = match.groups()
+        require(name not in seen, "duplicate M1 retirement manifest entry")
+        seen.add(name)
+        file = archive / name
+        require(file.is_file() and not file.is_symlink(), "M1 Docker archive file missing/unsafe")
+    require(inspect(record["name"]) is None,
+            "M1 tombstone exists but Docker candidate name still resolves")
+    return marker
+
+
+def watch_fresh(monitor: subprocess.Popen, monitor_dir: Path, candidate_id: str) -> None:
+    require(monitor.poll() is None, "pinned watchdog exited")
+    armed = monitor_dir / "armed"
+    heartbeat = monitor_dir / "heartbeat"
+    require(armed.is_file() and not armed.is_symlink()
+            and armed.read_text(encoding="utf-8").strip() == candidate_id,
+            "watchdog exact-ID arm lost")
+    require(heartbeat.is_file() and not heartbeat.is_symlink(), "watchdog heartbeat absent")
+    ts = int(heartbeat.read_text(encoding="utf-8").strip())
+    require(0 <= time.time() - ts <= 15, "watchdog heartbeat stale")
+
+
+def api_healthy() -> bool:
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+    try:
+        with opener.open(f"http://127.0.0.1:{PORT}/health", timeout=3) as resp:
+            if resp.status != 200:
+                return False
+        with opener.open(f"http://127.0.0.1:{PORT}/v1/models", timeout=3) as resp:
+            body = json.load(resp)
+        return [item.get("id") for item in body.get("data", [])] == [MODEL]
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+def inference_smoke() -> None:
+    """One supervised OpenAI-compatible inference, without saving model text."""
+    payload = json.dumps({
+        "model": MODEL, "messages": [
+            {"role": "user", "content": "Reply briefly with the word OK."}
+        ], "temperature": 0.0, "max_tokens": 64,
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{PORT}/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+    try:
+        with opener.open(req, timeout=120) as resp:
+            require(resp.status == 200, "M1 smoke HTTP status not 200")
+            result = json.load(resp)
+    except (OSError, ValueError, KeyError) as exc:
+        raise M1Error(f"M1 inference smoke request failed: {type(exc).__name__}") from exc
+    choices = result.get("choices")
+    require(isinstance(choices, list) and len(choices) == 1, "M1 smoke invalid completion envelope")
+    msg = choices[0].get("message", {})
+    require(isinstance(msg, dict) and isinstance(msg.get("content"), str)
+            and bool(msg["content"].strip()), "M1 smoke produced no assistant text")
+    print("M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED", flush=True)
+
+
+def kernel_rm_since(utc_start: str) -> str:
+    r = call("sudo", "-n", "journalctl", "-k", "--since", utc_start,
+             "--no-pager", check=True)
+    return "\n".join(line for line in r.stdout.splitlines()
+                     if "NV_ERR_NO_MEMORY" in line or "_memdescAllocInternal" in line)
+
+
+def verify_host(record: dict, snap: dict, state: Path, data: Path) -> None:
+    old_unchanged(snap["old"])
+    require(hashlib.sha256((state / "install.env").read_bytes()).hexdigest()
+            == snap["manifest_sha256"], "manifest drift")
+    require((data / "current").resolve().as_posix() == snap["release"], "release drift")
+    require(call("systemctl", "is-active", SERVICE, check=False).stdout.strip() == "inactive",
+            "managed service became active")
+    if SESSION_SLOT == "reinstall":
+        require(snap.get("historical_snapshot") is not None
+                and historical_retirement_snapshot(state) == snap["historical_snapshot"],
+                "archived historical M1 evidence drift")
+        assert_project_units_nonstarting()
+        require(snap.get("source_sha") is not None
+                and pinned_clean_source_sha() == snap["source_sha"],
+                "project source SHA or clean-worktree drift")
+    require(not (Path(record["monitor_dir"]) / "runtime-stop.env").exists(),
+            "candidate triggered memory-protection stop")
+    require(not kernel_rm_since(record["kernel_since"]), "NVIDIA RM memory allocation error")
+
+
+@contextmanager
+def protect_stop_finalization_signals():
+    """Avoid catchable terminal signals interrupting exact Docker/journal finalization."""
+    previous = {}
+    for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        previous[signum] = signal.getsignal(signum)
+        signal.signal(signum, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def stop_exact(record: dict, m1: Path) -> None:
+    with protect_stop_finalization_signals():
+        _stop_exact_critical(record, m1)
+
+
+def _stop_exact_critical(record: dict, m1: Path) -> None:
+    candidate = pinned_candidate(record)
+    was_failed = record["phase"] in ("failed", "failed_stopped")
+    failure_detail = str(record.get("detail", "")) if was_failed else ""
+    if candidate["State"]["Running"]:
+        journal(m1, record, "stopping", "operator end or protective error")
+        call("docker", "stop", "--timeout", "30", candidate["Id"])
+    final = pinned_candidate(record)
+    require(not final["State"]["Running"], "candidate did not stop")
+    record["exit_code"] = final["State"].get("ExitCode")
+    phase = "failed_stopped" if was_failed else "stopped"
+    journal(m1, record, phase,
+            failure_detail if was_failed else "Docker object and forensic files preserved")
+    print(f"M1_STOPPED_EXACT_ID={record['id']}")
+    print("M1_DOCKER_REMOVED=NO")
+
+
+
+def recovery_file(path: Path) -> bytes:
+    require(path.is_file() and not path.is_symlink(), f"unsafe M1 evidence path: {path}")
+    st = path.stat()
+    require(st.st_uid == os.getuid() and stat.S_ISREG(st.st_mode)
+            and not st.st_mode & 0o077 and 0 < st.st_size < 1024 * 1024,
+            f"unsafe M1 evidence ownership/mode/size: {path}")
+    return path.read_bytes()
+
+
+def assert_supervision_absent(record: dict) -> None:
+    """Reject concurrent terminal supervisor or exact-ID watchdog."""
+    for line in call("ps", "-ww", "-eo", "args=").stdout.splitlines():
+        try:
+            argv = shlex.split(line)
+        except ValueError:
+            require("mazinb-m1.py" not in line and record["id"] not in line,
+                    "unparseable M1-related process")
+            continue
+        programs = {Path(arg).name for arg in argv}
+        require(not ("mazinb-m1.py" in programs and "run" in argv),
+                "M1 supervisor process is still active")
+        require(not ("monitor-runtime.sh" in programs and
+                     "--expected-id" in argv and record["id"] in argv),
+                "M1 exact-ID watchdog process is still active")
+
+
+def recovery_marker(record: dict, monitor: Path) -> str:
+    marker = monitor / "runtime-stop.env"
+    require(not marker.is_symlink(), "unsafe M1 stop marker symlink")
+    if not marker.exists():
+        return "UNDETERMINED"
+    fields = {}
+    for line in recovery_file(marker).decode("utf-8").splitlines():
+        key, sep, value = line.partition("=")
+        require(bool(sep) and key not in fields, "malformed stop marker")
+        fields[key] = value
+    require(fields.get("RUNTIME_STOP_SCHEMA_VERSION") == "1" and
+            fields.get("STOP_REASON") == "memory-protection" and
+            fields.get("STOP_CONTAINER_NAME") == record["name"] and
+            fields.get("STOP_CONTAINER_ID") == record["id"],
+            "stop marker not pinned to this M1 Docker")
+    return "MEMORY_PROTECTION_MARKER"
+
+
+def reconcile() -> None:
+    """Reconcile a stopped exact-ID M1; NEVER start/stop/remove containers."""
+    state, data, m1 = state_paths()
+    with operation_lock(state):
+        safe_dir(data)
+        safe_dir(m1)
+        active = m1 / "active.json"
+        record = json.loads(recovery_file(active))
+        require(isinstance(record, dict), "active M1 journal must be an object")
+        require(record.get("schema") == 1 and
+                bool(NAME_RE.fullmatch(str(record.get("name", "")))) and
+                bool(HEX64.fullmatch(str(record.get("id", "")))) and
+                bool(HEX64.fullmatch(str(record.get("old_id", "")))),
+                "active M1 schema or identity invalid")
+        per_trial = m1 / (record["name"] + ".json")
+        other = json.loads(recovery_file(per_trial))
+        require(isinstance(other, dict), "per-trial M1 journal must be an object")
+        immutable_keys = ("schema", "name", "id", "old_id", "old_image_id",
+                          "image_id", "release", "manifest_sha256", "source_sha",
+                          "historical_snapshot", "model",
+                          "port", "kv_bytes", "monitor_dir", "trial_home",
+                          "started_at", "kernel_since")
+        require(all(record.get(key) == other.get(key) for key in immutable_keys),
+                "M1 journal immutable provenance diverged")
+        phases = ("stopping", "failed", "ready_for_bench", "stopped", "failed_stopped")
+        require(record.get("phase") in phases and other.get("phase") in phases,
+                "M1 journals have an unrecognized phase")
+        require(record.get("model") == MODEL and record.get("port") == PORT
+                and record.get("kv_bytes") == KV_BYTES,
+                "M1 benchmark configuration changed")
+        lock = m1 / "benchmark.lock"
+        require(lock.is_file() and not lock.is_symlink()
+                and lock.stat().st_uid == os.getuid()
+                and not lock.stat().st_mode & 0o077,
+                "M1 benchmark lock missing or unsafe")
+        with lock.open("rb") as fd:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as err:
+                raise M1Error("M1 benchmark currently holds lease") from err
+            for marker in MARKERS:
+                require(not (state / marker).exists() and not (state / marker).is_symlink(),
+                        f"unfinished managed lifecycle marker: {marker}")
+            _, digest = read_manifest(state)
+            require(digest == record.get("manifest_sha256"), "managed manifest changed")
+            current = data / "current"
+            require(current.is_symlink() and str(current.resolve()) == record.get("release"),
+                    "immutable managed release changed")
+            require(call("systemctl", "is-active", SERVICE, check=False).stdout.strip() == "inactive",
+                    "managed systemd service active/unknown")
+            old = snapshot_old(record["old_id"])
+            require(old["Image"] == record.get("old_image_id"),
+                    "managed predecessor immutable image changed")
+            check_trial_history()
+            trial = m1 / record["name"]
+            monitor = trial / "monitor"
+            safe_dir(trial)
+            safe_dir(trial / "home")
+            safe_dir(monitor)
+            require(record.get("monitor_dir") == str(monitor)
+                    and record.get("trial_home") == str(trial / "home"),
+                    "M1 forensic path mismatch")
+            arm = monitor / "armed"
+            hb = monitor / "heartbeat"
+            require(arm.is_file() and not arm.is_symlink()
+                    and arm.read_text(encoding="utf-8").strip() == record["id"],
+                    "M1 exact-ID watchdog arm missing")
+            require(hb.is_file() and not hb.is_symlink()
+                    and hb.read_text(encoding="utf-8").strip().isdigit(),
+                    "M1 watchdog heartbeat evidence missing")
+            monitor_log = trial / "monitor.log"
+            require(monitor_log.is_file() and not monitor_log.is_symlink()
+                    and monitor_log.stat().st_uid == os.getuid()
+                    and monitor_log.stat().st_size < 128 * 1024 * 1024,
+                    "M1 monitor log missing or unsafe")
+            log_tail = monitor_log.read_text(encoding="utf-8")[-8192:]
+            require("container is no longer running; monitor exiting" in log_tail,
+                    "M1 watchdog termination evidence missing")
+            reason = recovery_marker(record, monitor)
+            require(not ("PROTECT stopping" in log_tail and reason == "UNDETERMINED"),
+                    "M1 protective stop has no matching marker")
+            assert_supervision_absent(record)
+            docker = pinned_candidate(record)
+            final = docker["State"]
+            require(final.get("Status") == "exited" and final.get("Running") is False,
+                    "M1 candidate not proved exited")
+            exit_code = final.get("ExitCode")
+            require(type(exit_code) is int and 0 <= exit_code <= 255,
+                    "M1 exact Docker exit code invalid")
+            require(type(final.get("OOMKilled")) is bool
+                    and str(final.get("FinishedAt", "")).startswith("20"),
+                    "M1 Docker completion evidence missing")
+            assert_supervision_absent(record)
+            phase = ("failed_stopped" if final["OOMKilled"] or exit_code != 0
+                     or reason == "MEMORY_PROTECTION_MARKER"
+                     or record["phase"] in ("failed", "failed_stopped")
+                     else "stopped")
+            if (record == other and record.get("phase") == phase and
+                    record.get("exit_code") == exit_code and
+                    record.get("recovery_shutdown_cause") == reason):
+                print("M1_RECONCILE=ALREADY_CONSISTENT")
+                print(f"M1_STOPPED_EXACT_ID={record['id']}")
+                return
+            # Preserve raw original bytes of BOTH journals before replacing either.
+            tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(6)
+            for path in (active, per_trial):
+                backup = path.with_name(path.name + ".pre-reconcile-" + tag + ".bak")
+                with backup.open("xb") as output:
+                    os.chmod(backup, 0o600)
+                    output.write(recovery_file(path))
+                    output.flush()
+                    os.fsync(output.fileno())
+            record["recovery_previous_detail"] = record.get("detail", "")
+            record["recovery_shutdown_cause"] = reason
+            record["recovery_docker_finished_at"] = final["FinishedAt"]
+            record["recovery_docker_oom_killed"] = final["OOMKilled"]
+            record["recovery_host_stability"] = "INCONCLUSIVE"
+            record["exit_code"] = exit_code
+            detail = ("Reconciled after interrupted supervisor shutdown; STOP signal unverified"
+                      if reason == "UNDETERMINED" else
+                      "Reconciled with exact-ID memory-protection stop marker")
+            journal(m1, record, phase, detail)
+            print(f"M1_RECONCILE=RECORDED_{phase.upper()}")
+            print(f"M1_STOPPED_EXACT_ID={record['id']}")
+            print(f"M1_EXIT_CODE={exit_code}")
+            print(f"M1_SHUTDOWN_CAUSE={reason}")
+            print("M1_DOCKER_START_STOP_REMOVE=NOT_PERFORMED")
+
+def run_session(expected: str) -> None:
+    require(os.environ.get("QWEN38_M1_WIZARD_APPROVED") == "1",
+            "live M1 requires Wizard default-NO operator approval")
+    require(sys.stdin.isatty(), "live M1 must run interactively in foreground terminal")
+    def signal_abort(signum: int, frame) -> None:
+        raise M1Error(f"foreground M1 interrupted by signal {signum}")
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, signal_abort)
+    state, data, m1 = state_paths()
+    with operation_lock(state):
+        snap = preflight(expected, state, data, m1)
+        if not m1.exists():
+            m1.mkdir(mode=0o700)
+        safe_dir(m1)
+        bench_lock = m1 / "benchmark.lock"
+        require(not bench_lock.is_symlink(), "unsafe M1 benchmark lock")
+        if not bench_lock.exists():
+            with bench_lock.open("x", encoding="utf-8"):
+                os.chmod(bench_lock, 0o600)
+        require(bench_lock.is_file() and bench_lock.stat().st_uid == os.getuid(),
+                "unsafe M1 benchmark lock owner")
+        now = datetime.now(timezone.utc)
+        name = "qwen38-mazinb-m1-" + now.strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(4)
+        trial_dir = m1 / name
+        trial_dir.mkdir(mode=0o700)
+        # Isolate caches and temporary files from the predecessor and every
+        # historical A/B run; serve.sh derives both vLLM and FlashInfer
+        # host cache mounts from HOME. Never reuse the operator's HOME.
+        trial_home = trial_dir / "home"
+        trial_home.mkdir(mode=0o700)
+        monitor_dir = trial_dir / "monitor"
+        monitor_dir.mkdir(mode=0o700)
+        runner_state = trial_dir / "state"
+        runner_state.mkdir(mode=0o700)
+        record = {"schema": 1, "name": name, "id": "",
+                  "old_id": expected, "old_image_id": snap["old"]["Image"],
+                  "image_id": snap["image_id"], "release": snap["release"],
+                  "manifest_sha256": snap["manifest_sha256"],
+                  "historical_snapshot": snap["historical_snapshot"],
+                  "source_sha": snap["source_sha"],
+                  "model": MODEL, "port": PORT, "kv_bytes": KV_BYTES,
+                  "monitor_dir": str(monitor_dir),
+                  "trial_home": str(trial_home), "started_at": now.isoformat(),
+                  "kernel_since": now.astimezone().strftime("%Y-%m-%d %H:%M:%S")}
+        env = dict(os.environ)
+        env.update({
+            "HOME": str(trial_home),
+            "MODEL_PROFILE": PROFILE, "MODEL_DIR": snap["model_path"],
+            "SERVED_NAME": MODEL, "VLLM_IMAGE": IMAGE,
+            "NAME": name, "PORT": str(PORT), "PUBLISH_HOST": "127.0.0.1",
+            "RESTART_POLICY": "no", "MONITOR_ENABLED": "0", "MONITOR_PROTECT": "0",
+            "TRIAL_CREATE_ONLY": "1", "TRIAL_VARIANT": "mazinb-m1",
+            "TRIAL_PREDECESSOR_ID": expected, "XDG_STATE_HOME": str(runner_state),
+            "KV_MEM": KV_BYTES, "GPU_UTIL": "0.80", "NSPEC": "2",
+            "MAXLEN": "262144", "MAXSEQS": "3", "PREFIX_CACHE": "0",
+            "INDEX_SHARE": "0", "AUTOTUNE": "0", "QSA_EXACT_TOPK": "1",
+        })
+        monitor = None
+        try:
+            call("bash", str(ROOT / "scripts/serve.sh"), env=env)
+            created = inspect(name)
+            require(created is not None and created["State"]["Status"] == "created"
+                    and not created["State"]["Running"], "candidate was not only created")
+            record["id"] = created["Id"]
+            require(bool(HEX64.fullmatch(record["id"])), "created Docker ID invalid")
+            journal(m1, record, "created")
+            pinned_candidate(record)
+            verify_host(record, snap, state, data)
+            args = [
+                "bash", str(ROOT / "scripts/runtime/monitor-runtime.sh"),
+                "--container", name, "--expected-id", record["id"],
+                "--wait-running", "120", "--trial-max-seconds", str(MAX_WATCHDOG_SECONDS),
+                "--state-dir", str(monitor_dir),
+                "--armed-file", str(monitor_dir / "armed"),
+                "--heartbeat-file", str(monitor_dir / "heartbeat"),
+                "--min-available-gib", snap["monitor"]["MONITOR_MIN_AVAILABLE_GIB"],
+                "--min-free-gib", snap["monitor"]["MONITOR_MIN_FREE_GIB"],
+                "--free-gate-gib", snap["monitor"]["MONITOR_FREE_GATE_GIB"],
+                "--min-swap-free-gib", snap["monitor"]["MONITOR_MIN_SWAP_FREE_GIB"],
+                "--consecutive", snap["monitor"]["MONITOR_CONSECUTIVE"],
+                # Source-scoped to M1 only: historical managed monitor keeps
+                # its original 256-MiB swap-growth emergency behavior.
+                "--swap-pressure-available-gib", "12",
+                "--heartbeat", snap["monitor"]["MONITOR_HEARTBEAT"], "--protect",
+            ]
+            with (trial_dir / "monitor.log").open("a", encoding="utf-8") as output:
+                monitor = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output,
+                                           stderr=subprocess.STDOUT, start_new_session=True, env=env)
+            for _ in range(50):
+                if monitor.poll() is not None:
+                    raise M1Error("watchdog exited before exact-ID arm")
+                if (monitor_dir / "armed").is_file() and (
+                    monitor_dir / "armed").read_text().strip() == record["id"]:
+                    break
+                time.sleep(.1)
+            else:
+                raise M1Error("watchdog never armed: Docker not started")
+            journal(m1, record, "armed")
+            old_unchanged(snap["old"])
+            call("docker", "start", record["id"])
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                if (monitor_dir / "heartbeat").is_file():
+                    break
+                require(monitor.poll() is None, "watchdog exited during start")
+                time.sleep(.2)
+            watch_fresh(monitor, monitor_dir, record["id"])
+            journal(m1, record, "started_unqualified")
+            started = time.monotonic()
+            print(f"M1_CANDIDATE_STARTED_UNQUALIFIED={name}", flush=True)
+            while time.monotonic() - started < STARTUP_SECONDS:
+                watch_fresh(monitor, monitor_dir, record["id"])
+                require(pinned_candidate(record)["State"]["Running"], "candidate stopped before READY")
+                verify_host(record, snap, state, data)
+                if api_healthy():
+                    journal(m1, record, "soaking")
+                    break
+                time.sleep(5)
+            else:
+                raise M1Error("candidate never reached exact-model API readiness")
+            for _ in range(SOAK_SECONDS // 5):
+                watch_fresh(monitor, monitor_dir, record["id"])
+                require(pinned_candidate(record)["State"]["Running"], "candidate stopped during soak")
+                verify_host(record, snap, state, data)
+                time.sleep(5)
+            verify_host(record, snap, state, data)
+            require(api_healthy(), "exact model API identity lost after soak")
+            inference_smoke()
+            watch_fresh(monitor, monitor_dir, record["id"])
+            verify_host(record, snap, state, data)
+            journal(m1, record, "ready_for_bench", "API, smoke, soak and RM/monitor checks passed")
+            print(f"M1_READY_FOR_BENCH=http://127.0.0.1:{PORT}", flush=True)
+            print(f"M1_SERVED_NAME={MODEL}", flush=True)
+            print(f"M1_EXACT_CONTAINER_ID={record['id']}", flush=True)
+            print(f"M1_TRIAL_RECORD={m1 / 'active.json'}", flush=True)
+            print("M1_LLAMA_BENCHY=NOT_MEASURED; run pinned benchmark in Terminal B", flush=True)
+            print("Type STOP and Enter in this Wizard terminal to stop exact M1 candidate.", flush=True)
+            while time.monotonic() - started < MAX_SESSION_SECONDS:
+                watch_fresh(monitor, monitor_dir, record["id"])
+                require(pinned_candidate(record)["State"]["Running"], "candidate stopped during benchmark window")
+                verify_host(record, snap, state, data)
+                ready, _, _ = select.select([sys.stdin], [], [], 5)
+                if ready:
+                    response = sys.stdin.readline()
+                    require(response != "", "terminal input stream closed")
+                    if response.strip().upper() == "STOP":
+                        with bench_lock.open("rb") as bench_fd:
+                            try:
+                                fcntl.flock(bench_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            except BlockingIOError:
+                                print("M1_STOP_DEFERRED=BENCHMARK_RUNNING; finish Terminal B first", flush=True)
+                                continue
+                        break
+                    print("Enter STOP to finish this supervised session.", flush=True)
+            else:
+                print("M1_MAX_SESSION_REACHED=YES; stopping candidate", flush=True)
+        except BaseException as err:
+            if record["id"]:
+                try:
+                    journal(m1, record, "failed", f"{type(err).__name__}: {str(err)[:180]}")
+                except Exception:
+                    pass
+            raise
+        finally:
+            if record["id"]:
+                # Stop only the unique newly-created candidate, never old Docker.
+                try:
+                    stop_exact(record, m1)
+                except (M1Error, OSError, ValueError) as stop_error:
+                    print(f"M1_EXACT_STOP_FAILED={stop_error}", file=sys.stderr)
+                    print("M1_MANUAL_INTERVENTION=REQUIRED; watchdog remains bounded/armed", file=sys.stderr)
+                    raise M1Error(f"candidate exact-ID stop failed: {stop_error}") from stop_error
+
+
+def status() -> None:
+    state, _, m1 = state_paths()
+    path = m1 / "active.json"
+    if not path.exists() and not path.is_symlink():
+        print("M1_SESSION=ABSENT")
+        return
+    record = read_json(path)
+    retired = retired_docker_marker(record, m1)
+    candidate = None if retired is not None else pinned_candidate(record)
+    print(f"M1_SESSION_PHASE={record['phase']}")
+    print(f"M1_SESSION_NAME={record['name']}")
+    print(f"M1_CONTAINER_ID={record['id']}")
+    if retired is not None:
+        print("M1_RUNNING=False")
+        print(f"M1_EXIT_CODE={record.get('exit_code')}")
+        print(f"M1_STATE_DIR={m1}")
+        print("M1_DOCKER_REMOVED=YES_ARCHIVED")
+        print(f"M1_DOCKER_ARCHIVE_PATH={retired['archive_path']}")
+    else:
+        print(f"M1_RUNNING={candidate['State']['Running']}")
+        print(f"M1_EXIT_CODE={candidate['State'].get('ExitCode')}")
+        print(f"M1_STATE_DIR={m1}")
+        print("M1_DOCKER_REMOVED=NO")
+
+
+def bench_admission() -> None:
+    """Read-only Terminal-B attestation; caller must itself hold shared flock."""
+    state, data, m1 = state_paths()
+    safe_dir(state)
+    safe_dir(data)
+    record = read_json(m1 / "active.json")
+    require(record.get("phase") == "ready_for_bench", "M1 is not admitted for benchmark")
+    require(record.get("model") == MODEL and record.get("kv_bytes") == KV_BYTES
+            and record.get("port") == PORT, "M1 benchmark configuration drift")
+    candidate = pinned_candidate(record)
+    require(candidate["State"]["Running"], "M1 candidate is not running")
+    monitor_dir = Path(record["monitor_dir"])
+    safe_dir(monitor_dir)
+    armed = monitor_dir / "armed"
+    heartbeat = monitor_dir / "heartbeat"
+    require(armed.is_file() and not armed.is_symlink()
+            and armed.read_text().strip() == record["id"], "M1 pinned monitor arm missing")
+    require(heartbeat.is_file() and not heartbeat.is_symlink(), "M1 monitor heartbeat absent")
+    require(0 <= time.time() - int(heartbeat.read_text().strip()) <= 15,
+            "M1 watchdog heartbeat stale")
+    snap = {"old": snapshot_old(record["old_id"]), "release": record["release"],
+            "manifest_sha256": record["manifest_sha256"],
+            "historical_snapshot": record.get("historical_snapshot"),
+            "source_sha": record.get("source_sha")}
+    verify_host(record, snap, state, data)
+    require(api_healthy(), "M1 API not ready with exact mazinb model identity")
+    print(f"M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY")
+    print(f"M1_BENCH_CONTAINER_ID={record['id']}")
+    print(f"M1_BENCH_API=http://127.0.0.1:{PORT}")
+    print("M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Internal Wizard mazinb M1 controller")
+    parser.add_argument("action", choices=("plan", "status", "preflight", "run", "bench-admission", "reconcile"))
+    parser.add_argument("--expected-old-id", default="")
+    parser.add_argument("--session-slot", choices=("historical", "reinstall"),
+                        default="historical")
+    args = parser.parse_args()
+    global SESSION_SLOT
+    SESSION_SLOT = args.session_slot
+    try:
+        if args.action == "plan":
+            print("M1_PLAN=NEW_ISOLATED_MAZINB_16G")
+            print("M1_SESSION_SLOT=" + SESSION_SLOT)
+            print("M1_PORT=127.0.0.1:18889")
+            print("M1_WATCHDOG=ARM_EXACT_ID_BEFORE_START")
+            print("M1_SESSION_MAX_SECONDS=5400")
+            print("M1_KEEP_OLD_AB_AND_MANAGED=YES")
+            print("M1_START=ONLY_INTERACTIVE_WIZARD_OPT_IN")
+            print("M1_BENCHMARK=NOT_MEASURED")
+        elif args.action == "status":
+            status()
+        elif args.action == "bench-admission":
+            bench_admission()
+        elif args.action == "reconcile":
+            reconcile()
+        elif args.action == "preflight":
+            state, data, m1 = state_paths()
+            with operation_lock(state):
+                s = preflight(args.expected_old_id, state, data, m1)
+            print("M1_PREFLIGHT=PASS_READ_ONLY")
+            print(f"M1_OLD_DOCKER_ID={s['old']['Id']}")
+            print(f"M1_IMMUTABLE_RELEASE={s['release']}")
+            print(f"M1_IMAGE_ID={s['image_id']}")
+            print("M1_CANDIDATE_START=NOT_PERFORMED")
+        else:
+            run_session(args.expected_old_id)
+    except (M1Error, OSError, ValueError, KeyError, subprocess.SubprocessError) as err:
+        print(f"M1_BLOCKED={err}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

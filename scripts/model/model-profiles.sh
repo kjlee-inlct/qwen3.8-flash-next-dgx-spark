@@ -9,11 +9,11 @@
 
 list_model_profiles() {
   # Installable profiles only.
-  printf '%s\n' orcarouter nvidia mazinb orcarouter-hybrid
+  printf '%s\n' orcarouter nvidia mazinb
 }
 
 list_model_candidates() {
-  printf '%s\n' lychee888
+  printf '%s\n' orcarouter-hybrid lychee888
 }
 
 describe_model_profile() {
@@ -46,13 +46,13 @@ describe_model_profile() {
       PROFILE_DESCRIPTION_KO="선택형 mazinb 프로필; 관리형 KV 복원력 완화 설정 16 GiB 검증"
       ;;
     orcarouter-hybrid)
-      PROFILE_STATUS="experimental"
+      PROFILE_STATUS="retired"
       PROFILE_DISPLAY_NAME="OrcaRouter Hybrid H6"
       PROFILE_DEFAULT=0
-      PROFILE_INSTALLABLE=1
+      PROFILE_INSTALLABLE=0
       PROFILE_REPO="local/orcarouter-mazinb-h6-w4a16"
-      PROFILE_DESCRIPTION="Generated H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"
-      PROFILE_DESCRIPTION_KO="생성형 H6 hybrid (OrcaRouter + mazinb experts, W4A16 NVFP4)"
+      PROFILE_DESCRIPTION="Retired local H6 hybrid (2026-10-16); preserved for historical metadata only"
+      PROFILE_DESCRIPTION_KO="2026-10-16 로컬 H6 정리 완료; 과거 기록 전용"
       ;;
     lychee888)
       PROFILE_STATUS="planned"
@@ -82,6 +82,10 @@ print_model_profiles() {
 
 load_download_profile() {
   describe_model_profile "$1" || return
+  if [[ "${PROFILE_STATUS}" == retired ]]; then
+    printf 'ERROR: retired model profile %s cannot be downloaded or rebuilt without a new approved workflow\n' "$1" >&2
+    return 2
+  fi
   local model_root="${QWEN38_MODEL_ROOT:-${HOME}/models}"
   PROFILE_LOCAL_BUILD=0
   PROFILE_BASE_PROFILE=""
@@ -105,9 +109,8 @@ load_download_profile() {
       PROFILE_CONFIG_OVERRIDE=0
       ;;
     mazinb)
-      # Short immutable Hugging Face commit ID verified for the qualified checkpoint.
-      # download-weights.sh records the resolved full SHA in its local manifest.
-      PROFILE_REVISION="f2c21eb"
+      # Full immutable revision from the original DGX measured mazinb provenance.
+      PROFILE_REVISION="f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f"
       PROFILE_MODEL_DIR="${model_root}/qwen3.8-flash-next-mazinb"
       PROFILE_IMAGE="vllm-orcarouter-v029:v1"
       PROFILE_SERVED_NAME="mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4"

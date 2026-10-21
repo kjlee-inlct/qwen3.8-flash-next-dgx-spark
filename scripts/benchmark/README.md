@@ -1,3 +1,16 @@
+## 2026-10-18 — catplusplus M0 benchmark planning (NO GPU)
+
+Read-only plan script: `scripts/benchmark/catplusplus-plan.py plan`.
+Operator entry: `./wizard.sh` -> Benchmark **5 -> 22**.
+The plan records pinned catplusplus HF revision, physical metadata
+size, two mazinb-parity llama-benchy workloads and required
+loader/offload/protected-start admission. It never starts a
+runtime, API or benchmark and never fetches weights.
+The supported `llama-benchy-report.py --profile catplusplus` is
+an **offline report-conversion label only**; it refuses empty
+numeric results and wrong model identity. No catplusplus performance
+has been measured; see [M0 document](../../docs/model-reports/catplusplus.md).
+
 # Benchmark harness
 
 This directory contains the repository's canonical read-only benchmark harness for the managed Qwen3.8 Flash Next runtime.

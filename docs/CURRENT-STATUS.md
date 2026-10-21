@@ -1,3 +1,4645 @@
+## 2026-10-21 — PHYSICAL recovery BLOCKED: both exact original receipts missing
+
+The single DGX Spark host had already verified that the original
+29-target partial reset removed both Qwen3.8 models, eight project
+Docker containers, seven project image tags and the dedicated
+`/swap-ple.img` plus its fstab marker, while retaining exactly
+three foreign Docker containers, ordinary `/swap.img`, and
+eight original planned directory roots (3 dedicated caches,
+3 research evidence trees, state/data roots). The prior
+`~/.cache/flashinfer-v029` permission failure remains the
+cause of partial deletion.
+
+**New physical operator evidence:** checkout HEAD
+`6f8c17e4cb3097c055ac2241955e6d1dc4a97349`,
+expected feature branch and clean worktree, recovery script
+present. However `sudo ... partial-uninstall-recovery.py
+audit --plan-file ~/qwen38-exact-reset-plan-canonical.json`
+blocked before any deletion:
+`REASON=path_disappeared:/home/inlc/qwen38-exact-reset-plan-canonical.json`.
+The independent shell check confirmed canonical receipt absent.
+A follow-up tested the older
+`~/qwen38-exact-reset-plan.json` SHA
+`5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89`,
+but it too was absent; `find ~ -maxdepth 1 -type f
+-name 'qwen38*plan*.json'` returned no files. **Cause
+of lost receipts is UNKNOWN.** Neither attempted
+recovery command called the deletion executor; the
+previous eight-root physical status was not freshly
+re-verified after the receipt loss. Do not invent,
+reconstruct or reuse a substitute file claiming either
+old SHA256. Retain historical printed hashes as
+historical evidence, not as current live authorization.
+
+Source-only corrective path:
+`scripts/lifecycle/fresh-residual-recovery.py` implements
+an explicit **new authorization** path, not original
+29-target `apply`. On the fixed physical home layout
+`/home/inlc`, root-admin `snapshot` checks the exact
+8 separate known project-only directories (3 caches,
+3 forensic, state and release data roots), each live
+directory dev/ino/mode, project inventory for unexpected
+assets, the three exact preserved foreign Docker container
+IDs, fresh external-reference conflicts and the absent
+PLE swap/fstab marker. All reviewed directory trees
+must exist with no foreign nested mounts. Snapshot writes
+only a new exclusive 0600 receipt outside deletion roots
+(`/home/inlc/qwen38-residual-recovery-v2.json`),
+using a new mode and new SHA256. Separate
+`audit --sha <new>` revalidates every root with the
+unchanged receipt; `apply` is an **independent second
+explicit approval** gated on exact full SHA, root
+privilege, the original 8-directory inventory and
+fresh foreign-reference checks. It uses the already
+tested FD-relative, symlink-no-follow scoped removal
+routine from `partial-uninstall-recovery.py`.
+It contains **no calls to remove Docker images,
+containers, models, swap or Git checkout**. All of
+this is source-only until CI and DGX audit. Do not
+describe it as a recovery of the lost original receipt:
+it is a new operator-authorized residual plan.
+
+Physical full removal remains **PARTIAL_FAILURE /
+NOT_VERIFIED**; after successful separate recovery,
+run independent project-scoped verify and preserved
+system/external asset checks, then record proof in
+GitHub before the final, separately guarded local Git
+checkout and transient-receipt cleanup. Preserve
+PR #261 Draft/Open.
+
+---
+
+## 2026-10-21 — PHYSICAL partial reset postcheck: 475G recovered; Docker/models/PLE absent; eight root targets remain
+
+Operator supplied an actual, read-only post-failure host audit on
+source HEAD `dca3ba8dce0b48ba68b648ad2f926d7461adb325`.
+`full-project-uninstall.py verify --model-root <repo>/models
+--plan-file ~/qwen38-exact-reset-plan-canonical.json`
+returned `FULL_UNINSTALL_POSTCHECK=RESIDUALS_OR_INCOMPLETE` /
+RC=3; independent `uninstall-inventory.py verify
+--baseline ~/qwen38-predelete-inventory.json` returned
+`UNINSTALL_AUDIT_VERIFICATION=RESIDUALS_PRESENT` /
+RC=3. The original canonical SHA remains
+`b38c6693014e0965437b220fe818837e3ca446de781af4356123c89bb0e6428f`.
+
+**PHYSICALLY OBSERVED AS REMOVED:** both 171G OrcaRouter
+and 174G mazinb model directories, the canonical `model`
+symlink, all eight original project Docker containers, all
+seven project Docker image tags, dedicated `/swap-ple.img`
+and the project `# qwen38-ple-swap` fstab entry.
+`docker ps -a` showed **only three preserved foreign
+containers**: exact IDs starting `9219d017` (`open-webui`),
+`12c2de1b` (`spark-searxng`), `360cc353` (`portainer`).
+`swapon --show` showed only ordinary `/swap.img`
+(16G, 0B used); no PLE swap. No `vllm-`/`qwen38-`
+image tags remained. Some now-untagged image layers, if any,
+were not audited, and no claim is made about them.
+`df -h /`: before reset **626G used / 244G available / 73%**,
+now **151G used / 718G available / 18%**, approximately
+**475G lower used** (rounded df readings; not an independently
+measured bytes-reclaimed number).
+
+**Eight exact planned root targets remain, still physically
+identity-MATCH (dev/ino/mode) vs original plan:** 3 dedicated
+project cache trees:
+`~/.cache/flashinfer-v029`, `~/.cache/vllm-qwen38`,
+`~/.cache/vllm-qwen38-v029`; 3 external research evidence
+trees: `<checkout>/docs/model-reports/evidence`,
+`<checkout>/scripts/benchmark/evidence`,
+`~/Workspace/llm/qwen38-m1-bench-results`; project state
+root `~/.local/state/qwen38-spark` and data/release root
+`~/.local/share/qwen38-spark`.
+Nested state `retirement-archives`, `install.env`,
+ownership registry, 48 historical state entries, data
+`releases/qualified/evidence` and pointers `current/previous`
+are inside these roots and likewise remain. The original
+plan's two release-link entries still exist with matching
+symlink inodes; these are unlinked as entries when data-root
+is removed. Shared `~/.cache/huggingface` and
+`~/.cache/flashinfer` remain EXCLUDED_SHARED and must not
+be touched. `container-name:UNKNOWN` is only an inventory
+classification, not a remaining Docker container (independent
+docker ps audit identifies the three foreign survivors).
+
+**CONFIRMED FAILURE CAUSE:** `~/.cache/flashinfer-v029`
+root is `inlc:inlc`, mode 775, exact dev=66306,
+ino=10901508. Inside `0.6.18/121a/generated/
+cutlass_instantiations/120/gemm_grouped/80/`,
+the parent directories and failed
+`cutlass_kernel_file_gemm_grouped_sm80_M128_group1.generated.cu`
+are owned `root:root` with non-writable ordinary-user
+directory permissions 755, file mode 644; unprivileged
+`Path.unlink` failed with Errno 13. The host printed
+no nested mountpoints inside that dedicated cache root.
+Do not broad-chown `~/.cache` or run unscoped `rm -rf`.
+
+**Next safety boundary:** source-only narrow partial-uninstall
+recovery may clean the **eight unchanged and independently
+approved root targets** with exact original receipt SHA,
+scope, kind, pathname, mode/dev/ino, mount/symlink checks,
+using root privilege *only for bounded project roots*.
+No original `apply` rerun: Docker/model/swap targets are
+already absent and cannot satisfy its stale receipt. Re-verify
+`full-project-uninstall.py verify` and
+`uninstall-inventory.py verify` after this stage. Then
+preserve final evidence in GitHub and separately remove the
+local checkout plus three saved owner/receipt JSONs if
+requested. **Project-wide deletion remains INCOMPLETE until
+these residuals are removed and independent postcheck passes.**
+
+---
+
+## 2026-10-21 — PHYSICAL destructive reset partial failure on dedicated FlashInfer cache
+
+User physically invoked the **destructive** full project reset with
+saved canonical SHA256 receipt
+`b38c6693014e0965437b220fe818837e3ca446de781af4356123c89bb0e6428f`
+at source HEAD `dca3ba8dce0b48ba68b648ad2f926d7461adb325`,
+after typing exact irreversible approval. Host preflight:
+`EXACT_PLAN_VALIDATED=PASS`, 29 approved targets including
+`/swap-ple.img` and its `# qwen38-ple-swap` fstab entry;
+`PLAN_MATCHES_CURRENT_INVENTORY` / drift 0;
+available memory 118.06 GiB, used PLE swap 1.00 GiB,
+swapoff memory preflight PASS; external Docker reference audit
+`NO_OBSERVED_CONFLICTS`, eight project and three unrelated
+Docker containers, seven image candidates, no aliases or
+foreign conflicts. Sudo preflight succeeded.
+
+Actual apply aborted with:
+```text
+FULL_UNINSTALL=BLOCKED_OR_PARTIAL_REVIEW_REQUIRED
+REASON=[Errno 13] Permission denied: '/home/inlc/.cache/flashinfer-v029/0.6.18/121a/generated/cutlass_instantiations/120/gemm_grouped/80/cutlass_kernel_file_gemm_grouped_sm80_M128_group1.generated.cu'
+PROJECT_RESET=FAILED_OR_PARTIAL
+STOP: DO NOT RETRY BLINDLY
+```
+This exception arose in the project-specific
+`~/.cache/flashinfer-v029` cleanup. The engine's source
+executes Docker container and image removals, dedicated PLE
+swap removal, legacy model link removal and model directory
+removal **before** project-cache recursive removal; thus this
+is a **partial destructive attempt**, not the earlier read-only
+preflight failure. However no independent physical postcheck
+yet confirms which removals succeeded. The Python cache
+deletion was running unprivileged and failed to unlink a
+generated .cu file in a non-writable directory.
+
+Do not rerun original `apply`, falsely claim success, change
+ownership for all of `~/.cache`, or remove shared
+`~/.cache/flashinfer`. Maintain the exact old plan/approval/
+inventory files as recovery evidence. Next: obtain physical
+READ-ONLY `full-project-uninstall.py verify`,
+`uninstall-inventory.py verify`, exact `swapon --show`,
+project Docker counts, and guarded cache permission/mount
+metadata. Only then plan narrow sudo-scoped deletion of
+verified remaining project assets. The user authorizes complete
+project removal (including project PLE swap), but NOT
+`/swap.img`, external Docker, Portainer/SearXNG volumes,
+shared HF/FlashInfer roots, other host assets or GitHub.
+Checkout and approval receipts are separate final cleanup
+targets. **M2 physical result: PARTIAL_FAILURE;
+full uninstall NOT_VERIFIED.**
+
+---
+
+## 2026-10-21 — ACTUAL DGX mount drift classified ORDER_ONLY across six containers; deletion still NOT_RUN
+
+The owner physically ran the latest read-only `full-project-uninstall.py
+diagnose` after syncing the verified checkout
+`e69375ef47c49340ea06da2c848f329cf11d1d12`.
+The unchanged saved SHA256 reset receipt
+`5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89`
+again differed from the live scan
+`89df1efa3a6e81514cf6aafceba5f086284ef4ad924b59a2363d1b95a84003c0`.
+All **six** observed differences were *only*
+`container.fingerprint.mounts` and were individually
+`classification=ORDER_ONLY`: the same full mount dictionaries
+were present with unchanged count (4,3,3,3,3,4), but Docker
+returned them in a different array order.
+
+Exact affected container IDs:
+`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+`5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445`,
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+`918974a9e4edd03a8566b5a42527e372cd435a155f74362a1424e5420737f030`,
+`bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+
+Physical output included `HOST_DELETION=NOT_PERFORMED`,
+`DIAGNOSIS_RC=3`. The historical container fingerprint's
+unordered Docker `Mounts` list had caused false SHA256 drift;
+there is **no observed host Source, RW, bind target or mount
+content drift** between the compared inspection snapshots.
+This establishes no permission to remove foreign assets and does
+not retroactively validate destructive host M2.
+
+**Source remediation, no physical execution yet:** Docker
+`docker_identity()` now sorts the *full* Mounts dictionaries by
+lossless sorted-key JSON serialization before both `plan` and
+`apply` identity calculation. This canonicalization preserves
+every field, type, duplicate and value, leaving real Source/RW/
+mode/propagation changes detectable; malformed or missing Mounts
+fail closed. Synthetic tests assert invariant receipt SHA on
+permutation and rejection of content changes. The former
+saved receipt is **not valid as the new canonical receipt** and
+must not be patched, reused or supplied to `apply`. After
+CI passes, require a clean fast-forward to the precise GitHub
+HEAD, fresh `plan` to a **new** protected receipt path,
+read-only `diagnose` comparing its identity against a second
+live snapshot, then independent review and explicit approval
+before destructive apply. Existing owner-exception JSON and
+predelete inventory are retained unchanged if corresponding
+fresh inventories/identity checks still pass.
+
+The owner's full-reset scope explicitly includes
+wizard-created dedicated `/swap-ple.img` (128 GiB) and
+project-only `/etc/fstab` persistence line; preserve ordinary
+`/swap.img`, external Docker containers/volumes, shared HF/
+FlashInfer roots and GitHub history. Source-only/CI results do
+not prove the physical DGX is reset. M2 still NOT_RUN.
+
+---
+
+## 2026-10-21 — ACTUAL DGX read-only receipt diagnosis: four Docker mount fingerprints only
+
+The operator cleanly fast-forwarded the single DGX Spark checkout from
+`ead3bf450a1c98f2c35f20d19b92a02479cdaaac` to exact
+`a603b0ae3d8c73a5dca773a07c4c3c08a30c774e`
+and physically executed the **read-only**
+`full-project-uninstall.py diagnose` command against the original
+owner-approved delete plan. Actual terminal result:
+
+```text
+FULL_UNINSTALL_DIAGNOSIS=DRIFT_DETECTED
+SAVED_PLAN_SHA256=5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89
+FRESH_PLAN_SHA256=5c167bca7b373ea24b34f1165491d5ccbdcf23cac345385fde5f01c1f39aaa7f
+CHANGED_TARGET_COUNT=4
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56","kind":"container"}
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445","kind":"container"}
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7","kind":"container"}
+DRIFT={"change":"target_identity_changed","fields":["fingerprint.mounts"],"id":"bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8","kind":"container"}
+HOST_DELETION=NOT_PERFORMED
+DIAGNOSIS_RC=3
+DGX_DELETION=NOT_PERFORMED
+```
+
+This establishes that the prior `inventory_or_asset_identity_drift_before_apply`
+is localized to four full-ID **Docker container Mounts** arrays in
+the stored versus current exact reset receipts. No other top-level
+receipt target differences were reported by this comparison, including
+none on the modeled PLE swap target; it does **not** establish whether
+the changed Mounts arrays are reordered, have new/removed mount entries,
+or changed host Source/Mode/RW/Propagation. No destructive
+steps ran. **Do not use old `apply` receipt** or interpret a
+`mounts` drift as automatically safe.
+
+Source-only follow-up on this same feature branch extends the
+existing `diagnose` output with a read-only
+`describe_mount_drift` classifier: `ORDER_ONLY`,
+`CONTENT_CHANGED` with container-internal Destination and changed
+field names (never reveal host Source), or
+`AMBIGUOUS_MOUNT_IDENTITIES`/`UNVERIFIABLE_MOUNT_METADATA`.
+It does **not** change `scan`, `execute`, the exact receipt
+comparison, any Docker deletion eligibility, owner-exception hashes,
+or swap handling. New synthetics verify mount order, host-source
+redaction, RW changes, missing mounts, ambiguous metadata and
+receipt diagnostic integration. Its host output and exact-HEAD CI
+qualification are not yet recorded; only after both can a
+new exact deletion receipt be considered.
+
+The operator's removal intent remains the project-local
+model/images/containers/forensics/state/releases and
+wizard-created **128-GiB `/swap-ple.img` plus project fstab entry**.
+Foreign Docker/Portainer/SearXNG, ordinary `/swap.img`, shared
+HF/FlashInfer roots, unrelated host software and GitHub history
+must remain untouched.
+
+---
+
+## 2026-10-21 — ACTUAL DGX whole-project apply preflight DRIFT, no deletions (PLE swap included)
+
+The owner explicitly reconfirmed the intent to delete **the complete
+project including the dedicated wizard-created PLE swap**
+`/swap-ple.img` and the matching `# qwen38-ple-swap`
+`/etc/fstab` line, while preserving `/swap.img` and
+external Docker/volumes. The physical operator ran the exact
+`ead3bf450a1c98f2c35f20d19b92a02479cdaaac`
+source with the previously generated
+`/home/inlc/qwen38-exact-reset-plan.json` receipt. They printed:
+
+```text
+EXACT_RESET_RECEIPT=PASS
+PLE_SWAP_IN_PLAN=YES
+TOTAL_TARGETS=29
+MEM_AVAILABLE_GIB=118.10
+PLE_SWAP_USED_GIB=1.01
+MEMORY_RESERVE_GIB=16
+PLE_SWAPOFF_MEMORY_PREFLIGHT=PASS
+REFERENCE_AUDIT_RESULT=NO_OBSERVED_CONFLICTS
+PROJECT_CONTAINER_COUNT=8
+TOTAL_DOCKER_CONTAINERS=11
+EXTERNAL_CONTAINER_COUNT=3
+PROJECT_IMAGE_COUNT=7
+CANDIDATE_VOLUME_COUNT=0
+EXTERNAL_REFERENCE_CONFLICTS=0
+OTHER_IMAGE_TAG_ALIASES=0
+FULL_UNINSTALL=BLOCKED_OR_PARTIAL_REVIEW_REQUIRED
+REASON=inventory_or_asset_identity_drift_before_apply
+STOP: deletion failed or is partial
+DO NOT RETRY BLINDLY
+```
+
+There is **no evidence that the full reset executor ran**: the
+reported failure comes from `main()` at exact plan-vs-fresh
+comparison **before** `execute(saved)`, which is the first
+Docker/swap/filesystem mutation entry point. Therefore the logged
+attempt performed **no managed deletion**. No swapoff, image
+removal, container rm or checkpoint wipe is reported. The exact
+changed resource/field is **not yet known**; neither label it
+benign nor bypass the strict gate. One full `read-only plan`
+is SHA `5248a649ffb11eacf574ab9c1f349bd455bd4de3d577351f347bfc7f16505f89`,
+9 owner exceptions are bound to physical predelete inventory
+SHA `1a5892edff4cccf9ff662467cfda460608e9404bfef5d47bfbadcecdafa1d863`.
+The physical stdout provided 29 targets: eight containers,
+seven images, two model dirs, one legacy model link,
+three dedicated caches, three forensic paths, two release links,
+state/data roots and one PLE swap. The first count of four
+forensic inventory entries includes nested archive under state
+and is not four separately targeted trees.
+
+**Source-only diagnostics under review:** an additional
+`full-project-uninstall.py diagnose` action was implemented on
+the same feature branch. It loads the *existing* receipt and
+owner-exception, holds the existing lifecycle lock read-only,
+rebuilds the same scan, and returns only bounded changed target
+and field names; it never calls `execute`. Separate synthetic
+tests cover changed Docker status/model inode and enforce that
+diagnose cannot invoke mutators. This action must have
+exact-HEAD passing CI and operator-side clean fast-forward before
+its first real DGX use; no `apply` rerun until the output is
+reviewed and any actual change addressed. Physical destructive
+M2 remains NOT_QUALIFIED.
+
+---
+
+## 2026-10-21 — ACTUAL DGX predelete inventory capture and refreshed Docker reference check
+
+Following the owner's explicit intention to **delete all Qwen3.8
+project-scoped assets, including historically unowned/unverified
+candidates**, the operator executed a read-only predelete capture on
+the actual DGX. The command ran
+`python3 -B scripts/lifecycle/uninstall-inventory.py plan --json`
+and redirected stdout to the **outside-checkout** path
+`/home/inlc/qwen38-predelete-inventory.json`; the path-existence
+guard prevented overwriting an existing file, and the terminal
+printed `PREDELETE_READONLY=COMPLETE`. The operator then reran
+`uninstall-inventory.py references`, reporting exactly:
+
+```text
+UNINSTALL_REFERENCES=READ_ONLY_NO_DELETION
+REFERENCE_AUDIT_RESULT=NO_OBSERVED_CONFLICTS
+PROJECT_CONTAINER_COUNT=8
+TOTAL_DOCKER_CONTAINERS=11
+EXTERNAL_CONTAINER_COUNT=3
+PROJECT_IMAGE_COUNT=7
+CANDIDATE_VOLUME_COUNT=0
+EXTERNAL_REFERENCE_CONFLICTS=0
+OTHER_IMAGE_TAG_ALIASES=0
+REFERENCE_AUDIT_IS_NOT_OWNERSHIP_AUTHORIZATION=1
+PREDELETE_READONLY=COMPLETE
+```
+
+**Limit:** the operator has not pasted or uploaded the contents,
+SHA256 or `issues` field of the saved inventory JSON; successful
+shell execution does not independently prove every target in that
+file was inspected by the assistant. The physical local checkout HEAD
+was not printed in this specific run; the preceding physical
+`references` run had checked HEAD
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c`.
+The new GitHub source/docs commits since then were not shown to be
+synchronized on host. Do not conflate inventory JSON with the
+deletion-capable `full-project-uninstall.py plan` SHA256 receipt.
+
+**Owner intent changes the desired scope, not the technical
+verification outcome:** the owner wants the two historical model
+directories, seven present image tags and all confirmed project
+containers/caches/forensics/services/state removed even though
+their registry/inventory ownership can be `owned=False` or
+`UNVERIFIED`; protect unrelated Docker/app data and shared
+HF/FlashInfer parent caches. No registry flag falsification,
+blanket Docker prune, arbitrary `rm -rf`, or path guard bypass.
+At current source the complete-reset engine still blocks on
+`candidate_ownership_not_proven` and recorded unowned asset
+conflict, and destructive M2 is `NOT_QUALIFIED`. A future
+operator-reviewable, exact-identity scoped owner-exception
+mechanism remains to be implemented/tested. An explicit owner's
+desire to purge is **not** evidence that all similarly named
+files belong to this project.
+
+**Next action:** inspect a bounded summary of the saved JSON
+(`schema`, `mode`, `issues`, all present candidate
+`kind/locator/ownership`, exclusions and document SHA256) from
+the physical DGX, then bind exceptional approval only to the
+separately reviewed exact candidates before any destructive
+procedure. No project deletion occurred in this step; PR #261
+remains Draft/Unmerged and physical M2 is NOT_RUN.
+
+---
+
+## 2026-10-20 — ACTUAL DGX exact-SHA `references` read-only external Docker audit
+
+The owner executed the maintained
+`python3 -B scripts/lifecycle/uninstall-inventory.py references`
+on the **physical DGX Spark**. Immediately before the audit, the
+operator's guarded shell confirmed branch
+`feature/wizard-modular-phase1-20261014`, exact **local** HEAD
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c`, and an empty
+`git status --porcelain=v1 --untracked-files=all`. This closes the
+prior ambiguity about the on-host source SHA for the newly executed
+read-only `provenance`/`references` CLI **at the time of this audit**;
+it is not a claim that the host has the later docs-only GitHub HEAD.
+
+Exact printed outcome:
+
+```text
+UNINSTALL_REFERENCES=READ_ONLY_NO_DELETION
+REFERENCE_AUDIT_RESULT=NO_OBSERVED_CONFLICTS
+PROJECT_CONTAINER_COUNT=8
+TOTAL_DOCKER_CONTAINERS=11
+EXTERNAL_CONTAINER_COUNT=3
+PROJECT_IMAGE_COUNT=7
+CANDIDATE_VOLUME_COUNT=0
+EXTERNAL_REFERENCE_CONFLICTS=0
+OTHER_IMAGE_TAG_ALIASES=0
+REFERENCE_AUDIT_IS_NOT_OWNERSHIP_AUTHORIZATION=1
+DGX_REFERENCE_AUDIT=COMPLETE
+```
+
+This independent maintained source probe repeated the earlier
+owner-written 11-container external-reference assessment and added
+explicit **zero project-named/labeled candidate volumes**, with the
+same bounded lack of conflicts and aliases. No observed foreign
+Docker container used a candidate image ID, volume or scoped bind
+path under this point-in-time audit. **The three external containers
+were inspected, not removed.**
+
+This is a bounded `NO_OBSERVED_CONFLICTS` result, *not*
+proof of exclusive ownership, absence of arbitrary host-process
+file users, ownership of all Hugging Face cache entries or complete
+absence of foreign data in recursively considered roots. Both
+OrcaRouter and mazinb remain `owned=False`; all seven current
+image tags remain `UNVERIFIED` as assessed by the project inventory.
+`full-project-uninstall.py` must continue to block a complete plan
+until independently evidence-bound historical ownership authorization
+is designed, reviewed, tested and separately approved.
+
+**Evidence classification:** DGX `READ_ONLY` probe completed;
+model `provenance` result remains
+`CONSISTENT_METADATA_NOT_OWNERSHIP`; physical destructive M2
+`NOT_RUN/NOT_QUALIFIED`. There was no DGX deletion, service
+change, model execution, registry ownership promotion, swap change
+or PR Ready/Merge. Historical manual references proof is retained
+as separate, earlier evidence. This documentation update itself
+does not update the operator's local checkout.
+
+---
+
+## 2026-10-20 — ACTUAL DGX `provenance` metadata and pinned revision check (no deletion authorization)
+
+Owner-pasted **actual physical DGX** command
+`python3 -B scripts/lifecycle/uninstall-inventory.py provenance`
+reported `MODEL_PROVENANCE=READ_ONLY_METADATA_NO_MODEL_CONTENT_HASH`,
+`MODEL_PROVENANCE_RESULT=CONSISTENT_METADATA_NOT_OWNERSHIP` and
+`PROVENANCE_IS_NOT_DELETION_AUTHORIZATION=1`, with **no per-model issues
+printed**. This is the first observed on-host execution of the newer
+`provenance` action; earlier read-only execution on the old checkout
+had correctly rejected the unsupported command (`plan`, `verify`
+only). The owner also reported an unchanged clean worktree on feature
+branch `feature/wizard-modular-phase1-20261014` at old local HEAD
+`b0ef37f9b756a86cc3670691e98a0b0798984d51`, correct origin
+and tracking branch, and read-only remote head
+`35536609f3f971f84f63cbc1c4596a7dfbcd887c` *before*
+the successful `provenance` invocation. **The exact local Git HEAD
+after source synchronization was not printed**, so do not claim an
+actual exact-SHA local update, merely that the newer CLI was executed.
+
+| Physical marker/registry evidence | mazinb | OrcaRouter |
+|---|---|---|
+| model repository | `mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4` | `orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4` |
+| pinned marker revision | `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f` | `c1209bda15a6bbc4c68b585e93d40c0d85f50306` |
+| registry matches / owned / state | `1 / False / ready` | `1 / False / ready` |
+| inventory ownership | `UNVERIFIED` | `UNVERIFIED` |
+| marker status / recorded fingerprint | `complete / matches=True` | `complete / matches=True` |
+| listed files / present regular files | `108 / 108` | `30 / 30` |
+| unknown size entries | `0` | `0` |
+| files with provided SHA256 / content hashes verified | `97 / 0` | `20 / 0` |
+
+The marker file SHA256 values remain the previously measured exact
+registry fingerprints (`996eb79378ab09160e119951b7e089b3ad32f8db718c943f84f7233580ef431c`
+for mazinb and
+`3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`
+for OrcaRouter). Both `repository` strings and `revision` values
+match the source definitions in `scripts/model/model-profiles.sh`,
+but this is **source-to-host metadata alignment**, not a remote Hub
+attestation or complete weight integrity verification. The bounded
+probe checked the existence/type of **138/138** listed files and
+available expected sizes; **0/117** supplied file-content SHA256 values
+were recalculated. There is no evidence of exclusive project ownership
+or foreign-file independence from these metadata checks. Preserve
+both `owned=False` records, shared HF/FlashInfer caches and all
+current assets; no delete `apply`, Wizard 2 -> 5, Docker cleanup,
+service/GPU changes or M2 host trial is authorized. Next gate:
+independent historical asset exclusivity evidence and a reviewed,
+fail-closed exact-identity approval design, including seven unowned
+image candidates and project-specific cache candidates.
+
+**Evidence boundary:** actual DGX `provenance` **READ_ONLY PASS** for
+metadata consistency; full model content hashes **NOT_VERIFIED**;
+exclusive ownership **NOT_PROVEN**; destructive M2 **NOT_RUN**.
+The new GitHub documentation commit is source-only, not additional
+physical DGX validation.
+
+---
+
+## 2026-10-20 — ACTUAL DGX OrcaRouter and mazinb model marker schema/fingerprint read-only proof
+
+Operator read-only inspection re-confirmed the **physical DGX checkout**
+remains `b0ef37f9b756a86cc3670691e98a0b0798984d51`, with
+`git status --short` producing no changes. Both
+`checkout/models/qwen3.8-flash-next-orcarouter` and
+`checkout/models/qwen3.8-flash-next-mazinb` are present real
+directories, **not symlinks**. Each has exactly one
+`asset-ownership.json` model entry with `owned=False`,
+`state=ready`. Each has the real `.qwen38-model-manifest.json`
+marker; the SHA256 of its marker matches the corresponding
+cumulative registry fingerprint **exactly**:
+
+- OrcaRouter marker / registry:
+  `3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`
+- mazinb marker / registry:
+  `996eb79378ab09160e119951b7e089b3ad32f8db718c943f84f7233580ef431c`
+
+Both actual JSON markers have exactly the top-level field keys
+`files`, `repository`, `revision`, `schema_version` and
+`status`. The operator intentionally printed **only the field
+names**, not their values. Therefore repository/revision, marker
+`status=complete`, file entries and actual checkpoint file sizes
+remain **NOT_OBSERVED**. In the source implementation,
+`scripts/download-weights.sh` writes this marker from pinned
+remote metadata, while `scripts/lib/asset_ownership.py` fingerprints
+the **marker file**, not the complete checkpoint weight contents.
+The matched marker is strong identity continuity evidence,
+**not ownership promotion or a complete checkpoint hash check**.
+Do not convert these `owned=False` records to `owned=True`
+without independent provenance and reviewed consent.
+
+**SOURCE_ONLY subsequent work:** the existing read-only
+`uninstall-inventory.py` now has a `provenance` action for
+bounded model marker/registry/file-size review with synthetic
+negative tests. It does not hash model weight contents or grant
+deletion authority. The actual DGX has not executed this action
+and still runs the older checkout. Destructive M2, menu 5, local
+Git synchronization and PR #261 merge remain NOT_RUN/blocked.
+
+## 2026-10-20 — ACTUAL DGX unfiltered Docker external-reference check: 11 total, 3 external, no scanned conflicts
+
+New owner-pasted read-only physical DGX command executed the old
+checkout's `uninstall-inventory.py plan --json`, collected the
+**eight** present project-associated exact Docker IDs and **seven**
+present project image tags, resolved the seven live Docker image
+IDs, and enumerated the entire Docker container list via
+`docker ps -a --no-trunc`. It then queried every *nonproject*
+container with `docker inspect` for exact image-ID overlap and
+selected host bind-path ancestor/descendant overlaps. Finally
+`docker image ls --no-trunc` checked for other image tags
+sharing one of the seven target image IDs.
+
+Observed exact printed outcomes:
+
+    PROJECT_CONTAINER_COUNT= 8
+    TOTAL_DOCKER_CONTAINERS= 11
+    EXTERNAL_CONTAINER_COUNT= 3
+    EXTERNAL_REFERENCE_CONFLICTS= 0
+    OTHER_IMAGE_TAG_ALIASES= 0
+    CHECK=READ_ONLY_COMPLETE
+
+No external match was printed by this **particular scoped probe**.
+Its inspected file roots were checkout/models, checkout/model,
+checkout/docs/model-reports/evidence,
+checkout/scripts/benchmark/evidence,
+project state and data roots, three named dedicated vLLM/FlashInfer
+runtime caches, and external project benchmark-results directory.
+It did **not** inspect arbitrary open processes, all possible
+additional model roots (e.g. `$HOME/models`), individual shared HF
+cache candidate entries, every possible Docker named-volume
+dependency, or future changes after the scan. It did **not**
+emit the names/IDs of the three external containers or prove
+exclusive ownership of any `owned=False` image/model.
+`EXTERNAL_REFERENCE_CONFLICTS=0` is therefore a bounded
+**absence-of-observed-conflict** result, not blanket safe-to-delete
+authorization or M2 qualification.
+
+The source-only full-reset `scan()` still blocks all present
+unverified model and image candidates on the positive provenance
+guard before it can reach its own Docker dependency preflight.
+Next: independent model-marker and historical image provenance
+review, using a maintained read-only source inspection route;
+preserve shared caches and the separate physical DGX consent
+boundary. No DGX deletion, Git checkout update, GPU trial,
+service/swap change, or PR merge was part of this check.
+
+## 2026-10-20 — ACTUAL DGX 8-container exact Docker inspect and seven image identities
+
+Owner-pasted **read-only physical DGX** output from
+`uninstall-inventory.py plan --json` plus exact `docker inspect`
+and `docker image inspect` confirmed **8/8 discovered container
+IDs**, all `State.Running=False` and `Status=exited`; four have
+exit code `137` and four have exit code `0`. Names/identities and
+selected bind mounts:
+
+| Exact full container ID | Name | Exit | Image tag / model source |
+|---|---|---:|---|
+| `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1` | qwen38-ab-v029 | 137 | vllm-orcarouter-v029:v1 / OrcaRouter model |
+| `57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56` | qwen38-ab-legacy | 137 | vllm-skinny-tp1:v1 / OrcaRouter model |
+| `5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445` | qwen38-h38-deterministic-v029 | 0 | vllm-orcarouter-v029-h38-decoder-scope:v1 / checkout/model symlink |
+| `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7` | qwen38-mazinb-m1-20261019065452-e70d6233 | 137 | vllm-orcarouter-v029:v1 / mazinb model |
+| `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424` | qwen38-mazinb-m1-20261019043708-479dfc86 | 0 | vllm-orcarouter-v029:v1 / mazinb model |
+| `918974a9e4edd03a8566b5a42527e372cd435a155f74362a1424e5420737f030` | qwen38-orca-v029-r22 | 0 | vllm-orcarouter-v029:v1 / OrcaRouter model |
+| `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8` | qwen38-mazinb-m1-20261019221159-90ee9851 | 137 | vllm-orcarouter-v029:v1 / mazinb model |
+| `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24` | qwen38-flash-next | 0 | vllm-skinny-tp1:v1 / OrcaRouter model |
+
+**All seven experiment containers** have project-specific
+`qwen38.*` labels; the **unlabeled legacy canonical**
+`/qwen38-flash-next` has a read-only `/model` bind to the
+exact active OrcaRouter `MODEL_DIR`, as shown by the earlier
+managed manifest. Its additional `/root/.cache/flashinfer`
+bind is sourced from **shared** `/home/inlc/.cache/flashinfer`,
+not a project-specific cache to remove. AB trial and mazinb M1
+private cache binds are within project state, and H38/R22 use
+dedicated `~/.cache/*-v029` paths. The H38 container's `/model`
+bind uses `checkout/model` (an independently measured symlink to
+the OrcaRouter checkpoint), not an external checkpoint.
+
+The seven current image tag → exact live image-ID relationships are:
+
+- `vllm-skinny-tp1:v1` → `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4` (no project image labels)
+- `vllm-orcarouter-v029:v1` → `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`
+- `vllm-orcarouter-v029-h38-decoder-scope:v1` → `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`
+- `vllm-orcarouter-v029-r25-init-marker:v1` → `sha256:9abb228a5a4c232d20bf38e33a806f15d4bf62ff61128502349fdf39d70e3a9e`
+- `vllm-orcarouter-v029-r26-construction-marker:v1` → `sha256:568d0ac6917b324eef6c29e5f06b0a1ba182b5db043052b13296fe7d3c5428aa`
+- `vllm-orcarouter-v029-r27-linear-marker:v1` → `sha256:e9e92c5cb98d443a8410f21345cb0e07c30c9e7c84516cedcc2a6dc213934119`
+- `vllm-orcarouter-v029-r28-unquant-linear-marker:v1` → `sha256:54c1ae1ba05fc34ec10881db4e5a333895eebf5472a5d282fefa354fe39a762f`
+
+All six v0.29-derived images have `qwen38.*` build labels;
+the legacy skinny image has none. The R25–R28 image tags are
+**present** but are not shown as in use by the eight inspected
+containers. This scan does **not** prove that no other/nonproject
+container uses those image IDs or binds project files; an unfiltered
+full Docker reference check remains necessary. It also does not
+prove image/model exclusive ownership, despite exact tag/ID and
+manifest/registry agreement. The observed `137` codes do not
+resolve prior NVIDIA RM/kill cause, and no service/API READY proof
+is implied. No Docker/container/image/model removal or GPU start
+was performed.
+
+**Additional SOURCE_ONLY hardening:** canonical unlabeled Docker
+candidate `/qwen38-flash-next` now requires its unique read-only
+`/model` bind's exact `Source` to equal the strictly parsed
+active managed manifest `MODEL_DIR`, and that exact model to be
+visible in the bounded inventory. A similarly named foreign model
+directory or writable/mismatching mount is blocked; previous
+project-label checks for experiment containers remain. Added
+synthetic foreign-path preservation tests; host destructive M2
+still NOT_RUN and no consent to apply. GitHub PR #261 remains
+Draft/Open/unmerged.
+
+## 2026-10-20 — ACTUAL DGX complete-reset read-only inventory: 8 containers, 7 unowned images, 2 models, PLE swap
+
+Owner-pasted **physical DGX**, on the earlier reported clean feature-branch
+checkout (`b0ef37f9b756a86cc3670691e98a0b0798984d51`; no newer
+physical HEAD printed), executed
+`python3 -B scripts/lifecycle/uninstall-inventory.py plan`.
+It printed `UNINSTALL_AUDIT=READ_ONLY_NO_DELETION`,
+`UNINSTALL_AUDIT_VERIFICATION=NOT_PERFORMED`, and
+`UNINSTALL_APPLY=NOT_IMPLEMENTED_IN_AUDITOR`, with no
+`INVENTORY_ISSUE` lines. **No plan receipt, Docker mutation, or deletion.**
+The scan's project-related container candidates had these exact 64-hex IDs
+(names/labels are not in this inventory excerpt; independently check before
+any mutation):
+
+- `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`
+- `57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`
+- `5991fa8d3ef0def984f82ef069dbf651a33adba35613137b322aa0b733588445`
+- `68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`
+- `82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`
+- `918974a9e4edd03a8566b5a42527e372cd435a155f74362a1424e5420737f030`
+- `bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`
+- `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+
+Exactly **7 present Docker image-tag candidates** were all
+`ownership=UNVERIFIED`: `vllm-skinny-tp1:v1`,
+`vllm-orcarouter-v029:v1`,
+`vllm-orcarouter-v029-h38-decoder-scope:v1`, and the
+`vllm-orcarouter-v029-r25-init-marker:v1`,
+`r26-construction-marker:v1`, `r27-linear-marker:v1`,
+`r28-unquant-linear-marker:v1` variants (each with the full
+`vllm-orcarouter-v029-` prefix).
+**Two present model directories** were `UNVERIFIED`:
+`checkout/models/qwen3.8-flash-next-orcarouter` and
+`checkout/models/qwen3.8-flash-next-mazinb`; the separate
+`checkout/model` link was `UNSAFE_SYMLINK`.
+Project state/data, forensic archives and checkout evidence, three
+dedicated vLLM/FlashInfer caches, and the dedicated `/swap-ple.img`
+(`INSTALLER_OWNED` with matching fstab registration) were present.
+The shared HF root and shared `~/.cache/flashinfer` remained excluded.
+Project data `current` and `previous` release pointers appeared
+as `release: UNSAFE_SYMLINK` inside the **owned data root**.
+
+The registry independently printed four `owned=True`, `state=claimed`,
+empty-fingerprint image *records* (`h9-ct-modelweight`,
+`h10-ct-global-scale`, `h11-ct-packed-modelweight`,
+`h12-ct-postload-preserve`), **not proof of existing images**.
+Three `owned=False`, `state=ready` records include
+`vllm-orcarouter-v029-h38-decoder-scope:v1`
+(ID `sha256:412d407c76c55fe4411825f34ea3e843933d6d38780bedacb3e69688dc5e5cdc`),
+`vllm-orcarouter-v029:v1`
+(ID `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`),
+and `vllm-skinny-tp1:v1`
+(ID `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`).
+The exact live `docker image inspect vllm-skinny-tp1:v1` ID
+**matches** its unowned registry entry. Generic NVIDIA/vLLM/Ubuntu
+image labels were printed, **not a Qwen project ownership attestation**.
+
+A scoped `docker ps -a --filter ancestor=vllm-skinny-tp1:v1`
+showed `qwen38-ab-legacy` (exact
+`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+`Exited (137)`) and `qwen38-flash-next` (exact
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+`Exited (0)`). Six other candidate names/states and their exact labels/mounts
+remain **NOT_OBSERVED in this output**, as do external-container
+references for other images and model directories.
+
+**Confirmed SOURCE_ONLY gap revealed by physical inventory:** the
+full-reset `scan()` treats `release: UNSAFE_SYMLINK` as unsafe before
+its later state/data-root skip, even though normal managed release
+`current`/`previous` are symlinks. A separate code/test change now
+identity-binds those exact two canonical release pointers without
+following targets; release links outside the project release root
+or changed since the plan remain blocked. This is not DGX validation.
+The pre-existing positive-ownership gate continues to block all
+seven unowned image candidates and two unowned models before apply.
+No assumption that a matching ID implies exclusive project ownership.
+
+Next: read-only full-ID Docker inspect (names, project labels, exact
+images, mounts, running state), model-marker/dependency review and
+project/foreign image reference classification. No ownership flag edits,
+blind `git pull`, `docker prune`, apply/menu 5, M2 claim, or PR merge.
+PR #261 remains protected Draft until independent approval.
+
+## 2026-10-20 — ACTUAL DGX OrcaRouter model target and non-owned registry fingerprint verified
+
+New owner-pasted **read-only physical DGX** output resolves the target-presence
+unknown from the earlier `checkout/model` symlink receipt. On the
+`feature/wizard-modular-phase1-20261014` physical checkout previously measured
+at `b0ef37f9b756a86cc3670691e98a0b0798984d51` (no subsequent physical
+Git sync reported), `models/qwen3.8-flash-next-orcarouter` is an **existing real
+directory** (`stat -L model`: device `66306`, inode `12061870`); the
+previously confirmed `model` link itself had device `66306`, inode
+`12097904`. The Python inspection also reported
+`TARGET_EXISTS=True`, `TARGET_IS_DIR=True`, and
+`TARGET_IS_SYMLINK=False` **for the resolved target**, not for `model`.
+
+The current managed `install.env` reports
+`MODEL_DIR=/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-orcarouter`,
+`MODEL_OWNED=0`, `VLLM_IMAGE=vllm-skinny-tp1:v1` and
+`IMAGE_OWNED=0`. The cumulative asset-ownership registry has exactly
+**one** matching OrcaRouter **model** entry:
+`owned=False`, `state=ready`, root
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models`,
+fingerprint `3c1cb3a9082801d23c4d7cd14bfe3f30cba900b43fd32d3619e59328fcbd6389`.
+The actual
+`.qwen38-model-manifest.json` SHA256 is **identical** to that registered
+fingerprint. This establishes project association and matching recorded
+model-marker identity, **not exclusive ownership or permission to remove**.
+The model weight files, contents of the marker, image registry record/current
+Docker image ID, foreign bind mounts, and overall deletion scope remain
+**NOT_OBSERVED** by these commands.
+
+Source-only full reset HEAD as last reviewed still intentionally blocks
+present models/images marked `UNVERIFIED`: the physical model's
+`owned=False` means a current-source `plan` would be expected to hit
+`candidate_ownership_not_proven:model:...` if no other blocking candidate
+or anomaly is encountered earlier. This is a **prediction from physical
+ownership data and source logic**, not a physically run updated plan.
+Do **not** change `MODEL_OWNED`, `IMAGE_OWNED` or registry `owned`
+to bypass verification. Complete project removal remains the owner's goal,
+but project-exclusive provenance and third-party dependencies must be
+reconciled first. No DGX fetch/pull, Docker command, deletion, receipt
+generation, or M2 qualification was performed by the supplied inspection.
+PR #261 must stay Draft/unmerged, and destructive Wizard menu 5 remains HOLD.
+
+## 2026-10-20 — ACTUAL DGX checkout/model symlink identity and local checkout SHA
+
+New owner-pasted **read-only physical DGX** command output established:
+
+- checked-out branch `feature/wizard-modular-phase1-20261014`;
+- `git rev-parse HEAD=b0ef37f9b756a86cc3670691e98a0b0798984d51`;
+- `git status --short` printed no entries (clean worktree at observation);
+- `model` is **actually a symbolic link**, not merely an inferred
+  `UNSAFE_SYMLINK`, with raw absolute link destination
+  `/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-orcarouter`;
+- `stat -c` reported symbolic link, device `66306`, inode `12097904`
+  (link entry only; destination inode/type/presence NOT_OBSERVED).
+
+Live remote GitHub verification showed branch and Draft/Open/unmerged PR #261
+at `97a7db92095ce34b622ee5c7140e6bf46953125b`, initially **18
+commits ahead** of the physical checkout, **0 behind**, with both Push and PR
+CI SUCCESS for that exact remote SHA. This is a GitHub-only comparison, not
+physical code synchronization. The local `b0ef37f9` version predates the
+dedicated `legacy_model_link_identity` source change; latest remote source
+can represent the exact link as `legacy-model-link`, but a live destination
+must also have independently verified model ownership. The target directory's
+presence, managed registry attribution/fingerprint, and full project asset
+inventory are NOT_OBSERVED. No fetch/pull, model deletion, Docker mutation,
+plan receipt creation, GPU run, or M2 execution is evidenced by the new
+read-only commands. A separate scoped sync review and further read-only
+target/registry checks remain necessary; **menu 5 remains prohibited**.
+
+## 2026-10-20 — ACTUAL DGX uninstall Wizard preflight, phase=complete baseline
+
+Owner-pasted DGX Wizard output (operator session; latest visible local
+observation before this handoff) shows `Manifest: valid (phase=complete)`,
+`Profile: orcarouter`, `Image: vllm-skinny-tp1:v1`, and
+`Runtime: NOT_PROBED`. Main Wizard displayed uninstall submenu
+1–6, including SHA-bound full reset plan/apply/postcheck.
+The operator selected **Uninstall -> 5** with no prior saved receipt;
+the Wizard refused with `A saved exact plan receipt is required`.
+No apply/mutation occurred.
+
+Then the owner selected **Uninstall -> 4**, answered `y` to
+the read-only receipt-generation prompt, and hit the exact
+`checkout/model` path preflight block documented below.
+The empty/unsuccessful plan receipt was removed by the Wizard;
+subsequent `PLAN_NOT_FOUND` was observed. Owner exited with
+`Ctrl-C`. **No destructive command is shown or inferred.**
+The actual DGX `git rev-parse HEAD`, local
+`checkout/model` file type and symlink destination, the exact
+project asset inventory, and all image/container/runtime live
+states after the prompt are **NOT_OBSERVED** in this output.
+Do not infer host checkout HEAD from the separately verified
+GitHub remote feature branch.
+## 2026-10-20 — ACTUAL DGX full-reset plan blocked on legacy checkout/model
+
+Owner selected Uninstall -> 4, entered `y` for read-only SHA
+plan creation; engine returned
+`resource_status_not_safely_present:model:/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/model`.
+The receipt was not created (`PLAN_NOT_FOUND` independently
+observed). No delete operation was invoked. Actual `model` file
+type/target has **not** been physically printed.
+
+GitHub SOURCE_ONLY fix introduces exact `checkout/model` link-only
+plan/application treatment with full target text/inode checks and
+requires a live pointed-at model to also be within the enumerated
+project model set; refuses foreign/untracked linked targets.
+Read-only DGX `ls -ld model; readlink model; stat -c '%F %d %i' model`
+is required to establish this specific host preflight result.
+No DGX mutations, M2 acceptance or protected PR merge.
+
+## 2026-10-20 — integrated full project uninstall engine, GitHub SOURCE_ONLY
+
+Created `scripts/lifecycle/full-project-uninstall.py` with bounded
+read-only SHA-bound plan, exact-ID/full-fingerprint `apply`, and
+independent post-removal project-scoped verification. Added Wizard
+uninstall options 4/5/6, dedicated vLLM/FlashInfer v0.29 cache
+inventory, and standalone synthetic safety/teardown fixture cases.
+Model weights, first/second/third mazinb R2 Docker, protected
+OrcaRouter, owned services/proxy, PLE swap, local benchmark and
+forensic files are all part of the eventual full-reset plan,
+**not protected retention exceptions**.
+
+Safeguards include managed unit marker validation, full Docker ID
+and experiment labels, canonical project mount verification, image
+ID identity, foreign image/volume/bind references, strict scoped
+filesystem trees, no symlink following, transition refusal, lock
+inheritance for managed service deletion, exact SHA receipt plus
+typed consent, and no generic prune. Plan generation and fixture
+testing do not mutate the DGX.
+
+**Operational status: SOURCE_ONLY; no actual DGX command run; M2
+destructive host E2E NOT_RUN/NOT_QUALIFIED.** The current physical
+checkout is not assumed to match GitHub. CI outcome must be tied
+to exact HEAD separately. PR #261 must remain Draft/unmerged.
+
+## 2026-10-20 — ACTUAL DGX R2 Stage K: second/third named RM classification and Docker startup evidence
+
+New operator-pasted physical evidence resolves the previously missing
+**third named-journal detail**. Both second and third R2 named JSONs show
+`phase=failed_stopped`, `exit_code=137` and
+`detail=M1Error: NVIDIA RM memory allocation error`. The matching
+full Docker IDs were independently label-checked and reported
+`STATUS=exited RUNNING=false OOM=false EXIT=137`.
+Two monitor extracts reported `STOP_MARKER=ABSENT_OR_UNSAFE`,
+warnings consistently `protect=0/5`, and monitor termination only
+after the Docker was no longer running. These outputs do not prove
+how SIGKILL was delivered. Host kernel RM/oom lines remain
+**NOT_OBSERVED**: both sudo journal queries required a password.
+
+Third Docker showed 95/95 checkpoint shards, 79.42 GiB model
+load, 16.0 GiB KV cache, finished CUDA graph capture and engine
+initialization at 2026-10-20 07:24:54 KST; Docker finished
+2026-10-20 07:25:14 KST. This is **not API READY** and no
+third-run inference, smoke, 180s soak or new benchmark was demonstrated.
+First R2 READY/smoke/soak PASS remains separately valid.
+
+These are owner-provided DGX console observations, not assistant
+host execution or proof of container-attributed kernel RM failures.
+[Full exact logs and provenance (Stage K)](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+Owner's complete-uninstall scope now includes OrcaRouter, all R2
+containers/model, swap, service/proxy and *local forensic journals
+and archives*; generic `--purge-all` remains insufficient.
+Do not launch a further GPU trial or destroy assets before the
+exact-ID, shared-dependency and bounded source-only cleanup process
+is implemented and separately approved. M2 remains NOT_RUN.
+
+## 2026-10-20 — owner complete-reset scope explicitly includes protected OrcaRouter and R2 evidence
+
+The owner confirmed that complete project removal MUST delete OrcaRouter,
+all mazinb R2 experiment Docker and model assets, other project
+NVIDIA/Hybrid checkpoints, project swap, service/proxy, state/releases,
+and all locally retained forensic journals, private archives, and benchmark
+results. No protected-project-asset exemption applies in complete mode.
+
+Read-only inventory now additionally covers HOME/models, checkout/models,
+external benchmark root, retirement archives, repo-local evidence, and
+project-specific HF checkpoint caches. Synthetic exact-ID fixtures include
+the OrcaRouter predecessor and all three known mazinb R2 trial Docker IDs.
+These are inventory candidates, not hardcoded deletion IDs. External apps,
+system swap, drivers and remote GitHub history remain outside local reset.
+Complete destructive apply remains NOT_IMPLEMENTED; M2 remains NOT_RUN.
+No physical DGX change was performed.
+
+## 2026-10-20 — SOURCE_ONLY full-project uninstall inventory in Wizard; destructive M2 blocked
+
+After reviewing the actual `uninstall.sh`, managed service/proxy/swap
+helpers, cumulative ownership rules and retained R2 records, a separate
+**read-only** full-project removal coverage module was added at
+`scripts/lifecycle/uninstall-inventory.py`. Main Wizard **2. Uninstall**
+now separates **1. Project asset inventory (read-only)**,
+**2. Existing managed uninstaller (separate confirmation)** and
+**3. Baseline-bound post-removal verification (read-only)**. The existing destructive
+uninstall is unchanged; no blanket full-project deletion action was added.
+
+Source scope: strict manifest and cumulative registry parsing; owned versus
+unverified checkpoint/image reporting; project-model and state/release
+enumeration including stopped R2 journals; project-named/labelled exact-ID
+Docker containers and tagged images/volumes; systemd unit files plus
+LoadState/ActiveState; PLE swap file plus exact fstab marker; and explicitly
+excluded shared HF cache/system Docker and non-project resources.
+The module never creates/stops/removes Docker, downloads models, changes
+services/swap, or writes its own files. JSON plan + same-scope baseline
+verification are available; **no observed residual within bounded scope**
+is not a claim of complete OS factory restoration.
+
+Synthetic tests `tests/test_uninstall_inventory.py` cover fail-closed
+registry/manifest anomalies, Docker ID, resource provenance, unit/swap/volume
+inventory, baseline residual detection, limited clean-postcheck and unknown
+data. Documentation: [project uninstall coverage](PROJECT-UNINSTALL-COVERAGE.md).
+Actual protected DGX was **NOT TOUCHED**; no physical pre/post removal
+has been verified. **M2 destructive end-to-end remains NOT RUN**, and
+historical five/17 exact-ID retirement code must never be reused for
+new R2 trials. Complete project cleanup still needs per-asset ownership,
+archive-before-retire, independent approvals and disposable-host acceptance.
+PR #261 remains protected Draft (no Ready/Merge authorization).
+
+## 2026-10-20 — SOURCE_ONLY mazinb R2 first-READY versus third-trial runtime file parity
+
+GitHub read-only comparison of the physically reported source SHA for the
+first successful R2 API/180-second soak/inference-smoke trial
+(`4612045c11ce47e52606794d63daede4cb35ac82`) and the last
+physically printed DGX checkout SHA during third-trial diagnosis
+(`f24fa284ba51000ece317227df26ff32e6f24ecd`)
+shows identical Git blob contents for:
+
+- `scripts/runtime/mazinb-m1.py` — blob `60b2ebf1105ffcd47b373c16b57df8461ab30a8e`;
+- `scripts/runtime/monitor-runtime.sh` — blob `017451b75b69da00bb10d9aec591a161a56862dc`;
+- `scripts/serve.sh` — blob `b6cd92b1bd58160576624d9c645528fe80af450d`.
+
+`scripts/wizard/benchmark-menu.sh` **did** change between those
+commits (Wizard route/UI changes require separate review). The GitHub
+compare places the third physical checkout 56 commits ahead of the first,
+without changes to the three runtime files named above. This is
+**GitHub SOURCE_ONLY file parity**, not an attestation of the exact
+runtime checkout at second-trial launch, image binary, memory/swap
+trajectory, model cache or driver state. The second trial's physical
+source SHA was not captured. It reduces support for a direct regression
+in those three files but does **not** establish a failure root cause.
+
+The actual Stage J state still stands: third trial `failed_stopped`,
+Docker exited with code 137 and `OOMKilled=false`; second trial's
+host-wide RM classifier matched, but original kernel lines and third
+named-journal `detail` remain **NOT_OBSERVED**. Next step remains
+**read-only**, bounded exact-trial journal, monitor, Docker and kernel
+correlation; no further GPU attempt or runtime/threshold change.
+[Original physical evidence Stage H–J](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+## 2026-10-20 — ACTUAL DGX third mazinb R2 failed_stopped, exact Docker exited/retained; RM cause pending
+
+**New owner-pasted physical DGX read-only evidence, superseding only
+the older Stage I `M1_RUNNING=True` *point-in-time snapshot*.**
+The third separately identified candidate
+`qwen38-mazinb-m1-20261019221159-90ee9851`,
+exact Docker ID
+`bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+now returned `M1_SESSION_PHASE=failed_stopped`,
+`M1_RUNNING=False`, `M1_EXIT_CODE=137`,
+`M1_DOCKER_REMOVED=NO`. Exact Docker inspect:
+`STATUS=exited RUNNING=false OOM=false EXIT=137`.
+Process inspection (`pgrep -af 'mazinb-m1.py|monitor-runtime.sh'`)
+returned no supervisor/watchdog at that observation.
+The script's identity-bound manual-stop guard appropriately
+printed `STOP_NOT_PERFORMED_IDENTITY_OR_STATE_MISMATCH`
+because the exact labeled candidate had
+`Running=false` already. **No additional stop required.**
+
+**Third trial monitor tail 2026-10-20 07:17:50–07:25:14 KST:**
+recurrent `noncmafree` ~0.9–2.0 GiB, high but decreasing
+`noncma_available` (low 17,240 MiB, 07:24:58),
+cumulative `swapgrowth` up to 3,482 MiB
+(07:23:12) and `swapfree` ≈142,945 MiB.
+Lowest displayed `noncmafree=899MiB` (07:24:37)
+occurred at a **different timestamp** from lowest
+available. Warnings consistently show
+`protect=0/5` and the final line at
+07:25:14 was `container is no longer running;
+monitor exiting`, with no `PROTECT stopping`
+in the **provided 35-line tail**. Source policy
+gates low-free + swap-growth protection on
+`noncma_available<12GiB`; displayed available
+was above that. Do **not** infer from this fragment
+that the watchdog itself sent SIGKILL or that
+no earlier stop event occurred. Docker exit 137
+indicates SIGKILL; `OOMKilled=false` does not
+disprove NVIDIA RM allocation failure or prove a
+particular terminator. Third-trial failure
+`detail`, full monitor record, kernel RM events
+and Docker logs remain **NOT_OBSERVED**.
+
+**Second R2 failed trial retained per-trial journal
+independently read and validated** (do not consult
+the rolling third-trial `active.json` for it):
+`~/.local/state/qwen38-spark/mazinb-m1-reinstall/
+qwen38-mazinb-m1-20261019065452-e70d6233.json`;
+exact Docker ID
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+`phase=failed_stopped`,
+`detail=M1Error: NVIDIA RM memory allocation error`,
+`exit_code=137`,
+`kernel_since=2026-10-19 15:54:52`,
+`started_at=2026-10-19T06:54:52.735564+00:00`,
+`updated_at=2026-10-19T07:04:33.845050+00:00`.
+The `kernel_since` parameter uses local host-wall-clock
+time (KST). The code checks **host-wide**
+`journalctl -k` for `NV_ERR_NO_MEMORY` or
+`_memdescAllocInternal` after the recorded instant;
+the actual kernel lines and attribution have **not
+been provided**. `failed_stopped` is a protected
+failure, not successful benchmark admission.
+
+**Current objective is forensic attribution, not another
+benchmark/reinstall or model change.** Both newer
+failed trial Docker objects and exact per-trial
+journals are preserved. First R2 trial still
+independently proved `M1_READY_FOR_BENCH`,
+180-second soak and inference smoke PASS and
+stopped normally, **but R2 throughput remains
+NOT_MEASURED** across all three trials.
+Pinned `llama-benchy 0.4.1.dev1+ge9be34457`
+has been installed on the actual host, no longer
+a current blocker. Exact latest physically printed
+checkout SHA was
+`f24fa284ba51000ece317227df26ff32e6f24ecd`
+(2026-10-20 first diagnosis), not the newer
+GitHub documentation-only HEAD.
+
+**Next safe order:** only read per-trial named
+`qwen38-mazinb-m1-20261019221159-90ee9851.json`
+to obtain actual third `detail/kernel_since`
+and exact-ID `monitor/runtime-stop.env` if present;
+capture **bounded** matching NVIDIA kernel lines
+for both second and third exact time windows;
+read only relevant tail of each
+`monitor.log` and `docker logs` plus exact
+Docker `FinishedAt/OOMKilled/ExitCode`.
+Correlate timestamps and distinguish NVIDIA RM,
+Linux OOM, watchdog protect, controller stop
+and SSH/session failure **without inventing
+causality**. No changes to watchdog/KV, swap,
+cache, GPU runtime, Docker, systemd, protected
+OrcaRouter or DGX source before forensic
+classification. Never use `set -e`/`exit 1`
+inside SSH read-only diagnostic copy/paste
+where a mismatch would log out the operator.
+Do not restart the model or measure benchmark
+until a separately approved corrective action.
+
+[Physical immutable evidence Stage I and
+newer Stage J](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+The older Stage I running snapshot remains in history
+but is no longer the latest known host state.
+
+## 2026-10-20 — ACTUAL DGX unexpected active THIRD R2 candidate during RM forensic commands; SSH logout
+
+Owner's DGX console, operating clean local HEAD
+`f24fa284ba51000ece317227df26ff32e6f24ecd`,
+attempted read-only postmortem on Stage H second
+failed R2 Docker
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`.
+However the rolling `mazinb-m1-reinstall/active.json`
+now identified a **THIRD** trial:
+`M1_SESSION_PHASE=started_unqualified`,
+`M1_SESSION_NAME=qwen38-mazinb-m1-20261019221159-90ee9851`,
+`M1_CONTAINER_ID=bee2e3819b7c2fef595357b61ea23934dd8969215a7fe2b957678bbf98eb1dd8`,
+`M1_RUNNING=True` (only at sampled instant).
+The new trial name timestamp is 2026-10-20
+07:11:59 Asia/Seoul. No user report of
+approval/READY/new smoke/RM safety/STOP/benchmark
+for this third trial was included. Do **not** assume
+the controller is still running after SSH logout.
+
+A pasted shell diagnostic matched active journal against
+the **second trial** ID/name; mismatch correctly produced
+`WRONG_TRIAL_RECORD`. Because the user's command ended
+in `|| exit 1`, the subsequent `로그아웃` / SSH
+disconnect may simply be the interactive shell exiting.
+This log is **not** proof of DGX reboot/host crash.
+
+**Immediate next step is safety, NOT a third benchmark or
+new GPU start**: reconnect and inspect exact third
+Docker ID status/labels, M1 current journal,
+controller/watchdog process and monitor log *without
+exit-on-error*, retain per-trial journal of second
+failed R2 run for original kernel RM forensics.
+If still supervised, stop via live Terminal A.
+If orphaned, stop only after matching the third
+Docker full ID/name/variant/predecessor labels.
+Never touch old OrcaRouter or old A/B and M1
+Docker, or run `git pull` while current M1
+possibly active. No latest physical third-trial
+post-SSH state has been supplied.
+[Physical evidence Stage I](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+## 2026-10-19 — ACTUAL DGX second protected mazinb R2 trial stopped on NVIDIA RM error; benchy now installed
+
+**Actual later physical user transcript** shows a *second*
+separately owner-approved Wizard **5→24→4** isolated
+mazinb M1 trial with candidate
+`qwen38-mazinb-m1-20261019065452-e70d6233`;
+new exact Docker ID
+`68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`.
+The controller emitted
+`M1_CANDIDATE_STARTED_UNQUALIFIED`, then
+`M1_STOPPED_EXACT_ID=68cd243882bf117dbccdfad577cfdec7a95063ee8f2a96dbe6bcf51cfd8554e7`,
+`M1_DOCKER_REMOVED=NO`, and
+**`M1_BLOCKED=NVIDIA RM memory allocation error`**.
+No `M1_READY_FOR_BENCH`/new inference smoke/180s
+soak was emitted during this second trial, and no
+model throughput result was generated.
+
+Meanwhile, operator Terminal B **now has** the pinned
+`llama-benchy 0.4.1.dev1+ge9be34457`
+and PATH points to isolated user venv. This eliminates
+the earlier missing-tool blocker, but benchmark wrapper
+correctly **rejected failed trial** with
+`M1_BLOCKED=M1 is not admitted for benchmark` and
+`BENCH_M1=BLOCKED attestation_failed`.
+No safety check was bypassed.
+
+**Critical code-level limitation of error label:**
+`scripts/runtime/mazinb-m1.py` verifies host-wide
+`sudo -n journalctl -k --since <kernel_since>` and
+fails if either `NV_ERR_NO_MEMORY` or
+`_memdescAllocInternal` appears. The stdout proves
+a matching message was detected in that time window,
+but does not by itself link it to this candidate nor
+distinguish VRAM allocation, RAM pressure, Xid or
+a host-wide other-device event. Need actual matching
+kernel timestamps/text + exact Docker state
+`ExitCode`/`OOMKilled` + same trial `monitor.log` +
+bounded model loading stderr + current retained journal.
+**NO THIRD GPU RESTART** until root cause is classified.
+
+The previous *first* R2 trial on the same DGX
+**passed exact API, 180s soak and inference smoke** and
+stopped cleanly (Docker
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`).
+That physical success must not be erased nor treated
+as proof of reliability under the second load:
+two separate episodes with different exact IDs.
+Both stopped candidates intentionally retained;
+original protected OrcaRouter/older M1 archives remain
+untouched. New installed tool does not change these
+classifications.
+
+**Next safe action:** read-only failed session
+`status --session-slot reinstall` (expect
+`failed_stopped`, **not** normal `stopped`);
+read per-trial logs and `journalctl -k` matching
+RM lines since its `kernel_since`. Do not manually
+mutate journal, disable monitor, adjust swap/KV/port,
+delete Docker, upgrade source on DGX before collecting
+forensics, or invoke a third trial.
+
+[Physical Stage H evidence](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+This text was written to GitHub only, NOT on DGX.
+Current local DGX SHA for second run **not printed**
+in its pasted transcript; do not infer it from
+remote HEAD. PR #261 Draft/unmerged.
+
+## 2026-10-19 — ACTUAL DGX mazinb R2 protected exact-ID STOP completed, Docker preserved
+
+**Owner's latest physical Wizard Terminal A output:** after a
+successful isolated R2 vLLM API/model exact match, protected
+180-second soak and real inference smoke, and separate
+Terminal B safely refused to benchmark due to absent pinned
+`llama-benchy`, the owner entered `STOP`. Program printed:
+
+```text
+M1_STOPPED_EXACT_ID=82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424
+M1_DOCKER_REMOVED=NO
+```
+
+**Actual exact-ID stop PASS**, candidate intentionally
+retained for forensic evidence, no model/container cleanup.
+Earlier Terminal A reported
+`M1_READY_FOR_BENCH=http://127.0.0.1:18889`,
+`M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`
+and exact served mazinb model; this functional success
+stands. **R2 PP/TG/TTFT new measurements remain
+NOT_MEASURED** because the required CLI was unavailable.
+Old historical measured 2026-10-14 evidence remains
+unchanged. No persistent managed systemd service
+qualified.
+
+Latest actual DGX checkout was clean
+`4612045c11ce47e52606794d63daede4cb35ac82`;
+newer remote GitHub documentation and tool-prep HEADs
+were **not** used in this live trial. Although stdout
+confirms exact stop, it does not display independent
+journal `M1_SESSION_PHASE=stopped` and
+`M1_RUNNING=False`. **Next operator read-only
+verification:** `python3 -B scripts/runtime/mazinb-m1.py
+status --session-slot reinstall`. Only after
+confirmed stopped/no running candidate and clean
+worktree, guarded fast-forward to successful remote
+GitHub HEAD, then optional user-approved isolated
+pinned `llama-benchy` install via Wizard
+**5→24→5**; a *new* protected session must be
+separately approved before actual benchmark.
+Do not delete protected historical/OrcaRouter models,
+Docker or old evidence.
+
+[Latest permanent actual DGX Stage G receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+PR #261 stays Draft/unmerged.
+
+## 2026-10-19 — ACTUAL DGX R2 benchmark blocker pinned tool absent; sudo cache restored
+
+Owner's actual DGX read-only file search for `llama-benchy`
+under user local bin, uv tools, pipx venvs, and llm workspace
+returned **no executable**. The later attempted
+`BENCHY_PATH=/실제로/확인한/경로/llama-benchy` was
+a copy of the assistant's example placeholder and **not
+a discovered path**, so shell returned file not found.
+First subsequent strict reinstall-slot benchmark wrapper was
+blocked for `sudo -n` password cache expiration
+(`M1_BLOCKED=... sudo: 암호가 필요합니다`). After `sudo -v`,
+the entire exact-ID pre/post admission and kernel RM
+check **PASSED**, but `MAZINB_R2_BENCH=
+BLOCKED_PINNED_LLAMA_BENCHY_MISSING`,
+`BENCH_COMMAND_RC=2`. **NO actual new PP/TG
+measurements or new JSON**. Protected inference READY
+evidence remains valid. Actual Terminal A STOP/expiry
+has not yet been provided.
+
+**GitHub source-only follow-up:** added
+`scripts/wizard/llama-benchy-setup.sh`,
+a default-NO/typed `INSTALL_PINNED_BENCHY`
+user-scoped venv installer at pinned upstream
+`e9be344578cec17745066b220798b80a0d2686d3`
+with expected CLI version `0.4.1.dev1+ge9be34457`.
+Wizard **5→24→5** exposes the plan and explicit
+install after the experiment STOP. It refuses to install
+while the lifecycle shared lock is held, project Docker
+is active, or M1 localhost API port is listening,
+never uses sudo or system package install, writes only
+separate `~/.local/share/qwen38-benchmark-tools/`,
+and records Python dependency freeze. Synthetic-only
+tests added. **NOT EXECUTED on DGX**, final CI
+and exact host compatibility still need confirmation.
+No Git source sync during the live R2 session; later
+clean worktree sync only after confirmed stopped.
+Do not rerun placeholder `BENCHY_PATH` or start a new
+GPU candidate without separate owner authorization.
+
+[Physical Stage F receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+PR #261 remains Draft and unmerged.
+
+## 2026-10-19 — ACTUAL DGX R2 benchmark admission PASS twice, tool missing, NO throughput
+
+**Physical Terminal B supplied by owner** against same
+R2 `M1_READY_FOR_BENCH` isolated mazinb model,
+exact new Docker
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`,
+`http://127.0.0.1:18889`. The
+`--plan` action was no-API/no-host-mutation;
+`scripts/wizard/m1-benchmark-lock.sh --session-slot reinstall`
+acquired both shared lifecycle and exclusive bench lease,
+then emitted:
+
+```text
+M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY
+M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW
+BENCH_M1=ATTESTED_SHARED_LIFECYCLE_EXCLUSIVE_BENCH
+MAZINB_R2_BENCH=BLOCKED_PINNED_LLAMA_BENCHY_MISSING
+M1_BENCH_ADMISSION=PASS_SESSION_PINNED_READ_ONLY
+M1_BENCH_HOST_RM=NO_MATCHING_EVENTS_IN_CURRENT_WINDOW
+BENCH_COMMAND_RC=2
+```
+
+The benchmark tool is not currently on operator PATH;
+it requires the pinned version `0.4.1.dev1+ge9be34457`.
+This is a **benchmark tooling gate block**, not a vLLM,
+Docker/host-RM or inference failure. Both actual pre/post
+model admission checks PASSED. No fresh throughput or
+TTFT was measured; no result JSON or SHA256 output
+was created by this refused payload.
+
+**Next while Terminal A remains live:** bounded read-only
+search for *existing* pinned `llama-benchy` in
+known user tool/venv paths. Do not sync Git, install
+packages, mutate service/cache or launch a second model.
+If no matching executable exists, complete observed
+model trial by the protected controller's `STOP`
+or automatic expiry, then install/verify the
+pinned benchmark tool **between** separately approved
+GPU sessions. Keep archived 2026-10-14 M1 measured
+numbers and all R2 API/soak/smoke evidence unchanged.
+
+[Permanent physical evidence, Stage E](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+PR #261 remains Draft and unmerged; remote docs
+have newer HEAD than the live clean DGX
+`4612045c11ce47e52606794d63daede4cb35ac82`.
+
+## 2026-10-19 — ACTUAL DGX mazinb R2 smoke/180s soak/API READY_FOR_BENCH
+
+**Owner's later protected experiment console: actual physical DGX
+evidence at clean local HEAD
+`4612045c11ce47e52606794d63daede4cb35ac82`.**
+The same separately approved isolated candidate
+`qwen38-mazinb-m1-20261019043708-479dfc86`
+now emitted `M1_INFERENCE_SMOKE=PASS_NO_GENERATED_TEXT_PERSISTED`,
+`M1_READY_FOR_BENCH=http://127.0.0.1:18889`, exact
+`M1_SERVED_NAME=mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`,
+and **unique new Docker ID**
+`82b143c4adad9fd785aad38590ed6738de52a6a06b06a4a9bdc07118ceb40424`.
+Active R2 trial journal:
+`/home/inlc/.local/state/qwen38-spark/mazinb-m1-reinstall/active.json`.
+Terminal A remains in interactive protected foreground and requested
+manual STOP at conclusion.
+
+The exact executing code places READY *after* exact-model API
+health, 180s = 36×5s monitored soak, kernel RM/host/watchdog
+revalidation and actual inference smoke; thus **R2 foreground
+isolated inference readiness passed on physical DGX**. This
+does NOT mean boot-persistent systemd operation, long-term
+host-stability, or an actual throughput benchmark.
+
+Terminal output explicitly said
+`M1_LLAMA_BENCHY=NOT_MEASURED`. Prior Terminal B check
+showed `BENCHY=NOT_INSTALLED` on PATH and
+`BENCH_RESULT_DIR=READY`. Read-only search for an existing
+pinned CLI is the safe next action; **no live package
+installation, source sync or benchmark bypass**. Benchmark
+requires pinned `0.4.1.dev1+ge9be34457` via strict
+reinstall-slot exclusive benchmark lock, while Terminal A
+keeps supervising. If tool absent, finish the live smoke
+experiment with exact candidate STOP before setting up
+benchmark tooling for another explicit session.
+[Physical evidence Stage D](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+Earlier entry `STARTED_UNQUALIFIED` is preserved as a
+chronological intermediate state superseded by this
+**actual ready-for-benchmark result**. Original 2026-10-14
+measured benchmark remains unchanged, and PR #261 is Draft.
+
+## 2026-10-19 — ACTUAL DGX mazinb R2 first separately approved GPU trial STARTED_UNQUALIFIED
+
+**Owner-pasted actual DGX console**, after R2 checkpoint restore
+and read-only preflight: local clean source SHA
+`4612045c11ce47e52606794d63daede4cb35ac82`,
+`BENCHY=NOT_INSTALLED` (CLI absent on operator PATH), and
+`BENCH_RESULT_DIR=READY`. User selected Wizard
+**5→24→4**, explicitly approved GPU start with `y`,
+typed protected exact OrcaRouter predecessor Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+and exact startup phrase `START_RESTORED_MAZINB_16G`.
+The physical controller printed:
+
+```text
+M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261019043708-479dfc86
+```
+
+**Stage classification: ACTUAL_DGX STARTED_UNQUALIFIED ONLY**.
+The marker is emitted by the controller after protected candidate
+create/start and watchdog arm/initial heartbeat checks; operator
+has not yet provided `M1_READY_FOR_BENCH`, 180s soak,
+exact-model API/smoke or actual throughput output.
+Do not claim full model READY or long-term service qualification.
+The uninstalled/unavailable PATH `llama-benchy` blocks the
+new R2 benchmark regardless of API readiness until the exact
+pinned version and compatible CLI are verified. During live
+Terminal A **do not `git pull`, install packages, rebuild
+Docker images, stop services, delete data, or attempt a
+bench without lease**. Read-only check for an *existing*
+pin-matching benchy executable in a separate terminal is
+safe; otherwise terminate the unique R2 candidate via
+its watched/explicit `STOP` when safe and prepare
+benchmark environment before a separately approved new run.
+
+[Stage C appended to physical evidence receipt](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+Remote Draft PR HEAD is newer than physical DGX source;
+**do not confuse docs commits with runtime source**.
+The original 2026-10-14 measured mazinb benchmark remains
+immutable.
+
+## 2026-10-19 — ACTUAL DGX mazinb R2 checkpoint RESTORED and independent M1 preflight PASS
+
+**Owner-pasted physical DGX Wizard evidence:** Models **3→12**
+resumable HF download completed **108/108** selected files,
+then post-transfer per-file `verified` printed for all 108
+(48 expert safetensors + 43 BF16 PLE + 4 BF16 model
++ 13 aux/config/tokenizer files). Fixed checkpoint
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`
+at complete revision
+`f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`
+was placed at
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-mazinb`.
+Downloader reported file progress `108/108 [4:20:52]`,
+`hf_xet` available (high-performance), 8 workers,
+temporary `vllm-orcarouter-v029:v1` downloader,
+`done → ... (174G)`,
+`MAZINB_RESTORE_DOWNLOAD=COMPLETE_DOWNLOADER_VERIFIED`
+and `MAZINB_RESTORE_GPU_START=NOT_PERFORMED`.
+It did **not** print whether HF authentication token was
+actually present.
+
+Owner immediately ran reinstalled **Benchmark 5→24→3**,
+re-entered exact protected OrcaRouter Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+authenticated read-only kernel RM inspection and received
+`M1_PREFLIGHT=PASS_READ_ONLY`.
+The immutable installed release was
+`ff67bab3c94d6992f61b9535836df97f03b9c022`;
+candidate experiment image ID
+`sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`.
+Output ended `M1_CANDIDATE_START=NOT_PERFORMED`.
+Original installed OrcaRouter remains `phase=complete`,
+runtime not probed by Wizard banner.
+
+**Evidence classification:** physical **R2 model restore +
+read-only launch admission PASS**; new R2 Docker startup,
+monitor arm, 180-second soak, inference smoke, localhost
+API READY, service operational qualification and
+new benchmark measurements **NOT_YET_RUN**.
+The physical transcript does not show local `git HEAD`
+SHA; controller preflight source requires clean expected
+branch but exact SHA must not be fabricated.
+[Permanent human-curated physical evidence](../scripts/benchmark/evidence/dgx-mazinb-r2-download-preflight-physical-20261019.md).
+
+**Next only after explicit fresh owner approval**:
+Wizard **5→24→4**, confirm exact protected Docker ID,
+type `START_RESTORED_MAZINB_16G`, remain in foreground
+Terminal A. Only use separate Terminal B pinned benchmark
+after the live controller prints `M1_READY_FOR_BENCH`.
+Never run previous historical M1 action 5→9.
+Do not fast-forward/modify local checkout during an
+active trial/benchmark; source_sha is pinned across both.
+Do not merge Draft PR #261 as a substitute for physical
+live qualification.
+
+## 2026-10-19 — catplusplus vLLM-first versus SGLang comparative source study (SOURCE ONLY)
+
+**Owner says proceed** with source comparison while the 173.64-GiB
+mazinb R2 checkpoint download is underway. No DGX commands,
+weight/source-bundle downloads, Docker/GPU builds or model
+runtime changes have been performed by this work.
+
+**Verified external upstream GitHub PRs:**
+`vllm-project/vllm#53896` Qwen3.8 model support **MERGED**
+2026-08-31; `#54371` UVA PLE offload **MERGED**
+2026-09-09; prior `#53899` CPU PLE **CLOSED UNMERGED**;
+`#54129` PLE safetensors read-only mmap **CLOSED UNMERGED**.
+Merged UVA offload uses pinned CPU memory accessible via CUDA
+UVA and **does not remove physical RAM occupancy on the
+single 128-decimal-GB unified-memory GB10**. Disk-backed
+mmap was a separate, unmerged implementation. Neither
+proves catplusplus mixed MXFP8 fused qkvz scale consumption
+or installed `vllm-orcarouter-v029:v1` has the same patches.
+
+**Publisher model card** claims `extra/packages/` includes
+modified **both** vLLM and SGLang source trees and two
+git-history bundles. Their actual per-file implementations,
+bundle identities and GB10 kernel support have NOT been
+inspected at fixed revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`.
+Production SGLang script is described, but this is not
+GB10 proof; vLLM-first is a **review order**, not a runtime
+decision.
+
+**New source-only inspection tier:** Added
+`scripts/model/inspect_catplusplus_engine_sources.py`
+and Wizard **5→23→11** with strict pinned
+`/extra/packages` Hub JSON subtree scope,
+bounded API pagination/response limits/no redirect,
+file/bundle existence counts with an explicit
+`engine_impl=NOT_AUDITED` result. No source
+bundles/files or weights are read, downloaded or
+executed; actual DGX inventory **NOT_RUN** during
+mazinb download. Offline safety/transport tests added.
+A later bounded exact-path source file SHA/function audit
+is required to compare fused QKVZ MXFP8 scales,
+ModelOpt mixed NVFP4 and FP8 PLE by engine.
+
+Authoritative [dual-engine source/GB10 report](CATPLUSPLUS-VLLM-SGLANG-COMPARISON.md).
+**Live, engine, RAM, checkpoint, service and benchmark
+qualification remains BLOCKED; catplusplus NOT_MEASURED.**
+Keep PR #261 Draft and preserve mazinb in-progress
+download; do not `git pull` the actively transferring
+DGX checkout.
+
+## 2026-10-19 — catplusplus preparation while mazinb R2 download underway (SOURCE ONLY)
+
+Owner reports the previously authorized **mazinb 173.64-GiB R2
+checkpoint download has STARTED**. This is operator status, not a
+completion receipt; there is NO new actual mazinb API/benchmark
+readiness evidence. Maintain the current pinned checkpoint transfer:
+no simultaneous catplusplus weight download, Docker build, GPU,
+systemd switch, source sync in its active checkout, cleanup,
+swap mutation or eviction.
+
+**Catplusplus work proceeds in GitHub source only** under Draft
+PR #261, without touching DGX:
+- Previous physical DGX Wizard 5→23→8 measured HEAD **307**
+  (`resolve` → same HF host `/api/resolve-cache/`)
+  and HEAD **200** (both fixed pinned `raw` files);
+  new `scripts/model/audit_catplusplus_loader_source.py`
+  uses a *single fixed pinned raw GET/no redirects* per
+  `config.json` (≤256KiB) and
+  `extra/inference/inference_qwen38_flash_next_sglang.sh`
+  (≤128KiB). No arbitrary or package/weight fetch. Source
+  declaration results from actual DGX GET: **NOT_YET_RUN**.
+  Even PASS cannot attest SGLang wheel or GB10 residency.
+- Added `scripts/model/catplusplus_admission_plan.py`
+  (Wizard **5→23→9** pure source-only plan and **5→23→10**
+  lock-aware *read-only* conservative full-repository/disk
+  screen, no lock or directory creation). Current source
+  download/engine/MXFP8/PLE/GPU/bench gates stay BLOCKED.
+- Read-only capacity arithmetic based on actual pinned DGX
+  metadata: root safetensors ≈174.8553 GiB vs 128 decimal
+  GB unified RAM ≈119.2093 GiB. Even subtracting publisher
+  estimated FP8 PLE 47.7 GiB yields ~127.1553 GiB in
+  *stored bytes*, already above RAM before CUDA/KV/RM.
+  This does not prove an actual GB10 residency number,
+  but disallows "PLE offload alone => proven fit" reasoning.
+- Full staged engineering guide:
+  [single-GB10 install/serve/bench preparation](CATPLUSPLUS-SINGLE-GB10-INSTALL-SERVE-BENCH.md).
+  Run original publisher scripts/bundles, drop caches, trust
+  remote code or publish 0.0.0.0: **FORBIDDEN**.
+  Actual SGLang mixed quant fused-qkvz scale, NVFP4 expert,
+  FP8 PLE offload, image pin, peak GPU RM allocation and
+  protected candidate controller are **UNQUALIFIED**.
+  The existing catplusplus M1 preflight/live/bench options
+  remain deliberately fail-closed.
+- Tests added for pinned raw GET 2-file allowlist/size/no
+  redirect and pure staged memory/lock planning.
+  GitHub CI at final source HEAD must be checked separately.
+
+**No catplusplus install, real model launch or benchmark has
+been performed or approved by this source-only work**. Do not
+run DGX code sync until the live mazinb download concludes
+and its hashes are verified; after that do bounded
+source 5→23→7 and design-time 9/10 without weights.
+
+## 2026-10-19 — ACTUAL DGX mazinb R2 restore admission PASS twice; weights still absent
+
+**Owner-supplied real DGX Wizard console** selected Models **3 → 11**
+twice; both independent outputs ended with:
+`MAZINB_RESTORE_PREFLIGHT=PASS_READ_ONLY_NO_WEIGHT_DOWNLOAD`
+and `MAZINB_RESTORE_DOCKER_GPU_SERVICE_ACTION=NONE`.
+The pinned repository was
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`,
+full revision `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`,
+with Hub metadata + disk admission reporting **173.64 GiB** and
+`Preflight passed` at the dedicated checkout model directory
+`/home/inlc/Workspace/llm/qwen3.8-flash-next-dgx-spark/models/qwen3.8-flash-next-mazinb`.
+The downloader's storage-space policy includes 20 GiB reserve.
+The independent host-idle check on both invocations returned
+`MANAGED_IDLE_SERVICE_ENABLED=0`, `API_ACCESS_MODE=local`,
+three project systemd units `load=not-found active=inactive`,
+`MANAGED_IDLE_MANAGED_PORTS=NO_LISTENERS`,
+`MANAGED_IDLE_DOCKER=NO_RUNNING_QWEN38_CONTAINERS`,
+`MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START`
+and `MANAGED_IDLE_AUDIT_HOST_MUTATION=NONE`.
+Installed manifest remained `phase=complete`, profile
+`orcarouter`, image `vllm-skinny-tp1:v1`,
+with runtime banner `NOT_PROBED`.
+
+**Owner navigated Benchmark 5 → 24**, which displayed the
+four restored-M1 menu actions, but performed **none**.
+No 3→12 download was authorized or run in this transcript,
+no 5→24→3 live preflight result, no GPU start, no fresh
+model API/soak/benchmark. The current console output does
+**not** attest an exact `git rev-parse HEAD`; continue to
+require clean checked-out source before any destructive,
+network-heavy or GPU operation.
+
+**Next physical operation:** from Models **3 → 12** choose
+explicit default-NO authorization and type
+`RESTORE_MAZINB_PINNED` for pinned checkpoint download;
+inspect completion and verify per-file hashes before opening
+Benchmark 5 → 24 → 3. Never use legacy original M1 5→9,
+do not reactivate managed systemd or delete evidence.
+The measured historical mazinb result stays preserved
+independently of R2; model restore does not yet qualify
+a service or benchmark.
+
+## 2026-10-19 — SOURCE mazinb pinned restore and isolated R2 live/bench path
+
+The operator explicitly requested **mazinb reinstall → actually serve →
+protected benchmark first**, before resuming catplusplus. This is a
+new authorization to *prepare* the staged workflow, NOT evidence that
+the DGX has downloaded the model, started a GPU or measured new results.
+
+**Known physical predecessor:** DGX mazinb final read-only retirement
+audit passed on exact SHA `5164042ed5d784fe3469ad0207e4d8ecf8d5869f`;
+mazinb checkpoint absent, historic Docker archived and removed,
+original benchmark JSON/SHA PASS; installed OrcaRouter profile remains
+completed, service/boot disabled. Do **not** reactivate or replace the
+installed service in order to run a benchmark.
+
+**New source-only functionality:** Wizard Models **3 → 11**
+read-only pinned metadata/disk/host-idle restore admission and **3 → 12**
+explicit owner-approved ~174 GiB download, using
+`scripts/wizard/mazinb-restore.sh`. Pinned source
+`mazinb/Qwen3.8-Flash-Next-Uncensored-NVFP4`, full immutable
+revision `f2c21eb3d2ff5f24c208ea7e3afba65e2e70f83f`.
+Restore retains exclusive lifecycle lock, rechecks idle and leaves
+OrcaRouter/old research artifacts untouched. The download helper
+may briefly create a CPU-only downloader container; it does **not**
+start a model, GPU or installed service. Old retired Hybrid
+menu numbers 8-10 remain unavailable.
+
+Wizard Benchmark **5 → 24** new `reinstall` session slot:
+separate `mazinb-m1-reinstall` journal/benchmark lease, previous
+`mazinb-m1` original audit/tombstone hash-pinned and never overwritten,
+managed boot/service remains disabled and no project port/listener
+or running Qwen Docker is admitted before create.
+Old exact managed Docker immutable ID/image/release are protected.
+Explicit separate GPU approval and Terminal-A foreground watchdog
+are required. Localhost-only 18889, KV 16 GiB,
+create-only→arm→start→READY→180s soak→inference smoke→strict RM safety.
+**No persistent/background systemd service is claimed.**
+
+Terminal B uses `m1-benchmark-lock.sh --session-slot reinstall`
+plus `mazinb-reinstall-bench.sh --run` only after new physical
+`M1_READY_FOR_BENCH`. The benchmark requires the historical
+`llama-benchy 0.4.1.dev1+ge9be34457` version, fixed
+PP512/2048 TG128 C1 warmup1/runs3, separate fresh JSON,
+report and SHA256 and post-run admission. No performance
+metrics until physical execution and independent evidence.
+See [R2 operating guide](MAZINB-REINSTALL-R2-WIZARD.md).
+**Current R2 physical install/download/live/bench: NOT_RUN**.
+Synthetic source CI must pass at the exact final HEAD before DGX
+action; PR #261 stays Draft.
+
+## 2026-10-19 — ACTUAL DGX catplusplus redirect transport diagnosis (HEAD only)
+
+**Operator-provided live DGX Wizard 5 → 23 → 8 output**
+shows both pinned `resolve` text paths returned **HTTP 307**,
+redirect `LOCATION_CLASS=HF_SAME_HOST`,
+`LOCATION_ROUTE=API_RESOLVE_CACHE`; corresponding pinned
+`raw` paths (`config.json`, SGLang launcher) returned
+**HTTP 200** and `LOCATION_CLASS=NONE`. No redirect was
+followed, no HTTP response body was read or parsed; no source
+audit or model/download/GPU live admission occurred.
+The terminal excerpt does not independently print a Git SHA.
+The original `SOURCE_REDIRECT_BLOCKED` was consistent
+with the strict `resolve` GET no-follow policy;
+it is **not** proof that the pinned `raw` GET content
+passes quantization declarations or is consumed by a GB10
+engine. The approved source-level next step, after
+the mazinb priority, is separately verifying bounded pinned
+`raw` GET content with unchanged no-follow/size limits.
+Catplusplus stays **NOT_MEASURED / LIVE_BLOCKED**.
+
+## 2026-10-19 — catplusplus pinned Hub header-only redirect triage (SOURCE ONLY)
+
+Physical DGX Wizard **5 → 23 → 7** previously returned
+`CATPLUSPLUS_M1_BLOCKED=SOURCE_REDIRECT_BLOCKED`, with
+neither redirect target/route nor which of the two files
+established. Hugging Face `resolve` may redirect to same-Hub
+cache routes or external data endpoints; no raw fallback
+or target-host trust can be inferred without bounded evidence.
+
+New Wizard **5 → 23 → 8** delegates to M1
+`source-transport` and a dedicated constrained
+`probe_transport()` to make four **HEAD only**
+requests (`resolve`/`raw` for exactly the
+two pinned tiny text file paths). No response bodies
+are read, redirect following is disabled, and only
+sanitized status, same-host/external-host classification
+and bounded route class are displayed. No signed URL,
+authentication tokens, redirect query strings,
+weights, scripts or engine binaries are fetched.
+Existing **5 → 23 → 7** GET source audit
+retains its strict redirect-blocking behavior and
+all catplusplus M1 GPU/load/memory/live admission
+gates remain BLOCKED. New source-only tests
+mock network transport and assert HEAD-only,
+four fixed URLs, no-follow, no token disclosure
+and independent live block. Current physical
+HEAD diagnosis **NOT_YET_EXECUTED**; do not
+claim the redirect resolved until real DGX output.
+
+## 2026-10-19 — ACTUAL DGX mazinb final read-only retirement audit PASS
+
+**Owner-pasted DGX terminal transcript (physical, not CI):**
+[Permanent exact-key physical evidence](../scripts/benchmark/evidence/dgx-mazinb-retirement-audit-physical-20261019.md).
+The owner synchronized the sole canonical checkout on
+`feature/wizard-modular-phase1-20261014` from
+`14a44f0` to **exact source SHA**
+`5164042ed5d784fe3469ad0207e4d8ecf8d5869f` by
+`git fetch` + `git merge --ff-only`, with expected branch and
+clean-worktree gates; the shell printed `SOURCE_SYNC=VERIFIED`.
+The preceding GitHub Push and PR CI both had success conclusions.
+
+**Wizard 3 → 6** on that DGX returned
+`MAZINB_RETIREMENT_AUDIT=PASS_READ_ONLY_DEDICATED_ARTIFACTS_ABSENT`
+and `MAZINB_RETIREMENT_HOST_MUTATION=NONE`.
+Specific independently observed read-only results:
+- `MAZINB_DOCKER_EVIDENCE=ORIGINAL_AND_REPOSITORY_SHA256_PASS`,
+  `MAZINB_DOCKER_JOURNAL=STOPPED_EXACT_ID`,
+  `MAZINB_DOCKER_HYBRID_STAGES=POST_RETIREMENT_NOT_REQUIRED`.
+- `MAZINB_AUDIT_ARCHIVE=PASS_EXACT_FIVE_INSPECT_AND_LOG_PAIRS_SHA256`
+  and `MAZINB_AUDIT_ORIGINAL_AND_GITHUB_BENCHMARK=SHA256_PASS`.
+  The private historical Docker evidence archive remains
+  `/home/inlc/.local/state/qwen38-spark/retirement-archives/mazinb-docker-20261014T103718Z-7e238b9aeb`.
+- `MAZINB_AUDIT_DOCKER=EXACT_FIVE_ABSENT_NO_OTHER_MAZINB`,
+  protected predecessor ID
+  `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`
+  is still present and the shared vLLM image is preserved.
+- Dedicated system and user units both ABSENT, the three project
+  shared runtime/proxy units `load=not-found active=inactive`,
+  mazinb 18889 port and shared 8888/8000/8001 ports have NO_LISTENER,
+  no known mazinb worker/watchdog processes.
+
+**Wizard 3 → 5** after this independently confirmed
+`MAZINB_DOCKER_RETIRE=BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED`,
+demonstrating the new no-repeat-delete protection physically; this
+was not a second deletion. **Wizard 5 → 7** reported M1
+`phase=stopped`, `Running=False`, `ExitCode=0`, historical
+session `qwen38-mazinb-m1-20261014013811-16ced779`,
+Docker ID `7af3966f3d0cae79f8277eaf9ad003fb04c1e15ea01f86574c2d8eeac396e7a1`,
+`M1_DOCKER_REMOVED=YES_ARCHIVED` and the same archive path.
+No Docker/service/GPU/weight/download action performed by these
+read-only checks; all 2026-10-14 M1 benchmark observations remain
+historical, not freshly measured or proof of a current live mazinb service.
+
+**Closed:** prior post-retirement audit physical-run gap, old
+H3-H6 false dependency and the repeated-retirement prevention
+physical-check gap. **Still open:** catplusplus pinned-source
+`SOURCE_REDIRECT_BLOCKED`, exact pinned loader/GB10 capacity,
+checkpoint acquisition and separate approved model GPU launch.
+mazinb checkpoint remains absent, as verified by prior physical
+Wizard assets inventory; re-running mazinb requires separately
+reviewed reinstallation and physical startup authorization.
+PR #261 remains Draft/unmerged.
+
+## 2026-10-19 — SOURCE fix for post-retirement mazinb audit after H3-H6 deletion
+
+The actual DGX **3 → 5** historical cleanup attempt stopped in
+`retire-mazinb-containers.py evidence()` because it still required
+Hybrid H3-H6 directories, even though the 2026-10-14 physical Docker
+retirement was already completed and those Hybrid checkpoints were
+separately retired later.
+
+**Distinct phase-specific contracts now enforced:**
+- Historical *destructive* mazinb Docker retirement plan/apply still
+  requires H3-H6 to exist, exact five stopped Docker IDs, prior source
+  retirement and immutable benchmark/M1 provenance. No deletion
+  protections were relaxed.
+- Current *read-only* `verify-mazinb-retirement.py` archive check
+  invokes shared benchmark/journal evidence with
+  `require_hybrid_stages=False`; later removal of unrelated
+  Hybrid stages no longer invalidates a historical mazinb archive.
+  Exact benchmark original+repository SHA256, M1 journal,
+  tombstone/ten Docker archive SHA256 files, Docker IDs,
+  ports, dedicated units and processes remain fail-closed.
+- Wizard **3 → 5** now detects an existing historical
+  `retired-docker.json` marker, refuses any repeat cleanup
+  and points operators to **3 → 6** for full read-only
+  independent verification. Marker *presence* is not evidence
+  of completion.
+
+Host-free tests check both the non-relaxed destructive gate and
+the later post-retirement audit exception, archive tampering rejection
+and wizard refusal to call a deletion manager when a marker exists.
+The new source fix needs exact-HEAD CI, DGX fast-forward and actual
+**3 → 6** result before claiming physical post-retirement audit PASS.
+No GPU/Docker/model files/service changes were performed.
+
+## 2026-10-19 — ACTUAL DGX mazinb assets absent; historical retirement menu re-entry blocked
+
+**Owner-supplied physical Wizard transcript**, not a source/CI simulation:
+`./wizard.sh` **3 → 2** showed `mazinb`
+`ACTIVE=no CHECKPOINT=absent CONTAINER=absent IMAGE=present`,
+with expected checkpoint at
+`models/qwen3.8-flash-next-mazinb` and shared image
+`vllm-orcarouter-v029:v1`. OrcaRouter remained configured
+active with `171G` checkpoint `present`, Docker `exited`
+and image `present`; Hybrid H3-H6 checkpoints reported
+`absent`, consistent with prior approved retirement.
+The Wizard banner was
+`Manifest: valid (phase=complete)`, configured
+`orcarouter`, image `vllm-skinny-tp1:v1`,
+`Runtime: NOT_PROBED`. This is an assets listing, **not**
+a proof of a running backend or verified Docker image compatibility.
+
+The operator entered **3 → 3** then supplied `6` at the
+**profile-name** prompt; Wizard correctly rejected
+`Unsupported or not-installable profile`. No switch occurred.
+Next **3 → 5** attempted the *read-only pre-delete plan* for
+historical mazinb Docker cleanup, which returned
+`MAZINB_DOCKER_RETIRE=BLOCKED reason=hybrid dependency missing:
+qwen3.8-hybrid-quant-layout`. This one-time legacy retirement
+precondition expects H3/H6 still present, but they were subsequently
+retired; the error does **not** contradict the verified 2026-10-14
+mazinb Docker archive+deletion. **No Docker cleanup ran**.
+At transcript end the operator had only opened **3 → 7**
+candidate metadata menu, without executing an action.
+**3 → 6** post-retirement audit and **5 → 7** M1 journal status
+are still awaiting *current* physical output. The transcript lacks
+an exact `git rev-parse HEAD` value, so no exact physical source
+SHA is attested.
+
+**Source-only UX/safety correction:** Wizard **3 → 5** now
+detects a historical M1 `retired-docker.json` marker before
+invoking the old one-time five-container plan, fails closed with
+`BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED` and points to
+Wizard **3 → 6**. Marker existence alone is **not** proof of
+a valid archive/retirement; the separate full read-only audit
+remains mandatory. Synthetic Wizard regression checks there is
+no call to the retirement manager when a marker is present.
+The actual DGX has **not yet executed the corrected source**.
+
+**Next gate:** collect physical **3 → 6** read-only retirement
+audit, **5 → 7** M1 status, current Git HEAD and clean-worktree
+proof. Do **not** select historical mazinb deletion actions,
+managed model switching or M1 GPU start to bypass the absence
+of a checkpoint. A new mazinb download and separate GPU
+launch need explicitly scoped approval after source/host preflight;
+archived M1 reports can already be analyzed without reinstallation.
+
+## 2026-10-19 — ACTUAL DGX catplusplus pinned-source audit redirected and blocked
+
+**Evidence: owner-pasted DGX Wizard transcript**, not GitHub CI or
+a backend loader test. Wizard **5 → 23 → 7** on the host printed
+`CATPLUSPLUS_M1_BLOCKED=SOURCE_REDIRECT_BLOCKED` followed by
+`catplusplus M1 admission remains BLOCKED; no Docker/GPU/download action`.
+The Wizard's displayed manifest was valid/complete, configured profile
+`orcarouter`, image `vllm-skinny-tp1:v1`, runtime
+`NOT_PROBED`. The transcript did **not** print a Git HEAD,
+redirect HTTP response/location or file-specific request, and does not
+establish that either pinned file was downloaded/parsed. The
+read-only audit intentionally rejects HTTP redirects; the redirect
+cause remains **UNDETERMINED** pending bounded transport diagnosis.
+Do not bypass the allowlist or automatically follow an unverified
+redirect; positive declarations and engine/GB10 compatibility remain
+**NOT_ATTESTED**, catplusplus **NOT_MEASURED**.
+
+The operator next prioritizes collecting mazinb runtime provenance
+before returning to catplusplus. **Crucial existing physical
+history:** mazinb's ~173.65 GiB source checkpoint and five stopped
+trial Docker containers were already retired with preserved
+SHA-verified M1 benchmark evidence on 2026-10-14. The historical
+successful M1 is *not* evidence of currently installed mazinb
+weights. Verify present host assets using Wizard **3 → 2** and
+**3 → 6** before considering a *new* owner-approved download or
+isolated M1 GPU run. Do not use managed model switching as a
+shortcut: the last physically confirmed managed API/service state
+had `SERVICE_ENABLED=0`, and actual current state must be rechecked.
+The archive and [benchmark report](model-reports/mazinb.md)
+can support static loader/benchmark comparison without
+recreating a ~174 GiB checkpoint.
+
+## 2026-10-18 — catplusplus M1 fused-qkvz declaration guard tightened (SOURCE ONLY)
+
+Follow-up to the pinned two-file source audit: `scan_config` now
+requires each declared fused `.linear_attn.in_proj_qkvz` quantized
+layer to have explicit `quant_algo=MXFP8`. An NVFP4 or unspecified
+algorithm no longer counts as a positive MXFP8 source declaration.
+Wizard **5 → 23 → 7** now reports total, MXFP8 and non-MXFP8
+fused alias counts and declared PLE dtype; offline negative fixtures
+cover invalid qkvz algorithms. This is a conservative parser
+correctness fix, **not pinned Hub source verification or a
+real DGX result**. All engine/scale consumption, 128GB GB10 residency,
+physical audit, weights, GPU start and M1 benchmark gates remain
+unqualified; catplusplus stays **NOT_MEASURED**.
+See [catplusplus M1 Wizard](CATPLUSPLUS-M1-WIZARD.md).
+
+## 2026-10-18 — catplusplus real-path pinned source compatibility audit implemented (NOT DGX EXECUTED)
+
+Progress beyond the previous source-only M1 lifecycle skeleton:
+GitHub now has a maintained real-world read-only source
+inspection path. Wizard **5 -> 23 -> 7** invokes
+`scripts/runtime/catplusplus-m1.py source-audit`,
+which delegates to
+`scripts/model/audit_catplusplus_loader_source.py`.
+This fetches (only if the owner physically selects that
+menu) pinned **config.json** and the publisher's small
+**SGLang launcher text**, checks quantization config
+(ModelOpt MIXED_PRECISION, MXFP8 fused `in_proj_qkvz`
+declarations, FP8 PLE dtype), PLE file-offload flags
+and warns about `sudo`, `drop_caches`, public bind.
+Read-only network requests cap the individual files
+(256/128KiB), block redirects and do not pull model
+weights, packages or bundles. Unit fixtures cover both
+positive source declarations and missing/dangerous sources.
+
+**IMPORTANT:** no physical DGX output for the new source
+audit has been received. No actual backend loader/wheel
+verified, no model downloaded, no 128GB capacity workaround
+proven; GPU readiness/benchmark remains NOT_MEASURED.
+The M1 live paths are still separately blocked, with
+all old managed/A/B objects preserved. Positive source
+declarations must not open the actual GPU start gate.
+
+## 2026-10-18 — catplusplus M1 mazinb-parity lifecycle source scaffold; ALL LIVE GATES BLOCKED
+
+The operator specified that catplusplus should follow the same **form**
+as the first physical mazinb M1 benchmark: Wizard-owned independent
+session, exact protected predecessor identities, lifecycle lock,
+Docker create-only, exact-ID watchdog armed BEFORE start,
+model API identity and functional smoke, protected post-ready
+180-second soak, pinned llama-benchy Terminal-B admission and
+PP512/TG128 + PP2048/TG128 C1 warmup1/runs3, exact-ID STOP,
+archived raw evidence and SHA256.
+
+**GitHub SOURCE ONLY now implemented:**
+- `scripts/runtime/catplusplus-m1.py` exposes mazinb-compatible
+action names `plan`, `status`, `preflight`, `run`,
+`bench-admission`, `reconcile`. The 12-step lifecycle is a
+**contract, not runnable implementation**. All live/bench
+paths **fail closed** (rc2); no Docker/API/GPU/weight download.
+Only read-only plan, journal status and no-journal reconcile
+can return PASS without claiming actual candidate readiness.
+- Wizard Benchmark **5 -> 23** gives its own seven-action
+catplusplus sub-menu (the six mazinb-parity lifecycle checks plus
+read-only pinned-source audit option **7**), alongside the existing
+**5 -> 22 M0 plan**.
+- Offline tests verify all 12 workflow markers, refused live
+start, refused benchmark with even forged ready journal,
+no-local-state side effects, symlink refusal and safe Wizard
+nested navigation. No user data, services, releases or running
+Docker objects are modified.
+- Persistent runbook: [catplusplus M1 Wizard](CATPLUSPLUS-M1-WIZARD.md).
+
+**Reason for rejecting an actual mazinb-style load TODAY:**
+Actual DGX pinned catplusplus metadata shows root model
+safetensors ~174.8553 GiB versus a single GB10 nominal
+128GB unified memory. Neither exact mixed MXFP8 fused qkvz
+scale consumer/ModelOpt NVFP4 loader nor file-offloaded FP8
+PLE, peak RM/CPU/swap budget or exact pinned GB10 image
+is currently qualified. The checkpoint was not downloaded,
+and no owner approval for catplusplus download/GPU startup
+was granted. Therefore catplusplus actual API
+READY/inference/benchmark remains **NOT_MEASURED**.
+
+Safety: do NOT inherit mazinb's known-good vLLM image
+or systemd installed-service assumption. Existing three
+managed/OrcaRouter A/B Docker protected objects remain intact.
+Only after specific source/offload qualification and separate
+download/GPU approvals may a full protected M1 controller
+be implemented/executed on the physical DGX.
+## 2026-10-18 — catplusplus M0 benchmark plan uploaded to GitHub: SOURCE ONLY / NOT_MEASURED
+
+The operator suggested prioritizing catplusplus benchmark preparation
+before additional OrcaRouter C attempts. The project remains
+**P0 Wizard-first install/switch/inspect/safe-uninstall**.
+
+Earlier ACTUAL DGX pinned L0 metadata for
+`catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed`
+revision `3251fd8afbd08f76368a9bfa71132d9aef364813`:
+`TREE_METADATA_COMPLETE`, 17,448 entries, 96 `.safetensors`
+files, complete repository 188,540,029,444 bytes (~175.59 GiB)
+and root weights ~174.8553 GiB (rounded).
+These weights exceed nominal 128 decimal GB unified RAM even
+before KV cache, loader staging and safety reserve, so naive
+fully-resident single-GB10 inference is not a safe next step.
+
+**GitHub source-only M0 added:**
+- `scripts/benchmark/catplusplus-plan.py plan [--json]`: purely
+static pinned candidate plan with NO host/API/Docker/GPU/download
+actions, correct baseline C1/PP512+2048/TG128/warmup1/repeats3,
+empty `measurements` and `NOT_MEASURED` terminal status.
+- Operator Wizard main **5 Benchmark -> 22 catplusplus M0 plan**
+provides same read-only status and memory/loader blockers.
+- Existing strict `llama-benchy-report.py` accepts optional
+`--profile catplusplus` **only to convert future real JSON**;
+this does NOT make the candidate model installable or prove READY.
+- Synthetic tests for the M0 plan, menu and report identity/numeric
+guards. New standalone
+`docs/model-reports/catplusplus.md` explains source gates
+and actual mazinb M1 benchmark reference without fake cat metrics.
+
+**LIVE/INSTALL GATE REMAINS CLOSED:** no catplusplus weights
+downloaded, no actual model/driver runtime qualified, no
+MXFP8 qkvz+scale/ModelOpt mixed/FP8 PLE loader proof, no safe
+partial memory-residency plan or GPU/RM watch, no catplusplus
+API READY, no inference and **NO CATPLUSPLUS BENCHMARK**.
+The previously owner-approved one-time C CPU CLI probe was
+consumed and does not authorize catplusplus actions.
+No new DGX/container/service changes, no Docker removal or
+PR merge. A real downloaded model or GPU run still requires
+new explicit owner authorization and independent host gates.
+
+[M0 benchmark plan and comparison boundaries](model-reports/catplusplus.md).
+[Last physical pinned metadata evidence](CATPLUSPLUS-METADATA-COMPATIBILITY.md).
+## 2026-10-18 — ACTUAL DGX corrected OrcaRouter backend Wizard status now physically verified
+
+Owner provided the **second actual DGX Wizard compatibility-screen output**
+after the installed-vs-registry presentation fix. It now reports
+`ORCAROUTER_MANIFEST_STATE=valid`,
+`ORCAROUTER_CONFIGURED_PROFILE=orcarouter`,
+`ORCAROUTER_CONFIGURED_IMAGE=vllm-skinny-tp1:v1`,
+`ORCAROUTER_CONFIGURED_VARIANT=LEGACY_SKINNY_MANIFEST_IMAGE`,
+`ORCAROUTER_LIVE_RUNTIME=NOT_PROBED`,
+`ORCAROUTER_V029_BACKEND=REGISTRY_IMPLEMENTED_NOT_LIVE_ATTESTED_HERE`,
+`ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY`,
+`ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED`
+and `WIZARD_MUTATION=NONE`.
+
+The physical interactive view separately labels
+`vllm-orcarouter-v029:v1` as the **registry default candidate**,
+not as the installed image. It notes the deliberate GPU-hidden
+CLI help failure and outstanding PLE/KV16GiB/MTP/READY qualification.
+Thus the preceding source-only UI correction has now been
+**actually seen and verified on DGX**. No exact
+`git rev-parse HEAD` was provided for this particular screen;
+do not claim the operator has synced to later GitHub commits.
+
+**Not yet established:** any running vLLM/READY health, runtime
+switch apply, model inference or benchmark. The screen is a
+read-only manifest/candidate diagnostic and is not independent
+fresh protected-Docker ID evidence. The permanent product
+priority is still **easy Wizard install, runtime/backend switch,
+inspect and safe uninstall**, not manual Docker probes.
+[Physical second Wizard evidence](../scripts/benchmark/evidence/dgx-orcarouter-wizard-backend-status-20261018.md).
+## 2026-10-18 — ACTUAL DGX OrcaRouter Wizard backend screen verified; installed image differs from registry default
+
+The operator physically navigated `./wizard.sh`
+`3 Model management -> 7 Candidate metadata ->
+5 OrcaRouter backend qualification` and returned
+to the parent submenu. The main banner reported
+`Manifest: valid (phase=complete)`,
+`Profile: orcarouter`, **`Image: vllm-skinny-tp1:v1`**,
+**`Runtime: NOT_PROBED`**. The read-only C qualification
+screen returned `WIZARD_MUTATION=NONE` and
+`ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED`.
+All CLI/help, PLE, KV, MTP, GPU runtime and benchmark
+limitations remain. The terminal excerpt did not print
+a Git HEAD or independently inspect active Docker IDs.
+
+**P0 Wizard UX discrepancy discovered:** the C qualification
+screen emphasized source registry
+`vllm-orcarouter-v029:v1`, but the *physical installed
+manifest* actually records `vllm-skinny-tp1:v1`.
+The registry candidate must never be confused with
+the currently installed manifest image or an actually
+running/READY runtime.
+
+**GitHub source correction (NOT YET physically verified):**
+`scripts/wizard/candidate-metadata-menu.sh` now reads
+the existing strict manifest status helper and renders
+`ORCAROUTER_CONFIGURED_IMAGE`, exact
+`ORCAROUTER_CONFIGURED_VARIANT`,
+`ORCAROUTER_MANIFEST_STATE` and
+`ORCAROUTER_LIVE_RUNTIME=NOT_PROBED` separately from
+the v0.29 registry candidate. No `install.env` sourcing,
+GPU, Docker mutation, model download/deletion, or
+service changes. New synthetic tests exercise legacy,
+v0.29, unknown, symlink/invalid and missing manifest cases.
+No new C start authorization.
+
+[Exact operator terminal receipt and follow-up source boundaries](../scripts/benchmark/evidence/dgx-orcarouter-wizard-backend-status-20261018.md).
+## 2026-10-18 — SOURCE-ONLY P0 Wizard backend admission integrated; legacy menu contract restored
+
+Continuing from physical DGX vLLM C CPU-only help failure
+(`RuntimeError: Failed to infer device type` before CLI argument
+printing), focus returns to **P0 easy Wizard install, profile
+switch, diagnostics and safe uninstall**, NOT manual Docker trials.
+
+CI on earlier head `714717c7d663bdc0c3c337bd6a8e71c4af17df48`
+FAILED both Push and PR workflows, exactly two synthetic
+retired-Hybrid menu tests (`8/9/10` must each return Invalid
+selection). New Model management option 8 had improperly
+revived retired slot 8. Source remediation keeps **8–10**
+non-routable and moves the read-only OrcaRouter backend
+qualification view to existing **Model management -> 7 Candidate
+metadata -> 5 OrcaRouter qualification**. No Hybrid artifacts
+or test protections are removed.
+
+Additional new **source-only** operator integration:
+- `scripts/backend/backends.sh` now distinguishes vLLM image
+variants of existing OrcaRouter model: `v029` implemented,
+`legacy` experimental fresh-install-only, `official-arm64-c`
+**UNQUALIFIED/NOT_SELECTABLE**. This axis is distinct from the
+vLLM vs SGLang backend axis and from model/checkpoint identity.
+- Main `install.sh` Wizard model selection (both fresh install
+and existing profile switch selection) explicitly displays
+why official C cannot be selected: an intentionally GPU-hidden
+CPU-only CLI probe died in device inference **before**
+CLI flags could be assessed; real option, PLE/KV16GiB/MTP,
+model READY and host-safety remain unverified.
+- Typing `c`, `official-c`, `official-arm64-c` in Wizard,
+or providing these as `--orcarouter-runtime` CLI arguments,
+does **not** authorize/load/run C and is blocked by the
+qualified runtime selector. Original v029/legacy contracts
+and original default model/serving image are unchanged.
+- Synthetic tests added to cover direct installer blocking,
+candidate-menu nested navigation, and preserved invalid
+retired menu numbers. No physical C start and no new
+CPU-only Docker probe were performed by these commits.
+
+**Current qualification:** GitHub source changes are NOT
+DGX deployed/physically verified until exact-head CI PASS
+and operator-controlled safe Git fast-forward. Prior actual
+physical DGX state remains CLI-help failure with all protected
+managed/A/B objects unchanged, disposable CPU probe removed.
+**No approval for model GPU start, service changes, destructive
+operations or PR merge.**
+
+[C official runtime and wizard integration plan](ORCAROUTER-PEER-C-PLAN-20261018.md).
+[Physical CPU CLI root-cause evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
+## 2026-10-18 — ACTUAL DGX saved vLLM traceback: CPU-only CLI died in DeviceConfig before flag help
+
+The operator read the existing, already-consumed CPU-probe output
+`/home/inlc/orcarouter-bench-evidence/peer-c-cli-20261018T115111Z-5e41d75a/vllm-serve-help-all.txt`
+**without starting a new Docker container**. Exactly 34 saved
+lines showed Triton `0 active driver(s)`, torch
+`No CUDA runtime is found`, and Python traceback:
+`vllm/entrypoints/cli/main.py` -> `serve.py` ->
+`openai/cli_args.py` -> `AsyncEngineArgs.add_cli_args` ->
+`EngineArgs.add_cli_args` -> `get_kwargs(VllmConfig)` ->
+`_compute_kwargs` -> `default.default_factory()` ->
+`vllm/config/device.py:56 __post_init__` ->
+`RuntimeError: Failed to infer device type`.
+
+**Confirmed failure point:** the CPU-only help invocation failed
+when creating the CLI parser's device defaults **before printing
+the options**. It is consistent with the explicitly GPU-hidden
+`--runtime runc`, no GPU devices, `CUDA_VISIBLE_DEVICES=-1`,
+`NVIDIA_VISIBLE_DEVICES=void` test environment. It does NOT
+demonstrate unsupported `--kv-cache-memory-bytes`,
+`--speculative-config` or any other CLI option, and does NOT
+prove the image's GPU engine or OrcaRouter checkpoint incompatible.
+
+Actual installed distributions remain
+`vllm=0.1.dev20073+g8e685d198`,
+`torch=2.13.0+cu130`, `transformers=5.15.1`,
+`flashinfer-python=0.6.17`,
+`compressed-tensors=0.17.0`. GPU, weight loading, model READY,
+runtime memory stability and benchmark remain untested.
+
+The saved-report code was extended **source-only** to classify the
+exact device trace as
+`DEVICE_INFERENCE_FAILED_IN_GPU_HIDDEN_PROBE`, while retaining
+`NOT_EVALUATED_HELP_FAILED` for all CLI flags and
+`BACKEND_WIZARD_INSTALL_SWITCH=NOT_QUALIFIED`.
+The one-time CPU approval is consumed and no retry or GPU load
+is authorized. Continue source/read-only diagnosis and the
+**P0 Wizard-centered model install/switch lifecycle**, not
+standalone trial scripts as a product replacement.
+[Exact physical traceback evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
+## 2026-10-18 — ACTUAL DGX official ARM64 peer C CPU-only CLI probe FAILED; package inventory verified
+
+Owner executed source SHA `4873016f1d9fd864e6cce30c18fb96634b412fe3`
+via the explicitly approved one-time CPU-only disposable OCI
+probe. Pre-Docker host-check passed, and after-run managed/A/B
+objects were unchanged; new probe container auto-removed.
+Evidence directory:
+`/home/inlc/orcarouter-bench-evidence/peer-c-cli-20261018T115111Z-5e41d75a`.
+
+**Physical verified packages:**
+`vllm=0.1.dev20073+g8e685d198`,
+`torch=2.13.0+cu130`, `transformers=5.15.1`,
+`flashinfer-python=0.6.17`, `compressed-tensors=0.17.0`.
+**Critical result:** the `vllm serve --help=all` invocation failed
+(help exit 1; probe-container exit 13; host helper exit 2).
+The physical output's all-`NOT_FOUND_IN_HELP` flags
+are **not evidence those flags are unsupported** because
+the help command did not succeed. The saved decoded
+`vllm-serve-help-all.txt` is the source of the next root-cause
+inspection and has not yet been pasted. No model loader, GPU,
+API or performance sample was run.
+
+**Approved action consumed:** do not rerun CPU Docker, alter
+runtime flags, or initiate live C. New GitHub source adds a
+`report` **read-only** action for already persisted CLI
+stderr/stdout and repurposes Wizard Advanced option 6
+to inspect saved failure rather than repeating the one-shot
+probe; still requires CI-qualified source sync for DGX.
+
+**P0 hierarchy:** normal easy Wizard checkpoint installation,
+switching, diagnostics and safe removal remain the primary
+product goal; official C is a candidate backend of existing
+OrcaRouter and **not a newly verified selectable checkpoint**.
+Keep C disabled from normal production selection until
+real CLI/model/host proof is available. Do not reframe research
+helpers or manual Docker commands as the primary deliverable.
+[Complete physical probe receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
+## 2026-10-18 — Explicit approval: one-time CPU-only C image CLI/version probe (NOT EXECUTED)
+
+Following physical DGX `host-check` PASS at source SHA
+`c54248245376565c24c96893ba27f00032d6bffa`, the owner
+explicitly approved a **single** CLI help/package metadata
+inspection using the already installed official ARM64 C image.
+This is **not** permission to run GPU or load OrcaRouter weights.
+
+GitHub implements a new *source-only until DGX execution*
+`scripts/runtime/orcarouter-peer-c-cli-probe.py` (`plan` and
+`run --approved-cpu-only`), Wizard Advanced default-no option 6,
+and synthetic offline tests.
+The CPU probe uses exact image manifest/config IDs, Docker
+`--pull=never --runtime runc --network none --read-only`, no GPU
+devices, no model mounts, restricted non-root resources,
+`vllm serve --help=all` and `importlib.metadata` packages.
+Only a new randomly named disposable probe is auto-removed;
+existing managed/A/B are exact-ID protected and untouched.
+Evidence is collected to `$HOME/orcarouter-bench-evidence/`;
+a one-time approval marker prevents accidental repeated execution.
+No C container has yet been created under this authorization;
+the tool requires a new CI-successful source sync on DGX.
+
+**Persistent STOP boundaries:** do not claim the image's actual
+CLI support or wheel/source revision before operator returns
+the CPU-only probe output; even a parser-help PASS does not
+prove model CPU PLE/KV/MTP runtime compatibility. No GPU start,
+bench, service changes or cleanup of old containers authorized.
+[Plan and approval receipt](ORCAROUTER-PEER-C-PLAN-20261018.md).
+## 2026-10-18 — ACTUAL DGX NEW C host-check PASS (CI-qualified source; static only)
+
+Owner safely fast-forwarded to exact Git HEAD
+`c54248245376565c24c96893ba27f00032d6bffa`
+(`GIT_SYNC=PASS`), then executed
+`python3 -B scripts/runtime/orcarouter-peer-c-readonly.py host-check`
+on the physical DGX.
+Actual output: `PEER_C_OPERATION=HOST_CHECK_READ_ONLY`,
+`PEER_C_RUNNING_DOCKER=ONLY_KNOWN_ADMIN_CONTAINERS`,
+`PEER_C_PORT_18891=NO_LISTENER_AT_CHECK`,
+`PEER_C_PLE_SWAP=PLE_SWAP_ACTIVE`,
+`PEER_C_NONCMA_FREE_KIB=119329120`,
+`PEER_C_NONCMA_AVAILABLE_KIB=123853516`,
+`PEER_C_SWAP_FREE_KIB=149950172`,
+`PEER_C_MEMORY_MARGIN=MINIMUM_STATIC_MARGIN_MET`,
+`PEER_C_HOST_CHECK=PASS_SNAPSHOT_NOT_LIVE_APPROVAL`,
+`HOST_CHECK_EXIT_CODE=0`.
+Github CI on the exact DGX synchronized SHA was Push+PR SUCCESS.
+
+**Scope:** only an independent read-only momentary host readiness
+check passed. No C trial create/start, new services, model load,
+host protected monitor arming, GPU execution, 180s soak or throughput
+was performed. Existing managed/A/B identity/stop evidence remains
+preserved; today's host snapshot does not replace the exact-ID check.
+
+**Next source gate:** confirm the pinned official ARM64 image's
+**actual** vLLM CLI/wheel and 16GiB KV/CPU PLE/MTP options, then
+finish an independent uniquely named C create-only and protected
+watchdog-before-start controller with synthetic CI tests. Any Docker
+create/run or GPU model test needs separate owner approval.
+[Physical host-check receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-host-readonly-20261018.md).
+## 2026-10-18 — ACTUAL DGX peer C read-only host resources: free TCP port, swap and RAM
+
+The owner ran `docker ps`, `ss -H -ltn '( sport = :18891 )'`,
+`swapon --show` and a `/proc/meminfo` grep on the real DGX.
+Only two Docker containers were currently running:
+`open-webui` (id-prefix `9219d017e6ca`, exposed TCP 3000, healthy)
+and `portainer` (id-prefix `360cc353a945`, exposed TCP 9443).
+The `ss` check displayed **no listener** for C's planned TCP port
+`18891` at that instant. `/swap-ple.img` was active at 128G with
+`1020.3M` used, and `/swap.img` was active at 16G with 0 used.
+Raw `/proc/meminfo`: `MemFree=119400264 kB`,
+`MemAvailable=123921280 kB`, `CmaFree=69320 kB`,
+`SwapTotal=150994936 kB`, `SwapFree=149950172 kB`.
+So immediate **non-CMA free** was approximately **113.8 GiB**
+and **non-CMA available** approximately **118.1 GiB**;
+swap free was about **143.0 GiB**.
+
+Interpretation: the *current* host snapshot is far above previous
+low-free-RAM B protection samples, and no existing TCP listener
+collides on port 18891. This is **NOT a port reservation, allocation
+guarantee, GPU model compatibility result, proof other services are
+absent, or authorization for live C start**. Existing A/B/managed
+full exact IDs remain preserved per prior physical preflight.
+No source deploy, host operation, Docker creation, model READY,
+RAM-soak test or benchmark occurred in this inspection.
+
+[Exact operator host resource and running-container evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-host-readonly-20261018.md).
+## 2026-10-18 — ACTUAL DGX C systemd inventory: exact managed unit NOT_FOUND in system AND user managers
+
+The owner ran `systemctl show qwen38-flash-next.service` and
+`systemctl --user show qwen38-flash-next.service` with read-only
+`--property=LoadState,ActiveState,SubState,UnitFileState`.
+**Both** outputs were
+`LoadState=not-found`, `ActiveState=inactive`, `SubState=dead`,
+`UnitFileState=` (empty). Thus the exact named unit is
+**not installed/recognized in either systemd scope** at inspection
+time, **not** an installed stopped service. This resolves the
+earlier `INACTIVE_OR_UNKNOWN` ambiguity to `NOT_FOUND` for this
+specific physical observation, but does not rule out differently named
+units or unmanaged processes.
+
+An independent new C Wizard controller cannot inherit a requirement
+that this actual unit be installed, nor claim a managed service
+is healthy; it must independently guard port ownership, running
+Docker objects and unfinished lifecycle state and arm the existing
+memory-protection watchdog before starting the exact C candidate.
+**No systemd change, C create/start, GPU execution or benchmark.**
+[Read-only physical receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
+## 2026-10-18 — ACTUAL DGX C full preflight PASS (READ-ONLY); still no C model runtime
+
+Operator successfully fast-forward synchronized DGX clean local branch
+`feature/wizard-modular-phase1-20261014` from
+`ad3855a0a64e25deed3b9c11d7b3168f06730d68` to
+`ff339c1eb9eb77cb774b50b3fcdc7fa009ecd74d`
+(`GIT_SYNC=PASS`). The same physical DGX executed
+`python3 -B scripts/runtime/orcarouter-peer-c-readonly.py preflight`,
+returning `PREFLIGHT_EXIT_CODE=0`,
+`PEER_C_LOCAL_IMAGE=PINNED_MATCH`,
+`PEER_C_RUNTIME_CONTRACT=ENTRYPOINT_SHAPE_MATCH_WHEEL_SOURCE_UNATTESTED`,
+`PEER_C_PROTECTED_OBJECTS=THREE_STOPPED_EXISTING_IDS`,
+`PEER_C_HOST_ARCH=ARM64`, `PEER_C_ROOT_DISK_FREE_GIB=417`,
+`PEER_C_MANAGED_SERVICE=INACTIVE_OR_UNKNOWN`,
+`PEER_C_ADMISSION=SOURCE_READ_ONLY_PREFLIGHT_PASS_NOT_LIVE_APPROVAL`.
+
+**Important limits:** status `INACTIVE_OR_UNKNOWN` is only an ambiguous
+combined result for systemctl exit codes 3 and 4; it cannot affirm
+the systemd unit's existence/status. It also cannot attest exact
+embedded vLLM wheel or flag compatibility, memory behavior, API READY,
+or performance; **no C Docker create/start, GPU or bench** occurred.
+
+Static code review: current `scripts/serve.sh` allows create-only
+variants `mazinb-m1`, `hybrid-h6-m1` or old `legacy/v029`, **not C**.
+When using a distinct image for OrcaRouter it selects CPU PLE but
+default KV flag `--kv-cache-memory`; public vLLM docs instead expose
+`--kv-cache-memory-bytes`. Specific pinned official image CLI parser
+must be checked before writing a live C launcher. Do not use direct
+`docker run` or reuse historical A/B container names to bypass this.
+
+Read-only C helper source was later improved to label its true host
+inspection and distinguish `INACTIVE` vs `UNKNOWN_NOT_LIVE_APPROVED`
+rather than printing `PLAN_ONLY` and `INACTIVE_OR_UNKNOWN` on preflight;
+the owner has **not** synchronized or run these later changes.
+[Exact operator transcript and static blocker evidence](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-preflight-20261018.md).
+## 2026-10-18 — ACTUAL DGX peer C OCI ENTRYPOINT attested; vLLM embedded wheel remains unknown
+
+The owner inspected local pinned official ARM64 image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`
+read-only. Output: `ENTRYPOINT=["vllm", "serve"]`,
+`CMD=NOT_SET`, `WORKDIR=/vllm-workspace`,
+`CUDA_VERSION=13.0.1`, `OCI_REVISION=unknown`,
+`VLLM_BUILD_COMMIT=unknown`, `VLLM_IMAGE_TAG=local/vllm-openai:dev`,
+`VLLM_VERSION=NOT_SET`, `FLASHINFER_VERSION=NOT_SET`.
+
+Existing `serve.sh` appends `/model` and runtime flags after the
+image, which produces the intended **argument shape**
+`vllm serve /model ...`. It does not prove option acceptance,
+Qwen4Exp/OrcaRouter/CPU PLE loader support or compatible
+CUDA/allocator behavior, and no actual Docker start occurred.
+The image is installed and SHA verified but its embedded vLLM
+wheel/source is still **UNATTESTED**. Current new C
+read-only preflight now inspects the actual Entrypoint, optional
+Cmd, WorkingDir and CUDA_VERSION; this is a static gate only.
+**No launch, API READY, memory/host qualification or C benchmark.**
+[Actual OCI metadata receipt](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+## 2026-10-18 — ACTUAL DGX official ARM64 peer C image pull VERIFIED, protected Docker unchanged
+
+The operator explicitly authorized **only pinned image download and
+identity verification**. On physical DGX, `docker pull --platform linux/arm64`
+of `vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`
+completed and live local `docker image inspect` produced
+`PEER_C_VERIFY=PASS` with `OS=linux`, `Architecture=arm64`,
+exact expected `RepoDigests` and distinct image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`.
+Source registry label information is not yet proof of actual embedded
+wheel revision or runtime model compatibility.
+
+The exact protected `qwen38-flash-next`, `qwen38-ab-legacy`,
+`qwen38-ab-v029` container ID/image/status/running/OOMKilled metadata
+were identical before and after the pull; `diff -u` passed and operator
+printed `PEER_C_PROTECTED_DOCKER=UNCHANGED`.
+Evidence root `/home/inlc/orcarouter-bench-evidence/peer-c-image-20261018T093728Z`
+holds `pull.log`, JSON image inspect, verification output, pre/post
+protected receipts and a `SHA256SUMS.txt` file. The owner's terminal
+did not paste checksum contents nor attest post-run verification.
+
+**Current gate:** `PEER_C_IMAGE_STAGE=VERIFIED`,
+`PEER_C_MODEL_START=NOT_PERFORMED`,
+`PEER_C_BENCHMARK=NOT_MEASURED`.
+Run the independently developed **read-only** C preflight on a
+known-clean, explicitly synchronized exact source SHA; check
+image/guard/runtime metadata before designing live candidate.
+**No live Docker create/start/exec, GPU, service, cleanup or
+PR merge approval is implied by the download-only approval.**
+[Exact actual DGX image receipt and protected postcheck](../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+[Peer C planning](ORCAROUTER-PEER-C-PLAN-20261018.md).
+## 2026-10-18 — ACTUAL DGX OrcaRouter v0.29 B protection stop proven; official ARM64 C image NOT LOCAL
+
+New owner physical **read-only observation** of the preserved Oct-13 B:
+`qwen38-ab-v029` exact ID `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`,
+image `sha256:dba5d8af...`, Docker `exited`, `ExitCode=137`,
+**`OOMKilled=false`**, 2026-10-13 20:56:13–21:04:01 KST.
+Five monitor samples at 21:03:22–30 triggered `protect=1/5` →
+`5/5`, low immediately-free non-CMA **1969 → 1171 MiB** and
+`swapgrowth=3207MiB`, while `noncma_available` remained
+approximately 40–42GiB. `STOP_REASON=memory-protection` and
+`PROTECT stopping` occurred at **21:03:30 KST**. This is
+a **confirmed watchdog stop**, *not* proof of NVIDIA RM or Docker OOM.
+No actual B API READY or throughput was measured.
+
+The same owner performed `docker image inspect` on the exact published
+`linux/arm64` vLLM image manifest
+`vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`,
+and got **`No such image`**. This only proves that exact reference is
+not local; an alias under a different tag still requires separate
+`RepoDigests` inspection. **No C image pull, Docker start, GPU use,
+or C performance measurement occurred.**
+
+New GitHub **SOURCE_ONLY**
+`scripts/runtime/orcarouter-peer-c-readonly.py` plus offline tests
+and Advanced Wizard read-only plan/preflight entries identify the
+official ARM64 digest and preserve existing managed/A/B objects.
+`preflight` blocks if the pinned digest/tag is not locally attested.
+This is a planner, **not a C GPU launch implementation or live approval**.
+The operator's DGX was last shown on clean `ad3855a0...`; do not imply
+new GitHub commits have been executed locally. PR #261 remains
+Draft/Open/Unmerged. Real pinned Docker pull and C live startup still
+require separate operator approval; keep KV=16GiB and protection unchanged.
+
+[Actual B timeline and no-image evidence](../scripts/benchmark/evidence/dgx-orcarouter-v029-b-readonly-status-20261018.md).
+[Independent C plan and gate](ORCAROUTER-PEER-C-PLAN-20261018.md).
+## 2026-10-18 — ACTUAL DGX v0.29 B trial stopped from memory protection; benchmark had no API
+
+The owner executed the maintained **read-only** OrcaRouter A/B trial
+status, managed-service status and `docker ps`. The preserved
+`v029` trial is `phase=stopped`, `Running=False`,
+`DockerStatus=exited`, `ExitCode=137`,
+`STOP_REASON=memory-protection`, exact Docker ID
+`13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`.
+This is the **current observation of an existing B trial**, **not**
+a newly started 2026-10-18 GPU experiment. Its exact
+`StartedAt`, `FinishedAt`, `OOMKilled`, monitor pressure
+trajectory and strict kernel RM window were not provided.
+Managed service command reported `installed=no enabled=no active=no`;
+`docker ps` showed only unrelated `open-webui` and `portainer`
+running. Neither service status nor an empty model-serving port proves
+checkpoint/manifest or protected historical Docker absence.
+
+The owner's loopback `18888` requests received connection refused.
+Two invocations of the canonical lock-wrapped Python benchmark client
+produced **error-only** JSON (qualification and decode), with
+`/health` connection refused on 2026-10-18 at 08:29:57Z.
+No throughput, TTFT, generation, READY or RM stability measurement was
+obtained. `BENCHMARK_STATUS=NOT_MEASURED` for OrcaRouter remains.
+The source's fail-closed same-variant Docker-name reservation blocks
+reuse of existing `qwen38-ab-v029` without separate evidence-backed
+resource disposition; **do not delete it to bypass admission**.
+No trial restart, benchmark repeat, model-data cleanup or protection
+relaxation is approved. Collect bounded read-only exact B monitor,
+Docker and kernel window evidence next, then review any new candidate
+through a distinct identity and owner-approved Wizard procedure.
+[Exact owner terminal output, scope and STOP rules](../scripts/benchmark/evidence/dgx-orcarouter-v029-b-readonly-status-20261018.md).
+
+## 2026-10-18 — ACTUAL DGX OrcaRouter full peer config parity 7/7 verified
+
+The DGX operator pasted the output of the existing bounded,
+read-only `inspect_orcarouter_mount_config_readonly.py` from
+`~/Workspace/llm/qwen3.8-flash-next-dgx-spark`.
+Current protected container postcheck `PASS_CURRENT_ONLY`;
+managed/legacy RO bind sources match and original+override configs
+are readable. The override equals the expected narrow
+`qwen_sparse_attention -> full_attention` rewrite and retains
+48 layers, 36 linear / 12 full, 2 CT groups / 301 targets /
+753 ignores.
+
+**New physical finding:** canonical SHA256 values for the FULL
+operator-supplied community `config.json` and all six separately
+reported subtrees (quant, CT groups, ignore list, text, **ordered**
+layer types, vision) are **7/7 MATCH_REFERENCE_CANONICAL_VALUES**.
+This closes *JSON-value parity with the supplied third-party reference*
+as a remaining config-difference question; earlier count-only
+conclusions are preserved as the preceding measurement.
+**Not** proof of peer weight/tensor identity, actual runtime-selected
+config, image source equivalence, READY/API success, protection
+continuity or strict RM host-stability.
+
+Provenance: `ACTUAL_DGX_OPERATOR_TERMINAL`, but the displayed
+terminal portion does **not** include exact local HEAD, clean
+worktree or exit status; those are `NOT_CAPTURED_IN_THIS_TRANSCRIPT`.
+Do not attribute the run to GitHub HEAD `ad3855a0...` or its
+successful PR CI without a separate local checkout receipt.
+[Original and follow-up physical evidence](../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+No weights, GPU or Docker mutation during this inspector run.
+
+**Current active next gate:** exact provenance of official ARM64
+CUDA13 vLLM wheel/commit and source-based 48 x 400MiB
+`w13_weight` / 48 x 800MiB pre-create allocator comparison
+against preserved R23–R32 source and memory evidence. Official
+image still `NOT_PRESENT` in the last owner's local inspect;
+no new image pull/container start, host mutation, protection
+relaxation, KV24, or Draft PR merge is authorized.
+
+## 2026-10-18 — OrcaRouter official ARM64 image registry provenance checked; embedded source still unattributed
+
+GitHub PR #261 and #259 are **Draft / Open / Unmerged**. The
+previous source HEAD `dacbdc21d31bd0d1a82169297b6726fd30b7ea53`
+completed both exact-head Push CI #39104104591 and
+PR CI #39104107142 **SUCCESS** (one validate job each).
+This proves CI status for that exact revision only,
+not the subsequent documentation commit or a physical DGX run.
+
+Independent public Docker Hub registry review of the peer's
+pinned `linux/arm64` image manifest
+`sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`
+confirms CUDA 13.0.1 build metadata, Python 3.12 and FlashInfer
+0.6.17 build arguments. But OCI/vLLM revision labels say
+`unknown` / `local/vllm-openai:dev`; no immutable exact
+wheel-source commit can be derived from those labels.
+External deployments report
+`vLLM 0.1.dev20073+g8e685d198`, but a public upstream
+GitHub contents lookup for `8e685d198` returned 404.
+**Official-image exact source and RM allocator differences:
+NOT_ATTESTED / NOT_PROVED.** See
+[the source-only image review](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md#2026-10-18--official-arm64-cuda-13-image-provenance-source-only-evidence-and-blocker).
+
+The already-implemented `inspect_orcarouter_mount_config_readonly.py`
+digest comparison remains **NOT_RUN_ON_PHYSICAL_DGX**,
+pending a clean checkout pinned to a newly CI-qualified exact HEAD
+and the protected current-only postcheck.
+Historical 2/301/753 + 36/12 shape evidence is counts-only;
+no new Docker, checkpoint, PLE, GPU, KV or PR state mutation
+was carried out. Default KV=16GiB, 24GiB future conditional
+A/B only, strict RM error zero requirement unchanged.
+
+## 2026-10-18 — ACTUAL_DGX OrcaRouter mounted original and override config verified, reference counts match
+
+The physical DGX owner ran the protected Docker-mount-derived,
+read-only `inspect_orcarouter_mount_config_readonly.py`
+at exact HEAD `2812aa01fdc33d7d4b6b52cdc6e7a1ecec038948`,
+with exact-head CI 2/2 SUCCESS. All current protected
+image/container identity and RO mount checks **PASS**;
+both protected stopped containers share the same
+real on-host model root and config override source.
+Original `config.json` and existing override are
+bounded, readable regular files. **The earlier
+`$HOME/models` guessed-path failure was NOT evidence
+of checkpoint loss.**
+
+`CONFIG_REWRITE=EXACT_EXPECTED_LAYER_TYPE_REWRITE`;
+the original uses 48 layers (36 linear, 12
+`qwen_sparse_attention`), the override uses 36
+linear + 12 `full_attention`. CT declaration
+shape in both: **2 groups / 301 targets / 753 ignored**,
+matching the third-party OrcaRouter posted config
+**counts only**. Neither the ordered 48 layer
+positions nor all CT target/ignore values have
+yet been compared to the posted config. The
+operation read no weights and performed no Docker
+mutation or GPU run.
+
+**Important finding:** direct review of maintained
+`scripts/serve.sh` confirms the peer's CUDA/PLE/
+FlashInfer environment and resource/security flags
+(32g shm, IPC host, memlock, privilege additions),
+8192 batching, tool/reasoning parsers, TP=1/mp,
+MTP2 and caching switches are all already
+present. Raising KV from 16GiB to peer's 24GiB
+remains contradicted by our physical stability
+tests. The only prominent remaining unresolved
+delta is the **official ARM64 CUDA13 image and
+its embedded vLLM/allocator/PLE implementation**
+(the owner previously confirmed NOT_PRESENT
+locally). The new source-only extension performs
+private SHA256 comparisons of the full community
+pasted JSON and critical subtrees against the
+current mounted override, emitting sanitized
+MATCH/DIFFERENT/MISSING labels. This extra
+comparison is **not yet physically measured**.
+[New ACTUAL_DGX evidence](../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+
+## 2026-10-18 — ACTUAL_DGX OrcaRouter read-only preflight stopped on guessed model path
+
+The owner fast-forwarded local
+`feature/wizard-modular-phase1-20261014` from
+`1dddec7..28d5429` and obtained
+`EXACT_HEAD_CI=SUCCESS_2_OF_2`.
+The existing protected-container read-only postcheck
+returned `PASS_CURRENT_ONLY`: both temp ID and
+name absent, pinned image ID/size matches, both
+managed and legacy exact stopped containers/nested
+read-only model binds match. Both container
+name-vs-ID `Mounts=ORDER_ONLY` (complete
+record equality modulo order) and other fields
+`MATCH`. Docker did no mutation/copy/GPU work.
+The official peer-run image
+`vllm/vllm-openai:qwen38-flash-next-arm64-cu130`
+was reported **`OFFICIAL_IMAGE_LOCAL=NOT_PRESENT`**
+by a read-only `docker image inspect`; no pull.
+Next the older command assumed
+`${QWEN38_MODEL_ROOT:-$HOME/models}/qwen3.8-flash-next-orcarouter/config.json`
+and stopped at `STOP: Original config missing`
+**before** running the maintained checkpoint inspector.
+
+**This does not prove the original OrcaRouter checkpoint or
+config was deleted.** The assumed default path was
+not independently verified as the existing Docker
+`/model` bind `Source`; actual current protected
+Docker mounts are better provenance than a guessed
+home directory. No model config comparison, safetensors
+header read, image-source delta or benchmark was
+performed in that physical run.
+
+Follow-up is implemented SOURCE_ONLY as
+`scripts/model/inspect_orcarouter_mount_config_readonly.py`:
+it reuses the exact-ID current protected postcheck,
+reads the existing protected `/model` directory
+and nested `/model/config.json` bind sources from
+Docker metadata and opens **only two bounded small
+JSON configs**, never full model tensors or files.
+It emits sanitized categories and CT/layer-type
+counts without printing source paths, JSON or secrets,
+and compares existing generated override to the
+narrow `prepare_config.convert_layer_types` function.
+It fails closed on changed identities, multiple/missing
+or non-RO binds, differing managed/legacy source
+directories, missing/invalid config files and
+unreadable or unqualified data. Host execution of
+the new code remains **NOT_OBSERVED**; no remote image,
+model download or Docker mutation is authorized.
+[OrcaRouter community comparator](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+
+## 2026-10-18 — OrcaRouter-first recovery from community reference, flags mostly already matched
+
+The owner specifically requested revisiting **OrcaRouter
+startup stability** using the Arca single-Spark report,
+rather than only extrapolating it to lychee888.
+GitHub historical physical evidence shows a 16GiB
+OrcaRouter run reached strict `PASS/PASS` (Oct 3),
+while later 16GiB restarts could reach READY yet
+emit strict NVIDIA RM `NV_ERR_NO_MEMORY` and fail
+host-stability; Legacy A (Oct 13) was correctly
+stopped by the protective monitor at 914MiB
+non-CMA free with 13.77GiB swapgrowth before
+checkpoint completion. v0.29 PLE-mmap R22
+reached API READY but had one strict RM OOM;
+mmap reduced later swap pressure yet did not
+eliminate the early ~75GiB RM allocation burst.
+
+Review of maintained `scripts/serve.sh` confirms
+community options `mp`, legacy CPU PLE offload,
+1800s PLE wait, TP1, MTP k=2, 262144 max context,
+0.85 GPU utilization and max 3 sequences
+are already configured. Local 16GiB KV remains
+evidence-driven and **must not be raised to the
+forum's 24GiB** without a separately qualified run.
+Most meaningful unverified difference: the
+community **official CUDA13 ARM64 vLLM image**
+versus our custom legacy/v0.29 images, and
+the author's separate `config.json` override.
+TP1 uniproc/PLE worker hang workaround `mp`
+is already in our stack
+(https://github.com/vllm-project/vllm/issues/53960).
+A recent vLLM image may have different
+allocator/model/quantization semantics, but
+this has **not been source-proved** or physically
+measured here.
+
+**Plan:** source-only image/config comparison and
+read-only preflight first; a new isolated Wizard
+trial needs separate explicit approval. Keep
+protected monitors and 16GiB default; no image
+pull/rebuild, Docker start/create/remove, checkpoint
+download or GPU run now.
+[Authoritative comparison](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+
+## 2026-10-18 — EXTERNAL_ONLY OrcaRouter single-Spark CPU-offload reference; not lychee888 qualification
+
+The operator supplied the **full third-party report and posted
+config.json** from https://arca.live/b/alpaca/181506470.
+Its author reports serving **orcarouter/Qwen3.8-Flash-Next-Uncensored-NVFP4**
+on one DGX Spark, TP=1, using
+`vllm/vllm-openai:qwen38-flash-next-arm64-cu130`,
+`VLLM_PLE_CPU_OFFLOAD=1`, MP executor,
+24GiB KV, configured 262144 max context, concurrency 3 and
+MTP=2. Author-reported memory 118.4/122GB (~97%);
+mixed concurrency-3 output 52.4 tok/s on a short 12-request
+benchmark. This is **external third-party user evidence**,
+NOT our physical DGX evidence and NOT proof that a real
+262K input or long-term stable benchmark passed.
+
+We parsed the posted OrcaRouter config: Qwen4Exp,
+`compressed-tensors` `mixed-precision`, 2 CT groups
+(300 FP8 channel targets + 1 NVFP4 experts regex),
+753 ignored entries, 2 explicitly ignored PLE projection
+strings, **no direct PLE ngram target** and
+**no `ple_embedding_dtype` declaration**. Thus it is
+**NOT the lychee888 FP8 PLE / BF16 global-scale
+checkpoint** and cannot clear the actual installed
+`NATIVE_FP8_CONFIG_ONLY_SOURCE` dispatch blocker.
+
+Single GB10 has shared system/GPU memory:
+pinned CPU PLE offload still costs physical memory
+and does not alone resolve lychee888's pinned index
+`132279699754` bytes exceeding 128GB nominal.
+External upstream file-backed alternatives
+[#58439](https://github.com/vllm-project/vllm/pull/58439)
+`checkpoint_mapped` and
+[#58815](https://github.com/vllm-project/vllm/pull/58815)
+`host_file_gather` are **OPEN/UNMERGED** as of
+2026-10-18, potentially more relevant than
+simple pinned-CPU offload but not part of our
+installed image and NOT QUALIFIED for lychee888.
+[Full external-evidence comparison](COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+No Docker/model download/GPU action is authorized;
+current physical protected resources remain
+`PASS_CURRENT_ONLY`, original historical
+`FAIL_REVIEW` preserved.
+
+## 2026-10-18 — SOURCE_ONLY compressed-tensors config_groups shape inventory for lychee888
+
+The first actual DGX pinned model JSON L0 completed at
+`b9114544eb35d7275740cf0ca2e9d010134f7cbb`:
+index `total_size=132279699754` bytes, 223047 tensor
+keys, 128 PLE shards, one global scale and
+`compressed-tensors` `mixed-precision`.
+The installed-image PLE selector remains known
+only via prior physical SHA/AST evidence
+`NATIVE_FP8_CONFIG_ONLY_SOURCE` with no
+CT resolver runtime attestation.
+
+The same existing metadata-only assessor was extended
+with a **structural CT config-group inventory**:
+group count, target-pattern count, PLE substring
+mentions in group targets, ignored-target entries
+and PLE substring mentions in ignore list.
+These counts can help identify which fixed
+checkpoint scheme declarations need source review.
+**They are NOT runtime target matching.**
+Actual CT matching may use layer class names,
+regexes, fused remapping and ignored layers;
+the installed image's `CompressedTensorsConfig`
+implementation and prefix rules are **not
+audited**, and a literal string mention alone
+does not qualify FP8 PLE dispatch. Missing or
+malformed structures are explicitly unknown
+or fail-closed; no silent fallback to success.
+The implementation is SOURCE_ONLY + synthetic tests.
+The next operator command is the same pinned
+JSON-only CLI at a successfully validated new HEAD.
+No Docker/GPU/weight operations are authorized.
+
+## 2026-10-18 — ACTUAL_DGX pinned lychee888 metadata L0 success and over-nominal index bytes
+
+The operator on the physical DGX verified clean local
+`b9114544eb35d7275740cf0ca2e9d010134f7cbb`
+(exact-head two CI SUCCESS), then completed
+`assess_lychee888_loader.py --json` with
+`LYCHEE888_METADATA_COMMAND=COMPLETED`.
+Pinned Hub revision:
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`.
+`l0_verdict=INDEX_STRUCTURE_PASS_METADATA_ONLY`;
+223,047 indexed keys, exactly 128 PLE weight shards
+across ten FP8-PLE filenames, and one listed global
+`weight_scale`; PLE config dtype `float8_e4m3fn`.
+Pinned quant metadata
+`quant_method=compressed-tensors` and
+`format=mixed-precision` differs from the
+repository NVIDIA `ModelOptMixedPrecisionConfig`
+patch. Source dispatch `NATIVE_FP8_CONFIG_ONLY_SOURCE`
+comes from an older independently captured physical
+source SHA receipt, not a fresh Docker check.
+
+New pinned index `metadata.total_size=132279699754`
+bytes, exceeding nominal DGX Spark 128 GB unified
+system memory by **4,279,699,754 bytes** under a
+hypothetical untransformed full-residency comparison.
+Runtime peak memory `NOT_MEASURED`;
+this is not proof of OOM, nor proof of fit with
+mmap/CPU offload/streaming. Global scale is
+index-listed but its actual BF16 tensor dtype,
+registration/load/consumption and backend dispatch
+remain unverified.
+
+Report `installed_loader_contract=BLOCKED_SOURCE_ONLY_UNQUALIFIED`,
+`single_gb10_tp1=NOT_VERIFIED`, and
+`SOURCE_ONLY_LOADER_UNQUALIFIED`. No model
+download, Docker action or GPU run occurred.
+Existing protected-current-state result remains
+`PASS_CURRENT_ONLY`; historical one-shot
+`FAIL_REVIEW` remains unclassified.
+[Physical output](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — SOURCE_ONLY nominal unified memory screen for lychee888 index
+
+The same standalone pinned metadata/source assessor now
+screens `model.safetensors.index.json` `metadata.total_size`
+against NVIDIA DGX Spark's **nominal 128 GB decimal
+unified system memory** (128,000,000,000 bytes).
+The model card reports ~123.25 GiB on disk and an
+index tensor size of 132,279,699,754 bytes,
+which **exceeds** the nominal memory capacity.
+However those card claims and the model-index JSON
+are **file-side metadata**, not a real pinned-host
+`MemAvailable`, vLLM loaded tensor residency,
+peak allocations, CPU/disk offload, mmap behavior,
+or usable KV-cache/headroom measurement.
+When the indexed `total_size` value is not present,
+positive integral, and explicitly returned by the
+pinned metadata source, the code fails closed with
+`NOT_VERIFIED_INDEX_TOTAL_SIZE_MISSING`.
+It never outputs `FIT` or `INSTALLABLE`, even when
+index bytes are below nominal size.
+
+One Spark **TP=1** still `NOT_VERIFIED`. This
+source-only screen does not authorize checkpoint
+download, disk-mmap or GPU experiments, and should
+not be used to claim either measured OOM or
+measured stable fit. Source: NVIDIA
+https://docs.nvidia.com/dgx/dgx-spark/hardware.html;
+model card:
+https://huggingface.co/lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE.
+
+## 2026-10-18 — SOURCE_ONLY lychee888 installed PLE native-FP8 versus compressed-tensors dispatch gate
+
+The prior actual-DGX `PASS_CURRENT_ONLY` resource safeguard
+and physical PLE source SHA remain valid; the historical
+one-shot `FAIL_REVIEW` is preserved and not retroactively
+explained. The existing independent metadata-vs-source
+gate `scripts/model/assess_lychee888_loader.py` now
+reports the **installed local Docker image ID**,
+physical image-derived PLE Python file SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`
+and actual static resolver classification
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`. It differentiates
+pinned model `quant_method=compressed-tensors`,
+`format=mixed-precision` from repository NVIDIA patch
+`ModelOptMixedPrecisionConfig`, and explicitly
+labels the vLLM runtime quant class as **expected but
+not independently runtime-attested**.
+
+**Static compatibility: `BLOCKED_SOURCE_ONLY_UNQUALIFIED`.**
+The pinned lychee888 metadata has 128 PLE shards and
+one index-listed global scale; the installed native
+`Fp8Config` selector does **not** prove that a
+`CompressedTensorsConfig` checkpoint can take the
+FP8 path. Registering BF16 `weight_scale` and
+multiplying by scale are only conditional **source
+signatures**, not evidence that the scale tensor
+was loaded or exercised. Its dtype routing is
+`NOT_PROVEN_IN_INSTALLED_SOURCE`, and the CT
+prefix/scheme resolution, expert quantization,
+actual tensor header dtype and single GB10 TP=1
+remain unverified. The source bytes are **not
+archived**, so the new gate uses the preserved
+ACTUAL_DGX SHA/AST receipt, not runtime execution.
+
+New vLLM PLE documentation exposes explicit
+`ple_embedding_dtype` / `CompressedTensorsConfig`
+handling (external/reference-only); do **not**
+attribute this new implementation to the measured
+older installed image without identical-source evidence:
+https://docs.vllm.ai/en/latest/api/vllm/models/qwen4_exp/common/ngram_embedding/
+
+This update includes synthetic tests; **SOURCE_ONLY**
+until pinned metadata-only CLI is run by an operator.
+No image rebuild/patch, source reread, Docker mutation,
+checkpoint download or GPU run is authorized.
+[Actual source and protection evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — ACTUAL_DGX order-insensitive PLE postcheck PASS_CURRENT_ONLY; historical failure retained
+
+Operator fast-forwarded to clean exact local
+`a24cd3a7ce48c7531cabbdfec0139327eefce18a`,
+verified same-head GitHub CI `SUCCESS_2_OF_2` and
+executed `inspect_ple_postcheck_readonly.py` on the
+actual DGX. Current protected-state verdict:
+**`PLE_POSTCHECK_CURRENT_STATIC_POSTCHECK=PASS_CURRENT_ONLY`**.
+The one-time temp is **ABSENT_ID_AND_NAME**, installed
+image SHA256/size match, both original protected
+containers have exact expected identity, `EXITED`,
+`ReadonlyRootfs=false` and nested RO model binds.
+The managed `NAME_VS_ID_MOUNTS=ORDER_ONLY`
+(all complete mount-record values identical, ordering
+alone differs), historical A/B
+`NAME_VS_ID_MOUNTS=IDENTICAL_ORDER`;
+both `NAME_VS_ID_FIELDS=MATCH`. The command made
+**no Docker mutation/copy and no GPU run**.
+
+This confirms **current** matching protection
+metadata and addresses the previous unqualified
+raw `DIFFERENT_Mounts` ambiguity for this new
+snapshot. It does **NOT** recover the initial physical
+one-shot source probe's unrecorded pre/post field-level
+differences. Preserve original `FAIL_REVIEW` as
+historical `UNRECOVERABLE_WITHOUT_PRE_POST_FIELD_SNAPSHOTS`;
+do not reinterpret it as `PASS` or proven damage.
+Physical source-only image PLE SHA remains
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`,
+with native `Fp8Config`-only selector and BF16
+scale source signatures. lychee888 checkpoint
+`compressed-tensors` routing and GB10 TP=1
+remain **NOT_QUALIFIED**.
+[Full actual-DGX evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — ACTUAL_DGX legacy name-vs-ID Mounts raw difference; exact temp absent
+
+At clean local SHA `4fa3a83f33be508736ea4d79f0ed97d24bc0be60`,
+the owner verified exact-head CI `SUCCESS_2_OF_2`
+and ran the seven-inspect **read-only** protected
+postcheck on DGX. It reported
+`PLE_POSTCHECK_TEMP_ABSENCE=ABSENT_ID_AND_NAME`,
+`IMAGE=MATCH_PINNED_ID_AND_SIZE`, both protected
+container exact name/ID/image matches, both `EXITED`,
+`ROOTFS=READONLY_FALSE`, and
+`MOUNT_TOPOLOGY=MODEL_CONFIG_NESTED_RO_BINDS`.
+The **managed** container's whole name-vs-ID inspect
+sections were `MATCH`; the **legacy** A/B object's
+`NAME_VS_ID_FIELDS=DIFFERENT_Mounts`, so the script
+returned `CURRENT_STATIC_POSTCHECK=STOP_REVIEW_REQUIRED`.
+
+This is not evidence that a mount disappeared or that the
+protected container was damaged. The older tool compared
+`Mounts` as a **serialized ordered list**: order-only
+reordering and a real mount-record drift are not
+distinguished. The original one-time source probe's
+`FAIL_REVIEW` remains in the record; lost before/after
+field-level details cannot be recreated by reinspection.
+
+A **SOURCE_ONLY** enhancement to
+`scripts/model/inspect_ple_postcheck_readonly.py`
+now classifies exact mount-record equality, reordering
+only, and destination/type/RW/other mount metadata
+differences without disclosing source paths. The next
+physical action is ONLY this new read-only diagnosis
+after exact-HEAD CI SUCCESS, not creating another
+container or using an old mutation approval.
+[ACTUAL_DGX transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — SOURCE_ONLY postcheck differential diagnostic ready after physical probe partial result
+
+After recording the actual physical installed-image PLE source
+SHA256 and **`PLE_TEMP_PROTECTED_POSTCHECK=FAIL_REVIEW`**,
+the branch adds the independent read-only
+`scripts/model/inspect_ple_postcheck_readonly.py` and
+offline synthetic tests. It requests only current Docker
+metadata (7 `inspect` calls), checks actual temporary
+object absence under both **exact ID and name**, protected
+image ID/size, protected container IDs, stopped status,
+rootfs flag, nested RO mounts and current same-time
+name-vs-ID differences in the original fingerprint
+fields. It emits only field CATEGORY labels, never bind
+source paths, env, inspect JSON or credentials.
+
+**Crucial:** the earlier entire-dictionary pre/post comparison
+has no retained field-level receipts; the historical
+`FAIL_REVIEW` root cause is **NOT_RECONSTRUCTIBLE**
+from a new snapshot. Even if the current-state check
+passes, original physical outcome remains
+`SOURCE_CAPTURED_STATIC_ONLY, POSTCHECK_FAILED`.
+This new script is SOURCE_ONLY until owner runs it;
+no new Docker temp create/copy/removal or GPU use is
+authorized. [Evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — ACTUAL_DGX isolated PLE source SHA captured; protected postcheck FAIL_REVIEW
+
+The owner's actual DGX ran the narrowly approved **single**
+temporary created-only container source probe at exact clean
+code SHA `f1bce18ef6ab444ced20f4efed2ba8ec42a250f0`
+with verified `EXACT_HEAD_CI=SUCCESS_2_OF_2`.
+Exact existing image SHA256 unchanged; Docker Engine 29.6.2;
+created no-mount, unstarted temp
+`eb91d18dd1a1b45a4cba233160165bbe43b7835afa21873686402b505aac9375`
+(name `qwen38-ple-read-e7e7bac84a0b79e85020ff51`).
+Generic Docker-copy transport succeeded and the actual
+installed-image-derived PLE source path was
+`/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py`
+with SHA256
+`a71144c1d36e06f22a2da1b1ada900076597fe5e824a911e7ada86249a0993e7`.
+Static AST labels:
+`NATIVE_FP8_CONFIG_ONLY_SOURCE`;
+BF16 global scale parameter registration `PRESENT`;
+scale multiply `PRESENT`.
+All are **source signatures**, not checkpoint loader or TP=1 proof.
+
+Temp cleanup reported `EXACT_ID_REMOVED_VERIFIED`,
+**but protected before/after fingerprint comparison reported
+`FAIL_REVIEW`**. The script compared full `State`,
+`HostConfig`, `Mounts` alongside immutable identity
+without field-specific output. **Do not assert protected
+resources were preserved unchanged**, or that they were
+damaged; root cause remains UNCLASSIFIED pending read-only
+physical identity/state inspection. The overall probe did
+not reach `SOURCE_CAPTURED_STATIC_ONLY`; physical status
+is **PARTIAL / POSTCHECK_FAILED**. No replay of the
+already used one-temp approval, no destructive cleanup or
+GPU work. Current installed source bytes were not archived,
+but file SHA and static signatures were captured.
+[Full physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — owner approved exactly one isolated unstarted PLE source probe
+
+The owner explicitly answered **허용** to creating one **new**
+temporary container from the exact already-installed
+`vllm-skinny-tp1:v1` image, never starting it, reading only
+one bounded generic TAR and bounded PLE Python source files,
+and removing **only that uniquely labeled newly created ID**.
+The owner did **not** approve modifying/removing/restarting the
+protected managed or A/B containers, executing GPU code,
+downloading models, rebuilding images, Docker daemon upgrades
+or protected Draft PR merger.
+
+Source implementation is `scripts/model/probe_isolated_ple_source.py`
+with synthetic tests `tests/test_isolated_ple_source_probe.py`.
+The script defaults to read-only preview; execution requires
+exact immutable image ID and `--approved-scope` literal.
+It validates metadata, disk/inode reserve, no image-declared
+volumes, zero mounts/network/GPU exposure, exact temp
+identity/nonce/state, bounded TAR and source AST evidence,
+exact-ID-only cleanup and postchecks. SIGINT/SIGTERM attempt
+guarded cleanup, while SIGKILL/power-loss cannot be recovered
+automatically. A cleanup identity mismatch is STOP, not force
+deletion. All real Docker create/copy/remove steps remain
+**ACTUAL_DGX NOT_RUN** until a clean exact successful CI
+checkout and owner-terminal execution report are supplied.
+The installed PLE source SHA and lychee888 loader/TP=1 remain
+`NOT_CAPTURED`/`NOT_QUALIFIED` until that result.
+[Scoped operator contract](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md).
+
+## 2026-10-18 — ACTUAL_DGX isolated-source feasibility planner passed metadata only
+
+The operator cleanly fast-forwarded the DGX branch to exact
+`769332111dc4cdfa13e9817544b9166402985f66`
+and **physically ran**
+`python3 -B scripts/model/audit_installed_ple_image.py --plan-isolated-source`.
+Output attests exact image SHA256
+`01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+20,629,141,958-byte declared image, **both existing
+containers with `MODEL_CONFIG_NESTED_RO_BINDS`**,
+`DECLARED_IMAGE_VOLUMES=NONE` and
+`ISOLATED_CREATE_ONLY_FEASIBILITY=REVIEW_CANDIDATE_NOT_AUTHORIZED`.
+Only three Docker metadata inspections occurred;
+`DOCKER_CP_REQUESTS=0`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`, `SOURCE_BYTES_CAPTURED=NO`.
+This is a **physical read-only preview result**, not
+an installed PLE-source or loader/GPU acceptance.
+
+A [separate unapproved source-access proposal](LYCHEE888-ISOLATED-SOURCE-READ-PLAN.md)
+now describes a future uniquely owned, **created-but-never-
+started, zero-mount** temporary container derived from the
+exact installed image ID, one bounded generic copy and
+bounded PLE-source inspection, plus strict exact-ID postcheck
+and cleanup requirements. It explicitly does **not**
+authorize or execute temporary container creation/removal.
+Owner authorization, host disk/inode/operation isolation,
+exact procedure review, and resource/rollback acceptance
+remain **NOT_GRANTED / NOT_CHECKED**. Protected managed and
+historical containers remain unchanged and both Draft
+PR gates remain blocked.
+[Physical output](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-18 — SOURCE_ONLY isolated PLE source planning gate; no image bytes
+
+The current working branch implements a **preview-only**
+`python3 -B scripts/model/audit_installed_ple_image.py --plan-isolated-source`
+diagnostic. It uses exactly three existing Docker inspect
+requests and fails closed on mismatched immutable image ID,
+unexpected protected/historical container state, missing
+mount data, invalid image size, or ambiguous image
+`Config.Volumes`. It reports only safe source-access
+feasibility labels, never host bind source paths or raw
+container config. It **does not** create, copy, start,
+remove or change a container. A hypothetical mountless
+create-only source-copy probe remains a separately reviewed,
+**NOT_AUTHORIZED** future operation; volume declarations
+are a STOP condition because Docker may create anonymous
+volumes. Only SOURCE/CI tests exist for this mode until an
+actual DGX run is supplied; it is NOT a physical
+image-loader capture or a TP=1 admission.
+[Maintained module](../scripts/model/audit_installed_ple_image.py).
+
+External reference-only update: upstream vLLM
+[PR #53899](https://github.com/vllm-project/vllm/pull/53899)
+was closed without merge on 2026-09-21 and documents
+CPU offload TP2/TP4 on GB200, not single GB10 TP=1.
+[PR #54882](https://github.com/vllm-project/vllm/pull/54882)
+merged on 2026-09-03 but resolves FP8 PLE under
+`ModelOptMixedPrecisionConfig`, **not** proof that the
+pinned lychee888 `compressed-tensors` `mixed-precision`
+config selects that route. The exact vendor image source
+SHA remains `NOT_CAPTURED`.
+
+## 2026-10-17 — ACTUAL_DGX legacy same-image nested RO mounts; alternative cp blocked
+
+Operator inspected historical stopped `qwen38-ab-legacy`
+(`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`)
+on the DGX using **read-only Docker inspect**.
+`Image` **exactly matched** the protected managed
+`vllm-skinny-tp1:v1` image digest
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`.
+`State.Status=exited`, `HostConfig.ReadonlyRootfs=false`.
+Its `Mounts` include `/model` and
+`/model/config.json`, both bind and `RW=false`;
+cache binds `/root/.cache/flashinfer` and
+`/root/.cache/vllm` have `RW=true`.
+This proves that the historical A/B container has the
+**same nested read-only bind configuration** as the managed
+container, so it is **not an established Docker-copy
+workaround** for the diagnosed Docker 29.6.2 mount replay
+bug. No `docker cp` against the legacy container was
+performed or implied; no PLE source was captured.
+
+Proceed to a **separately reviewed, bounded nonmutating**
+image-origin source-access approach or independent
+pinned-source analysis with explicit provenance; do not
+bulk-export a ~20.63-GB image without an I/O/resource plan,
+access the Docker layer store with unbounded root traversal,
+restart Docker, create a fresh container, alter mounts or
+touch checkpoint/GPU. The installed-source SHA, FP8 PLE
+dispatch, BF16 scale and single-GB10 TP=1 gates remain
+unqualified.
+[Complete physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-17 — ACTUAL_DGX image size and legacy A/B alternate preview candidate
+
+The owner ran read-only Docker image-size and container-inventory
+commands. The pinned image ID remained
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`,
+declared image size `20,629,141,958` bytes (~19.21 GiB).
+`docker ps -a --filter ancestor=vllm-skinny-tp1:v1`
+returned two **stopped** containers:
+historical `qwen38-ab-legacy`
+(`57eada965768b01eb412b10826ec4f0be9c4ed352abd87957c4ffbe932f27a56`,
+exit 137) and protected managed `qwen38-flash-next`
+(`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+exit 0), both displaying tag `vllm-skinny-tp1:v1`.
+The `ancestor` filter **does not attest** the legacy
+container's exact immutable image digest; its mount topology
+and source provenance remain unverified.
+
+**Current safe next step:** read-only `docker container inspect`
+for **only** `qwen38-ab-legacy` and display its exact `Image`
+digest, state, readonly-rootfs flag, and mount **destinations**
+/ types / RW flags, never bind Source paths. Do not copy source
+from or change the historical container before identity and
+mount risk are evaluated. The 20.6-GB image is not a suitable
+unreviewed bulk-save target. No GPU run, daemon restart,
+image rebuild, model download or PR merge occurred.
+[Physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-17 — ACTUAL_DGX 29.6.2 predates verified nested-bind docker cp fix
+
+Read-only actual DGX `docker version` and `docker info`
+reported `SERVER_VERSION=29.6.2`, `SERVER_API=1.55`,
+and `STORAGE_DRIVER=overlay2`. Official Moby
+`docker-v29.6.2` source still uses write-opening
+`O_CREATE|O_WRONLY` and `root.Open` in mount replay.
+The same source at `docker-v29.8.2` contains the
+`O_EXCL` / `O_PATH` improvements; Docker
+[29.8.2 release notes](https://docs.docker.com/engine/release-notes/29/)
+list the nested bind `docker cp` fix.
+Together with the previous **ACTUAL_DGX** nested RO bind topology
+and `openat model/config.json: read-only file system`,
+this narrows the Docker-copy failure to a **high-confidence
+pre-fix daemon mount replay mechanism**, not PLE module absence.
+The installed daemon binary's vendor-specific backport state and
+internal stack are not independently attested; overlay2 usage alone
+is not evidence of a corrupt Docker filesystem.
+
+No Docker update, service restart, image rebuild, bind change,
+container execution, checkpoint download or GPU run was performed.
+Next: size-and-identity-only inventory of the installed image and
+any existing same-image containers before proposing an image-source
+extraction method. Physical source stays `NOT_CAPTURED` and
+lychee888 remains `NOT_INSTALLABLE`.
+[Detailed immutable physical transcript and source comparison](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-17 — ACTUAL_DGX confirmed nested read-only model mounts at cee107d
+
+Operator fast-forwarded the clean checkout to exact HEAD
+`cee107d9e47b278d7dede40a8d401ea9c2ccea32`
+and ran Wizard **3 → 7 → 4** on physical DGX.
+The protected image/container immutable IDs matched previous
+observations. `container_state=exited`,
+`container_readonly_rootfs=FALSE`, and the new
+`docker_cp_model_config_mount_topology=MODEL_CONFIG_NESTED_RO_BINDS`
+**physically verified one nested pair of read-only binds**
+at `/model` and `/model/config.json`.
+The single `/etc/group` Docker-copy preflight still failed
+`FILESYSTEM_READ_ONLY` with exit 1, 76-byte stderr and
+`DOCKER_DAEMON_REPLY,FILESYSTEM`; all 24 PLE/GEMM copies
+were deliberately skipped (`NOT_ATTEMPTED_PRECHECK_BLOCK`).
+`DOCKER_MUTATION=NONE`, `GPU_RUN=NOT_PERFORMED`,
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`, source `NOT_CAPTURED`.
+
+Coupled with the preceding exact Docker stderr
+`openat model/config.json: read-only file system` for
+an unrelated `/etc/group` copy, the protected container
+topology now makes the known Docker nested-bind-mount
+copy failure a **strong cause hypothesis**. An upstream
+[Moby source fix](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35)
+for overlapping binds was found, but the installed Docker
+Engine/server version and exact patch applicability remain
+unverified. No inference of missing PLE source or host root
+filesystem failure. **Physical next step:** read-only
+Docker Server Version inspection, then evaluate an alternative
+source-read route which does not modify the protected
+container or Docker configuration.
+[Full physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+## 2026-10-17 — ACTUAL_DGX Docker copy openat model/config.json; nested readonly bind candidate
+
+The owner captured the exact 76-byte-class Docker daemon error
+from the same read-only generic copy control:
+`Error response from daemon: openat model/config.json: read-only file system`
+(exit 1). The directly supplied host checkout SHA was
+`7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360`
+at this invocation. A request for `/etc/group` failed while accessing
+an unrelated `model/config.json` path. Static project serve source
+specifies nested read-only Docker bind mounts `/model:ro` and
+`/model/config.json:ro` for config override. Moby's
+[2026-09-17 nested bind mount Docker-copy fix](https://github.com/moby/moby/commit/7420e6240935b25644155447a3197a25af703d35)
+is a directly relevant candidate mechanism, **not verified as the
+installed daemon fault**. The physical container `Mounts` fields
+and daemon version remain NOT_CAPTURED.
+
+**SOURCE-only follow-up:** The existing PLE auditor now emits a
+sanitized fixed-destination mount topology observation based solely on
+existing `docker container inspect` records; it does not print
+host bind-source paths. It retains the current fail-closed Docker-copy
+preflight and is not a substitute for the next actual physical
+Wizard **3 → 7 → 4** execution. This exact source change requires
+its own HEAD CI result. Full physical stderr/provenance and
+bounded next-gate details:
+[lychee888 Docker-copy chronology](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+No Docker/GPU/model mutation, PR merge or candidate admission.
+
+## 2026-10-17 — ACTUAL_DGX early-stop verified; Docker copy read-only blocker persists
+
+Owner supplied the next actual read-only Wizard **3 → 7 → 4**
+output from the same pinned managed image/container IDs recorded in
+the [chronological physical evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+`State.Status=exited` and **`HostConfig.ReadonlyRootfs=FALSE`**
+were observed. The single generic `/etc/group` `docker cp`
+failed with `FILESYSTEM_READ_ONLY`, exit 1, stderr 76 bytes,
+sanitized signals `DOCKER_DAEMON_REPLY,FILESYSTEM`.
+The revised auditor correctly reported `ple_candidates_checked=0`
+and `NOT_ATTEMPTED_PRECHECK_BLOCK` for all targeted PLE/GEMM
+copy requests; **24 downstream attempts were skipped**, not tested.
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`.
+
+This is **ACTUAL_DGX proof of source-auditor fail-closed behavior**,
+not proof that PLE/GEMM files are missing, Docker host root is
+read-only, the image has a runtime-compatible FP8 loader, or
+lychee888 TP=1 can load. Docker storage/mount/rootless/daemon
+causality and exact Docker stderr remain unclassified. The
+on-host checkout SHA was not supplied; GitHub HEAD/CI are
+separate evidence. Next: one bounded, reviewed stderr probe on
+an existing non-model file; no Docker mutation, rootfs repair,
+service restart, model download, GPU load or protected PR merge.
+
+## 2026-10-17 — ACTUAL_DGX Docker copy FILESYSTEM_READ_ONLY: 25 requests, source not attested
+
+The owner reran read-only Wizard **3 → 7 → 4** on the existing
+image `sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and protected managed container
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+whose visible `container_state=exited`.
+Each of the 12 PLE file candidates and 12 Skinny-GEMM
+references failed Docker copy with `FILESYSTEM_READ_ONLY`;
+the `/etc/group` non-model copy control failed the same way,
+with `exit_code=1`, `stderr_bytes=76`, signals
+`DOCKER_DAEMON_REPLY,FILESYSTEM`. All source files remained
+`NOT_CAPTURED`, `GPU_RUN=NOT_PERFORMED`,
+`DOCKER_MUTATION=NONE`, `PLE_IMAGE_AUDIT=INCONCLUSIVE`.
+The **common Docker filesystem copy error** has priority over
+additional PLE path guessing. Neither checkpoint incompatibility,
+missing modules, host filesystem being read-only, nor container
+rootfs configured readonly is proven. See
+[the latest exact operator transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+The independent inspector now reads
+`container_readonly_rootfs` from existing
+`HostConfig.ReadonlyRootfs` (TRUE/FALSE/UNKNOWN),
+preflights only the bounded `/etc/group` Docker copy,
+and aborts **before 24 targeted file attempts** when
+`FILESYSTEM_READ_ONLY` or `CONTAINER_ROOTFS_READ_ONLY`
+is returned. Target source statuses are explicit
+`NOT_ATTEMPTED_PRECHECK_BLOCK`; this is not a loader
+admission. Both protected Draft PRs are left unmerged;
+no Docker mutation, image rebuild, GPU run or rootfs
+remount is proposed. This new early-stop implementation
+is SOURCE/CI-only until a new physical Wizard
+**3 → 7 → 4** output is supplied. Its latest pre-handoff
+implementation plus documentation at
+`7c93e4db2efd37d0bdc4f2f40748b1fe23d5f360`
+passed GitHub Actions `39035168973` (**SUCCESS**);
+that result is synthetic/repository CI, NOT actual DGX
+Docker-copy or PLE compatibility evidence.
+The [physical evidence index](../scripts/benchmark/evidence/README.md)
+now links the latest `FILESYSTEM_READ_ONLY` transcript.
+See [lychee888 canonical analysis](LYCHEE888-WIZARD-INTEGRATION.md).
+
+## 2026-10-17 — ACTUAL_DGX: all 25 Docker cp requests unclassified; prioritize shared copy transport
+
+Physical owner ran read-only Wizard **3 → 7 → 4**. It verified local
+Docker image SHA `01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and protected managed container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+Twelve PLE paths and twelve skinny-GEMM paths each returned
+`COPY_FAILED_UNCLASSIFIED:12`; the generic tiny `/etc/group`
+Docker-copy control also returned `COPY_FAILED_UNCLASSIFIED`.
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`. The exact reason, exit status and
+container runtime state were not in this physical output. This
+is **not proof of missing vLLM files or loader incompatibility**;
+the shared Docker-copy access mechanism is the priority blocker.
+See [the actual physical transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+**GitHub SOURCE-only follow-on:** bounded, enumerated Docker
+copy error categories and the generic non-model transport
+control now also expose `container_state` (allowlist only),
+`docker_cp_small_file_exit_code`,
+`docker_cp_small_file_stderr_bytes`, and
+`docker_cp_small_file_stderr_signals` (fixed keywords only).
+No raw Docker stderr, host mount/source paths, credential data,
+model files, Docker mutations, service restarts or GPU launches.
+The same read-only Wizard **3 → 7 → 4** performs the check
+after a clean branch sync. The new actual DGX result is
+**NOT_CAPTURED** until the owner runs it; CI is only
+synthetic verification. The lychee888 `compressed-tensors`
+FP8-PLE source adapter, memory and single Spark TP=1 remain
+unqualified; PR #261/#259 stay Draft and unmerged.
+
+## 2026-10-17 — ACTUAL_DGX source copy inconclusive with pinned existing Docker IDs
+
+New physical owner Wizard **3 → 7 → 4** output attested
+existing local Docker image ID
+`sha256:01bdde6de42794bc7073fa7c0724d4b62375d4c32817fea902217fdc33b5cef4`
+and managed container ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`.
+`PLE_DIAGNOSTIC_PLE_CANDIDATES_CHECKED=12`;
+`PLE_DIAGNOSTIC_DOCKER_CP_REFERENCE_STATE=SKINNY_GEMM_REFERENCE_UNAVAILABLE`;
+`PLE_DIAGNOSTIC_PLE_SOURCE_FILE=NOT_CAPTURED`;
+`PLE_IMAGE_AUDIT=INCONCLUSIVE`;
+`DOCKER_MUTATION=NONE`, `GPU_RUN=NOT_PERFORMED`.
+This is **not proof the image lacks those files**, since the
+previous inspector discarded Docker-copy error classifications.
+Original log hash and exact on-host checkout SHA were not printed.
+Preserve [second actual source-copy transcript](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+**Source-only follow-up:** the existing standalone auditor now
+reports scrubbed categorical counts of `docker cp` failures
+for PLE and GEMM source requests and probes a single tiny existing
+`/etc/group` TAR read as a **transport control**; only its TAR
+header is validated in memory, not file data displayed or written.
+No Docker start/exec/create, image build/pull, source mount change,
+weight download, GPU load or lifecycle mutation.
+The operator route remains Wizard **3 → 7 → 4**.
+The new classification/transport output is still
+**NOT_CAPTURED on actual DGX**. The lychee888 source adapter,
+memory and TP=1 runtime remain unqualified. The previously
+attested OrcaRouter assets and managed container are protected;
+Draft PR #261/#259 must not be merged without approval.
+
+## 2026-10-17 — ACTUAL_DGX PLE source path unresolved; bounded Docker-copy differential added
+
+Physical owner executed read-only Wizard **3 → 7 → 4** after the earlier
+mount-safe source fix. The error changed from broad vLLM mount
+blocking to `PLE_IMAGE_AUDIT=INCONCLUSIVE: No known PLE loader path
+in existing matching container`, with `DOCKER_MUTATION=NONE` and
+`GPU_RUN=NOT_PERFORMED`. The original checker attempted eight
+fixed Python dist/site-package paths and did not print exact image ID,
+matching container ID or `docker cp` failure details. Neither
+source absence nor lychee888 incompatibility is established.
+The exact chat transcript and interpretation limits are preserved
+at [physical source-path evidence](../scripts/benchmark/evidence/dgx-lychee888-ple-path-inconclusive-20261017.md).
+
+GitHub source remediation extends the fixed, bounded Python version
+candidate list (12 paths) and adds **read-only existing-image**
+`low_latency_gemm.py` sentinel checks after missing PLE paths.
+The pinned `scripts/Dockerfile.skinny-gemm` requires that exact
+nvidia low-latency GEMM module for image build. On a failed source
+inspection the checker now prints validated image/container IDs,
+candidate count, sentinel copy status and reference pathname,
+while returning `INCONCLUSIVE`. The sentinel is a **package layout**
+differential, not a PLE loader proof, new Docker image, or GPU trial.
+The same Wizard menu **3 → 7 → 4** is retained, no extra operator
+command or GPU activity is required. Updated synthetic tests cover
+successful/missing sentinel separation and never admit lychee888
+from the reference file alone.
+
+This is **SOURCE/CI** only until a new physical DGX output arrives;
+existing managed profile `orcarouter` and protected Docker assets
+are untouched. Both Draft PR #261 and #259 remain unmerged.
+See [lychee888 canonical analysis](LYCHEE888-WIZARD-INTEGRATION.md).
+ 
+## 2026-10-16 — ACTUAL_DGX PLE image audit INCONCLUSIVE; safe mount-provenance SOURCE fix CI PASS
+
+Operator ran the newly added Wizard **3 → 7 → 4** against their
+existing DGX state and received
+`PLE_IMAGE_AUDIT=INCONCLUSIVE: Mounted vLLM source could differ
+from image layer`, `DOCKER_MUTATION=NONE`,
+`GPU_RUN=NOT_PERFORMED`. This is a valid protective stop, **not**
+an observed lychee888 GPU loader failure. The old checker blocked
+all mounts under a broad Python/vLLM package prefix and did not
+report whether the specific `ple_layer.py` path was shadowed.
+See [physical mount-check evidence](../scripts/benchmark/evidence/dgx-lychee888-existing-ple-mount-audit-20261016.md).
+The original exact image SHA256, conflicting Docker mount identity
+and actual effective PLE source remain **NOT_CAPTURED**.
+
+**Repository-only remediation:** `scripts/model/audit_installed_ple_image.py`
+now distinguishes mounts covering the exact probed PLE pathname
+from unrelated vLLM mounts. For an exact matching existing managed
+container/image, it reads a covering host bind source with bounded,
+symlink-resistant, identity-checked read-only operations (no Docker
+`exec`, container start, image build or model data access), and
+reports `source_origin=HOST_BIND_MOUNT_FILE_NOT_IMAGE_LAYER`,
+mount destination and actual source SHA256. Unmounted sources still
+use `docker cp` and carry separate provenance, while overlapping,
+non-bind, unreadable, symlink or changed sources remain fail-closed.
+The synthetic CI at commit `003851a34eca5098b83e8aa3dca27fedec7c6bae`,
+Actions `38869439987`, **SUCCESS**; source-only, not physical.
+Operator route stays Wizard **3 → 7 → 4** after clean fast-forward.
+No lychee888 registry, installability, watchdog, image or running
+host configuration was changed. Both protected Draft PRs remain
+unmerged. See [lychee888 working analysis](LYCHEE888-WIZARD-INTEGRATION.md)
+and [canonical module map](../scripts/README.md).
+
+## 2026-10-16 — ACTUAL_DGX lychee888 compressed-tensors gate PASS; loader remains blocked
+
+The owner fast-forwarded the clean DGX working checkout from
+`99f04da` to `aea42fa` then used Wizard **3 → 7 → 3**.
+The actual fixed-revision Hub JSON output returned
+`INDEX_STRUCTURE_PASS_METADATA_ONLY` at
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`,
+223,047 index keys, 128 FP8 PLE shards / ten files / one global
+scale key, `float8_e4m3fn` PLE dtype, **`quant_method=compressed-tensors`**,
+`format=mixed-precision`, and no top-level `quant_algo`.
+`nvidia_patch_source_dispatch=NOT_APPLICABLE`;
+`SOURCE_ONLY_LOADER_UNQUALIFIED`,
+`MODEL_PAYLOAD_DOWNLOADED=NO` and `GPU_RUN=NOT_PERFORMED`.
+This supersedes the new L1 source probe's prior `NOT_CAPTURED` status,
+**not** the unverified actual-image loader and single-Spark TP=1 gates.
+Exact owner-provided evidence is retained at
+[lychee888 actual source-gate report](../scripts/benchmark/evidence/dgx-lychee888-fp8ple-source-gate-physical-20261016.md).
+
+**SOURCE follow-on only:** The external dual-Spark PLE implementation
+demonstrates FP8 table selection on explicit `ple_embedding_dtype`,
+FP8 weight/BF16 global-scale registration and applying the global
+scale during dequantization, but its externally maintained image and
+TP=2 evidence do not qualify our installed `vllm-skinny-tp1:v1`
+or actual GB10 TP=1 runtime. AGPL external source is referenced,
+not copied. A bounded **read-only existing-image source inspector**
+now operates through Wizard **3 → 7 → 4**:
+`docker image inspect`, `docker container inspect` and
+`docker cp` from an already-existing exact matching managed
+container only. It cannot create/start/exec any container, build
+images or touch GPU/model data, and fails closed if the source/image
+identity is unavailable. Its output is explicitly static source
+signatures only and `lychee888_tp1_loader=NOT_QUALIFIED`.
+This new inspection procedure has **NOT** yet been executed on
+the real DGX; CI/synthetic evidence is separate. The candidate
+remains planned/disabled. PR #261 and #259 remain protected Draft
+and no merge or physical GPU trial is authorized.
+
+## 2026-10-16 — lychee888 pinned FP8-PLE source-only Wizard gate; CI PASS, physical probe pending
+
+Added `scripts/model/assess_lychee888_loader.py` (independent standard-library
+metadata/source inspector), its isolated offline synthetic tests and Wizard
+Candidate metadata item **3 → 7 → 3**. The fixed
+`lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` immutable revision
+is `1b3c3cedc14fb3bee4294dea5e3515af74b8268a`. The new gate
+fetches revision-scoped Hub JSON, config and index only, validates
+the 128 FP8 PLE shards / 10 files / global-scale key using the maintained
+L0 module, and compares quantization method to the existing NVIDIA-only
+`ModelOptMixedPrecisionConfig` / per-prefix FP8 patch conditions. It never
+claims the NVIDIA image adapter works for lychee888's config; a successful
+inspection verdict is explicitly `SOURCE_ONLY_LOADER_UNQUALIFIED`.
+It does not download weights or execute Docker/GPU. The actual DGX pinned
+Hub result for this new gate remains **NOT_CAPTURED**; the original
+2026-10-13 lychee888 pinned Hub L0 PASS is preserved separately.
+
+GitHub SOURCE CI at `2cfeb219ec4eb9b7367c808bbf1763fd7a6aa0a6`,
+run `38864476668`, **SUCCESS** (new source gate, Wizard routing
+and tests). The exact later documentation HEAD has its own CI.
+The protected Draft PR #261/#259 remain unmerged; no model image build,
+registration, managed-runtime modification, GPU load, memory-policy change
+or model download was authorized. See
+[lychee888 model compatibility](LYCHEE888-WIZARD-INTEGRATION.md).
+
+## 2026-10-16 — ACTUAL DGX catplusplus pinned inventory and size reconciliation PASS
+
+Owner re-ran the read-only Wizard **3 → 7 → 1** after the compact
+pagination fix against immutable HF revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`.
+The physical-DGX terminal returned
+`TREE_METADATA_COMPLETE`, `legacy_tree_reconciliation_complete=True`,
+`GPU_RUN=NOT_PERFORMED`; pagination progress reached page 20 at
+19,820 entries, with 17,448 **files** after directory filtering.
+There were 96 `.safetensors` files and 96 index-referenced weight
+filenames. These are Hub JSON metadata results, **not** local weight
+installation, tensor header validation or GPU load.
+
+**Definitive old-API accounting resolution:** old
+`siblings[].size` = **68,586,923,924 bytes** = 63.876550574 GiB;
+new full-tree-only files = **119,953,105,520 bytes** =
+111.715035066 GiB; complete repository = **188,540,029,444 bytes** =
+175.591585640 GiB = **188.540029444 decimal GB** (matches public
+UI ~189 GB). Both `legacy_siblings_unknown_size_entries=0` and
+`legacy_missing_size_recovered_tree_bytes=0`. The former shortfall
+came from filenames missing from the sibling inventory rather than
+unknown per-file byte sizes. Supersedes historical `NOT_CAPTURED`
+and unresolved notes below; retain their dated provenance.
+
+`root_safetensors_gib=174.8553` (~187.75 decimal GB)
+is the **stored root weight data**. NVIDIA lists a single DGX Spark
+with 128 decimal GB unified RAM (~119.21 GiB); therefore an
+unchanged fully resident model load exceeds the entire system
+capacity by ~55.65 GiB before runtime/KV/monitor overhead.
+Memory mapping/offload/streaming are unqualified alternatives,
+not license to launch. Candidate remains
+`RESEARCH_ONLY / PROFILE_INSTALLABLE=0 / GPU_NOT_TESTED`;
+lychee888's separate pinned L0 JSON PASS remains distinct.
+See [full reconciled candidate record](CATPLUSPLUS-METADATA-COMPATIBILITY.md).
+No Docker, weight download, GPU or host mutation was reported.
+
+## 2026-10-16 — Actual DGX Hub pagination failure; compact metadata fix CI PASS
+
+Owner synchronized the Wizard checkout at `22bcba4711ee423ffea062268f4b8de3366938e1`
+and selected Model management **3 → 7 → 1** for the revision-pinned
+catplusplus remote metadata summary. It failed before validation with
+`CATPLUSPLUS_METADATA_FAIL: tree pagination repeated or exceeded 100 pages`.
+The old implementation conflated a repeated URL with the 100-page limit
+and used costly `expand=true` (documented at ~50 files/page). This
+was a **physical host execution of read-only Hub JSON inspection**, NOT
+physical model loading, READY or inference; 63.88 GiB vs ~189 GB remains
+unresolved.
+
+Source fix: `scripts/model/inspect_catplusplus_metadata.py` now uses
+`recursive=true&expand=false&limit=1000`, enforces pinned-revision
+pagination links, distinguishes repeated URLs/paths and empty-progress
+pages, reports progress, and fails closed when the 256-page ceiling
+is exceeded without claiming inventory completeness. Additional
+synthetic/offline tests cover 105 unique pages, loops, missing progress,
+unsafe links and the hard page limit. Source/CI at
+`6858b4252d3e8768bd3c62a91508d7d4f614e176`, GitHub
+Actions run `38859700597`, **SUCCESS**. The exact Hugging Face
+model inventory still needs a new read-only DGX run via Wizard
+**3 → 7 → 1**, without Docker, GPU or checkpoint download. The
+status of PR #261 remains protected Draft; no merge was authorized.
+See [catplusplus compatibility record](CATPLUSPLUS-METADATA-COMPATIBILITY.md).
+
+## 2026-10-16 — Retired Hybrid research routes removed from active Wizard
+
+Following the operator's request, the four completed Hybrid-only Model
+management routes (former items 7–10 for H6 Phase-0, H3–H6 dependency
+inspection, H6 launch admission and historical retirement guidance) have
+been removed from the active terminal Wizard. The read-only candidate Hub
+metadata submenu moved from item 11 to **item 7**. Historical Hybrid
+inspection scripts and the retired retirement-menu module remain in Git
+for reproducibility but are no longer imported by active Wizard routing.
+Stale active-menu wording claiming the physically removed H3–H6 stages
+must still be retained was corrected. The `orcarouter-hybrid` registry
+record stays `retired` / `PROFILE_INSTALLABLE=0`; neither the registry's
+historical identity nor the original local research evidence was deleted.
+
+SOURCE + synthetic CI through commit `d78ad60e16719fc31cca5b94bde1bc0a11fbb3ef`:
+GitHub Actions run `38857649562` **SUCCESS**, after updating assertions
+that previously required the obsolete Hybrid menu. Regression tests now
+verify the retired menu IDs cannot reach historical scripts and the
+read-only source guards remain preserved. Stable general policy for
+removing obsolete research-only menu routes is in
+`docs/SESSION-HANDOFF-PROMPT.md`. No operator DGX source-sync,
+Docker/model deletion, host mutation or new GPU trial is claimed by
+these repository-only changes. PR #261/#259 remain protected Draft.
+
+## 2026-10-16 — Candidate metadata Wizard integrated; source-only CI PASS
+
+The canonical operator Wizard now exposes Model management item 11
+(read-only candidate metadata), with catplusplus summary/full-JSON options
+routed to the independent pinned Hub inspector. No candidate was made
+installable. Error, cancellation, EOF and mock interpreter invocation
+are covered by isolated synthetic Wizard tests. The catplusplus inspector
+additionally reconciles old API `siblings[].size` subtotals with the
+complete revision-pinned tree, separately accounting for legacy NULL sizes
+and tree-only files, with four new offline validation tests.
+
+GitHub PR #261 source/CI head `92dbb1ad8acf28bffe5fabdf5d003b87997e31be`:
+Actions run `38856100612` **SUCCESS**, independently of any physical DGX
+execution. Stable independent-module/Wizard-managed-operation rules were
+recorded in `docs/SESSION-HANDOFF-PROMPT.md` (earlier CI run
+`38855790439` SUCCESS). Both PR #261 and #259 remain protected Draft.
+**Physical pinned full-tree API output remains NOT_CAPTURED.**
+63.88 GiB versus ~189 GB is still only a source-level size discrepancy
+hypothesis, not settled actual file accounting. No weights, GPU, Docker,
+host state or protected assets were changed by these repository commits.
+
+## 2026-10-16 — Candidate SOURCE metadata inspector added; Hub inventory and GPU unverified
+
+A standalone standard-library catplusplus revision-pinned HF metadata tree
+inspector and synthetic/offline tests were added. It reads only JSON (complete
+paginated file tree, config, optional index) to distinguish legacy
+siblings[].size subtotal from repository/weight file bytes. Historical
+63.87655 GiB and public UI ~189 GB have **NOT** yet been reconciled by an
+actual pinned full-tree output; model weights and GPU were not touched.
+The current model card and config show ModelOpt MIXED_PRECISION, MXFP8
+projections and NVFP4 experts, but current main-web config is not
+independent pinned-revision validation. Source L1 found no qualified TP=1
+FP8-PLE resolver in the current managed lychee888 path; the dual-DGX
+external override is not a single-GB10 proof.
+See [catplusplus investigation](CATPLUSPLUS-METADATA-COMPATIBILITY.md)
+and [lychee888 plan](LYCHEE888-WIZARD-INTEGRATION.md). Both candidates
+remain unapproved for real GPU trials or installation. Keep PR #261 and
+#259 Draft/Unmerged. CI result for the latest fix must be checked on its
+exact HEAD separately.
+
+## 2026-10-16 — Physical managed-state retention audit PASS; cleanup closed
+
+Owner fast-forwarded the DGX checkout through commit `9d84c39` and ran
+`python3 -B scripts/storage/state-retention-audit.py` against
+`/home/inlc/.local/state/qwen38-spark`. Physical output:
+`STATE_DELETE_AUTHORIZED=NO`, `STATE_FILES_DELETED=0`; all inspected
+top-level items had `links=0 boundaries=0`. Main measured allocated
+sizes: `mazinb-m1=216.24 MiB` (research data),
+`monitor.log=2.14 MiB` (managed lifecycle diagnostics),
+`retirement-archives=1.69 MiB` including protected original
+Hybrid Docker archive `1.40 MiB` and Mazinb archive `0.29 MiB`,
+`hybrid-retirement-evidence=0.74 MiB`, and
+`hybrid-h6-m1=0.10 MiB`. `ab-trials` and `analysis` are
+each less than 0.2 MiB; 30 stability JSON and runtime
+validation JSON entries are individually tiny.
+
+**Operator disposition:** No further state-file deletion warranted.
+Most allocated state space is the valuable Mazinb M1
+benchmark history; Git has only sanitized Hybrid records,
+not raw 17-container logs. Maintain install/ownership/lock/
+recovery files, benchmark archives and historical evidence.
+The `retirement-archives` parent size already includes its children;
+do not double-count. Audit is classification only, not a
+deletion approval. Close the immediate Hybrid/state cleanup
+task and resume metadata-first model candidate evaluation.
+Source CI for the audit + Wizard Storage item 5 at
+`9d84c39ebd7ed6155199b6c1db4e58ae445dab0e`
+completed successfully; real host audit above was separate.
+
+## 2026-10-16 — Managed state retention review and next candidate metadata (read-only)
+
+DGX owner has completed independent post-removal checks: retired Hybrid H3–H6
+model directories absent, protected OrcaRouter directory present, and local
+17-container private retirement archive SHA256 files still pass. Final
+available bytes observed: `449058615296`. Do not remove original raw
+Hybrid archive based merely on its Git-pinned checksums: Git retains
+summaries and log hashes, **not the raw logs**. A distinct
+`retirement-archives/mazinb-docker-20261014T103718Z-7e238b9aeb`
+must remain untouched by Hybrid cleanup.
+
+The owner inspected `~/.local/state/qwen38-spark`, which also includes
+`install.env`, `asset-ownership.json`, `operation.lock`,
+`config.vllm.json`, `monitor.log`, multiple `runtime-validation*.json`,
+30 `stability-N.json` files, `ab-trials`, `analysis`,
+`hybrid-h6-m1` and `hybrid-retirement-evidence`. These are **not all
+disposable**: runtime and ownership files are protected, and raw evidence
+archives contain non-Git-backed material. Historical Hybrid state and
+stability results require separate duplicate/reference review, not blanket
+deletion.
+
+A small self-contained read-only classifier now lives in
+`scripts/storage/state-retention-audit.py`, exposed under Wizard
+Storage item 5, plus isolated synthetic tests. It reports
+allocation-sized estimates, retention categories, symlinks and filesystem
+boundary warnings **without exposing state-file contents or deleting
+anything**. Its actual DGX output has NOT yet been collected. There is
+currently no approved command for deleting these state folders.
+
+Owner's real DGX remote metadata-only model inspection:
+`lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` revision
+`1b3c3cedc14fb3bee4294dea5e3515af74b8268a`, reported
+`remote_size_gib=123.24575388710946`, public, and separate MTP file marker;
+`catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` revision
+`3251fd8afbd08f76368a9bfa71132d9aef364813`, reported
+`remote_size_gib=63.87655057385564`, public. Both reported
+`LOCAL_REQUIRED` with no tensor/layout qualification. Public
+Hugging Face file-browser UI shows **189 GB** for the latter, differing
+from the metadata-only inspector's 63.88 GiB; measurement scope is not
+yet reconciled. **Do not budget download/physical storage based on
+one of these numbers until exact file inventory and selective download
+scope are verified**. No GPU launch or model-weight download occurred.
+
+## 2026-10-16 — VERIFIED: Hybrid local retirement completed; Wizard guided cleanup modularized
+
+**Physical DGX result, independently checked:** exactly 17 stopped Hybrid research Docker containers removed; all four H3/H4/H5/H6 checkpoint directories removed. Their names are recorded in the [immutable retirement evidence](../scripts/benchmark/evidence/dgx-hybrid-local-retirement-scope-20261015.md). 17-container raw-log+metadata private archive remains on DGX with 34/34 SHA256-verified files; its `SHA256SUMS` SHA256 is `79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701`. Git contains sanitized 17-ID inventory, per-log digests/marker counts and H6 physical failure report; it does **not** contain raw logs or deleted weight blobs.
+
+Actual model removal reported `available_bytes_before=303420813312`, `available_bytes_after=449058627584`, `available_bytes_delta=145637814272` (135.64 GiB). Independent filesystem check later returned `449058615296` available bytes. Earlier exact-17 Docker retirement measured `5099741184` additional available bytes. These are observed intervals, not an immutable per-object storage attribution. Post-delete check confirmed **all four Hybrid directories absent**, protected OrcaRouter original present, and the SHA256 archive remained checkable. Remaining Docker listing had eight non-target objects; `open-webui` and `portainer` were running. Managed OrcaRouter Docker was retained but was observed exited, **not proven READY**. No physical H6 inference/benchmark success occurred.
+
+**Wizard improvement:** model-management item 10 now delegates to small dedicated `scripts/wizard/hybrid-retirement-menu.sh` (sourced by `scripts/wizard/menus.sh`). It exposes read-only stage status, archive verification, Docker reference inventory and guided evidence-first cleanup policy. This is **NOT** yet a generic automatic cleanup engine. Historical exact-17 and exact-H3-H6 scripts are pinned to the completed 2026-10-16 retirement and must not be reused for new experiments. Keep menus thin and implement generic discovery/approval/resume in independently testable modules. The operator explicitly prioritizes *finishing this small, safe Wizard improvement quickly* and then returning to other checkpoint candidates.
+
+**Next candidate research (not GPU execution):** `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` is planned/not installable, and `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed` is a research-only candidate. Begin with revision-pinned remote metadata and single-GB10 compatibility investigation, not a large download or GPU launch. See [lychee888 plan](LYCHEE888-WIZARD-INTEGRATION.md), [mission and model scope](PROJECT-MISSION-AND-MODEL-SCOPE.md), and [Hybrid final evidence](../scripts/benchmark/evidence/dgx-hybrid-local-retirement-scope-20261015.md).
+
+
+## 2026-10-15 — DIRECTION CHANGE: multi-model validation + compact handoff
+
+OPERATOR DECISION (not a physical GPU result): defer mazinb-centered Wizard completion. Maintain the wizard-first long-term mission, but improve common Wizard support incrementally while researching/validating `lychee888/Qwen3.8-Flash-Next-Uncensored-NVFP4-FP8PLE` and new candidate `catplusplus/Qwen3.8-Flash-Next-uncensored-NVFP4-mixed`. Catplusplus is **research-only**, not registered, installed, benchmarked, or verified compatible. mazinb retains its historical real DGX READY and benchmark reference.
+
+Hybrid H6 remains protected/stopped. Next decision is read-only assessment of the double 81-shard loading/memory behavior before deciding whether to retire Hybrid; do not infer success from absence of a kernel Xid. No new GPU run or asset deletion authorized. Preserve H7/H20 references, old managed OrcaRouter ID, H6 archive, and both Draft PR #261/#259. The older planned benchmark→retire→rebuild sequence is **deferred pending the explicit keep/retire decision**, not silently completed.
+
+SESSION POLICY: stationary rules/history/evidence belong in canonical permanent docs. `docs/SESSION-HANDOFF-PROMPT.md` is a compact entrypoint with source-of-truth links, invariant guardrails and live delta only. Full previous handoff prose remains retrievable in Git history; do not copy that entire historical log into new conversation prompts.
+
+## 2026-10-15 — Physical H6 Docker tail fully normalized: CR/LF counts and exception resolved
+
+Actual DGX operator confirmed **all seven original H6 evidence
+files SHA256 PASS** again and measured raw `docker.log`
+delimiter counts: **244 LF, 97 CR, 336 Python
+`splitlines()` logical lines**. This explains the
+earlier `nl -ba` vs Python index discrepancy
+without changing the evidence.
+First shard pass **81/81**, 577.40s at
+`docker.log` Python logical row 234 (~23:28:33 KST);
+the next pass starts 0/81 at row 244 (~23:28:46),
+reaches 5/81 before API shutdown row **255**
+(23:28:58 KST), and prints 6/81–9/81
+after the traceback in the captured output stream.
+The single terminal traceback occupies rows **256–328**:
+API was initializing EngineCore via AsyncMPClient /
+ZeroMQ poll and vLLM `_interrupt_init` raised
+`KeyboardInterrupt("terminated")` at row 327,
+`KeyboardInterrupt: terminated` at row 328.
+Previous watchdog stop was **23:28:55 KST**.
+Worker progress after the API message may be
+interleaved/buffered or genuine graceful-stop lag;
+neither is a demonstrated post-exit GPU workload.
+No independent CUDA/RM/OOM/ModelOpt crash is
+evidenced by this terminal traceback. Root cause of
+whether watchdog intervention was *necessary*
+remains **INCONCLUSIVE**, notwithstanding definite
+watchdog-triggered termination.
+The prior docs/CI repair SHA `bedb80cf05fc115aa670e8aaab3c2274473e73bb`
+passed **Push #38662904456 and PR #38662909227**;
+this new commit needs independent CI verification.
+No H6 READY/benchmark, off-host verified backup,
+GPU rerun, guard weakening, deletion or PR merge.
+[Permanent detailed evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 interrupted vLLM initialization and CR-rendering caveat
+
+Actual archived H6 owner terminal again verified **seven
+SHA256 files PASS**. The shutdown traceback visibly ended
+with vLLM `entry.py:_interrupt_init` raising
+`KeyboardInterrupt("terminated")` and
+`KeyboardInterrupt: terminated`, consistent with
+the watchdog's pinned memory-protection stop
+23:28:55 KST and subsequent vLLM EngineCore SIGTERM
+message around 23:28:58. No independent GPU/RM OOM
+cause is established. `nl -ba` printed numbered Docker
+rows 235–240 followed by unnumbered shard progress bars;
+because tqdm uses carriage returns, these shell line
+numbers cannot safely be equated with the earlier Python
+universal-newline **336 logical lines**. Next inspection,
+if required, must use Python-indexed escaped output on
+original `docker.log` without modifying archive files.
+Confirmed source monitor path is
+`scripts/runtime/monitor-runtime.sh`, identical Git blob
+`017451b75b69da00bb10d9aec591a161a56862dc`
+at the original H6 launch and later audit revisions.
+Prior docs commit `cc5bdfa3...` had **both Push and PR
+CI FAILED** solely on `test_script_layout` category
+restriction: the physical evidence Markdown under
+`scripts/benchmark/` included a forbidden literal
+cross-category `runtime` path. The benchmark evidence
+was corrected to retain the script name + hash without
+the forbidden path. New head's CI is separate and cannot
+be presumed passed. No GPU run, protection change,
+Docker deletion, benchmark, PR merge or off-host backup
+qualification. [Permanent analysis](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 terminal cross-check: watchdog stop during second shard pass
+
+Actual operator read-only analysis, seven on-host SHA256 entries
+PASS. `monitor.log`: 270 lines/17 selected regex matches.
+`docker.log`: 336 lines/225 regex matches (only last 35 printed,
+400 chars each; full traceback not yet reviewed). Last healthy
+heartbeat at **23:28:13 KST** had non-CMA Available
+**42,581 MiB**, Free **4,025 MiB**, SwapFree **143,030 MiB**.
+At **23:28:46 KST** (`14:28:46` vLLM UTC timestamp), Worker
+logged EXT4/checkpoint **173.59 GiB**/RAM **27.19 GiB**
+auto-prefetch **disabled INFO**, with a new 0/81 checkpoint-shard
+pass. At **23:28:47**, Available fell to **27,809 MiB**
+(−14,772 MiB in 34s), Free **1,795 MiB**, and host-wide
+swap-growth **3,427 MiB**; protection 1/5 to 5/5 ran
+23:28:47–55 (last Free **726 MiB**), followed by
+`PROTECT stopping` **23:28:55**. API Server shutdown
+`send sigterm to EngineCore` at **23:28:58 KST**;
+Docker veth teardown **23:29:11 KST**. Exact physical
+source `a30fe34...` and audited head `ca1cb0c9...`
+have **identical** monitor script blob
+`017451b75b69da00bb10d9aec591a161a56862dc`
+and H6 controller blob
+`19dd0823dc71d468890e334e4d484a34a1e1f56d`.
+Host-wide swap usage was already accumulated (~3.4GiB)
+by last healthy heartbeat; crossing the 2GiB non-CMA
+immediately-Free threshold armed the established legacy
+swap-growth protection. Model loader INFO is not a
+GPU allocation failure; truncated Python traceback
+does not establish an independent model crash.
+Watchdog **direct stop reason CONFIRMED**, necessity/false
+positive and NVIDIA RM allocation safety **INCONCLUSIVE**;
+no H6 READY/bench or independently verified off-host backup.
+No GPU rerun, guard relaxation, deletion, or PR merge.
+[Detailed forensic correlation](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 kernel all 13 physical lines reviewed: Docker veth only
+
+Owner again confirmed **7/7 on-host SHA256 PASS** and pasted all
+13 unfiltered saved kernel messages from H6 window. Rows 1–7 at
+`23:18:03.922–.928 KST` are `docker0`/veth attach and
+`forwarding`. A separate H6 watchdog stop marker is at
+`23:28:55 KST`. Rows 8–13 at `23:29:11.449–.484 KST`
+are the same interface rename/disable/unregister, **~16.45–16.48 s**
+after the stop marker. Thus the logged kernel events are exclusively
+Docker virtual-network lifecycle, and **no NVIDIA RM/Xid/GPU allocator/
+OOM errors were recorded in these 13 lines**. The log itself has no
+Docker container ID; interface-to-H6 association is temporal, not
+independently ID-pinned by kernel text. No entries exist between the
+two event clusters, which is NOT proof of complete event retention,
+absence of silent GPU failures, or an unnecessary watchdog.
+The established low non-CMA Free + host-wide swap-growth 5/5
+protective stop stands; necessity/false-positive classification is
+**INCONCLUSIVE**. No READY, inference, bench, off-host backup,
+restart, threshold weakening, deletion, or merge authorized.
+[Full 13-line transcript](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 archived kernel scan: 13 lines, zero broad RM/GPU/OOM matches
+
+The operator rechecked all **seven** on-host SHA256 archive entries
+and independently scanned the already saved `kernel-window.log`
+**read-only**. `H6_KERNEL_LINES=13`, first timestamp
+`2026-10-14T23:18:03.922217+09:00` (Docker veth blocking state),
+last timestamp `2026-10-14T23:29:11.483687+09:00` (Docker veth
+disabled state), spanning watchdog STOP at 23:28:55 KST.
+`H6_KERNEL_BROAD_MATCHES=0` for
+`nvidia|nvrm|xid|gpu|allocat|fail|error|fault|oom|out of memory|memory pressure|smmu|iommu|gsp|uvm|dma`
+(case insensitive). These are **zero matches in 13 archived kernel
+messages**, not proof that unlogged GPU allocation failures
+could not happen or that memory protection was unnecessary.
+The first/last records bracket the stop but do not prove the
+kernel journal is complete. The other 11 raw lines have not been
+pasted for unfiltered review. Confirmed watchdog cause remains
+low non-CMA Free + >=256 MiB host-wide swap growth, 5/5 warnings.
+`H6_ROOT_CAUSE_PROTECTION_NECESSITY=INCONCLUSIVE`;
+`API_READY=NOT_OBSERVED`; `BENCHMARK=NOT_MEASURED`;
+`OFF_HOST_BACKUP=NOT_VERIFIED`; no restart/tuning/deletion/merge.
+[Detailed physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 kernel window physically archived; selected RM/OOM strings absent
+
+Owner-operated DGX evidence collection used interactive sudo and
+verified a nonempty local kernel journal interval
+**2026-10-14 23:18:03–23:29:55 KST** (stop was 23:28:55 KST).
+The original six forensic evidence files and new
+`kernel-window.log` passed all **seven** entries in the on-host
+`SHA256SUMS.txt` check at
+`/home/inlc/h6-m1-evidence-20261014.dvQmt6eq`.
+The specified `NVRM|Xid|NV_ERR_NO_MEMORY|_memdescAllocInternal|oom-killer|out of memory`
+grep emitted **zero matches**. This is a *captured-window limited
+negative pattern search*, NOT proof of healthy NVIDIA RM or that
+all kernel error text/coverage has been exhaustively reviewed.
+The preceding `NOT_CAPTURED` statements below describe an earlier
+failed `sudo -n` attempt, now superseded **for capture status only**.
+Known H6 low-non-CMA-Free/swap-growth watchdog trigger remains
+confirmed; false-positive versus necessary protection remains
+`INCONCLUSIVE`. Original run source `a30fe34b...`; physical
+read-only forensic audit source `2e61645c...`; follow-up source
+hardening head `6936f8c9...` (CI PASS, **not yet physically
+requalified by the new script**). No model restart, benchmark, deletion,
+protection relaxation or off-host backup verification. PR #261 and
+PR #259 remain Draft/unmerged.
+[Full selective evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-15 — H6 PHYSICAL read-only forensics: watchdog trigger confirmed; RM unresolved
+
+At exact audit source `2e61645c59dc005c474139bde1b3313ff62728b8`
+the operator ran `hybrid-h6-forensics-readonly.py --latest`.
+Journal/stop marker/Docker exact ID matched and `RC=0` confirmed the
+protected `failed_stopped` Docker object. Five actual watchdog warnings
+(23:28:47–23:28:55 KST) confirm
+`noncmafree < 2GiB && swapgrowth >= 256MiB`
+with `noncma_available=27809–28282MiB`, `swapgrowth=3427MiB`,
+final `noncmafree=726MiB`; H6 legacy swap-growth response was active.
+The 10-GiB Available and 8-GiB SwapFree guards were not the trigger.
+This identifies the watchdog decision, **not proof of NVIDIA RM health**.
+
+Six raw trial/monitor/Docker files were copied into on-host directory
+`/home/inlc/h6-m1-evidence-20261014.dvQmt6eq` and
+`sha256sum -c` passed. No independent off-host backup verified.
+`sudo -n` failed due to password requirement; NVIDIA RM/Xid kernel
+window still NOT_CAPTURED. The attempted manual 14:18 interval was
+UTC, whereas the host monitor uses KST 23:18; use the local H6 journal
+`kernel_since` and actual stop time to bound a correct query.
+No H6 READY, inference, or benchmark. No rerun, protection loosening,
+deletion, or merge of Draft PRs #261/#259.
+[Detailed physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+
+## 2026-10-14 — Actual H6 first GPU load MEMORY-PROTECTION STOP; benchmark NOT_MEASURED
+
+The operator physically ran approved Wizard **Benchmark 5→20** at
+exact `a30fe34b8c2fd3ad511d79876ac95ad69ac32523`.
+A unique H6 isolated container
+`qwen38-hybrid-h6-m1-20261014141803-69ef3492`, ID
+`e526189f1093e95d81568d82eb10b8beaeb6227adca49029f241634769e6cbc7`,
+reached **DOCKER_STARTED_UNQUALIFIED**, then Wizard emitted
+`H6_EXACT_STOPPED_ID` and `H6_SESSION_BLOCKED=memory_protection_stop_marker`.
+Read-only verification: journal `failed_stopped`, Docker `exited`,
+`Running=false`, `OOMKilled=false`, `ExitCode=1`.
+One 81/81 shard loading pass completed in 577.40 s, **then another
+81-shard loading pass began** (at least 9/81 observed); READY was
+NEVER observed. The post-stop host had 118Gi RAM available and 142Gi
+swap free, but this **does not prove at-stop headroom**.
+Full non-CMA/swap warning samples (especially `protect=5/5`),
+exact monitor marker, and NVIDIA RM kernel events remain TO_BE_AUDITED.
+Do not ascribe failure to the FP4/ModelOpt warnings or API
+`KeyboardInterrupt` termination trace alone.
+**No immediate rerun, benchmark, deletion or loosening watchdog
+thresholds.** Historical H7/H20 model aliases and 16 stopped Docker
+mount references remain protected; full H3–H6 retire blocked.
+
+New **source-only** Wizard **Benchmark 5→21** forensics will display
+bounded critical warnings plus independently pinned journal,
+stop marker and exact stopped Docker ID; it does not mutate host.
+[Permanent selective physical evidence](../scripts/benchmark/evidence/dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+CI and physical forensic check must pass separately before
+any safe candidate configuration decision.
+
+## 2026-10-14 — REAL DGX Wizard Benchmark 5→17/18/19: H6 preflight PASS
+
+**Exact checkout:** `1de3ec0c9ae4cba5eb44fc66176d0c96b04371e6`
+fast-forward from `e61f6b4` succeeded. Real DGX Wizard
+**Benchmark 17** plan displayed `H6_PLAN=ISOLATED_16G_NO_BOOT`,
+loopback port 18890, watchdog exact-ID before start;
+**Benchmark 18** reported `H6_SESSION=ABSENT`.
+**Benchmark 19**, with sudo kernel-journal read access, returned
+`H6_PREFLIGHT=PASS_READ_ONLY`,
+`H6_CANDIDATE_START=NOT_PERFORMED`.
+Pinned existing old Docker ID
+`f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`;
+H6 runtime image
+`sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`;
+immutable release `ff67bab3c94d6992f61b9535836df97f03b9c022`.
+The installed manifest remains OrcaRouter legacy image
+`vllm-skinny-tp1:v1`, **not** the H6 isolated runtime image;
+its identity was deliberately preserved.
+
+**Result interpretation:** the actual host has sufficient
+admission memory/swap/storage at this instant, H6 stage structure,
+v0.29 image, sudo journal read and non-boot service policy pass
+the *preflight*; **no new Docker container is created, no GPU model is
+started, no READY/soak/inference, no llama-benchy numbers exist**.
+Historical H7/H20 aliases and 16 old Docker mounts still prevent
+H3–H6 cleanup. DO NOT run Wizard Benchmark 20 without separate
+explicit operator approval for new GPU load.
+
+**Follow-up source hardening:** check the running Git checkout is
+clean and pin the exact 40-character HEAD before trial creation,
+record the source SHA in the session journal, reject any source
+drift during GPU load/soak/benchmark, and require that same pinned
+source when admitting Terminal B. The new hardening is SOURCE_ONLY
+until CI passes and its **new commit** is installed on DGX.
+The observed physical preflight above belongs to prior source
+`1de3ec0`; never claim the new source physically qualified yet.
+Keep PR #261 Draft/unmerged and PR #259 unchanged.
+
+## 2026-10-14 — Actual DGX H6 start-admission RC=3; isolated controller source-only
+
+DGX checked exact commit `e61f6b4d44624e8ebb454eac3288d13e3904f370`:
+Hybrid H3–H6 structural PASS, managed idle PASS, monitor=1,
+protect=1, heartbeat=60, canonical predecessor stopped exact ID,
+but `SERVICE_ENABLED=0` and `SERVICE_OWNED=0` block
+**installer-managed profile switch**. The physical start-admission
+`BLOCKED_PENDING_SAFE_CONTROLLER` result (RC=3) was expected.
+A new Wizard Benchmark **17–20** isolated-H6 source controller
+handles no-boot/no-service protected candidate create + exact-ID
+watchdog-before-start + localhost port 18890 + 16-GiB KV and
+forensic STOP; a separate Terminal-B benchmark lock adds
+readiness/monitor/kernel RM admission. CI, physical preflight and
+H6 live qualification must be recorded independently; **none yet
+performed for this new controller at the time of authoring**.
+H6 bench NOT_MEASURED; original H3–H6 full retire blocked by
+2 preserved H7/H20 aliases and 16 old Docker trial mounts.
+Canonical [runbook](HYBRID-BENCH-REBUILD-CYCLE.md).
+
+## 2026-10-14 — DGX dependency audit PHYSICAL PASS (retirement BLOCKED)
+
+At exact `443fd2bd01f0bd5314ee6a0dc66608d2059dfbf6`, operator
+performed the new physical Hybrid reference audit.
+`PROTECTED_PROFILE_REFERENCES=2` (H7 group metadata and H20
+ModelOpt conversion both alias the existing H6 checkpoint);
+`DOCKER_CONTAINERS_INSPECTED=24`;
+`DOCKER_REFERENCING_CONTAINERS=16` all exited, including
+`DOCKER_OTHER_ROOT_REVIEW_CONTAINERS=11` recorded with historical
+`/home/inlc/models` mounts.
+`HYBRID_REFERENCE_AUDIT=BLOCKED_KNOWN_REFERENCES`,
+`HYBRID_DELETION_AUTHORIZED=NO`, RC=3 **EXPECTED**.
+No models/services/containers changed; H6 first bench NOT_MEASURED.
+
+**Independent startup issue identified in source:** DGX installed manifest
+last reported `SERVICE_ENABLED=0`, while `install.sh` requires
+`SERVICE_ENABLED=1` AND `SERVICE_OWNED=1` for a real managed
+profile switch. The current shutdown state cannot safely be converted
+into a qualified live H6 switch by blindly running
+`install.sh --model orcarouter-hybrid`. Even restoring ownership
+requires careful no-boot/no-accidental-start planning. A source-only
+read-only Wizard **Models 3→9** admission checks this lifecycle
+restriction plus protective monitor/heartbeat and exact stopped
+predecessor, without any model start; physical check pending.
+Implement a protected isolated H6 trial or explicitly reviewed
+managed-service transition before 1st benchmark; **do not bypass
+with docker run**.
+
+## 2026-10-14 PHYSICAL DGX Hybrid Phase-0: STATIC PASS / RECLAIM BLOCKED
+
+Operator executed exact source `8ca529ba62067cae10e7ccdfd457e890967a1133`
+on the physical DGX. Host idle and pinned Hybrid H3→H6 runtime-only
+manifest validation PASS. Available disk **298422198272 B**.
+Allocated per directory: base **183535857664 B**, H3 **77543333888 B**,
+H4 **68014092288 B**, H5 **44912640 B**, H6 **35475456 B**.
+H3/H4/H5/H6 symlinks = 13/76/91/139; all five trees report zero
+regular files with >1 hard link. **H7/H20 registered profiles alias H6;
+16 exited Hybrid Docker experiments bind-mount H3/H4/H5/H6**
+(5 at repo-root, 11 historical `/home/inlc/models` paths).
+`PASS_STATIC_INVENTORY_ONLY` is not a deletion permit, runtime READY or
+measured benchmark. First H6 benchmark NOT_MEASURED; full deletion
+BLOCKED_KNOWN_REFERENCES. No asset or service removed.
+Source-only Wizard **Models 3→8** read-only external dependency audit
+added; physical execution of new audit NOT_RUN.
+See [HYBRID-BENCH-REBUILD-CYCLE.md](HYBRID-BENCH-REBUILD-CYCLE.md).
+
+## 2026-10-14 — SOURCE ONLY: Hybrid Phase-0 Wizard entry
+
+Added Models **3→7** and `scripts/wizard/hybrid-phase0-readonly.sh`:
+strict read-only managed idle, H6 runtime validation, metadata SHA256,
+disk/link counts, Docker IDs and bind mounts. `PASS_STATIC_INVENTORY_ONLY`
+is **not** live-start or retirement authorization. Physical Phase-0 at
+this source revision: **NOT_RUN**. Full H7/H20/release reference closure
+remains NOT_QUALIFIED. New host-free regression tests cover missing-root
+rejection, non-mutation source contract and Wizard navigation. Also fixed
+the mazinb Docker retirement Wizard's misplaced `else` to prevent a
+misleading failure warning after successful cleanup.
+
+## 2026-10-14 — NEXT: Hybrid H6 two-cycle benchmark / complete reclaim / rebuild
+
+Physical DGX mazinb reclaim and full managed host idle PASS are complete.
+The user requested **H6 benchmark → delete → verify absent → reinstall
+from source → repeat benchmark → delete again**, preserving research
+evidence and all unrelated Docker/shared assets.
+
+**Canonical runbook:** [HYBRID-BENCH-REBUILD-CYCLE.md](HYBRID-BENCH-REBUILD-CYCLE.md).
+It defines the first H6 reused-stage measurement, strict measured
+JSON/report/SHA and off-host backup, full H6→H5→H4→H3 generated-stage
+reclaim, independent absence/link/dependency/Docker/systemd checks,
+forced pinned mazinb source reacquisition for true reconstruction when H3
+is gone, full H3→H6 rebuild and matched benchmark, and final safe
+reclaim/host idle. H7/H20, old experimental containers, OrcaRouter base
+and images are **never broad-purged**.
+
+**BLOCKERS before live/destructive steps:** Hybrid `NOT_MEASURED`;
+past RM instability, modular Wizard live profile switch only preview;
+no implemented full-chain dependency-gated Hybrid removal; physically
+not qualified on clean new DGX. Current first action is ONLY Phase-0
+read-only script in the runbook; actual hybrid launch/reclaim/rebuild
+remain NOT_RUN. Do not use generic model `retire` or
+`uninstall.sh --purge-all` as shortcuts.
+
+## 2026-10-14 20:43 KST — PHYSICAL DGX MANAGED HOST IDLE: PASS (final)
+
+**Evidence type: operator DGX terminal, not CI simulation.** The user fast-forwarded the
+physical DGX source from `909b03f` to verified branch commit
+`2a2c2220bbb70db6007934bd678bddd704c0f643`:
+`SOURCE_UPDATE=PASS`. The standalone read-only shutdown preview
+`bash install.sh --lang ko --manage-settings --shutdown-access --dry-run`
+reached normalized **6/6 plan** with current `orcarouter` model profile,
+`API access: local only: 127.0.0.1:8888`, service disabled (`--no-service`),
+`--no-start`, and `DRY-RUN 완료` with no host resource mutation.
+
+The operator then invoked `./wizard.sh` → **Runtime 4 → post-benchmark shutdown 6**,
+explicitly approved the separate default-NO plan/commit questions, and reached
+`Settings transaction prepared (start=0)`, systemd
+`qwen38-flash-next.service` boot target link removed,
+`Managed Qwen API access endpoints removed`,
+`Managed Qwen runtime service removed`,
+`Settings resources applied and verified with boot enable deferred until commit`,
+`Settings transaction committed`, and transaction state applied/verified.
+The managed install manifest remains `PHASE=complete`, `MODEL_PROFILE=orcarouter`,
+but is now configured `API_ACCESS_MODE=local`, `SERVICE_ENABLED=0`.
+**The profile shown in the manifest is configured identity, not evidence
+of a running model.**
+
+**Two independent physical host-idle checks passed**: once automatically after
+Wizard shutdown and once directly after exiting Wizard using
+`python3 -B scripts/diagnostics/verify-managed-idle.py`. Both output:
+
+```text
+MANAGED_IDLE_MODEL_PROFILE=orcarouter
+MANAGED_IDLE_API_ACCESS_MODE=local
+MANAGED_IDLE_SERVICE_ENABLED=0
+MANAGED_IDLE_UNIT=qwen38-flash-next.service load=not-found active=inactive boot=
+MANAGED_IDLE_UNIT=qwen38-openwebui-proxy.socket load=not-found active=inactive boot=
+MANAGED_IDLE_UNIT=qwen38-openwebui-proxy.service load=not-found active=inactive boot=
+MANAGED_IDLE_SYSTEMD=NO_RUNNING_OR_BOOT_ENABLED_UNITS
+MANAGED_IDLE_MANAGED_PORTS=NO_LISTENERS
+MANAGED_IDLE_DOCKER=NO_RUNNING_QWEN38_CONTAINERS
+MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START
+MANAGED_IDLE_AUDIT_HOST_MUTATION=NONE
+```
+
+**Scope of PASS:** the project-managed runtime and OpenWebUI systemd units,
+boot-enable flags, configured backend/API/experiment port set, and running
+`qwen38-*` Docker containers. This is not proof that every non-project
+Docker or unrelated host service is stopped, nor proof of a physical reboot.
+ma-zinb checkpoint (~173.65 GiB reclaimed), exact five trial containers
+(~1.30 GiB reclaimed), and complete mazinb evidence archive were verified
+in earlier physical stages. H3–H6, OrcaRouter model checkpoint, Docker images,
+historic Docker objects not selected for reclaim, releases, benchmark payloads,
+journals, and archives remain in place.
+
+**Next workflow consequence:** newly installed or selected model must explicitly
+restore the desired `API_ACCESS_MODE` and `SERVICE_ENABLED` through the
+managed Wizard settings editor (Runtime **4 → 4**), only when wanted.
+Do not manually toggle raw systemd units without updating managed state.
+The older subsections below record historic intermediate states
+(active proxy / unverified idle) and are **superseded by this physical PASS**.
+
+## 2026-10-14: final model-benchmark cleanup must also close shared API/boot exposure
+
+Owner's DGX after mazinb source+Docker retirement: `qwen38-flash-next.service`
+is **installed=yes, enabled=yes, active=no**; the **shared** OpenWebUI
+socket/service remain **installed/active** and listen on
+`172.17.0.1:8000` and `10.221.50.65:8000`. Port 8888 has no
+listener; dedicated mazinb M1 18889 has no listener. The old
+`verify-mazinb-retirement.py` correctly passes its narrower
+"mazinb-specific artifacts absent" contract, but **DOES NOT attest that
+the overall managed API host is idle or reboot-safe**.
+
+**Correct safety boundary:** Although the configured manifest is still
+`MODEL_PROFILE=orcarouter`, no project model is currently being served.
+Preserving a shared proxy install does not mean the proxy needs to
+remain active. Worse, enabled runtime service can start on reboot.
+Do not conflate preserved files/ownership with active network listeners,
+and do not blindly `systemctl disable` without reconciling
+`install.env`: the settings transaction verifies enabled/service
+consistency.
+
+**New Wizard flow:** Runtime/API/Ports/Service **4 → 6**,
+"Post-benchmark API & boot shutdown". This delegates to the existing
+`install.sh --manage-settings --shutdown-access` with an exact
+completed-install manifest and a separate default-NO entry confirmation,
+default-NO apply consent, final normalized plan review and
+`START=0` (never starts the 171G vLLM model). It reuses
+`settings-transition.sh` and its rollback semantics to set
+`API_ACCESS_MODE=local`, `SERVICE_ENABLED=0` and release
+installer-owned `qwen38-openwebui-proxy.socket/service` and
+`qwen38-flash-next.service` managed systemd units. It preserves
+model checkpoints, Docker containers, images, immutable releases,
+benchmarks and private archived evidence. New CLI selector cannot be
+used for fresh install, without `--manage-settings`, with `--yes`
+or mixed with model/setting override flags.
+
+Read-only preview:
+`bash install.sh --lang ko --manage-settings --shutdown-access --dry-run`.
+New Wizard **4 → 7** or
+`python3 -B scripts/diagnostics/verify-managed-idle.py` verifies
+completed manifest's local/no-boot policy, all three shared unit
+ActiveState/UnitFileState, managed backend/proxy/old trial ports and
+all running `qwen38-*` Docker containers, without modification.
+It prints `MANAGED_IDLE_AUDIT=PASS_NO_MANAGED_API_LISTENER_OR_BOOT_START`
+only when ALL layers are quiescent; missing/failed inspections block.
+
+**Physical host shutdown: NOT_RUN.** The available real DGX evidence
+only establishes active proxy and auto-boot while the user is idle.
+Do not claim full teardown or report output of the new audit until the
+operator syncs an exact passing CI SHA, previews the plan, explicitly
+approves shutdown and obtains physical audit PASS. On subsequent
+installs/benchmarks, the operator must deliberately re-enable service
+and API access via the existing Wizard settings transaction.
+
+## 2026-10-14 Wizard installed API / LAN port configuration restored (source)
+
+**User finding:** prior installer supported setting Docker-app/LAN ports, but
+modular `wizard.sh` hid those settings for already completed installations.
+Verified code: fresh `install.sh` stage 5/6 still prompts for
+`API_ACCESS_MODE=local|docker|lan`, `API_DOCKER_PORT`,
+`API_LAN_ADDRESS`, `API_LAN_PORT`. Completed `install.sh` already
+had a transactional **Edit runtime / API / service settings** path.
+However the modular Wizard's top-level "Install/resume" blocks a
+`PHASE=complete` install while its runtime menu initially exposed
+only status/doctor/summary. This was a missing navigation route,
+not a removed port capability.
+
+**Source fix:** `wizard.sh` → **4 Runtime/Service → 4 API access /
+Docker & LAN ports** now delegates directly to
+`./install.sh --lang ko --manage-settings` (with the selected UI language).
+The new `--manage-settings` option requires an existing strictly
+parsed `PHASE=complete` manifest; blocks switches, forced `--yes`,
+CLI setting overrides and fresh/resume mode. It directly opens the
+existing installed-settings editor with current values, separate
+**default-NO apply** consent, normalized plan and equivalent CLI,
+and a last "Continue?" review. Only an accepted live edit delegates
+to the existing rollback-capable `settings-transition.sh`; it does
+not duplicate proxy/service mutation code. Direct preview supported:
+`./install.sh --manage-settings --lang ko --dry-run`. Runtime menu
+**5** shows `./scripts/manage-proxy.sh status` (read-only).
+Run disposable-HOME CI and real DGX source/host preview before
+claiming physical qualification.
+
+**Physical host 2026-10-14 19:38 KST (older checkout `446de3a93494...`):**
+the user's read-only mazinb post-retirement audit PASSED. The
+shared `qwen38-flash-next.service` is loaded but inactive; the shared
+OpenWebUI socket and proxy service are loaded/active. The listener
+inventory shows `172.17.0.1:8000` for Docker apps,
+`10.221.50.65:8000` for the LAN, neither on dedicated 8001,
+and no active backend 8888 (because runtime is stopped).
+Dedicated mazinb port 18889 and service, user unit and
+worker processes were absent. The proxy is still active and is a
+shared OrcaRouter component; do not delete it as mazinb debris.
+This output documents actual current listener facts, not a test
+that a future port-setting transaction has been applied.
+
+> **2026-10-14 PHYSICAL MAZINB CHECKPOINT + FIVE DOCKER REMOVAL PASS; SERVICES/PROXY AUDIT PENDING.**
+> Checkpoint recovered 186449989632 B (~173.65 GiB); Docker five-container
+> archive PASS_10_FILES then `REMOVED_FIVE_VERIFIED`, 1397395456 B (~1.30 GiB)
+> additionally recovered, all other Docker IDs unchanged. Known shared
+> `qwen38-flash-next.service`, `qwen38-openwebui-proxy.socket/service`,
+> and shared vLLM image MUST NOT be removed simply for mazinb.
+> New Wizard Model 3→6 calls read-only `scripts/verify-mazinb-retirement.py`
+> to audit system/user units, processes, M1 port 18889, shared proxy/runtime,
+> benchmark SHA, retired Docker tombstone and 10 archived files.
+> **ACTUAL DGX FULL SERVICE/PROXY AUDIT: NOT_RUN**. Exact details in
+> [Benchmark before reclaim](BENCHMARK-BEFORE-RECLAIM.md).
+
+> **2026-10-14 PHYSICAL MAZINB SOURCE RECLAIM PASS / FIVE DOCKER REMNANTS PENDING:**
+> Physical Wizard 3→4 removed mazinb checkpoint and recovered
+> `186449989632` bytes of disk availability. Five stopped mazinb
+> Docker containers remain **by earlier explicit source-only scope**.
+> New Wizard Models 3→5 archives their full logs/sanitized metadata
+> before removing only those five exact stopped IDs. Shared Docker
+> image/volumes, Hybrid, releases and M1 journal preserved.
+> **New five-container cleanup PHYSICAL RUN: NOT_RUN**. CI is synthetic.
+> See [physical run and scoped cleanup](BENCHMARK-BEFORE-RECLAIM.md).
+
+> **2026-10-14 MAZINB CHECKPOINT RECLAIM PENDING PHYSICAL GATE:**
+> v0.29 M1 actual benchmark is MEASURED; original/archived evidence was SHA-verified.
+> New Wizard Model 3→4 and `manage-models.sh reclaim-mazinb --dry-run` provide
+> a source-only, precise mazinb checkpoint removal with default-NO consent,
+> exact phrase, archive/Hybrid/Docker/M1 journal checks and shared locks.
+> All Docker objects, shared image, Hybrid H3-H6, logs and benchmark results
+> are preserved. Stopped mazinb trial objects may no longer restart after
+> model data removal. **REAL DGX REMOVAL AND BYTES RECLAIMED: NOT_RUN.**
+> First verify new source SHA/CI, perform physical dry-run, and only apply
+> if every gate passes. [Exact scope](BENCHMARK-BEFORE-RECLAIM.md).
+
+> **2026-10-14 FRESH HYBRID H6 INSTALL ACCEPTANCE — SOURCE PATH PRESENT, E2E PENDING:**
+> Operator requires one Wizard selection on a new DGX Spark to prepare
+> the OrcaRouter + mazinb inputs, vLLM image and H3→H4→H5→H6 chain,
+> then enter the managed runtime path automatically. Existing `install.sh`
+> already contains this conditional flow; a disposable-HOME dry-run/CLI
+> replay and source-contract regression were added. These are host-free
+> tests, not proof of clean-host downloads, builds, inference or RM safety.
+> Physical DGX installation/start requires separate approval and evidence.
+> [Fresh-host Hybrid E2E acceptance gate](HYBRID-FRESH-INSTALL-ACCEPTANCE.md).
+> OrcaRouter A/B benchmark is deferred; current priority remains
+> actual other-model measurement → verified archive → targeted reclaim.
+
+> **2026-10-14 PRIORITY: REAL MODEL BENCHMARK → ARCHIVE → TARGETED SPACE RECOVERY**
+> User explicitly clarified the goal is to test models, preserve actual
+> llama-benchy results, then recover memory/disk by selective removal;
+> Wizard should make this lifecycle easier. Further pure P1f/P1g
+> Supervisor simulation is DEFERRED as non-critical.
+> Physical DGX at source `1594f30`: P1e in-memory journal simulation
+> PASS and all **11/11** P1e standalone tests PASS; neither is a
+> live Supervisor qualification. Sole canonical worktree clean.
+> IMPORTANT: The former broad storage prune could erase stopped
+> experiment containers and older benchmark files. Current source
+> disables BOTH default deletion paths; they are preserved until
+> exact-ID archive review, independent checksum verification and
+> explicit per-target approval. Wizard 6→4 adds read-only archive SHA checks.
+> No checkpoint/Docker cleanup is authorized; inspect actual up-to-date
+> storage inventory and protect managed predecessor/dependency graph.
+> [Benchmark/reclaim operating contract](BENCHMARK-BEFORE-RECLAIM.md).
+
+> **2026-10-14 M1 P1e WRITE-AHEAD JOURNAL — PURE SYNTHETIC SOURCE ONLY:**
+> Source commit `f715ee9c8e1877ea9da53ff3388d9caaf64cbc26`
+> adds `m1-supervisor-journal-protocol.py`, adversarial unit tests
+> and Wizard Benchmark **16** in-memory journal/crash simulation.
+> Prepared STOP_INTENT is not 'durable' without an injected ack;
+> acknowledged intent cannot be auto-replayed after interruption;
+> independently proven candidate exit and stopped monitor are needed
+> before an EXIT_PROVEN record, with unknown shutdown cause preserved.
+> No actual file I/O, real fsync, authenticated IPC, concurrent durable
+> CAS, replay ledger, user service, Docker or GPU action is implemented.
+> All 'durable' snapshots/acks and watchdog evidence are simulated.
+> **P1e has not yet been run on the physical DGX.** P1d actual
+> in-memory simulation PASS is archived separately. Physical
+> `Linger=no` remains confirmed and no change approved.
+> [P1e design and limits](MAZINB-M1-WIZARD.md).
+
+> **2026-10-14 ACTUAL DGX P1d COMMAND SIMULATION: PASS_IN_MEMORY**
+> At exact source `08f69beda51a7ee8d610774e260aae21bed911b0`
+> the operator ran the pure `m1-supervisor-command-protocol.py`
+> plan/simulate on the physical DGX (one canonical Git worktree).
+> P1d printed `PASS_IN_MEMORY`, and blocked default-NO STOP,
+> `Linger=no`, nonce replay and expired requests. Real STOP was
+> `NOT_PERFORMED`; real IPC, worker, OS peer attestation, Docker
+> action, user service and linger mutation all remain absent.
+> Source Push/PR CI for `08f69be` both SUCCESS, not a live
+> background supervisor qualification. `Linger=no` stays confirmed.
+> [Exact physical P1d evidence](MAZINB-M1-P1D-PHYSICAL-SYNTHETIC-20261014.md).
+
+> **2026-10-14 M1 SUPERVISOR P1d — PURE SYNTHETIC CONTROL GATES ONLY:**
+> Commit `5777ee4d2b63466b0db6a750a3a3f71e8bfb84df`
+> adds `m1-supervisor-command-protocol.py`, adversarial unit tests
+> and Wizard Benchmark **15** (memory-only command simulation).
+> The mocked request includes owner token, exact Docker IDs, PID/start
+> ticks, systemd invocation ID, UID, a bounded TTL and nonce history.
+> Synthetic STOP requires explicit consent, linger gate, verified
+> worker/watchdog and free benchmark lease. Default-NO, `Linger=no`,
+> expired requests, nonce replay and owner drift reject admission.
+> All peer UID, supervisor, linger, heartbeat and approval values are
+> INJECTED INPUTS; no real kernel identity/authentication, IPC,
+> persistent nonce store, background worker, Docker or systemd action.
+> No physical DGX P1d execution yet; physical P1c IN_MEMORY_PASS and
+> actual DGX `Linger=no` remain recorded above/below.
+> Production real background lifecycle and logout persistence are
+> NOT_IMPLEMENTED / NOT_QUALIFIED. New CI results need separate check.
+> [Wizard P1d safety description](MAZINB-M1-WIZARD.md).
+
+> **2026-10-14 ACTUAL DGX P1c PURE SYNTHETIC PROTOCOL: PASS_IN_MEMORY**
+> At exact source `835be6f411abbb3e901992566d4459881853acf7`,
+> the operator synced the sole canonical worktree and ran P1c
+> `plan` and `simulate` physically on DGX.
+> Output: `M1_P1C_SIMULATION=PASS_IN_MEMORY`,
+> `SIM_STOP=PASS_EXPLICIT_ACK`, `SIM_RECOVERY=PASS_UNDETERMINED`,
+> `SIM_UNAUTHORIZED_STOP=BLOCKED`, `SIM_PID_REUSE=BLOCKED`.
+> The script also reported `WORKER_IMPLEMENTED=NO`,
+> `HOST_INSPECTION=NONE`, `DOCKER_ACTION=NONE`,
+> `USER_SERVICE_MUTATION=NONE`, `LINGER_CHANGE=NONE`.
+> This proves only execution of an in-memory simulation on DGX.
+> It does not qualify a real Worker, watchdog, Docker stop, host
+> stability or logout persistence. `Linger=no` remains confirmed
+> and no policy change has been approved.
+> [Exact operator evidence](MAZINB-M1-P1C-PHYSICAL-SYNTHETIC-20261014.md).
+> Source `835be6f` Push and PR CIs both SUCCESS.
+
+> **2026-10-14 M1 BACKGROUND SUPERVISOR P1c — PURE SYNTHETIC SOURCE ONLY:**
+> Commit `80501d2277945390ffc4c97ef79a10460ebdc073` adds
+> `scripts/runtime/m1-supervisor-protocol.py` with in-memory
+> exact-ID/session-token/PID-start-ticks/systemd-invocation binding,
+> watchdog freshness, benchmark-lease and explicit STOP-approval gates.
+> New Wizard Benchmark **14** runs `simulate` only; no host/Docker
+> subprocesses, services, journals, GPU, linger or model actions.
+> Synthetic STOP and supervisor-loss reconciliation are modeled, not
+> performed. Prior physical DGX `Linger=no` and reserved unit
+> `NOT_FOUND` remain the only actual background host observations.
+> No real Background Worker, persistent journal/IPC, user unit or
+> start/stop implementation has been built or qualified. SOURCE_CI
+> result must be checked separately; no actual DGX P1c test yet.
+> [Protocol guide](MAZINB-M1-WIZARD.md). Older source-only plans
+> below must not be construed as real worker readiness.
+
+> **2026-10-14 ACTUAL DGX P1b READ-ONLY USER UNIT INVENTORY: PASS_NOT_FOUND**
+> At exact source `e542f99fa711a61a1713fa0c10341f47934e7866`,
+> the owner fetched and fast-forwarded the single canonical checkout and
+> ran `m1-background-probe.py unit-status` without mutation.
+> The reserved `qwen38-mazinb-m1-background.service` returned
+> `M1_BG_UNIT_STATUS=NOT_FOUND`, `ABSENT_RESERVED_UNIT_ONLY`.
+> `M1_BG_WORKER_IMPLEMENTED=NO`, `M1_BG_WORKER_IDENTITY_VERIFIED=NO`,
+> `M1_BG_DOCKER_ACTION=NONE`, `M1_BG_USER_SERVICE_MUTATION=NONE`.
+> This proves only that specific reserved user unit was not found;
+> no background worker/lifetime is qualified and no other process or
+> unit inventory can be inferred. Earlier `Linger=no` remains confirmed.
+> NO Docker/service/linger changes and no GPU startup were performed.
+> [Exact physical evidence](MAZINB-M1-P1B-PHYSICAL-UNIT-STATUS-20261014.md); PR #261 Draft/unmerged.
+
+> **2026-10-14 ACTUAL DGX USER SYSTEMD LINGER — CONFIRMED DISABLED:**
+> Source `56b51aa94a5db5b32ce0d8adc2397760bb026805` and original canonical checkout verified.
+> Physical `loginctl show-user ... --property=Linger` printed `Linger=no`.
+> P1a printed `M1_BG_USER_LINGER=DISABLED`,
+> `M1_BG_USER_MANAGER=AVAILABLE` and
+> `M1_BG_BLOCK_REASON=USER_LINGER_DISABLED`; host probe BLOCKED.
+> No Docker, user-service, linger, GPU or managed-release change.
+> Prior reason `NOT_ENABLED_OR_UNKNOWN` is superseded by exact read-only
+> evidence. Owner approval to modify persistent linger is **NOT GIVEN**.
+> P1b source adds read-only reserved unit inventory only; no worker
+> launch, stop, PID or exact-ID ownership qualification.
+> See [physical evidence and P1b design](MAZINB-M1-WIZARD.md).
+
+> **2026-10-14 ACTUAL DGX BACKGROUND P1a HOST PROBE: SAFELY BLOCKED**
+> At source `9df9d0823762b16a1316847b7804e178f8b1a494` on
+> the original Git checkout, operator executed read-only plan/probe.
+> `M1_BG_HOST_PROBE=BLOCKED` with
+> `M1_BG_BLOCK_REASON=USER_LINGER_NOT_ENABLED_OR_UNKNOWN`.
+> No Docker/systemd user-service/linger mutation performed; background
+> worker and start/stop remain NOT_IMPLEMENTED. This old combined
+> reason does not by itself prove `Linger=no` rather than query failure.
+> New source distinguishes DISABLED / UNKNOWN; read-only DGX recheck
+> is necessary. Operator must explicitly authorize any persistent
+> `loginctl enable-linger` change; do not silently change host policy.
+> [Physical P1a evidence and safe next steps](MAZINB-M1-WIZARD.md).
+
+> **2026-10-14 P1a BACKGROUND SUPERVISOR HOST PROBE — SOURCE ONLY:**
+> Source commit `38560326631d612c45ee0d1cde19dd9da927e62d`
+> adds Wizard Benchmark **11 plan** and **12 host probe**,
+> backed by `scripts/runtime/m1-background-probe.py` and synthetic tests.
+> User bus, loginctl linger, systemctl user manager, tool availability
+> and XDG runtime-dir ownership/mode are inspected **read-only**.
+> This does NOT enable lingering, install/start/stop systemd units,
+> create Docker containers, launch a background worker or start models.
+> `PASS_CAPABILITY_ONLY` is not detached lifecycle/host-stability proof.
+> Background start/stop and independently owned PID/unit/session token
+> remain **NOT_IMPLEMENTED / NOT_QUALIFIED**.
+> Existing Wizard 5→9 Foreground and 5→10 exact-ID Journal recovery
+> retain their prior implementation and safety gates.
+> [Detailed safety design](MAZINB-M1-WIZARD.md) and
+> [architecture](WIZARD-ARCHITECTURE.md).
+> Older proposed Background notes below are historical snapshots.
+
+> **2026-10-14 WORKSPACE / BENCHMARK EVIDENCE UPDATE:**
+> All three remaining detached experiment worktrees were safely removed;
+> `git worktree list` returned only the original canonical checkout
+> on `feature/wizard-modular-phase1-20261014` at `2f1cc08`.
+> The independent 36-KiB physical M1 benchmark output directory is
+> preserved. DGX operator checked all three archived data SHA-256 values:
+> `smoke.json` PASS, `mazinb.json` PASS, `mazinb-report.md` PASS.
+> Local `SHA256SUMS` lists absolute paths (436 bytes), archival manifest
+> lists relative paths (238 bytes); measured payload digests match.
+> [Operator evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+> Foreground-only M1 remains the qualified startup architecture;
+> Background Supervisor is **DESIGN ONLY** and requires separate safety
+> tests and DGX approval. No GPU/Docker changes in workspace cleanup.
+
+> **2026-10-14 KST M1 PHYSICAL JOURNAL RECONCILIATION: PASS_RECORDED_STOPPED**
+> Physical DGX operator ran Wizard Benchmark 5→10 on source
+> `4776a6118decabc7cb511e4e60e7b157d3a57bec` and confirmed `y`.
+> Reconciler printed `M1_RECONCILE=RECORDED_STOPPED`.
+> Subsequent separate read-only status printed `phase=stopped`,
+> `Running=False`, `ExitCode=0`, `M1_DOCKER_REMOVED=NO`.
+> Two original JSON backup files were listed (0600; 1149 bytes each).
+> Shutdown cause remains `UNDETERMINED`, HOST_STABILITY=INCONCLUSIVE.
+> No Docker start/stop/delete is reported by the reconcile workflow.
+> [Permanent operator evidence](../scripts/benchmark/evidence/dgx-mazinb-m1-journal-reconcile-physical-20261014.md).
+> Source recovery is now **physically executed**; the older
+> `RECOVERY_REQUIRED`/`NOT_RUN` paragraph below is the previous snapshot.
+> Retain original canonical working directory:
+> `~/Workspace/llm/qwen3.8-flash-next-dgx-spark`.
+> Only audited, Git-registered clean temporary Worktrees may be removed;
+> all model/Docker/swap/state/evidence assets remain protected.
+
+> **2026-10-14 M1 SECOND ACTUAL GPU START:** DGX detached source SHA
+> `67f45d506cd773b2c5066659ddcb946970cc5ff1` verified clean.
+> Owner approved Wizard Benchmark 5 -> 9 and obtained
+> `M1_CANDIDATE_STARTED_UNQUALIFIED=qwen38-mazinb-m1-20261014003622-035e91fd`.
+> New M1-only swap-pressure availability gate is being physically
+> exercised. No second-run exact Docker ID/READY/soak/smoke/strict
+> RM outcome/llama-benchy metrics supplied yet. Preserve Terminal A.
+> Source SHA mistakenly entered for old Docker ID at initial 5 -> 8
+> was rejected (safe no-start); historical evidence submenu 9 was
+> rejected (safe no-start). Eventually correct full old Docker ID
+> acknowledged during live start. Historical A/B/managed preserved.
+> Benchmark only after `M1_READY_FOR_BENCH` in separate Terminal B.
+
+> **2026-10-14 M1 PHYSICAL FAILURE ROOT CAUSE CONFIRMED:** Actual new
+> model `qwen38-mazinb-m1-20261013235416-edd777eb` stopped via
+> `memory-protection`, exit 1, OOMKilled=false; reached 26/95 shards.
+> Five consecutive samples at KST 08:59:10–18: non-CMA free
+> 1192,1233,2045,1436,1496 MiB; non-CMA available 37.6–38.7 GiB;
+> swap growth 279–411 MiB. Low free <2 GiB AND swap growth >256 MiB
+> triggered despite high available memory and ~143 GiB swap-free.
+> Filtered kernel RM/OOM result EMPTY (not exhaustive).
+> Subsequent SOURCE-ONLY change: pinned M1-only swap-growth protection
+> additionally needs available <12 GiB; primary 10 GiB available
+> and 8 GiB swapfree guards unchanged, RM inspection still strict.
+> Fix failure phase recorded as failed_stopped with failure cause;
+> previous `phase=stopped` historical trial remains immutable.
+> NEXT: source CI + exact DGX SHA, guard verification and
+> explicit owner-supervised fresh M1/llama-benchy only if safe.
+> No fresh runtime or performance numbers yet.
+
+> **2026-10-14 ACTUAL DGX first M1 live started but MEMORY-PROTECTION STOPPED:**
+> Exact source SHA `72982e0e1bb53cdf8bb66a641356eb4a7e743320`,
+> operator approved Wizard 5 -> 9 and launched
+> `qwen38-mazinb-m1-20261013235416-edd777eb`,
+> exact Docker ID `1ebe723a279171794d7753cdbc3726e8c0db052c7cac02ec3060b8fc23c2700d`.
+> Output `M1_STOPPED_EXACT_ID=...`, `M1_DOCKER_REMOVED=NO`,
+> `M1_BLOCKED=candidate triggered memory-protection stop`.
+> No READY/soak/inference/llama-benchy. Protective stop is confirmed;
+> actual non-CMA/swap samples, OOMKilled and RM journal not yet supplied.
+> HOLD new launch; request read-only candidate Docker/monitor/kernel
+> evidence. Preserve historical A/B, managed Docker, M1 candidate and swap.
+> See `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
+> **2026-10-14 DGX M1 repeat READ_ONLY PASS:** A second physical
+> Wizard 5 -> 8 transcript returned `M1_PREFLIGHT=PASS_READ_ONLY` and
+> `M1_CANDIDATE_START=NOT_PERFORMED`, matching the previously recorded
+> old Docker ID `f6bfee5a...ff6acd24`, immutable release `ff67bab3...`
+> and image SHA256 `dba5d8af...`. The user then entered 5 -> 5 -> 0,
+> which *cancelled* historical evidence selection without mutation.
+> The second transcript did not print its git HEAD; do not assert it
+> cryptographically establishes SHA 72982e0 until `git rev-parse HEAD`
+> is checked. No new M1 live container, READY, smoke or bench has run.
+> See `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
+> **2026-10-14 M1 ACTUAL DGX READ-ONLY PREFLIGHT PASS:** Source
+> `2dfa74dacedfe50fe1c28ca309939ed9d61b8123` in isolated
+> worktree; Wizard Benchmark 6 plan (16 GiB / port 18889),
+> 7 `M1_SESSION=ABSENT`, 8 returned `M1_PREFLIGHT=PASS_READ_ONLY`.
+> Old Docker full ID
+> `f6bfee5a421743758974920064d59c1fb7586584cb3a96f83b5c3fafff6acd24`,
+> release `ff67bab3c94d6992f61b9535836df97f03b9c022`,
+> M1 image ID `sha256:dba5d8af279fb85901e6d8911f1a59ecc45b669b0948ab8d01d7c7d1c5815734`.
+> Candidate start NOT_PERFORMED. Subsequent source change isolates each
+> new M1 HOME/vLLM/FlashInfer cache; needs updated SHA/CI physical check.
+> New M1 GPU start, READY, RM stability and llama-benchy NOT_RUN.
+> See `scripts/benchmark/evidence/dgx-mazinb-m1-physical-readonly-preflight-20261014.md`.
+
+> **2026-10-14 mazinb M1 source implementation:** Added an isolated
+> unique-name create-only `scripts/runtime/mazinb-m1.py` supervisor;
+> Wizard Benchmark 6/7/8/9 = plan/status/read-only physical preflight/
+> explicit opt-in new live start. A strict pinned-label watchdog is
+> armed BEFORE start, post-ready 180s soak and strict RM monitoring are
+> source-implemented; the M1 shared lifecycle + exclusive benchmark
+> lock contract is source-implemented in `scripts/wizard/m1-benchmark-lock.sh`. **M1 ACTUAL DGX PREFLIGHT / LIVE READY /
+> LLAMA-BENCHY remain NOT_RUN.** Old A/B and OrcaRouter protected.
+> Controlled B (16 GiB) historical success does not erase the
+> archived *managed* 16 GiB `NV_ERR_NO_MEMORY` HOST-STABILITY FAIL.
+> See `docs/MAZINB-M1-WIZARD.md`.
+
+> **2026-10-14 mazinb ACTUAL_DGX historical A/B evidence review:**
+> The owner's Wizard 5 -> 5 -> 3 output shows A/24 GiB
+> `STOP_REASON=memory-protection` after five low-memory samples
+> (Docker exit 1, OOMKilled=false) and B/16 GiB healthy API
+> `/health` + `/v1/models` HTTP 200 at 20:57:42 KST, about
+> 180 s before orderly exit 0, with no displayed protect stop or
+> filtered RM/OOM events. B exact served ID JSON and historical
+> runner final RESULT line are not included in the pasted output;
+> **no new model run, no llama-benchy, no cleanup**. Both old case
+> objects must be preserved and a new isolated M1 candidate needs
+> a unique name. See
+> [physical A/B evidence review](../scripts/benchmark/evidence/dgx-mazinb-kv-ab-wizard-readonly-20261014.md).
+
+> **2026-10-14 ACTUAL DGX mazinb status:** Wizard verified that both
+> old KV trials still exist and are exited: A/24GiB exit 1, B/16GiB
+> exit 0; both OOMKilled=false. These are historical observations,
+> NOT new READY or bench results. Evidence submenu now supports
+> 1=A, 2=B, 3=both; fresh-B admission explains old B name collision
+> before asking for predecessor ID. No Docker/state cleanup performed.
+> See `docs/MAZINB-EXECUTION-GATE.md`.
+
+> **2026-10-14 DGX mazinb M0 follow-up:** Real read-only admission
+> refused the existing historical `qwen38-mazinb-kv-a` container. It is
+> NOT proven running or safe to remove. Wizard Benchmark now exposes
+> read-only status/evidence A/B and an explicit reviewed-A exact-ID
+> acknowledgement before allowing independent B *admission*.
+> No cleanup, model launch, benchmark, or protected-object mutation.
+> See `docs/MAZINB-EXECUTION-GATE.md`.
+
+> **2026-10-14 mazinb timing/approval boundary:** Next DGX candidate is
+> mazinb. The first additional gate is read-only exact Docker-ID admission
+> (`scripts/wizard/mazinb-admission.sh`); M1 protected stay-READY lifecycle
+> and real llama-benchy remain **NOT IMPLEMENTED / NOT MEASURED**.
+> See [MAZINB-EXECUTION-GATE.md](MAZINB-EXECUTION-GATE.md).
+
+> **2026-10-14 Wizard migration note (Phase 1, staged):** A separate
+> modular `./wizard.sh` operator entry now exposes read-only inventory,
+> diagnostics, preflight and safe preview paths. The installer-only refactor,
+> live profile switch, protected benchmark controller and storage deletion
+> are **NOT IMPLEMENTED** in this stage. See
+> [WIZARD-ARCHITECTURE.md](WIZARD-ARCHITECTURE.md) for exact scope.
+
 # Current project status
 
 ## 2026-10-13 17:59:36 KST — ACTUAL_DGX Legacy A protective stop CONFIRMED

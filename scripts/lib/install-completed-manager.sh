@@ -27,7 +27,7 @@ install_completed_current_config_label() {
 }
 
 install_completed_stage_settings() {
-  local answer monitor_default protect_default service_default api_default detected_lan
+  local answer monitor_default protect_default service_default api_default detected_lan restart_default
   INSTALL_COMPLETED_CLI_DRY_RUN="${DRY_RUN:-0}"
 
   INSTALL_COMPLETED_CONFIG_OVERRIDE="${CONFIG_OVERRIDE:-}"
@@ -45,6 +45,34 @@ install_completed_stage_settings() {
   INSTALL_COMPLETED_API_LAN_ADDRESS="${API_LAN_ADDRESS:-}"
   INSTALL_COMPLETED_API_LAN_PORT="${API_LAN_PORT:-8001}"
   INSTALL_COMPLETED_SERVICE_ENABLED="${SERVICE_ENABLED:-1}"
+
+  if [[ "${INSTALL_COMPLETED_SHUTDOWN_ACCESS:-0}" == 1 ]]; then
+    # Post-benchmark teardown: mutate the managed configuration, not just
+    # systemctl state. A bare systemctl disable leaves install.env out of
+    # sync and can make later settings transactions/recovery fail.
+    # Keep all model, image, journal, release and monitor settings unchanged.
+    INSTALL_COMPLETED_API_ACCESS_MODE=local
+    INSTALL_COMPLETED_API_LAN_ADDRESS=""
+    INSTALL_COMPLETED_SERVICE_ENABLED=0
+    INSTALL_COMPLETED_PENDING_SETTINGS=1
+    INSTALL_COMPLETED_SETTINGS_APPLY=0
+    INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=1
+    START=0
+    wizard_warning 'This closes managed Docker/LAN API access and removes the owned boot runtime service.'
+    wizard_warning 'All checkpoints, stopped containers, evidence, images and immutable releases remain untouched.'
+    wizard_info 'This changes install.env transactionally. A future model session must explicitly re-enable API/service.'
+    if [[ "${INSTALL_COMPLETED_CLI_DRY_RUN}" == 1 ]]; then
+      DRY_RUN=1
+      wizard_info 'Read-only plan: nothing will be stopped or reconfigured.'
+    elif wizard_yes_no 'Apply post-benchmark API/service shutdown after reviewing the complete plan? / 최종 계획 확인 후 API·서비스를 비활성화합니까?' no; then
+      INSTALL_COMPLETED_SETTINGS_APPLY=1
+      INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
+      DRY_RUN=0
+    else
+      DRY_RUN=1
+    fi
+    return 0
+  fi
 
   if [[ "${UI_LANG}" == ko ]]; then
     wizard_info "현재 config: $(install_completed_current_config_label)"
@@ -185,12 +213,16 @@ install_completed_stage_settings() {
     return 0
   fi
 
+  # Direct Wizard API/port edits must not activate a previously stopped 171G
+  # model by accidental Enter; explicit yes is required for any restart.
+  restart_default=yes
+  [[ "${INSTALL_COMPLETED_FORCE_SETTINGS:-0}" != 1 ]] || restart_default=no
   if [[ "${UI_LANG}" == ko ]]; then
     if wizard_yes_no '최종 계획 확인 후 이 설정을 실제로 적용합니까?' no; then
       INSTALL_COMPLETED_SETTINGS_APPLY=1
       INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
       DRY_RUN=0
-      wizard_yes_no 'runtime 설정을 지금 재시작하여 적용합니까?' yes && START=1 || START=0
+      wizard_yes_no 'runtime 설정을 지금 재시작하여 적용합니까?' "${restart_default}" && START=1 || START=0
     else
       DRY_RUN=1
     fi
@@ -199,7 +231,7 @@ install_completed_stage_settings() {
       INSTALL_COMPLETED_SETTINGS_APPLY=1
       INSTALL_COMPLETED_SETTINGS_PREVIEW_ONLY=0
       DRY_RUN=0
-      wizard_yes_no 'Restart the runtime now to apply runtime settings?' yes && START=1 || START=0
+      wizard_yes_no 'Restart the runtime now to apply runtime settings?' "${restart_default}" && START=1 || START=0
     else
       DRY_RUN=1
     fi
@@ -323,6 +355,16 @@ install_completed_orcarouter_ab_trial() {
 
 install_completed_choose_action() {
   local answer current_summary
+
+  if [[ "${INSTALL_COMPLETED_FORCE_SETTINGS:-0}" == 1 ]]; then
+    # Wizard runtime-management entry bypasses the profile switch menu.
+    # Reuse all normal settings staging, default-NO apply consent, 6/6 plan
+    # review and the existing recoverable settings transaction.
+    INSTALL_COMPLETED_ACTION=settings
+    install_completed_stage_settings
+    INSTALL_COMPLETED_SUPPRESS_PROFILE_SELECTION=1
+    return 0
+  fi
 
   if [[ "${REFRESH_PROFILE_DEFAULTS:-0}" == 1 ]]; then
     INSTALL_COMPLETED_ACTION=refresh

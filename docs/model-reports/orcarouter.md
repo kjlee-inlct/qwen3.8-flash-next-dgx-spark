@@ -1,3 +1,176 @@
+## 2026-10-18 — Actual official ARM64 C image vLLM distribution attested; help failed
+
+One owner-authorized, offline/GPU-less Docker CLI probe of the pinned
+`vllm/vllm-openai@sha256:3b0e188f...` ARM64 C image found
+installed `vllm=0.1.dev20073+g8e685d198`,
+`torch=2.13.0+cu130`, `transformers=5.15.1`,
+`flashinfer-python=0.6.17`,
+`compressed-tensors=0.17.0`.
+The probe intentionally had no GPU, checkpoint mounts or network,
+and created exactly one disposable isolated test container.
+
+**Critical failure:** `vllm serve --help=all` returned exit
+code 1, outer helper status 2. The reported 17
+`PEER_C_FLAG_*=NOT_FOUND_IN_HELP` fields **do not prove** those
+options are unsupported: the command never produced a
+successfully parsed help result. Underlying traceback remains
+unread from saved `vllm-serve-help-all.txt`.
+After check, protected old managed/A/B ID and state snapshot
+was unchanged, and the new temporary container was removed.
+One-time approval was consumed; do not retry CPU Docker or
+launch GPU/model without separately reviewed authorization.
+
+The OrcaRouter checkpoint identity is unchanged; official C is
+a **candidate backend**, NOT a newly installable model family.
+Keep the original P0 Wizard mission: easy install, switch,
+inspect and safe removal; do not expose C as production-ready
+while its actual parser, PLE, KV cache flags, model READY
+and host memory safety remain unqualified.
+
+Read-only saved-help error report is now source-implemented
+behind Wizard Advanced option 6 and the maintained
+`scripts/runtime/orcarouter-peer-c-cli-probe.py report`
+action (CI/Git sync required before first physical run).
+[Actual DGX CPU probe receipt](../../scripts/benchmark/evidence/dgx-orcarouter-peer-c-cli-probe-20261018.md).
+## 2026-10-18 — Official ARM64 C source metadata: entrypoint compatible, package still unattested
+
+Following successful physical pinned image pull, the owner read
+`docker image inspect` runtime metadata without starting a container.
+The same image ID `sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`
+and exact RepoDigest were present; OCI Entrypoint is
+`["vllm", "serve"]`, `Cmd` absent, workdir `/vllm-workspace`,
+`CUDA_VERSION=13.0.1`, but `VLLM_BUILD_COMMIT=unknown`,
+`org.opencontainers.image.revision=unknown` and runtime env
+`VLLM_VERSION` not set. Existing `serve.sh` appends `/model` and
+flags, which matches the expected `vllm serve /model ...` argv
+shape **only**. CPU PLE/offload, compressed-tensors loader, MTP,
+KV memory flag, vLLM wheel version and host stability remain
+UNATTESTED. No container or model was launched, no API READY
+and no OrcaRouter benchmark obtained.
+[Actual physical source/Entrypoint evidence](../../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+## 2026-10-18 — Official ARM64 peer C image download confirmed; no inference run
+
+The DGX operator performed the separately approved
+`docker pull --platform linux/arm64` by immutable manifest digest
+`vllm/vllm-openai@sha256:3b0e188ffceb3d07e09c3cb5215433a0020eacf02d7f882ed3a8bfd15454477e`.
+Post-pull image inspect returned `linux/arm64`, exact RepoDigest and
+local config image ID
+`sha256:d464f3b466fa9c45ddbff8a812e80564503b6879a9fd95c1a47514f3f0df5a4a`.
+Existing managed/legacy A/v0.29 B exact Docker IDs, image IDs,
+status, Running, OOMKilled were all unchanged, and SHA256 receipt
+files were produced at
+`/home/inlc/orcarouter-bench-evidence/peer-c-image-20261018T093728Z`.
+User-pasted terminal showed `PEER_C_VERIFY=PASS`,
+`PEER_C_PROTECTED_DOCKER=UNCHANGED`,
+`PEER_C_GPU_RUN=NOT_PERFORMED`,
+`PEER_C_MODEL_BENCHMARK=NOT_MEASURED`.
+
+The newly installed Docker image is **not** a measured or qualified
+OrcaRouter runtime; it does not attest installed vLLM wheel/source
+commit, working PLE loader, inference accuracy, host RM safety, or
+throughput. Existing historic OrcaRouter A/B evidence is untouched;
+**BENCHMARK_STATUS remains NOT_MEASURED**.
+[Actual physical digest and protected pre/post evidence](../../scripts/benchmark/evidence/dgx-orcarouter-peer-c-image-pull-20261018.md).
+[C source-only plan](../ORCAROUTER-PEER-C-PLAN-20261018.md).
+## 2026-10-18 — Physical B post-trial status: monitor-protection stop, no bench samples
+
+Current operator read-only status confirms the existing isolated v0.29
+B Docker `13abbb81ca92cbf2f8256e96941a19102ce809ff1c9364ce6932b44a88ebf6a1`
+is `stopped/exited`, `ExitCode=137`, with a trial stop
+journal showing `STOP_REASON=memory-protection`. These observations
+do **not** date the model startup to 2026-10-18 or prove NVIDIA RM
+OOM/Docker OOM; exact B monitor sequence, Docker `OOMKilled`
+flag and kernel evidence remain uncollected in this transcript.
+Owner's 18888 `/health` and `/v1/models` both refused
+connections. The source benchmark client created two
+`status=fail` **error-only** qualification/decode records
+(`/health` connection refused); **no performance samples**
+were measured. Normal manager status reported installed/enabled/active
+all `no`; only `open-webui`/`portainer` shown running.
+Do not reuse/delete the existing B or bypass the wizard; new
+candidate design and live run require separate admission/approval.
+**BENCHMARK_STATUS stays NOT_MEASURED.**
+[Exact DGX operator output and classification](../../scripts/benchmark/evidence/dgx-orcarouter-v029-b-readonly-status-20261018.md).
+
+## 2026-10-18 — Actual DGX mounted OrcaRouter override equals the posted peer JSON (7/7)
+
+Owner-provided terminal output from
+`inspect_orcarouter_mount_config_readonly.py` reports
+`PASS_CURRENT_ONLY` with intact managed/legacy protected RO
+mount identities, readable source/override configs and the exact
+maintained narrow layer-type rewrite. Canonical digest parity with
+the complete **third-party posted** reference is
+**MATCH** in all 7 reported categories: full JSON, quantization,
+CT config groups, ignore list, full text config, **ordered** 48
+layer-type array and vision config. This supersedes the previous
+counts-only uncertainty specifically for that supplied reference.
+[Full owner terminal and interpretation](../../scripts/benchmark/evidence/dgx-orcarouter-mounted-config-parity-20261018.md).
+
+The pasted transcript omitted local git HEAD/status/exit-code
+attestation; do not infer the exact execution SHA from the remote
+GitHub branch. This is `ACTUAL_DGX_CONFIG_REFERENCE_PARITY_7_OF_7`,
+**not** exact runtime weight/config load identity, READY, inference,
+GPU RM safety or long-term host qualification. No new physical
+GPU, Docker mutation or weight read. Priority moves to source-only
+exact official ARM64 CUDA13 vLLM wheel/provenance comparison with
+legacy/v0.29 images and R23–R32 initial-allocation evidence.
+Default KV stays 16GiB; KV24 is not approved, nor is an image pull,
+Docker trial or PR merge.
+
+## 2026-10-18 — OrcaRouter original-config missing at guessed path; current protection check PASS
+
+Actual DGX source sync reached
+`28d54295725499bbaba2adef3d0ed7e8146dbaad`
+with 2/2 CI SUCCESS; protected read-only
+postcheck **`PASS_CURRENT_ONLY`**, both
+managed/legacy RO mount inventories equal modulo
+order, official community image **not locally
+installed**. The manual `$HOME/models`-based
+`config.json` prerequisite failed
+`STOP: Original config missing`. No original
+config or tensor-header inspector actually ran;
+**model deletion or checkpoint corruption is
+not established** by this negative path check.
+
+Follow-up `inspect_orcarouter_mount_config_readonly.py`
+uses the real protected Docker mount sources,
+not the standard profile's assumed local root,
+to inspect two bounded JSONs and report sanitized
+config-shape/quant/override parity. This is
+SOURCE_ONLY until run on the physical owner DGX.
+No Docker mutation or GPU operation.
+[Comparator and triage](../COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+
+## 2026-10-18 — source-only OrcaRouter recovery from single Spark reference
+
+The operator wishes to revisit **OrcaRouter**, not only
+lychee888, against
+https://arca.live/b/alpaca/181506470.
+This external TP=1 OrcaRouter runtime is a useful
+third-party comparison, **not our DGX qualification**.
+Past physical proof includes one clean managed
+16GiB `READY + 180s soak PASS/PASS`, subsequent
+strict RM-failing but functional 16GiB restarts,
+a v0.29 mmap R22 READY with RM OOM and Oct-13
+Legacy A monitor `PROTECT` during load.
+OrcaRouter is therefore not simply `never started`;
+**repeatable strict-stability and current A/B
+benchmark are unqualified**.
+
+Current `serve.sh` already sets MP executor,
+PLE CPU offload for legacy, MTP k=2, 1800s PLE
+timeout, max 262144, concurrency 3 and
+disabled async scheduling. Raising managed
+KV from 16 to the peer's 24GiB is contraindicated
+by prior physical A/B evidence. The distinctive
+candidate delta is the external official ARM64
+CUDA13 runtime image, not one obvious missing
+flag. The community's config override exactness
+and image's allocation path remain unverified.
+[Detailed risk and next source gates](../COMMUNITY-ORCAROUTER-SPARK-PLE-OFFLOAD-20261018.md).
+No independent new Docker/GPU trial is authorized;
+old protected objects and original RM proof are retained.
+
 # orcarouter — benchmark report
 
 ## 2026-10-13 17:59:36 KST — ACTUAL_DGX Legacy A protective stop CONFIRMED

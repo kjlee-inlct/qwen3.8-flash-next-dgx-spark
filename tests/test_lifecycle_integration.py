@@ -242,9 +242,8 @@ class LifecycleIntegrationTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("profile     : orcarouter-hybrid", result.stdout)
-            self.assertIn("qwen3.8-h6-modelopt-w4a16", result.stdout)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("retired", result.stderr)
             self.assertNotIn("Resuming installation", result.stdout)
             self.assertEqual(state.read_bytes(), before)
 

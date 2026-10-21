@@ -227,6 +227,50 @@ systems and risky live model startup remains separately gated.
 | OrcaRouter H38 managed profile | YES (candidate) | Static CI, exact-image source-only and checkpoint index-only gates, guarded migration rollback | `CHECKPOINT_METADATA_ORDER_GATE=FAIL`, `FUNCTIONAL=NOT_REACHED`, `HOST_STABILITY=INCONCLUSIVE`; **GPU/MODEL RERUN BLOCKED** |
 | `lychee888` | NO | Visible registry status = planned/non-installable | Not selectable; no production promise |
 
+### Integrated exact full reset source implementation (NOT M2 qualified)
+
+New optional `full-project-uninstall.py` supports read-only SHA-bound
+`plan`, guarded destructive `apply`, and independent residual `verify`.
+The Wizard exposes full reset actions under Uninstall options 4–6.
+Additional model/runtime cache and local forensic evidence candidates
+are in scope, not permanently protected project exceptions.
+Synthetic tests check exact Docker ID/labels, foreign Docker image,
+volume and bind mounts, scoped path trees, internal non-followed symlinks,
+manifest/receipt SHA integrity, transaction refusal and user consent.
+An exact plan match means approved identities only, not demonstrated
+host rollback or real DGX destructive acceptance. Service removal
+reuses the inherited shared lifecycle lock and ownership marker checks.
+
+**M2 STILL NOT RUN:** no actual DGX operation, no documented
+disposable-host install-delete-verify-reinstall E2E, and no approval
+to use the single protected DGX as a destructive test fixture.
+A successful CI result must remain labelled SOURCE_ONLY/CI_PASS.
+
+### Complete project reset target clarification (2026-10-20)
+
+Owner requests local deletion of project OrcaRouter, all mazinb R2 and other
+Docker/model assets, dedicated swap, service/proxy, state/releases, and
+all local forensic/benchmark evidence including repo-local copies.
+Historical preservation is not a full-reset exception. Exclude unrelated
+apps, system swap, drivers, remote GitHub history and the shared HF parent.
+This is acceptance scope, not execution authority. M2 remains NOT_RUN.
+
+### 2026-10-20 full-uninstall read-only coverage (SOURCE_ONLY)
+
+`scripts/lifecycle/uninstall-inventory.py` was introduced to inventory project
+state/models, Docker candidates and volumes, owned images, swap/fstab,
+service/proxy runtime status and excluded shared caches; Wizard
+**2. Uninstall → 1. Full-project resource inventory** is read-only.
+`plan` never deletes or starts resources. `verify --baseline` only
+compares bounded project-scoped resources against a prior plan and must
+not certify a factory-clean host. An unknown owner or missing Docker/systemd
+inventory does not become a positive deletion authorization.
+
+Actual research Docker/evidence/cache cleanup, end-to-end cancellation,
+destructive teardown, and post-removal real DGX qualification remain
+**NOT IMPLEMENTED / M2 NOT RUN**. Preserve the existing protected physical
+DGX. See [coverage and next gates](PROJECT-UNINSTALL-COVERAGE.md).
+
 ### Non-negotiable separation of result classes
 
 1. **`CI_PASS`** means the code and disposable-fixture tests passed. It does not imply live DGX E2E pass.

@@ -153,10 +153,10 @@ class InstalledProfileWizardTests(unittest.TestCase):
             manifest = self.write_manifest(home)
             before = manifest.read_bytes()
 
-            result = self.run_installer(home, "1\n5\n")
+            result = self.run_installer(home, "1\n4\n")
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("5) Cancel", result.stdout)
+            self.assertIn("4) Cancel", result.stdout)
             self.assertIn("Cancelled", result.stdout)
             self.assertNotIn("DRY-RUN complete", result.stdout)
             self.assertEqual(manifest.read_bytes(), before)

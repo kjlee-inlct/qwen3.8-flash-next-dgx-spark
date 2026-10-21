@@ -1,0 +1,238 @@
+## 2026-10-16 — Physical exact H3–H6 model retirement completed
+
+Owner ran the opt-in, post-Docker-gated exact-target model removal on DGX
+after a successful physical DRY_RUN. The terminal printed, in order:
+`REMOVED_HYBRID_STAGE=qwen3.8-h6-modelopt-w4a16`,
+`REMOVED_HYBRID_STAGE=qwen3.8-h5-neutral-input-scale`,
+`REMOVED_HYBRID_STAGE=qwen3.8-h4-orca-all`, and
+`REMOVED_HYBRID_STAGE=qwen3.8-hybrid-quant-layout`.
+The program reported `mode=EXECUTED`, `protected_orcarouter_exists=true`,
+`available_bytes_before=303420813312`,
+`available_bytes_after=449058627584`,
+`available_bytes_delta=145637814272` (about 135.64 GiB).
+No Docker commands ran from this model-removal tool. Previously, 17
+exact research containers were physically removed.
+
+The separately maintained private evidence archive (34 file SHA256 PASS
+before removal) and Git research documentation were not deletion targets.
+This console output verifies program-reported removal and protected path
+existence; independent post-delete verification of filesystem, Docker
+references, protected checkpoint integrity, swap, and retained evidence
+is still outstanding. Source CI for the model-retirement commit
+`1f7ddd61` completed successfully; this does not replace host checks.
+
+**Retirement milestone: H3_H4_H5_H6=REMOVED_PHYSICALLY;
+EXACT_17_DOCKER=REMOVED_PHYSICALLY; POST_RETIREMENT_AUDIT=PENDING.**
+
+## 2026-10-16 — Physical removal of exactly 17 Hybrid Docker research objects
+
+Operator invoked the opt-in exact-ID Docker-only removal after an
+actual DGX `DRY_RUN` had matched all 17 archived IDs and the GitHub
+CI for that code completed successfully. The terminal printed
+`REMOVED_EXACT_ID=` for each of all 17 expected full IDs, then
+`HYBRID_DOCKER_EXACT_17=REMOVED` and
+`MODEL_DELETE=NOT_PERFORMED`. A separate subsequent
+`docker ps -a --no-trunc` listed eight retained unrelated/managed
+Docker containers, including `qwen38-flash-next`, healthy running
+`open-webui`, and running `portainer`; none of the exact 17 remained.
+
+Observed `df -B1 .` before removal:
+`used=634497937408`, `available=298321874944` bytes.
+Observed after removal:
+`used=629398196224`, `available=303421616128` bytes.
+**Net observed additional available bytes: 5,099,741,184
+(about 4.75 GiB)**. This is observational correlation rather
+than filesystem proof that all change came exclusively from Docker;
+no Docker volumes/images or H3–H6 model directories were
+intentionally deleted by this script.
+
+**Retirement state:** EXACT_17_DOCKER=REMOVED_PHYSICALLY;
+H3_H4_H5_H6_MODELS=NOT_REMOVED;
+ORCAROUTER_MODEL=PROTECTED;
+PROVENANCE_ARCHIVE=LOCAL_PRIVATE_34_CHECKSUMS_PASS_BEFORE_REMOVAL.
+The earlier 17-object Docker presence gate is expected to
+fail after this deletion; it must not be reused as a model-only
+retirement gate.
+
+## 2026-10-16 — Physically checked aggregate of all 17 archived logs
+
+The operator ran the checksum-gated log aggregate on the real DGX. It reported 17 logs, aggregate size **1,351,619 bytes**, **7** traceback markers across 4 containers, **2** KeyboardInterrupt markers (H6 M1), and **0** matching OOM strings. The source archive SHA256SUMS hash matched the previously pinned `79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701`. All rows below contain only content digests, byte counts and marker counts; **no raw log lines have been committed**.
+
+| Docker ID (full) | Log bytes | Log SHA256 | Tracebacks | KeyboardInterrupt |
+|---|---:|---|---:|---:|
+| `10f8645adee052bd7506f1237e4064bcbbfb189caaeacbb9759981eaa33b32a5` | 54680 | `c181269b1a3fd857d057a774b75d4ae217fbc6299f57af7189a4e3b96ce5b4a7` | 0 | 0 |
+| `2ea2a61cb2e07df79044280ac1c65ffa5bda8fb3084501ea87853b7d6fbf20e1` | 54680 | `90b3c6e973a47e8f8bc4d48eaeff2c95a3f732f44f0f525e34683552c83a1741` | 0 | 0 |
+| `3b7e6badbd653f38f18e884c287b96c3c37cf005822cbc9ccb03f741d7421254` | 54679 | `45c0bde94055fe8731466ba13655ce001380ec3c559eeffb10cdc12f9210bd75` | 0 | 0 |
+| `43afd5055614c273181bd8f91d251ab19ac88d49080f3362cf7bcc31143c5c65` | 118387 | `2044781c9c47086ce053598f11312881831fbc794d46cbfa59a421f3db8f6b13` | 4 | 0 |
+| `569f2720593f4d0f768342c1417a9d2363fba894fd7f83a8de8a5df0dd2a9d51` | 54679 | `210319ad1f6e6e8bcf7c8325d20bf4d0e88eabd69beb7b722c2b29b1eed4d711` | 0 | 0 |
+| `586fb729f12cfb8971ba5ed21ef4fdff4845505d132511cfcacb269c77e045a0` | 54681 | `fcdb4221e5371efc6aee0720a66386dbd862491c384e032a8b3564d9f2aaffcb` | 0 | 0 |
+| `6484fdf56ffbec15d76333bda1a36f05ca50b9f17841b37e41e0781343a8b2e0` | 55250 | `2ac494ca68e919480efa382953df5495399b58d6f6a91b48275c3610742c0009` | 0 | 0 |
+| `7a871dfd8c7dbc63f7e3943a7261003e9564442a28c486b6cd6b3b8bf672cc45` | 54814 | `88b97dab36c1d207b7c7e349317203d3452d07fbd5c9efc7eb1d65f3f2ccdc01` | 0 | 0 |
+| `ba4029544a1ef39ffc2ab316da9ceb4cb975e845344c6be9bf683fc50db2ca5a` | 54545 | `f44f909152c0a411091b7c92e6b5850a5d94b5fdfaf1c2c967c205a8ef572cde` | 0 | 0 |
+| `bd6886aa4499f14e12e8ce3e49c2400ec2a0d940bf4e0d03a0d8fe3d1d5ba14c` | 93074 | `a7ed99f656fcb969d9ea3317aac5d17cfebb72d8153c71810e0a8b12d3d73e1f` | 0 | 0 |
+| `c14af278cc738258a8fda1d686595864f845ff11cf4b223e8c1f48d92be06ca1` | 55965 | `7f00b35ec39100834e3a230e0b83479764c48a959a757ec580d3910c4ef06fc1` | 1 | 0 |
+| `df2787a3fab4ef0d6d953e62ba4f7af380eebc46bf220734804b993cec5ac21b` | 54680 | `2f2601288cd7af145ef4176ff091491738cfb396f6e3984fb333b909d68dc64f` | 0 | 0 |
+| `e029767f2882aa50636bcabf55a55d4adda0c3b25c4d41c2b58d8d0b0f915a1c` | 56101 | `cc94e23d08799d82e3247b8949b113fc7544c5821d62bb2a6301d6f4eeaf7aad` | 1 | 0 |
+| `e2b000b28d5e71922e20d59f9725c8ebe54c5794349a20515343302f8d608e2a` | 386318 | `096bf28abeaccad7c529d98e326dc7b966caaeb2832376e6641579692a3eff59` | 0 | 0 |
+| `e526189f1093e95d81568d82eb10b8beaeb6227adca49029f241634769e6cbc7` | 39617 | `55725a50b3c06097fb597e38e7beb1b68725b06ab0c3fff03b791b0bc53e757a` | 1 | 2 |
+| `e937e0f23e45ba4ee8851e79e60eaefc509367b74a021e67a74fea098ad17f62` | 54789 | `e5c7e40e01dfab08bc017ec287e5f7cb6d9f27682647084ae87ea749975d8b7f` | 0 | 0 |
+| `efa06c76207540a3ffa034e1e8d21156565a458be91486b5bac1208bbe9a1aec` | 54680 | `8b0cc729f9ee00c3d3fea2faef525b01d71d37e020dbb82e0e0c889868f0910f` | 0 | 0 |
+
+The aggregate also counted model-loading and safetensors keywords, which are not meaningful success criteria. No matching OOM strings is **not** evidence against the separately documented H6 M1 physical memory-protection stop. Operator output explicitly stated `raw_lines_in_output=false`, `docker_delete_performed=false`, and `model_delete_performed=false`. The source logs still exist only in the local private archive and are **not** restored by this Git record.
+
+## 2026-10-15 — Pinned Git-facing local archive provenance (physical DGX PASS)
+
+Owner ran the maintained read-only provenance verifier after fast-forward to
+`ca6fbef`. JSON output confirmed `schema_version=1`,
+`record_type=hybrid_docker_archive_provenance`, **17 containers verified**,
+**34 SHA256-verified files**, all pinned IDs listed below, and exact
+SHA256 of the local 17-container archive's `SHA256SUMS` file:
+
+```text
+79ac8fcce46cc7063a6f0952537151dd80fda2d63a3e2828ee594a705c0f6701
+```
+
+This hash is a **Git-pinned reference to local bytes**, not proof that the
+17 logs or JSON evidence payloads themselves are present in Git. The report
+explicitly recorded `raw_logs_in_git=false`,
+`docker_removal_performed=false`, `model_removal_performed=false`.
+All 17 expected IDs are already recorded in this document. No model or
+Docker deletion is authorized merely by this checksum report.
+
+## 2026-10-15 — Seventeen-object archive independently checked on DGX
+
+Operator inspected the local private archive at
+`~/.local/state/qwen38-spark/retirement-archives/hybrid-docker-17-20261015`.
+It exists with mode `drwx------`, allocated size about **1.5M**,
+and contains exactly 17 `.log` files, 17 `.json` files and one
+`SHA256SUMS` manifest. An independent `sha256sum -c SHA256SUMS`
+verified **34/34** recorded file digests. A second read-only Python
+check verified 17 unique JSON internal IDs exactly equal to the
+64-hex filename stems, each JSON status `exited`, each
+`protected=false`, each with nonempty Hybrid mounts and matching
+log file: `HYBRID_METADATA=PASS_17_EXACT_IDS`. No Docker removal or
+model deletion occurred. This confirms the **local** archive and
+metadata structure, not that its raw payloads were committed to Git.
+
+**Git preservation policy:** This repository already includes
+the full 17-ID inventory, physical H6 stop analysis, research outcome
+and build scripts. Keep the raw 34-file evidence archive private until
+reviewed; raw Docker logs may include confidential strings. A Git
+commit containing a curated evidence manifest, rather than raw logs,
+is permitted after reviewing path disclosure and provenance.
+Checkpoint weights are explicitly out of Git scope by operator choice.
+
+Remaining for real cleanup: review which stopped research containers
+belong in the exact removal allowlist; ensure no active/managed Docker
+objects share those IDs; confirm protected OrcaRouter and original M1
+data; capture baseline filesystem free bytes; separately review and
+approve a specific no-prune/no-force cleanup sequence. The known legacy
+`/home/inlc/models` symlink must not be recreated or mutated for this.
+
+## 2026-10-15 — Whole-Docker physical inventory: 17 Hybrid references
+
+Operator ran the maintained read-only Hybrid Docker inventory command after
+fast-forward to `c93b074`. It returned
+`HYBRID_RESEARCH_DOCKER_CANDIDATES=17` and
+`HYBRID_DOCKER_INVENTORY=PASS_READ_ONLY`; all 17 were `exited`.
+Exactly six belong to the previously SHA256-checked local six-container
+archive. **Eleven more historical Docker objects need their evidence
+preservation reviewed**; the six-container archive does not cover them:
+
+| Additional historical Docker object | Full observed Docker ID |
+|---|---|
+| qwen38-h6-kv16-control | `10f8645adee052bd7506f1237e4064bcbbfb189caaeacbb9759981eaa33b32a5` |
+| qwen38-h6-kv16-rmuvm-r8 | `2ea2a61cb2e07df79044280ac1c65ffa5bda8fb3084501ea87853b7d6fbf20e1` |
+| qwen38-h6-kv8-instrumented-r2 | `3b7e6badbd653f38f18e884c287b96c3c37cf005822cbc9ccb03f741d7421254` |
+| qwen38-h6-kv8-control | `569f2720593f4d0f768342c1417a9d2363fba894fd7f83a8de8a5df0dd2a9d51` |
+| qwen38-h6-kv145-trace-r5 | `586fb729f12cfb8971ba5ed21ef4fdff4845505d132511cfcacb269c77e045a0` |
+| qwen38-h6-kv8-instrumented | `7a871dfd8c7dbc63f7e3943a7261003e9564442a28c486b6cd6b3b8bf672cc45` |
+| qwen38-h6-kv15-trace-r6 | `ba4029544a1ef39ffc2ab316da9ceb4cb975e845344c6be9bf683fc50db2ca5a` |
+| qwen38-h6-kv16-rmsys-r9 | `c14af278cc738258a8fda1d686595864f845ff11cf4b223e8c1f48d92be06ca1` |
+| qwen38-h6-kv14-control | `df2787a3fab4ef0d6d953e62ba4f7af380eebc46bf220734804b993cec5ac21b` |
+| qwen38-h6-kv12-control | `e029767f2882aa50636bcabf55a55d4adda0c3b25c4d41c2b58d8d0b0f915a1c` |
+| qwen38-h6-kv16-trace-r7 | `efa06c76207540a3ffa034e1e8d21156565a458be91486b5bac1208bbe9a1aec` |
+
+These additional eleven bind historical `/home/inlc/models/` paths;
+the operator confirmed it was a symlink to the project model assets
+although the link is now absent. All 17 are **research inventory
+candidates**, not individually approved removal IDs. No raw logs,
+environment/secrets, or full inspect configs were committed. Neither
+Docker removal nor checkpoint reclamation has happened.
+
+# DGX Hybrid local research retirement — operator scope and immutable inventory
+
+## Provenance and policy (2026-10-15)
+
+Operator explicitly clarified: local Hybrid checkpoint/research resources may be
+removed after the experiment records are preserved in Git. **The checkpoint
+weight bytes do not need an independent off-host backup.** Removing the bytes
+is irreversible without reconstructing the checkpoints from source inputs;
+the Git evidence is not a weight backup. This record is a **non-destructive
+evidence inventory**, not consent to execute an unreviewed deletion command.
+
+Original OrcaRouter source checkpoint (~171G), managed runtime/container,
+PLE swap, mazinb physical M1 benchmark originals, model switching/install
+capacity and all non-Hybrid project resources are excluded from retirement.
+
+## Verified physical observations
+
+- Four local Hybrid stages: H3 `qwen3.8-hybrid-quant-layout` (~73G),
+  H4 `qwen3.8-h4-orca-all` (~64G), H5
+  `qwen3.8-h5-neutral-input-scale` (~43M), and H6
+  `qwen3.8-h6-modelopt-w4a16` (~34M). Total allocated
+  approximately **136G**, but post-deletion `df` recovery is not yet measured.
+- Exact six historical Hybrid Docker objects were confirmed exited, name and
+  64-hex ID checked, and their selected logs plus sanitized metadata were
+  archived locally; manifest 7/7 SHA256 PASS. Full immutable IDs:
+
+| Container | Docker ID |
+|---|---|
+| H6 physical M1 | `e526189f1093e95d81568d82eb10b8beaeb6227adca49029f241634769e6cbc7` |
+| R28 unquant linear | `e2b000b28d5e71922e20d59f9725c8ebe54c5794349a20515343302f8d608e2a` |
+| R27 linear | `43afd5055614c273181bd8f91d251ab19ac88d49080f3362cf7bcc31143c5c65` |
+| R26 construction | `bd6886aa4499f14e12e8ce3e49c2400ec2a0d940bf4e0d03a0d8fe3d1d5ba14c` |
+| R25b initialization | `6484fdf56ffbec15d76333bda1a36f05ca50b9f17841b37e41e0781343a8b2e0` |
+| R24 KV16 | `e937e0f23e45ba4ee8851e79e60eaefc509367b74a021e67a74fea098ad17f62` |
+
+- Original H6 2026-10-14 archive was located at
+  `~/h6-m1-evidence-20261014.dvQmt6eq`, archive ~108K:
+  `active.json`, `trial.json`, `monitor.log`,
+  `runtime-stop.env`, `docker-inspect.json`, `docker.log`,
+  `kernel-window.log` all passed SHA256 against the existing local manifest
+  on 2026-10-15. Zero-byte `kernel.log` was not part of that manifest.
+- Separate exact-six evidence archive at
+  `~/.local/state/qwen38-spark/hybrid-retirement-evidence` was ~756K,
+  metadata and six timestamped rendered Docker logs, manifest 7/7 PASS.
+  These are local archives, not independently duplicated raw bytes in Git.
+- H6 direct physical M1 completed first 81/81 safetensors progress in
+  577.40s but entered a second pass and was stopped by watchdog memory
+  protection. **Not READY, inference PASS, or benchmark measured.**
+  Detailed normalized-log event chronology and safety limits remain in
+  [the canonical immutable physical H6 report](dgx-hybrid-h6-m1-protection-stop-physical-20261014.md).
+- The six exited objects each bind H3-H6 and OrcaRouter, and registry
+  aliases include H7 and H20 against H6. Additional exited
+  `qwen38-h6-kv16-rmsys-r9` Docker ID
+  `c14af278cc738258a8fda1d686595864f845ff11cf4b223e8c1f48d92be06ca1`
+  binds historical paths `/home/inlc/models/qwen3.8-h*`.
+  Operator established that `/home/inlc/models` was a symlink to the
+  project `models` root; although it no longer exists, its historical
+  Docker mount string is a **real research dependency**, not a distinct
+  safe directory. No automatic addition to the six-container delete set.
+
+## Record preservation boundary
+
+This Git document deliberately contains no raw Docker inspect JSON
+(which can expose secrets or environment), unreviewed raw logs, model weights,
+or caches. The detailed physical report linked above remains part of Git;
+the 7+7 archived payloads are **still on the DGX** and must not be misrepresented
+as Git-hosted copies. Before deleting the only raw copies, produce a redacted
+or reviewed portable Git evidence bundle or explicitly decide which raw bytes
+are not required. The existing repository docs alone are not proof that the
+raw logs and Docker inspect payloads have been uploaded.
+
+Current stage: `GIT_SUMMARY_COMMITTED` when this document reaches HEAD,
+`GIT_RAW_EVIDENCE=NOT_ARCHIVED`, `DELETE_EXECUTED=NO`.
+Exact-target staged removal and Docker alias/profile dependency handling,
+including verification of the protected OrcaRouter, require a separate
+explicit reviewed operation and measured filesystem recovery.

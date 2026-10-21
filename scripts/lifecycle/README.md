@@ -38,6 +38,63 @@ Top-level compatibility paths such as `scripts/qualify-release.sh`,
 thin delegators. Operator-facing transaction recovery/status commands use those stable
 paths; new internal code should target the canonical implementation here.
 
+## SHA256-bound full-project uninstall engine (2026-10-20 SOURCE_ONLY)
+
+`full-project-uninstall.py` is the separate three-stage whole-project
+`plan`/`apply`/`verify` engine exposed from the main Wizard uninstall
+submenu. It delegates read-only discovery to `uninstall-inventory.py`,
+binds exact full-ID Docker + image and mounted-volume proofs and safe
+filesystem root/inode scope to a canonical SHA256 receipt, and refuses
+external image/volume/bind-mount users and active transitions.
+Actual delete requires exact receipt and explicit irreversible phrase,
+holds the Qwen3.8 operation lock and passes its ownership to the
+existing managed service helper. It deletes local research evidence
+(no default archive retention) only after Docker/swap removal and
+reports leftover candidates via an independent postcheck.
+Standalone source/CI fixture tests: `tests/test_full_project_uninstall.py`.
+All real DGX destructive M2 tests remain **NOT_RUN/NOT_QUALIFIED**.
+See `docs/PROJECT-UNINSTALL-COVERAGE.md` for detailed scope/risks.
+
+## Project uninstall completeness inventory (read-only)
+
+`uninstall-inventory.py` provides an independently testable, non-mutating
+full-project candidate inventory and baseline-bound post-removal residual
+check. The Wizard's Uninstall → read-only inventory action delegates here.
+The module reports exact-ID Docker candidates, registry ownership distinctions,
+state/releases, systemd units and status, swap/fstab, model dirs and excluded
+shared caches. It never removes an object, issues a GPU command or grants
+deletion approval. Real destructive full cleanup remains **NOT IMPLEMENTED**
+and M2 host acceptance **NOT QUALIFIED**. See
+[project uninstall coverage](../../docs/PROJECT-UNINSTALL-COVERAGE.md) and
+`tests/test_uninstall_inventory.py`.
+
+### Read-only checkpoint marker provenance (SOURCE_ONLY)
+
+`python3 -B scripts/lifecycle/uninstall-inventory.py provenance`
+uses the bounded live inventory and recorded model marker fingerprints to
+report model repository/revision/status, file-entry counts and safe
+`lstat`/file-size consistency. `--json` is also supported. It
+**does not hash model weights**, label an `owned=False` checkpoint
+installer-owned, or grant any delete authority. Result states are
+`CONSISTENT_METADATA_NOT_OWNERSHIP`, `REVIEW_REQUIRED`,
+`INCOMPLETE` or `NO_MODEL_CANDIDATES`. Synthetic checks are
+in `tests/test_uninstall_inventory.py`. See
+`docs/PROJECT-UNINSTALL-COVERAGE.md` for specific limits.
+
+### Read-only Docker dependency reconciliation (SOURCE_ONLY)
+
+After a separately reviewed clean fast-forward on the physical host,
+`python3 -B scripts/lifecycle/uninstall-inventory.py references` checks
+external Docker container image-ID/volume/bind dependencies against
+the bounded project candidate inventory, including discovered
+UNVERIFIED assets. It prints `NO_OBSERVED_CONFLICTS` (exit 0),
+`CONFLICTS` (exit 3) or `INCOMPLETE` (exit 2); `--json` is
+available. No destructive commands or ownership changes occur.
+The inspection is point-in-time and is **not** a deletion authorizer
+or substitute for immutable ownership evidence. Synthetic regressions:
+`tests/test_uninstall_inventory.py`. Exact scope and limitations:
+`docs/PROJECT-UNINSTALL-COVERAGE.md`.
+
 ## Exact-SHA isolated local tests
 
 After an independently reviewed **clean, fast-forward-only Git synchronization**, use

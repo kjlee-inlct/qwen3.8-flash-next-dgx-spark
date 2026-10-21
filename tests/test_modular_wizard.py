@@ -1,0 +1,362 @@
+"""Modular Wizard safe-navigation regression tests; no DGX interaction."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ModularWizardTests(unittest.TestCase):
+    def run_case(self, home: Path, args: list[str], answers: str = "") -> subprocess.CompletedProcess[str]:
+        env = {**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "xdg")}
+        env.pop("UI_LANG", None)
+        env.pop("QWEN38_MODEL_ROOT", None)
+        return subprocess.run(
+            ["bash", str(ROOT / "wizard.sh"), *args],
+            cwd=ROOT, env=env, input=answers,
+            capture_output=True, text=True, check=False, timeout=20,
+        )
+
+    def test_status_never_claims_runtime_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--status", "--lang", "en"])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Manifest: missing", result.stdout)
+            self.assertIn("Runtime : NOT_PROBED", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_main_menu_retries_bad_choice_and_exits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "invalid\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Invalid selection", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_catplusplus_m1_ma_zinb_parity_gated_submenu(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            # Benchmark -> catplusplus M1 -> plan, status, preflight,
+            # bench admission, run gate, reconcile -> back -> exit.
+            result = self.run_case(
+                home, ["--lang", "en"], "5\n23\n1\n2\n3\n4\n5\n6\n0\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CATPLUSPLUS_M1_WORKFLOW=MAZINB_M1_PARITY_SOURCE_CONTRACT",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_SESSION=ABSENT", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_ADMISSION=BLOCKED_", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_BENCH_ADMISSION=BLOCKED_", result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_LIVE_START=NOT_IMPLEMENTED_OR_AUTHORIZED",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_M1_RECONCILE=NO_SESSION_OR_JOURNAL",
+                          result.stdout)
+            self.assertNotIn("CATPLUSPLUS_M1_READY_FOR_BENCH=PASS", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_restored_mazinb_benchmark_submenu_plan_and_status_are_readonly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(
+                home, ["--lang", "en"],
+                "5\n24\n1\n2\n0\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("M1_SESSION_SLOT=reinstall", result.stdout)
+            self.assertIn("M1_SESSION=ABSENT", result.stdout)
+            self.assertIn("Foreground-localhost experimental API", result.stdout)
+            self.assertNotIn("M1_CANDIDATE_STARTED_UNQUALIFIED", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_pinned_mazinb_restore_menu_source_requires_approval(self):
+        source = (ROOT / "scripts/wizard/model-menu.sh").read_text()
+        self.assertIn("wizard_menu_option 11 'mazinb restore preflight", source)
+        self.assertIn("wizard_menu_option 12 'Restore pinned mazinb", source)
+        self.assertIn("wizard_yes_no 'Approve pinned mazinb large download", source)
+        self.assertIn("RESTORE_MAZINB_PINNED", source)
+        self.assertIn("QWEN38_MAZINB_RESTORE_APPROVED=1", source)
+
+    def test_catplusplus_benchmark_plan_in_wizard_never_starts_a_model(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "5\n22\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CATPLUSPLUS_OPERATION=SOURCE_ONLY_BENCHMARK_PLAN", result.stdout)
+            self.assertIn("CATPLUSPLUS_PINNED_REVISION=3251fd8afbd08f76368a9bfa71132d9aef364813",
+                          result.stdout)
+            self.assertIn("CATPLUSPLUS_BENCHMARK_STATUS=NOT_MEASURED", result.stdout)
+            self.assertIn("CATPLUSPLUS_DOCKER_GPU_DOWNLOAD=NOT_PERFORMED", result.stdout)
+            self.assertIn("CATPLUSPLUS_ADMISSION=BLOCKED_", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_orcarouter_backend_status_is_read_only_and_blocks_unqualified_c(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "3\n7\n5\n0\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("ORCAROUTER_PROFILE=orcarouter", result.stdout)
+            self.assertIn("ORCAROUTER_OFFICIAL_ARM64_C_INSTALL_SWITCH=DISABLED_UNQUALIFIED",
+                          result.stdout)
+            self.assertIn("ORCAROUTER_OFFICIAL_ARM64_C=BLOCKED_PRE_RUNTIME_DEVICE_INFERENCE_CPU_ONLY",
+                          result.stdout)
+            self.assertIn("WIZARD_MUTATION=NONE", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_nested_back_is_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "ko"], "3\n0\n4\n0\n5\n0\n6\n0\n8\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_mazinb_evidence_menu_invalid_case_has_no_side_effects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "ko"], "5\n5\ninvalid\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Invalid trial", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_mazinb_status_and_menu_navigation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "5\n4\n0\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("mazinb historical experiments", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_evidence_numeric_selection_is_not_an_invalid_trial(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            bin_dir = home / "bin"
+            bin_dir.mkdir()
+            mock_bash = bin_dir / "bash"
+            mock_bash.write_text(
+                '#!/bin/sh\n'
+                'if [ "$2" = evidence ]; then printf "MOCK_EVIDENCE=%s\\n" "$3"; exit 0; fi\n'
+                'exit 73\n', encoding="utf-8",
+            )
+            mock_bash.chmod(0o700)
+            env = {
+                **os.environ, "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "xdg"),
+                "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            for option, expected in (
+                ("1", ["A"]), ("2", ["B"]), ("3", ["A", "B"]),
+                ("B", ["B"]), ("0", []),
+            ):
+                with self.subTest(selection=option):
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                        cwd=ROOT, env=env, input=f"5\n5\n{option}\n0\n0\n",
+                        text=True, capture_output=True, timeout=20, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    reviewed = [
+                        line.split("=", 1)[1] for line in result.stdout.splitlines()
+                        if line.startswith("MOCK_EVIDENCE=")
+                    ]
+                    self.assertEqual(reviewed, expected)
+                    self.assertNotIn("Invalid trial", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_existing_historical_b_blocks_fresh_b_before_id_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            bin_dir = home / "bin"
+            bin_dir.mkdir()
+            mock_docker = bin_dir / "docker"
+            mock_docker.write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = inspect ] && [ "$4" = qwen38-mazinb-kv-b ]; then\n'
+                '  printf "%064d\\n" 1\n'
+                '  exit 0\n'
+                'fi\n'
+                'exit 77\n', encoding="utf-8",
+            )
+            mock_docker.chmod(0o700)
+            env = {
+                **os.environ, "HOME": str(home),
+                "XDG_STATE_HOME": str(home / "xdg"),
+                "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            result = subprocess.run(
+                ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                cwd=ROOT, env=env, input="5\n2\n0\n0\n",
+                text=True, capture_output=True, timeout=20, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Historical B container already exists", result.stdout)
+            self.assertNotIn("Re-enter complete predecessor Docker ID", result.stdout)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_mazinb_reclaim_wizard_is_default_no_and_requires_exact_phrase(self) -> None:
+        """Never execute source removal from a blank/default or mistyped consent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stub_dir = home / "bin"
+            stub_dir.mkdir()
+            stub = stub_dir / "bash"
+            stub.write_text(
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$HOME/calls"\n'
+                'if [ "$2" = reclaim-mazinb ] && [ "$3" = --dry-run ]; then\n'
+                '  echo MAZINB_RECLAIM_PLAN=PASS_READ_ONLY_NOT_AUTHORIZED_TO_DELETE\n'
+                '  exit 0\n'
+                'fi\n'
+                'if [ "$2" = reclaim-mazinb ] && [ "$3" = --yes ]; then\n'
+                '  echo FAKE_RECLAIM_APPLY_CALLED\n'
+                '  exit 0\n'
+                'fi\n'
+                'exit 0\n', encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env = {
+                **os.environ, "HOME": str(home), "XDG_STATE_HOME": str(home / "xdg"),
+                "PATH": str(stub_dir) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            for answer, expected_apply in (
+                ("\n", False),
+                ("y\nWRONG_PHRASE\n", False),
+                ("y\nDELETE_MAZINB_SOURCE_CHECKPOINT\n", True),
+            ):
+                with self.subTest(answer=answer):
+                    (home / "calls").unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                        cwd=ROOT, env=env, input="3\n4\n" + answer + "0\n0\n",
+                        capture_output=True, text=True, timeout=20, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    calls = (home / "calls").read_text(encoding="utf-8")
+                    self.assertIn("reclaim-mazinb --dry-run", calls)
+                    self.assertEqual("reclaim-mazinb --yes" in calls, expected_apply)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_mazinb_docker_retirement_is_default_no_and_requires_exact_phrase(self) -> None:
+        """Model-menu 5 does not remove containers without explicit two-stage consent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            fake = home / "bin"
+            fake.mkdir()
+            stub = fake / "bash"
+            stub.write_text(
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$HOME/calls"\n'
+                'if [ "$2" = retire-mazinb-containers ]; then\n'
+                '  echo MAZINB_DOCKER_RETIRE_PLAN=PASS_NO_MUTATION\n'
+                'fi\n'
+                'exit 0\n', encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env = {**os.environ, "HOME": str(home),
+                   "XDG_STATE_HOME": str(home / "xdg"),
+                   "PATH": str(fake) + os.pathsep + os.environ.get("PATH", "")}
+            for consent, applied in (
+                ("\n", False),
+                ("y\nWRONG_PHRASE\n", False),
+                ("y\nDELETE_FIVE_MAZINB_CONTAINERS\n", True),
+            ):
+                with self.subTest(consent=consent):
+                    (home / "calls").unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                        cwd=ROOT, env=env,
+                        input="3\n5\n" + consent + "0\n0\n",
+                        text=True, capture_output=True, timeout=20, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    calls = (home / "calls").read_text()
+                    self.assertIn("retire-mazinb-containers --dry-run", calls)
+                    self.assertEqual("retire-mazinb-containers --yes" in calls, applied)
+                    self.assertFalse((home / "xdg").exists())
+
+    def test_mazinb_retired_marker_blocks_stale_deletion_route(self) -> None:
+        """Historical marker requires independent read-only audit, not a second delete."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            state = home / "xdg/qwen38-spark/mazinb-m1"
+            state.mkdir(parents=True)
+            marker = state / "retired-docker.json"
+            marker.write_text('{"state": "archived_docker_removed"}', encoding="utf-8")
+            original = marker.read_bytes()
+            fake = home / "bin"
+            fake.mkdir()
+            stub = fake / "bash"
+            stub.write_text(
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$HOME/calls"\n'
+                'exit 99\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env = {**os.environ, "HOME": str(home),
+                   "XDG_STATE_HOME": str(home / "xdg"),
+                   "PATH": str(fake) + os.pathsep + os.environ.get("PATH", "")}
+            result = subprocess.run(
+                ["/bin/bash", str(ROOT / "wizard.sh"), "--lang", "en"],
+                cwd=ROOT, env=env, input="3\n5\n0\n0\n",
+                text=True, capture_output=True, timeout=20, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "MAZINB_DOCKER_RETIRE=BLOCKED_HISTORICAL_MARKER_REVIEW_REQUIRED",
+                result.stdout)
+            self.assertIn("Models 3 -> 6", result.stdout)
+            self.assertEqual(marker.read_bytes(), original)
+            self.assertFalse((home / "calls").exists())
+
+    def test_eof_aborts_before_default_choice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_case(Path(tmp), ["--lang", "en"])
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("Input stream closed (EOF)", result.stderr)
+
+    def test_install_default_no_is_not_consent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            result = self.run_case(home, ["--lang", "en"], "1\n\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((home / "xdg").exists())
+
+    def test_nested_eof_also_aborts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_case(Path(tmp), ["--lang", "en"], "3\n")
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("Input stream closed (EOF)", result.stderr)
+
+    def test_malformed_manifest_blocks_installer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            state = home / "xdg" / "qwen38-spark"
+            state.mkdir(parents=True)
+            (state / "install.env").write_text("PHASE=complete\nMODEL_PROFILE=orcarouter\n", encoding="utf-8")
+            result = self.run_case(home, ["--lang", "en"], "1\n0\n")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Manifest: invalid", result.stdout)
+            self.assertIn("Invalid install manifest", result.stderr)
+
+    def test_symlinked_manifest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            state = home / "xdg" / "qwen38-spark"
+            state.mkdir(parents=True)
+            target = home / "not-a-manifest"
+            target.write_text("PHASE=complete\n", encoding="utf-8")
+            (state / "install.env").symlink_to(target)
+            result = self.run_case(home, ["--status"])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Manifest: invalid", result.stdout)
+
+    def test_unknown_flag_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_case(Path(tmp), ["--yes"])
+            self.assertEqual(result.returncode, 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

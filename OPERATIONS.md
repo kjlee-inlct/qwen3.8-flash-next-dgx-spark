@@ -479,6 +479,55 @@ A full purge removes every model/image asset recorded as installer-owned in `ass
 
 The uninstaller continues to refuse deletion of assets that are not recorded as installer-owned, have drifted from their recorded manifest/image fingerprint, or are still required by retained dependents.
 
+### 2026-10-20 complete-removal scope clarification
+
+The owner explicitly requires complete project uninstall to REMOVE the
+OrcaRouter predecessor and checkpoint, all mazinb R2 trial Docker objects
+and checkpoint, all project NVIDIA/Hybrid checkpoints, project Docker
+images/volumes, dedicated swap and fstab entry, service/proxy, project
+state/releases, and local forensic/benchmark journals and archives.
+Former preservation rules do NOT exempt these from approved full reset.
+Foreign apps, shared Hugging Face cache parent, system swap, Docker engine,
+NVIDIA drivers and remote GitHub history remain protected. This is a target
+specification, NOT authorization to execute destructive cleanup.
+See docs/PROJECT-UNINSTALL-COVERAGE.md.
+
+### Integrated complete reset source implementation (NOT host-qualified)
+
+Wizard 2. Uninstall now includes optional complete-reset plan (4),
+destructive exact application behind a saved SHA256 receipt and two
+explicit confirmations (5), and independent full postcheck (6).
+The canonical Python engine is at
+`scripts/lifecycle/full-project-uninstall.py`. It additionally
+handles project-only vLLM and v0.29 FlashInfer cache paths and
+repo-local forensic evidence. The generic shared `~/.cache/flashinfer`
+and Hugging Face parent cache remain excluded unless separately
+identity-proven. A local home receipt survives reset.
+
+**Do not execute menu 5 on the protected physical DGX for test**.
+Passing code tests or a valid plan does not establish M2 acceptance;
+failure after the first mutation may require manual recovery.
+Consult `docs/PROJECT-UNINSTALL-COVERAGE.md` before any approved trial.
+
+## Complete-uninstall coverage audit (read-only; not deletion)
+
+The Wizard's **2. Uninstall → 1. Full-project resource inventory** calls
+`python3 -B scripts/lifecycle/uninstall-inventory.py plan`. It separately
+reports managed vs unverified Docker/model assets, R2 experimental containers,
+project state and releases, systemd service/proxy file and runtime status,
+project-labelled Docker volumes, dedicated PLE swap/fstab marker, and excluded
+shared Hugging Face cache. It makes **no changes**.
+
+For optional post-removal verification, save a `plan --json` baseline outside
+the deletion scope and later call `verify --baseline PATH` at the same paths.
+This verifies only discovered, bounded project scope, not factory-clean OS.
+The existing managed uninstaller is **option 2**, separately confirmed;
+**option 3** runs baseline-bound read-only post-removal verification.
+A full research-container/evidence/cache cleanup is NOT implemented and
+physical DGX destructive E2E is NOT QUALIFIED. Do not run destructive
+`--purge-all` on the protected physical DGX as a shortcut.
+See [coverage boundaries and remaining gates](docs/PROJECT-UNINSTALL-COVERAGE.md).
+
 ## Recommended maintenance sequence
 
 Before maintenance:
